@@ -27,8 +27,10 @@ export default function App() {
   const [pageSpeedLoading, setPageSpeedLoading] = useState(false);
   const [pageSpeedError, setPageSpeedError] = useState<string | null>(null);
   const [pageSpeedStrategy, setPageSpeedStrategy] = useState<PageSpeedStrategy>('mobile');
+  const [permalinkCopied, setPermalinkCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('records');
   const reportRef = useRef<HTMLDivElement>(null);
+  const initialPathHandledRef = useRef(false);
   // Sequenz-Counter: nur das Ergebnis des zuletzt gestarteten Lookups
   // darf den State updaten — sonst überschreibt eine späte Antwort eine
   // frischere und der UI bleibt im falschen Zustand stehen.
@@ -52,6 +54,7 @@ export default function App() {
       if (seq !== lookupSeqRef.current) return;
       setReport(result);
       setActiveTab('records');
+      replaceLookupPath(result.domain);
     } catch (e) {
       if (seq !== lookupSeqRef.current) return;
       setError(e instanceof Error ? e.message : 'Lookup fehlgeschlagen');
@@ -81,6 +84,27 @@ export default function App() {
       reportRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [report]);
+
+  useEffect(() => {
+    if (initialPathHandledRef.current) return;
+    initialPathHandledRef.current = true;
+    const domainFromPath = getDomainFromLookupPath(window.location.pathname);
+    if (!domainFromPath) return;
+    void handleSearch(domainFromPath);
+  }, []);
+
+  const handleCopyPermalink = async () => {
+    if (!report?.domain) return;
+    const url = getLookupUrl(report.domain);
+    try {
+      await navigator.clipboard.writeText(url);
+      setPermalinkCopied(true);
+      window.setTimeout(() => setPermalinkCopied(false), 1400);
+    } catch {
+      // Fallback für Browser ohne Clipboard-API-Rechte.
+      window.prompt('Permalink kopieren:', url);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -273,7 +297,9 @@ export default function App() {
               {/* Footer-Actions */}
               <div className="mt-12 flex justify-end gap-2">
                 <ActionButton>Export JSON</ActionButton>
-                <ActionButton>Permalink kopieren</ActionButton>
+                <ActionButton onClick={handleCopyPermalink}>
+                  {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
+                </ActionButton>
                 <ActionButton>Watch 🔔</ActionButton>
               </div>
             </motion.div>
@@ -300,10 +326,39 @@ function Placeholder({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
-function ActionButton({ children }: { children: React.ReactNode }) {
+function ActionButton({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void | Promise<void>;
+}) {
   return (
-    <button className="px-3.5 py-2 text-xs font-medium rounded-lg border border-ink-100 dark:border-ink-900/80 hover:bg-ink-100/60 dark:hover:bg-ink-900 transition-colors">
+    <button
+      onClick={onClick}
+      className="px-3.5 py-2 text-xs font-medium rounded-lg border border-ink-100 dark:border-ink-900/80 hover:bg-ink-100/60 dark:hover:bg-ink-900 transition-colors"
+    >
       {children}
     </button>
   );
+}
+
+function getLookupUrl(domain: string): string {
+  return `${window.location.origin}/lookup/${encodeURIComponent(domain)}`;
+}
+
+function replaceLookupPath(domain: string): void {
+  const nextPath = `/lookup/${encodeURIComponent(domain)}`;
+  if (window.location.pathname === nextPath) return;
+  window.history.replaceState(null, '', nextPath);
+}
+
+function getDomainFromLookupPath(pathname: string): string | null {
+  const match = pathname.match(/^\/lookup\/([^/]+)\/?$/i);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]).trim().toLowerCase();
+  } catch {
+    return null;
+  }
 }

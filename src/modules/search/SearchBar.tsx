@@ -41,14 +41,15 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
         <button
           type="submit"
           disabled={loading || !value.trim()}
-          className="absolute right-2 top-2 h-10 px-5 rounded-lg bg-diggy-500 hover:bg-diggy-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors flex items-center gap-1.5"
+          className="absolute right-2 top-2 h-10 px-4 rounded-lg bg-diggy-500 hover:bg-diggy-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors flex items-center justify-center"
+          aria-label="Suchen"
         >
           {loading ? (
             <span className="dig-dots">
               <span /> <span /> <span />
             </span>
           ) : (
-            'Dig'
+            <Search className="w-4 h-4" />
           )}
         </button>
       </form>
