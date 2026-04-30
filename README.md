@@ -79,4 +79,5 @@ Mock-Daten aus `src/lib/mockData.ts`. Den Schalter findest du dort als `useMock`
 - [ ] Permalinks (`/lookup/example.com`)
 - [ ] Caching & Rate-Limiting
 - [ ] Watch/Monitor-Feature
+- [ ] benzorich ist king 🤍
 ```
