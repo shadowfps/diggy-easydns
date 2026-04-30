@@ -4,21 +4,33 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --bg-base: 248 247 244;
     --bg-elevated: 255 255 255;
     --text-primary: 22 20 15;
     --text-secondary: 75 71 64;
     --text-tertiary: 130 124 112;
     --border-subtle: 230 226 217;
+    /* Hintergrund-Decor — dezenter im Light-Mode */
+    --bg-grid: rgba(146, 15, 237, 0.05);
+    --bg-glow-strong: rgba(146, 15, 237, 0.10);
+    --bg-glow-soft: rgba(146, 15, 237, 0.04);
+    --grain-opacity: 0.012;
   }
 
   .dark {
+    color-scheme: dark;
     --bg-base: 11 10 7;
     --bg-elevated: 22 20 15;
     --text-primary: 248 247 244;
     --text-secondary: 200 195 184;
     --text-tertiary: 140 132 118;
     --border-subtle: 38 34 28;
+    /* Hintergrund-Decor — kräftiger im Dark-Mode (mehr Sichtbarkeit auf Schwarz) */
+    --bg-grid: rgba(146, 15, 237, 0.09);
+    --bg-glow-strong: rgba(146, 15, 237, 0.18);
+    --bg-glow-soft: rgba(146, 15, 237, 0.07);
+    --grain-opacity: 0.018;
   }
 
   html {
@@ -31,17 +43,40 @@
     @apply bg-ink-50 text-ink-900 dark:bg-ink-950 dark:text-ink-50;
     font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: 'cv11', 'ss01';
+    /* Subtile Grain-Texture direkt im Body-Background, damit sie nicht
+     * mit dem Pseudo-Element-Stacking konkurriert. */
+    background-image:
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='var(--grain-opacity, 0.015)'/%3E%3C/svg%3E");
+    background-attachment: fixed;
   }
 
-  /* Subtile Grain-Texture für Atmosphäre */
+  /* Layer 1: Lila-Grid-Pattern, fadet zu den Rändern aus.
+   * Mask-image macht aus dem unendlichen Grid einen weichen Lichtkegel. */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
     pointer-events: none;
-    opacity: 0.015;
-    z-index: 1;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    z-index: 0;
+    background-image:
+      linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
+    background-size: 56px 56px;
+    background-position: center center;
+    -webkit-mask-image: radial-gradient(ellipse 80% 75% at center, black 5%, transparent 80%);
+    mask-image: radial-gradient(ellipse 80% 75% at center, black 5%, transparent 80%);
+  }
+
+  /* Layer 2: Brand-Color-Glow oben und unten als Lighting. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 65% 50% at 50% -10%, var(--bg-glow-strong), transparent 70%),
+      radial-gradient(ellipse 80% 35% at 50% 110%, var(--bg-glow-soft), transparent 75%);
   }
 
   ::selection {
@@ -65,4 +100,15 @@
   }
   .dig-dots span:nth-child(2) { animation-delay: 0.2s; }
   .dig-dots span:nth-child(3) { animation-delay: 0.4s; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

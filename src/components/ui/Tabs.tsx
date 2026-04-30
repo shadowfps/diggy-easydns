@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/cn';
 
-export type TabId = 'records' | 'propagation' | 'security' | 'mail' | 'findings' | 'whois';
+export type TabId = 'records' | 'propagation' | 'security' | 'mail' | 'findings' | 'whois' | 'speed';
 
 interface Tab {
   id: TabId;

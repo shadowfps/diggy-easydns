@@ -8,35 +8,38 @@ export default {
         sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['"Geist Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
         display: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Brand-Wordmark — Goldman von Google Fonts
+        brand: ['Goldman', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
-        // Diggy Brand — warmes Amber/Erde
+        // Diggy Brand — Vivid Violet (Hauptton: #920FED)
+        // Skala um die 500 herum gleicher Hue, gestaffelte Lightness.
         diggy: {
-          50: '#FEF7EC',
-          100: '#FCEAC9',
-          200: '#F9D38E',
-          300: '#F5B752',
-          400: '#F19E2B',
-          500: '#E68314',
-          600: '#C8650D',
-          700: '#A14A0E',
-          800: '#823B12',
-          900: '#6B3112',
-          950: '#3D1806',
+          50: '#FAF1FE',
+          100: '#F3DEFD',
+          200: '#E8BCFB',
+          300: '#D88FF8',
+          400: '#C161F4',
+          500: '#920FED',
+          600: '#7C0DC9',
+          700: '#640AA1',
+          800: '#4F087E',
+          900: '#3B065C',
+          950: '#26033B',
         },
-        // Tiefes Petrol als Akzent
+        // Komplementäres Sage/Mint als Akzent (statt Petrol — passt besser zu Plum)
         accent: {
-          50: '#EFF8F8',
-          100: '#D6ECEC',
-          200: '#B0DADA',
-          300: '#7FBFC0',
-          400: '#4F9FA1',
-          500: '#3A8385',
-          600: '#2F6B6E',
-          700: '#2A555A',
-          800: '#27464A',
-          900: '#243B3F',
-          950: '#11242A',
+          50: '#EEF5F0',
+          100: '#D9E8DD',
+          200: '#B5D3BD',
+          300: '#8AB597',
+          400: '#629578',
+          500: '#4A7B5F',
+          600: '#3B634C',
+          700: '#314F3D',
+          800: '#294233',
+          900: '#23362B',
+          950: '#101D16',
         },
         // Background-Layer für Dark Mode
         ink: {

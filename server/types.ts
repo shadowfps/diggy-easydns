@@ -104,6 +104,59 @@ export interface MailSecurity {
   mtaSts: { present: boolean };
 }
 
+export interface WhoisInfo {
+  registrar?: string;
+  /** ISO date — Domain-Registrierung */
+  createdAt?: string;
+  /** ISO date — Ablaufdatum */
+  expiresAt?: string;
+  /** ISO date — letzte Änderung am Registrar */
+  updatedAt?: string;
+  /** Aus dem RDAP-Response übernommene Nameserver */
+  nameServers?: string[];
+  /** EPP-Status-Codes z.B. 'clientTransferProhibited' */
+  status?: string[];
+  /** secureDNS.delegationSigned aus RDAP */
+  dnssecDelegated?: boolean;
+  /** Welcher RDAP-Registry geantwortet hat (für UI-Transparenz) */
+  source?: string;
+}
+
+export type PageSpeedStrategy = 'mobile' | 'desktop';
+
+export interface PageSpeedReport {
+  domain: string;
+  requestedUrl: string;
+  finalUrl: string;
+  strategy: PageSpeedStrategy;
+  fetchedAt: string;
+  source: 'psi';
+  performanceScore: number;
+  metrics: {
+    fcpMs?: number;
+    lcpMs?: number;
+    ttfbMs?: number;
+    tbtMs?: number;
+    inpMs?: number;
+    cls?: number;
+  };
+  fieldData: {
+    overallCategory?: 'fast' | 'average' | 'slow';
+    lcp: { percentile?: number; category?: 'fast' | 'average' | 'slow' };
+    cls: { percentile?: number; category?: 'fast' | 'average' | 'slow' };
+    inp: { percentile?: number; category?: 'fast' | 'average' | 'slow' };
+    fcp: { percentile?: number; category?: 'fast' | 'average' | 'slow' };
+  };
+  opportunities: {
+    id: string;
+    title: string;
+    description?: string;
+    score?: number;
+    displayValue?: string;
+    numericValue?: number;
+  }[];
+}
+
 export interface LookupReport {
   domain: string;
   timestamp: string;
@@ -112,12 +165,7 @@ export interface LookupReport {
   ssl?: SslInfo;
   dnssec: DnssecInfo;
   mail: MailSecurity;
-  whois?: {
-    registrar?: string;
-    createdAt?: string;
-    expiresAt?: string;
-    nameServers?: string[];
-  };
+  whois?: WhoisInfo;
   findings: Finding[];
   healthScore: HealthScore;
 }

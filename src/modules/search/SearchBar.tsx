@@ -48,7 +48,7 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
               <span /> <span /> <span />
             </span>
           ) : (
-            <>Dig <span className="text-base leading-none">🐾</span></>
+            'Dig'
           )}
         </button>
       </form>
@@ -60,11 +60,12 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
             {i > 0 && <span className="opacity-40">·</span>}
             <button
               type="button"
+              disabled={loading}
               onClick={() => {
                 setValue(ex);
                 onSearch(ex);
               }}
-              className="text-accent-500 hover:text-accent-400 hover:underline transition-colors"
+              className="text-accent-500 hover:text-accent-400 hover:underline transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
             >
               {ex}
             </button>
