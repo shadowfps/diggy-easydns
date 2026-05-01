@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
+import { existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { lookupStandardRecords, isValidDomain, normalizeDomain } from './services/dnsLookup.js';
 import { buildReport } from './services/reportBuilder.js';
 import { queryAllResolvers } from './services/propagation.js';
@@ -12,6 +15,7 @@ import { lookupPageSpeed } from './services/pagespeed.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 app.use(cors());
 app.use(express.json());
@@ -128,6 +132,17 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
   }
 });
 
+// Production: Frontend aus dist/ ausliefern (SPA).
+const distDir = resolve(__dirname, '../dist');
+const distIndex = resolve(distDir, 'index.html');
+if (existsSync(distIndex)) {
+  app.use(express.static(distDir));
+  app.get('*', (req: Request, res: Response, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    return res.sendFile(distIndex);
+  });
+}
+
 app.listen(PORT, () => {
-  console.log(`🐾 Diggy API läuft auf http://localhost:${PORT}`);
+  console.log(`🐾 Diggy läuft auf http://localhost:${PORT}`);
 });
