@@ -1,33 +1,60 @@
-# 🐾 Diggy
+# Diggy
 
-> DNS made friendly. Comprehensive DNS, SSL & domain audits in one place.
+> DNS made friendly — DNS, SSL & Domain-Audits auf einen Blick.
 
-Diggy ist ein Multi-Resolver-DNS-Tool mit Health-Score, Mail-Security-Audit und SSL-Check
-— gedacht für Profis und Laien gleichermaßen.
+Diggy ist ein webbasiertes DNS-Audit-Tool. Domaine eingeben, fertig: Records, Mail-Security, SSL-Status, Propagation, WHOIS und PageSpeed-Score landen übersichtlich auf einem Screen — mit Health-Score und konkreten Empfehlungen.
+
+![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5-646cff?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss&logoColor=white)
+
+## Features
+
+- **DNS Records** — A, AAAA, MX, NS, TXT, CAA, SOA, CNAME auf einen Blick
+- **Health-Score** — automatisch berechnet aus Findings und Konfigurationslücken
+- **Findings & Empfehlungen** — konkrete Hinweise zu fehlenden oder fehlerhaften Einträgen
+- **Mail Security** — SPF, DKIM (Selector-Scan), DMARC, MTA-STS
+- **SSL / TLS** — Zertifikats-Details, Ablaufdatum, Chain-Check
+- **DNSSEC** — Validierungsstatus
+- **Propagation** — Vergleich über mehrere DNS-Resolver gleichzeitig
+- **WHOIS / RDAP** — Registrar-Infos, Ablaufdatum der Domain
+- **PageSpeed** — Google Lighthouse Score (Mobile & Desktop)
+- **Lookup-History** — zuletzt abgefragte Domains (lokal im Browser)
+- **Permalinks** — direkt verlinkbare Ergebnisseiten (`/lookup/<domain>`)
+- **JSON-Export** — vollständigen Report als Datei herunterladen
+- **Dark Mode** — systembasiert, manuell umschaltbar
 
 ## Stack
 
-- **Frontend:** React 18 + Vite + TypeScript + Tailwind CSS + Framer Motion
-- **Backend:** Node.js + Express + TypeScript (separate API für DNS-Lookups)
-- **Deployment-Ziel:** mittwald Hosting
+| Bereich | Technologie |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, GSAP |
+| Backend | Node.js, Express, TypeScript |
+| DNS | Native Node.js `dns` + DoH-Resolver |
 
 ## Quickstart
 
 ```bash
-# Dependencies installieren
+# Abhängigkeiten installieren
 npm install
 
-# Dev-Server (Frontend + Backend gleichzeitig)
+# Dev-Server starten (Frontend + Backend gleichzeitig)
 npm run dev
+# Frontend → http://localhost:5173
+# Backend  → http://localhost:3001
 
-# Frontend allein
-npm run dev:client    # → http://localhost:5173
+# Nur Frontend
+npm run dev:client
 
-# Backend allein
-npm run dev:server    # → http://localhost:3001
+# Nur Backend
+npm run dev:server
 
 # Production-Build
 npm run build
+
+# Production-Server starten
+npm start
 ```
 
 ## Projekt-Struktur
@@ -36,47 +63,46 @@ npm run build
 diggy/
 ├── src/
 │   ├── components/         # Wiederverwendbare UI-Bausteine
-│   │   ├── ui/             # Buttons, Tabs, Logo, etc.
+│   │   ├── ui/             # Buttons, Tabs, Logo, Animationen
 │   │   └── layout/         # Header, Footer
-│   ├── modules/            # Feature-Module — eines pro fachlichem Bereich
-│   │   ├── search/         # Domain-Eingabe
-│   │   ├── score/          # Health-Score & Schnellübersicht
-│   │   ├── records/        # DNS-Records-Liste
+│   ├── modules/            # Feature-Module
+│   │   ├── search/         # Domain-Eingabe & Validierung
+│   │   ├── score/          # Health-Score & Quick-Facts
+│   │   ├── records/        # DNS-Records-Tabelle
 │   │   ├── propagation/    # Multi-Resolver-Vergleich
 │   │   ├── findings/       # Empfehlungen & Findings
-│   │   ├── security/       # SSL, DNSSEC, CAA (TODO)
-│   │   └── mail/           # SPF, DKIM, DMARC (TODO)
-│   ├── lib/                # Utilities (cn, api, mockData)
-│   ├── hooks/              # React Hooks (useTheme)
-│   ├── types/              # TypeScript-Types
-│   └── styles/             # Globale Styles
-├── server/                 # Express-Backend für DNS-Lookups
-└── ...
+│   │   ├── security/       # SSL & DNSSEC
+│   │   ├── mail/           # SPF, DKIM, DMARC, MTA-STS
+│   │   ├── whois/          # WHOIS / RDAP
+│   │   ├── speed/          # PageSpeed
+│   │   ├── history/        # Lookup-Verlauf
+│   │   └── about/          # Info-Seite
+│   ├── lib/                # Utilities (API-Client, History, cn)
+│   ├── hooks/              # React Hooks
+│   └── types/              # TypeScript-Typen
+└── server/                 # Express-Backend
 ```
-
-## Module hinzufügen
-
-Jedes neue Feature wird ein eigenes Modul unter `src/modules/<name>/`. So bleibt's
-übersichtlich auch wenn das Tool wächst (Bulk-Lookup, Watch/Monitor, CT-History, ...).
-
-## Mock-Daten
-
-Solange das Backend noch keine echten Lookups macht, liefert `src/lib/api.ts`
-Mock-Daten aus `src/lib/mockData.ts`. Den Schalter findest du dort als `useMock`.
 
 ## Roadmap
 
-- [x] UI-Grundgerüst mit allen Modulen
-- [x] **Echte DNS-Queries im Backend (A/AAAA/MX/NS/TXT/CAA/SOA/CNAME)**
-- [x] **Domain-Validierung & Normalisierung** (akzeptiert URLs, Ports, www-Prefixes)
-- [x] **Erste Findings-Logik** (CAA fehlt, kein DMARC, IPv6, SPF-Probleme, …)
-- [x] **Health-Score-Berechnung** aus Findings
-- [ ] Multi-Resolver-Vergleich via DNS-over-HTTPS
-- [ ] SSL-Cert-Check via tls.connect()
+- [x] DNS-Queries (A/AAAA/MX/NS/TXT/CAA/SOA/CNAME)
+- [x] Domain-Validierung & Normalisierung
+- [x] Health-Score aus Findings
+- [x] Mail-Security-Audit (SPF, DKIM, DMARC, MTA-STS)
+- [x] SSL/TLS-Check
+- [x] WHOIS/RDAP-Lookup
+- [x] PageSpeed-Integration
+- [x] Permalinks & JSON-Export
+- [x] Lookup-History (Browser-lokal)
+- [ ] Multi-Resolver-Propagation via DNS-over-HTTPS (in Arbeit)
 - [ ] DNSSEC-Chain-Validierung
-- [ ] Mail-Security-Audit (DKIM-Selectors probieren, DMARC auf _dmarc.<domain>)
-- [ ] WHOIS/RDAP-Lookup
-- [ ] Permalinks (`/lookup/example.com`)
-- [ ] Caching & Rate-Limiting
-- [ ] Watch/Monitor-Feature
-```
+- [ ] Caching & Rate-Limiting im Backend
+- [ ] Watch/Monitor-Feature (Domain-Änderungen per E-Mail)
+
+## Mitmachen
+
+Pull Requests und Issues sind willkommen. Für größere Änderungen bitte vorher ein Issue öffnen.
+
+## Lizenz
+
+MIT
