@@ -1,4 +1,5 @@
 import type {
+  DetectedTech,
   DnsRecord,
   DnssecInfo,
   Finding,
@@ -18,6 +19,7 @@ interface BuildReportInput {
   mail: MailSecurity;
   ssl: SslInfo | null;
   whois: WhoisInfo | null;
+  techStack: DetectedTech[];
 }
 
 /**
@@ -49,6 +51,7 @@ export function buildReport(input: BuildReportInput): LookupReport {
     whois: input.whois ?? undefined,
     findings,
     healthScore,
+    techStack: input.techStack,
   };
 }
 

@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn';
 
 interface WhoisViewProps {
   whois?: WhoisInfo;
+  onUseDomain?: (domain: string) => void;
 }
 
 /** EPP-Status-Codes übersetzt für Laien — kurz & verständlich. */
@@ -38,7 +39,7 @@ const STATUS_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad'
   serverhold: { label: 'Server-Hold (nicht aufgelöst!)', tone: 'bad' },
 };
 
-export function WhoisView({ whois }: WhoisViewProps) {
+export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
   if (!whois) {
     return (
       <div className="surface rounded-xl p-12 text-center">
@@ -115,7 +116,7 @@ export function WhoisView({ whois }: WhoisViewProps) {
                         expiresInDays < 0
                           ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                           : expiresInDays < 30
-                          ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
+                          ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                           : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                       )}
                     >
@@ -157,8 +158,19 @@ export function WhoisView({ whois }: WhoisViewProps) {
                 key={ns}
                 className="font-mono text-xs text-ink-900/80 dark:text-ink-50/80 flex items-center gap-2"
               >
-                <span className="w-1 h-1 rounded-full bg-diggy-500/60" />
-                {ns}
+                <span className="w-1 h-1 rounded-full bg-ink-900/60 dark:bg-ink-50/60" />
+                {onUseDomain ? (
+                  <button
+                    type="button"
+                    onClick={() => onUseDomain(ns)}
+                    className="min-w-0 truncate rounded-md text-left font-mono text-xs text-ink-900/80 transition-colors hover:text-ink-950 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/80 dark:hover:text-white dark:focus-visible:outline-ink-50"
+                    title={`${ns} in die Suche übernehmen`}
+                  >
+                    {ns}
+                  </button>
+                ) : (
+                  ns
+                )}
               </li>
             ))}
           </ul>
@@ -193,7 +205,7 @@ export function WhoisView({ whois }: WhoisViewProps) {
                     meta.tone === 'ok' &&
                       'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
                     meta.tone === 'warn' &&
-                      'bg-orange-500/10 text-orange-700 dark:text-orange-300',
+                      'bg-red-500/10 text-red-700 dark:text-red-300',
                     meta.tone === 'bad' &&
                       'bg-red-500/10 text-red-700 dark:text-red-300'
                   )}

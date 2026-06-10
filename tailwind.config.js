@@ -4,6 +4,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      screens: {
+        '3xl': '2560px',
+        '4xl': '3200px',
+      },
       fontFamily: {
         sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['"Geist Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
@@ -12,41 +16,47 @@ export default {
         brand: ['Goldman', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       colors: {
-        // Diggy Brand — Vivid Violet (Hauptton: #920FED)
-        // Skala um die 500 herum gleicher Hue, gestaffelte Lightness.
+        // Neutral brand scale for the clean black/white visual system.
         diggy: {
-          50: '#FAF1FE',
-          100: '#F3DEFD',
-          200: '#E8BCFB',
-          300: '#D88FF8',
-          400: '#C161F4',
-          500: '#920FED',
-          600: '#7C0DC9',
-          700: '#640AA1',
-          800: '#4F087E',
-          900: '#3B065C',
-          950: '#26033B',
+          50: '#FAFAFA',
+          100: '#F5F5F5',
+          200: '#E5E5E5',
+          300: '#D4D4D4',
+          400: '#A3A3A3',
+          500: '#262626',
+          600: '#171717',
+          700: '#0F0F0F',
+          800: '#0A0A0A',
+          900: '#050505',
+          950: '#000000',
         },
-        // Komplementäres Sage/Mint als Akzent (statt Petrol — passt besser zu Plum)
+        // Secondary neutral for informational UI.
         accent: {
-          50: '#EEF5F0',
-          100: '#D9E8DD',
-          200: '#B5D3BD',
-          300: '#8AB597',
-          400: '#629578',
-          500: '#4A7B5F',
-          600: '#3B634C',
-          700: '#314F3D',
-          800: '#294233',
-          900: '#23362B',
-          950: '#101D16',
+          50: '#FAFAFA',
+          100: '#F4F4F5',
+          200: '#E4E4E7',
+          300: '#D4D4D8',
+          400: '#A1A1AA',
+          500: '#3F3F46',
+          600: '#27272A',
+          700: '#18181B',
+          800: '#111113',
+          900: '#0A0A0B',
+          950: '#050505',
         },
         // Background-Layer für Dark Mode
         ink: {
-          50: '#F8F7F4',
-          100: '#EFEDE6',
-          900: '#16140F',
-          950: '#0B0A07',
+          50: '#FAFAFA',
+          100: '#F4F4F5',
+          200: '#E4E4E7',
+          300: '#D4D4D8',
+          400: '#A1A1AA',
+          500: '#71717A',
+          600: '#52525B',
+          700: '#3F3F46',
+          800: '#27272A',
+          900: '#18181B',
+          950: '#09090B',
         },
       },
       animation: {

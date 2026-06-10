@@ -21,14 +21,14 @@ const SEVERITY_CONFIG: Record<
   warning: {
     label: 'WARNUNG',
     icon: AlertTriangle,
-    classes: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30',
-    iconClasses: 'text-orange-500',
+    classes: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30',
+    iconClasses: 'text-red-500',
   },
   info: {
     label: 'INFO',
     icon: Info,
-    classes: 'bg-accent-500/10 text-accent-700 dark:text-accent-300 border-accent-500/30',
-    iconClasses: 'text-accent-500',
+    classes: 'bg-ink-500/10 text-ink-700 dark:text-ink-300 border-ink-500/30',
+    iconClasses: 'text-ink-500',
   },
   success: {
     label: 'OK',

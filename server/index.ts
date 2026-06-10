@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
+import { existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { lookupStandardRecords, isValidDomain, normalizeDomain } from './services/dnsLookup.js';
 import { buildReport } from './services/reportBuilder.js';
 import { queryAllResolvers } from './services/propagation.js';
@@ -9,15 +12,42 @@ import { checkSsl } from './services/ssl.js';
 import { auditMail } from './services/mailAudit.js';
 import { lookupWhois } from './services/whois.js';
 import { lookupPageSpeed } from './services/pagespeed.js';
+import { scanVirusTotal } from './services/virusscan.js';
+import { isValidIpAddress, lookupIpDetails } from './services/ipDetails.js';
+import { detectTechStack } from './services/techstack.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 app.use(cors());
 app.use(express.json());
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'diggy-api', version: '0.2.0' });
+});
+
+app.get('/api/ip-details', async (req: Request, res: Response) => {
+  const ip = String(req.query.ip ?? '').trim();
+
+  if (!isValidIpAddress(ip)) {
+    return res.status(400).json({
+      error: 'invalid_ip',
+      message: `"${ip}" sieht nicht nach einer gültigen IP-Adresse aus.`,
+    });
+  }
+
+  try {
+    const result = await lookupIpDetails(ip);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    const status = err.name === 'AbortError' ? 504 : 502;
+    return res.status(status).json({
+      error: 'ip_details_failed',
+      message: err.message || 'IP-Details konnten nicht geladen werden.',
+    });
+  }
 });
 
 app.get('/api/pagespeed', async (req: Request, res: Response) => {
@@ -42,6 +72,30 @@ app.get('/api/pagespeed', async (req: Request, res: Response) => {
     return res.status(status).json({
       error: 'pagespeed_failed',
       message,
+    });
+  }
+});
+
+app.get('/api/virusscan', async (req: Request, res: Response) => {
+  const rawInput = String(req.query.domain ?? '');
+  const domain = normalizeDomain(rawInput);
+
+  if (!isValidDomain(domain)) {
+    return res.status(400).json({
+      error: 'invalid_domain',
+      message: `"${rawInput}" sieht nicht nach einer gültigen Domain aus.`,
+    });
+  }
+
+  try {
+    const result = await scanVirusTotal(domain);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    const status = err.name === 'AbortError' ? 504 : 502;
+    return res.status(status).json({
+      error: 'virusscan_failed',
+      message: err.message || 'VirusTotal-Scan fehlgeschlagen.',
     });
   }
 });
@@ -80,12 +134,13 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
 
     // Alle weiteren Sub-Checks parallel.
     // Promise.allSettled — ein einzelner Fehler killt den Report nicht.
-    const [propagationRes, dnssecRes, sslRes, mailRes, whoisRes] = await Promise.allSettled([
+    const [propagationRes, dnssecRes, sslRes, mailRes, whoisRes, techStackRes] = await Promise.allSettled([
       queryAllResolvers(domain, { types: ['A', 'AAAA'] }),
       checkDnssec(domain),
       checkSsl(domain),
       auditMail(domain, spfFromApex),
       lookupWhois(domain),
+      detectTechStack(domain),
     ]);
 
     const propagation = propagationRes.status === 'fulfilled' ? propagationRes.value : [];
@@ -102,12 +157,13 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
           mtaSts: { present: false },
         };
     const whois = whoisRes.status === 'fulfilled' ? whoisRes.value : null;
+    const techStack = techStackRes.status === 'fulfilled' ? techStackRes.value : [];
 
-    const report = buildReport({ domain, records, propagation, dnssec, ssl, mail, whois });
+    const report = buildReport({ domain, records, propagation, dnssec, ssl, mail, whois, techStack });
     const elapsedMs = Date.now() - start;
 
     console.log(
-      `[lookup] ${domain} → ${records.length} records, ${propagation.length} resolvers, ssl=${!!ssl}, dnssec=${dnssec.enabled}, whois=${!!whois} in ${elapsedMs}ms`
+      `[lookup] ${domain} → ${records.length} records, ${propagation.length} resolvers, ssl=${!!ssl}, dnssec=${dnssec.enabled}, whois=${!!whois}, techStack=${techStack.length} in ${elapsedMs}ms`
     );
     res.json(report);
   } catch (error) {
@@ -128,6 +184,17 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
   }
 });
 
+// Production: Frontend aus dist/ ausliefern (SPA).
+const distDir = resolve(__dirname, '../dist');
+const distIndex = resolve(distDir, 'index.html');
+if (existsSync(distIndex)) {
+  app.use(express.static(distDir));
+  app.get('*', (req: Request, res: Response, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    return res.sendFile(distIndex);
+  });
+}
+
 app.listen(PORT, () => {
-  console.log(`🐾 Diggy API läuft auf http://localhost:${PORT}`);
+  console.log(`🐾 Diggy läuft auf http://localhost:${PORT}`);
 });

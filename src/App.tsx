@@ -11,25 +11,45 @@ import { SecurityView } from '@/modules/security/SecurityView';
 import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
 import { PageSpeedView } from '@/modules/speed/PageSpeedView';
+import { VirusScanView } from '@/modules/virusscan/VirusScanView';
+import { HistoryView } from '@/modules/history/HistoryView';
+import { AboutView } from '@/modules/about/AboutView';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { Loader2 } from 'lucide-react';
 import SplitText from '@/components/ui/SplitText';
 import TextType from '@/components/ui/TextType';
 import ShinyText from '@/components/ui/ShinyText';
-import { lookupDomain, lookupPageSpeed } from '@/lib/api';
-import type { LookupReport, PageSpeedReport, PageSpeedStrategy } from '@/types/dns';
+import { lookupDomain, lookupPageSpeed, lookupVirusScan } from '@/lib/api';
+import { cn } from '@/lib/cn';
+import {
+  clearLookupHistory,
+  readLookupHistory,
+  saveLookupToHistory,
+  type LookupHistoryEntry,
+} from '@/lib/lookupHistory';
+import type { LookupReport, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
+
+type AppView = 'lookup' | 'history' | 'about';
 
 export default function App() {
+  const [view, setView] = useState<AppView>('lookup');
   const [report, setReport] = useState<LookupReport | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<LookupHistoryEntry[]>(() =>
+    readLookupHistory()
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageSpeed, setPageSpeed] = useState<PageSpeedReport | null>(null);
   const [pageSpeedLoading, setPageSpeedLoading] = useState(false);
   const [pageSpeedError, setPageSpeedError] = useState<string | null>(null);
   const [pageSpeedStrategy, setPageSpeedStrategy] = useState<PageSpeedStrategy>('mobile');
+  const [virusScan, setVirusScan] = useState<VirusScanReport | null>(null);
+  const [virusScanLoading, setVirusScanLoading] = useState(false);
+  const [virusScanError, setVirusScanError] = useState<string | null>(null);
   const [permalinkCopied, setPermalinkCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('records');
-  const reportRef = useRef<HTMLDivElement>(null);
+  const [searchValue, setSearchValue] = useState('');
+  const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const initialPathHandledRef = useRef(false);
   // Sequenz-Counter: nur das Ergebnis des zuletzt gestarteten Lookups
   // darf den State updaten — sonst überschreibt eine späte Antwort eine
@@ -37,7 +57,12 @@ export default function App() {
   const lookupSeqRef = useRef(0);
 
   const handleSearch = async (domain: string) => {
+    const normalizedDomain = domain.trim().toLowerCase();
+    if (!normalizedDomain) return;
     const seq = ++lookupSeqRef.current;
+    window.scrollTo({ top: 0, behavior: report ? 'smooth' : 'auto' });
+    setView('lookup');
+    setSearchValue(normalizedDomain);
     // Vorherigen Report sofort wegräumen, damit es nie zwei Reports
     // gleichzeitig im DOM gibt (alte Antwort + neue Antwort untereinander).
     setReport(null);
@@ -46,13 +71,17 @@ export default function App() {
     setPageSpeedError(null);
     setPageSpeedLoading(false);
     setPageSpeedStrategy('mobile');
+    setVirusScan(null);
+    setVirusScanError(null);
+    setVirusScanLoading(false);
     setLoading(true);
     try {
-      const result = await lookupDomain(domain);
+      const result = await lookupDomain(normalizedDomain);
       // Verzichte auf den State-Update, falls inzwischen ein neuer Lookup
       // gestartet wurde — wir wollen kein Flackern oder falsche Anzeige.
       if (seq !== lookupSeqRef.current) return;
       setReport(result);
+      setHistoryEntries(saveLookupToHistory(result));
       setActiveTab('records');
       replaceLookupPath(result.domain);
     } catch (e) {
@@ -60,6 +89,20 @@ export default function App() {
       setError(e instanceof Error ? e.message : 'Lookup fehlgeschlagen');
     } finally {
       if (seq === lookupSeqRef.current) setLoading(false);
+    }
+  };
+
+  const handleRunVirusScan = async () => {
+    if (!report?.domain || virusScanLoading) return;
+    setVirusScanError(null);
+    setVirusScanLoading(true);
+    try {
+      const result = await lookupVirusScan(report.domain);
+      setVirusScan(result);
+    } catch (e) {
+      setVirusScanError(e instanceof Error ? e.message : 'VirusTotal-Scan fehlgeschlagen');
+    } finally {
+      setVirusScanLoading(false);
     }
   };
 
@@ -77,17 +120,93 @@ export default function App() {
     }
   };
 
-  // Wenn ein neuer Report erscheint: sanft hinscrollen, damit der Wechsel
-  // sichtbar ist (sonst wirkt's auf langen Bildschirmen "nix passiert").
-  useEffect(() => {
-    if (report && reportRef.current) {
-      reportRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const handleHome = () => {
+    lookupSeqRef.current += 1;
+    setView('lookup');
+    setReport(null);
+    setLoading(false);
+    setError(null);
+    setPageSpeed(null);
+    setPageSpeedLoading(false);
+    setPageSpeedError(null);
+    setPageSpeedStrategy('mobile');
+    setVirusScan(null);
+    setVirusScanLoading(false);
+    setVirusScanError(null);
+    setPermalinkCopied(false);
+    setActiveTab('records');
+    setSearchValue('');
+    if (window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
     }
-  }, [report]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleHistory = () => {
+    lookupSeqRef.current += 1;
+    setView('history');
+    setReport(null);
+    setLoading(false);
+    setError(null);
+    setPageSpeed(null);
+    setPageSpeedLoading(false);
+    setPageSpeedError(null);
+    setVirusScan(null);
+    setVirusScanLoading(false);
+    setVirusScanError(null);
+    setHistoryEntries(readLookupHistory());
+    if (window.location.pathname !== '/history') {
+      window.history.pushState(null, '', '/history');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAbout = () => {
+    lookupSeqRef.current += 1;
+    setView('about');
+    setReport(null);
+    setLoading(false);
+    setError(null);
+    setPageSpeed(null);
+    setPageSpeedLoading(false);
+    setPageSpeedError(null);
+    setVirusScan(null);
+    setVirusScanLoading(false);
+    setVirusScanError(null);
+    if (window.location.pathname !== '/about') {
+      window.history.pushState(null, '', '/about');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleClearHistory = () => {
+    setHistoryEntries(clearLookupHistory());
+  };
+
+  const handleUseDomainInSearch = (domain: string) => {
+    const nextValue = normalizeSearchDomain(domain);
+    if (!nextValue) return;
+    setView('lookup');
+    setSearchValue(nextValue);
+    setSearchFocusSignal((value) => value + 1);
+    if (!report && window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     if (initialPathHandledRef.current) return;
     initialPathHandledRef.current = true;
+    if (window.location.pathname === '/history') {
+      setView('history');
+      setHistoryEntries(readLookupHistory());
+      return;
+    }
+    if (window.location.pathname === '/about') {
+      setView('about');
+      return;
+    }
     const domainFromPath = getDomainFromLookupPath(window.location.pathname);
     if (!domainFromPath) return;
     void handleSearch(domainFromPath);
@@ -106,23 +225,57 @@ export default function App() {
     }
   };
 
+  const handleExportJson = () => {
+    if (!report) return;
+    const filename = `diggy-${sanitizeFilename(report.domain)}-${formatExportTimestamp(report.timestamp)}.json`;
+    const blob = new Blob([JSON.stringify(report, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const lookupHasOutput = view === 'lookup' && Boolean(report || loading || error);
+
   return (
     <div className="min-h-screen flex flex-col relative z-10">
-      <Header />
+      <Header onHome={handleHome} onHistory={handleHistory} onAbout={handleAbout} />
 
-      <main className="flex-1 px-6 md:px-8 py-12 md:py-20">
+      <main
+        className={cn(
+          'flex-1 min-w-0 px-4 sm:px-6 lg:px-8 [overflow-anchor:none]',
+          view !== 'lookup' || lookupHasOutput ? 'py-6 md:py-8' : 'py-12 md:py-20'
+        )}
+      >
+        {view === 'history' && (
+          <HistoryView
+            entries={historyEntries}
+            onRun={handleSearch}
+            onUseDomain={handleUseDomainInSearch}
+            onClear={handleClearHistory}
+          />
+        )}
+
+        {view === 'about' && <AboutView />}
+
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
             Render blockieren. Da ein Loading-Zwischenstate sowieso die
             Lücke füllt, gibt es kein Overlap-Risiko. */}
         <AnimatePresence>
-          {!report && !loading && (
+          {view === 'lookup' && !report && !loading && (
             <motion.div
               key="hero"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0, y: -20, pointerEvents: 'none' }}
-              className="text-center mb-10"
+              className="mx-auto mb-10 max-w-5xl text-center"
             >
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
@@ -132,9 +285,9 @@ export default function App() {
               >
                 <ShinyText
                   text="diggy"
-                  className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase"
-                  color="#920FED"
-                  shineColor="#FFFFFF"
+                  className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase dark:invert"
+                  color="#111111"
+                  shineColor="#737373"
                   speed={2.5}
                   spread={120}
                   direction="left"
@@ -169,7 +322,7 @@ export default function App() {
                   pauseDuration={2200}
                   deletingSpeed={25}
                   cursorCharacter="▍"
-                  cursorClassName="text-diggy-500"
+                  cursorClassName="text-ink-900 dark:text-ink-50"
                   cursorBlinkDuration={0.6}
                   initialDelay={500}
                 />
@@ -178,18 +331,26 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <SearchBar onSearch={handleSearch} loading={loading} />
+        {view === 'lookup' && (
+          <SearchBar
+            value={searchValue}
+            onValueChange={setSearchValue}
+            focusSignal={searchFocusSignal}
+            onSearch={handleSearch}
+            loading={loading}
+          />
+        )}
 
         {/* Loading State */}
         <AnimatePresence>
-          {loading && (
+          {view === 'lookup' && loading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="mt-12 text-center"
+              className="mx-auto mt-10 max-w-2xl text-center"
             >
-              <Loader2 className="w-6 h-6 mx-auto animate-spin text-diggy-500" />
+              <Loader2 className="w-6 h-6 mx-auto animate-spin text-ink-900 dark:text-ink-50" />
               <p className="mt-3 text-sm text-ink-900/60 dark:text-ink-50/60">
                 Records werden geholt…
               </p>
@@ -198,8 +359,8 @@ export default function App() {
         </AnimatePresence>
 
         {/* Error */}
-        {error && (
-          <div className="mt-8 p-4 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 text-sm text-center">
+        {view === 'lookup' && error && (
+          <div className="mx-auto mt-8 max-w-2xl rounded-xl bg-red-500/10 p-4 text-center text-sm text-red-600 dark:text-red-400">
             {error}
           </div>
         )}
@@ -209,18 +370,15 @@ export default function App() {
             für eine saubere Lücke. Verschachteltes AnimatePresence-mode-wait
             (Tabs innen) kann sonst die Exit-Promise nicht resolven und
             den ganzen Block hängen lassen. */}
-        <AnimatePresence>
-          {report && !loading && (
-            <motion.div
-              ref={reportRef}
-              key={report.domain + report.timestamp}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8, pointerEvents: 'none' }}
-              transition={{ duration: 0.3 }}
-              className="mt-10"
-            >
-              <div className="text-center mb-8">
+        {view === 'lookup' && report && !loading && (
+          <motion.div
+            key={report.domain + report.timestamp}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.24 }}
+            className="mx-auto mt-6 w-full max-w-[110rem] md:mt-8"
+          >
+              <div className="text-center mb-5">
                 <span className="font-mono text-base text-ink-900/60 dark:text-ink-50/60">
                   {report.domain}
                 </span>
@@ -229,7 +387,7 @@ export default function App() {
               {/* Score + Quick Facts */}
               <div className="grid md:grid-cols-2 gap-4 mb-8">
                 <ScoreCard score={report.healthScore} />
-                <QuickFacts report={report} />
+                <QuickFacts report={report} onUseDomain={handleUseDomainInSearch} />
               </div>
 
               {/* Tabs */}
@@ -256,6 +414,7 @@ export default function App() {
                   { id: 'findings', label: 'Findings', count: report.findings.length },
                   { id: 'whois', label: 'WHOIS', count: report.whois ? 1 : undefined },
                   { id: 'speed', label: 'Speed', count: pageSpeed ? 1 : undefined },
+                  { id: 'virusscan', label: 'Virus Scan', count: virusScan ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined : undefined },
                 ]}
               />
 
@@ -268,7 +427,12 @@ export default function App() {
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.2 }}
                   >
-                    {activeTab === 'records' && <RecordsList records={report.records} />}
+                    {activeTab === 'records' && (
+                      <RecordsList
+                        records={report.records}
+                        onUseDomain={handleUseDomainInSearch}
+                      />
+                    )}
                     {activeTab === 'propagation' && (
                       report.propagation.length > 0
                         ? <PropagationView results={report.propagation} />
@@ -279,7 +443,12 @@ export default function App() {
                       <SecurityView ssl={report.ssl} dnssec={report.dnssec} />
                     )}
                     {activeTab === 'mail' && <MailView mail={report.mail} />}
-                    {activeTab === 'whois' && <WhoisView whois={report.whois} />}
+                    {activeTab === 'whois' && (
+                      <WhoisView
+                        whois={report.whois}
+                        onUseDomain={handleUseDomainInSearch}
+                      />
+                    )}
                     {activeTab === 'speed' && (
                       <PageSpeedView
                         data={pageSpeed}
@@ -290,21 +459,28 @@ export default function App() {
                         onRun={handleRunPageSpeed}
                       />
                     )}
+                    {activeTab === 'virusscan' && (
+                      <VirusScanView
+                        data={virusScan}
+                        loading={virusScanLoading}
+                        error={virusScanError}
+                        onRun={handleRunVirusScan}
+                      />
+                    )}
                   </motion.div>
                 </AnimatePresence>
               </div>
 
               {/* Footer-Actions */}
               <div className="mt-12 flex justify-end gap-2">
-                <ActionButton>Export JSON</ActionButton>
+                <ActionButton onClick={handleExportJson}>Export JSON</ActionButton>
                 <ActionButton onClick={handleCopyPermalink}>
                   {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
                 </ActionButton>
                 <ActionButton>Watch 🔔</ActionButton>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </motion.div>
+        )}
       </main>
 
       <footer className="px-6 md:px-8 py-8 border-t border-ink-100 dark:border-ink-900">
@@ -361,4 +537,18 @@ function getDomainFromLookupPath(pathname: string): string | null {
   } catch {
     return null;
   }
+}
+
+function normalizeSearchDomain(domain: string): string {
+  return domain.trim().toLowerCase().replace(/\.$/, '');
+}
+
+function sanitizeFilename(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function formatExportTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'report';
+  return date.toISOString().replace(/[:.]/g, '-');
 }

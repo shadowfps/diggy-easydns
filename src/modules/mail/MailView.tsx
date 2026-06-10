@@ -44,7 +44,7 @@ function SpfCard({ spf }: { spf: MailSecurity['spf'] }) {
           {spf.issues.length > 0 && (
             <ul className="text-xs space-y-1 mt-2">
               {spf.issues.map((issue, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-orange-600 dark:text-orange-400">
+                <li key={i} className="flex items-start gap-1.5 text-red-600 dark:text-red-400">
                   <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
                   <span>{issue}</span>
                 </li>
@@ -210,7 +210,7 @@ function EmptyState({ text, tone }: { text: string; tone: 'warn' | 'info' }) {
     <div
       className={cn(
         'flex items-start gap-2 text-sm',
-        tone === 'warn' && 'text-orange-600 dark:text-orange-400',
+        tone === 'warn' && 'text-red-600 dark:text-red-400',
         tone === 'info' && 'text-ink-900/60 dark:text-ink-50/60'
       )}
     >
@@ -241,7 +241,7 @@ function Stat({
           'font-medium',
           tone === 'ok' && 'text-emerald-600 dark:text-emerald-400',
           tone === 'bad' && 'text-red-600 dark:text-red-400',
-          tone === 'warn' && 'text-orange-600 dark:text-orange-400',
+          tone === 'warn' && 'text-red-600 dark:text-red-400',
           tone === 'muted' && 'text-ink-900/70 dark:text-ink-50/70'
         )}
       >

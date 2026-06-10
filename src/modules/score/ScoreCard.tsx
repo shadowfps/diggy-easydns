@@ -9,8 +9,8 @@ interface ScoreCardProps {
 
 function scoreColor(s: number) {
   if (s >= 85) return { bar: 'bg-emerald-500', text: 'text-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' };
-  if (s >= 65) return { bar: 'bg-diggy-500', text: 'text-diggy-500', badge: 'bg-diggy-500/10 text-diggy-600 dark:text-diggy-400' };
-  if (s >= 40) return { bar: 'bg-orange-500', text: 'text-orange-500', badge: 'bg-orange-500/10 text-orange-600 dark:text-orange-400' };
+  if (s >= 65) return { bar: 'bg-emerald-500', text: 'text-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' };
+  if (s >= 40) return { bar: 'bg-red-500', text: 'text-red-500', badge: 'bg-red-500/10 text-red-600 dark:text-red-400' };
   return { bar: 'bg-red-500', text: 'text-red-500', badge: 'bg-red-500/10 text-red-600 dark:text-red-400' };
 }
 
@@ -61,8 +61,8 @@ export function ScoreCard({ score }: ScoreCardProps) {
 
       <div className="flex items-center gap-4 mt-4 text-xs">
         <Stat label="ok" count={score.counts.success} dot="bg-emerald-500" />
-        <Stat label="info" count={score.counts.info} dot="bg-accent-500" />
-        <Stat label="warn" count={score.counts.warning} dot="bg-orange-500" />
+        <Stat label="info" count={score.counts.info} dot="bg-ink-500" />
+        <Stat label="warn" count={score.counts.warning} dot="bg-red-500" />
         <Stat label="krit" count={score.counts.critical} dot="bg-red-500" />
       </div>
     </motion.div>

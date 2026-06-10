@@ -119,6 +119,25 @@ export interface WhoisInfo {
   source?: string;
 }
 
+export interface IpDetails {
+  ip: string;
+  type?: 'IPv4' | 'IPv6' | string;
+  reverse?: string;
+  organization?: string;
+  isp?: string;
+  asn?: string;
+  asnName?: string;
+  asnDomain?: string;
+  network?: string;
+  country?: string;
+  region?: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+  timezone?: string;
+  source?: string;
+}
+
 export type PageSpeedStrategy = 'mobile' | 'desktop';
 
 export interface PageSpeedReport {
@@ -154,6 +173,42 @@ export interface PageSpeedReport {
   }[];
 }
 
+// VirusTotal Domain-Scan
+export type VirusScanVerdict = 'clean' | 'suspicious' | 'malicious';
+
+export interface VirusScanVendorResult {
+  name: string;
+  category: 'malicious' | 'suspicious' | 'harmless' | 'undetected' | 'timeout';
+  result: string;
+}
+
+export interface VirusScanReport {
+  domain: string;
+  scannedAt: string;
+  reputation: number;
+  verdict: VirusScanVerdict;
+  stats: {
+    malicious: number;
+    suspicious: number;
+    harmless: number;
+    undetected: number;
+    timeout: number;
+  };
+  vendors: VirusScanVendorResult[];
+  categories: Record<string, string>;
+  totalVotes: { harmless: number; malicious: number };
+  lastAnalysisDate: string;
+}
+
+export type TechCategory = 'cms' | 'framework' | 'language' | 'css' | 'server' | 'library' | 'cdn' | 'hosting';
+
+export interface DetectedTech {
+  name: string;
+  category: TechCategory;
+  version?: string;
+  confidence: 'high' | 'medium';
+}
+
 // Gesamter Lookup-Report
 export interface LookupReport {
   domain: string;
@@ -166,4 +221,5 @@ export interface LookupReport {
   whois?: WhoisInfo;
   findings: Finding[];
   healthScore: HealthScore;
+  techStack: DetectedTech[];
 }

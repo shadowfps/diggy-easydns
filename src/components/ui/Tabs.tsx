@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/cn';
 
-export type TabId = 'records' | 'propagation' | 'security' | 'mail' | 'findings' | 'whois' | 'speed';
+export type TabId = 'records' | 'propagation' | 'security' | 'mail' | 'findings' | 'whois' | 'speed' | 'virusscan';
 
 interface Tab {
   id: TabId;
@@ -40,7 +40,7 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
           {active === tab.id && (
             <motion.div
               layoutId="active-tab"
-              className="absolute bottom-0 left-0 right-0 h-0.5 bg-diggy-500"
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-ink-950 dark:bg-ink-50"
               transition={{ type: 'spring', stiffness: 380, damping: 30 }}
             />
           )}

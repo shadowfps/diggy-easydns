@@ -29,7 +29,7 @@ function SslCard({ ssl }: { ssl?: SslInfo }) {
         className="surface rounded-xl p-5"
       >
         <CardHeader icon={<Lock className="w-4 h-4" />} title="SSL / TLS" />
-        <div className="mt-4 flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+        <div className="mt-4 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
           <ShieldOff className="w-4 h-4" />
           <span>Kein TLS auf Port 443 erreichbar</span>
         </div>
@@ -41,7 +41,7 @@ function SslCard({ ssl }: { ssl?: SslInfo }) {
     ssl.daysUntilExpiry < 0
       ? 'text-red-600 dark:text-red-400'
       : ssl.daysUntilExpiry < 14
-      ? 'text-orange-600 dark:text-orange-400'
+      ? 'text-red-600 dark:text-red-400'
       : 'text-emerald-600 dark:text-emerald-400';
 
   const validFrom = new Date(ssl.validFrom).toLocaleDateString('de-DE');

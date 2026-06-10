@@ -1,16 +1,31 @@
 import { Search } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, type FormEvent } from 'react';
 
 interface SearchBarProps {
   onSearch: (domain: string) => void;
+  value: string;
+  onValueChange: (value: string) => void;
+  focusSignal?: number;
   loading?: boolean;
 }
 
 const EXAMPLES = ['github.com', 'cloudflare.com', 'mittwald.de'];
 
-export function SearchBar({ onSearch, loading }: SearchBarProps) {
-  const [value, setValue] = useState('');
+export function SearchBar({
+  onSearch,
+  value,
+  onValueChange,
+  focusSignal = 0,
+  loading,
+}: SearchBarProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (focusSignal <= 0) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [focusSignal]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -30,18 +45,19 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
           <Search className="w-4 h-4" />
         </div>
         <input
+          ref={inputRef}
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => onValueChange(e.target.value)}
           placeholder="example.com"
           autoComplete="off"
           spellCheck={false}
-          className="w-full h-14 pl-11 pr-32 rounded-xl bg-white dark:bg-ink-900 border border-ink-100 dark:border-ink-900/80 font-mono text-base placeholder:text-ink-900/30 dark:placeholder:text-ink-50/30 focus:outline-none focus:ring-2 focus:ring-diggy-500/40 focus:border-diggy-500/60 transition-all"
+          className="w-full h-14 pl-11 pr-32 rounded-xl bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 font-mono text-base placeholder:text-ink-900/30 dark:placeholder:text-ink-50/30 focus:outline-none focus:ring-2 focus:ring-ink-900/20 dark:focus:ring-ink-50/25 focus:border-ink-900/60 dark:focus:border-ink-50/60 transition-all"
         />
         <button
           type="submit"
           disabled={loading || !value.trim()}
-          className="absolute right-2 top-2 h-10 px-4 rounded-lg bg-diggy-500 hover:bg-diggy-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors flex items-center justify-center"
+          className="absolute right-2 top-2 h-10 px-4 rounded-lg bg-ink-950 hover:bg-ink-800 dark:bg-ink-50 dark:hover:bg-ink-200 disabled:opacity-50 disabled:cursor-not-allowed text-white dark:text-ink-950 font-medium text-sm transition-colors flex items-center justify-center"
           aria-label="Suchen"
         >
           {loading ? (
@@ -63,10 +79,10 @@ export function SearchBar({ onSearch, loading }: SearchBarProps) {
               type="button"
               disabled={loading}
               onClick={() => {
-                setValue(ex);
+                onValueChange(ex);
                 onSearch(ex);
               }}
-              className="text-accent-500 hover:text-accent-400 hover:underline transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
+              className="text-ink-900 dark:text-ink-50 hover:underline transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
             >
               {ex}
             </button>

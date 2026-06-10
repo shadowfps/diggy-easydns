@@ -1,4 +1,4 @@
-import type { LookupReport, PageSpeedReport, PageSpeedStrategy } from '@/types/dns';
+import type { IpDetails, LookupReport, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
 export interface LookupError {
   error: string;
@@ -40,6 +40,44 @@ export async function lookupPageSpeed(
     let errorPayload: LookupError = {
       error: 'pagespeed_failed',
       message: `PageSpeed fehlgeschlagen (${res.status})`,
+    };
+    try {
+      errorPayload = await res.json();
+    } catch {
+      // JSON-parse fehlgeschlagen — Default-Message reicht
+    }
+    throw new Error(errorPayload.message);
+  }
+
+  return res.json();
+}
+
+export async function lookupVirusScan(domain: string): Promise<VirusScanReport> {
+  const res = await fetch(`/api/virusscan?domain=${encodeURIComponent(domain)}`);
+
+  if (!res.ok) {
+    let errorPayload: LookupError = {
+      error: 'virusscan_failed',
+      message: `VirusTotal-Scan fehlgeschlagen (${res.status})`,
+    };
+    try {
+      errorPayload = await res.json();
+    } catch {
+      // JSON-parse fehlgeschlagen — Default-Message reicht
+    }
+    throw new Error(errorPayload.message);
+  }
+
+  return res.json();
+}
+
+export async function lookupIpDetails(ip: string): Promise<IpDetails> {
+  const res = await fetch(`/api/ip-details?ip=${encodeURIComponent(ip)}`);
+
+  if (!res.ok) {
+    let errorPayload: LookupError = {
+      error: 'ip_details_failed',
+      message: `IP-Details fehlgeschlagen (${res.status})`,
     };
     try {
       errorPayload = await res.json();

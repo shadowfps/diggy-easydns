@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import type { RecordType, ResolverResult } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { IpAddressLink } from '@/components/ip/IpAddressLink';
 
 interface PropagationViewProps {
   results: ResolverResult[];
@@ -62,8 +63,8 @@ export function PropagationView({ results }: PropagationViewProps) {
               className={cn(
                 'px-3 py-1 rounded-full text-xs font-medium transition-all',
                 activeType === t
-                  ? 'bg-accent-500 text-white'
-                  : 'bg-ink-100 dark:bg-ink-900 text-ink-900/70 dark:text-ink-50/70 hover:bg-ink-100/80 dark:hover:bg-ink-900/80'
+                  ? 'bg-ink-950 text-white dark:bg-ink-50 dark:text-ink-950'
+                  : 'bg-ink-100 dark:bg-ink-900 text-ink-900/70 dark:text-ink-50/70 hover:bg-ink-200/70 dark:hover:bg-ink-800/80'
               )}
             >
               {t}
@@ -94,7 +95,7 @@ export function PropagationView({ results }: PropagationViewProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
-            className="mt-4 pt-4 border-t border-ink-100 dark:border-ink-900/80 flex items-start gap-2 text-xs text-orange-600 dark:text-orange-400"
+            className="mt-4 pt-4 border-t border-ink-100 dark:border-ink-900/80 flex items-start gap-2 text-xs text-red-600 dark:text-red-400"
           >
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>
@@ -155,18 +156,26 @@ function ResolverRow({
       </div>
       <span
         className={cn(
-          'font-mono text-xs truncate flex items-center gap-1.5',
+          'min-w-0 max-w-[60%] font-mono text-xs flex items-center justify-end gap-1.5 text-right',
           result.error
             ? 'text-red-500'
             : values.length === 0
             ? 'text-ink-900/30 dark:text-ink-50/30'
             : isMismatch
-            ? 'text-orange-500'
+            ? 'text-red-500'
             : 'text-emerald-600 dark:text-emerald-400'
         )}
       >
         {result.error && <AlertCircle className="w-3 h-3 shrink-0" />}
-        <span className="truncate">{display}</span>
+        {result.error || values.length === 0 ? (
+          <span className="truncate">{display}</span>
+        ) : (
+          <span className="flex min-w-0 flex-wrap justify-end gap-x-2 gap-y-1">
+            {values.map((value) => (
+              <IpAddressLink key={value} ip={value} className="text-inherit" />
+            ))}
+          </span>
+        )}
       </span>
     </motion.div>
   );

@@ -5,38 +5,55 @@
 @layer base {
   :root {
     color-scheme: light;
-    --bg-base: 248 247 244;
+    --bg-base: 250 250 250;
     --bg-elevated: 255 255 255;
-    --text-primary: 22 20 15;
-    --text-secondary: 75 71 64;
-    --text-tertiary: 130 124 112;
-    --border-subtle: 230 226 217;
+    --text-primary: 9 9 11;
+    --text-secondary: 63 63 70;
+    --text-tertiary: 113 113 122;
+    --border-subtle: 228 228 231;
     /* Hintergrund-Decor — dezenter im Light-Mode */
-    --bg-grid: rgba(146, 15, 237, 0.05);
-    --bg-glow-strong: rgba(146, 15, 237, 0.10);
-    --bg-glow-soft: rgba(146, 15, 237, 0.04);
-    --grain-opacity: 0.012;
+    --bg-grid: rgba(0, 0, 0, 0.035);
+    --bg-glow-strong: rgba(0, 0, 0, 0.035);
+    --bg-glow-soft: rgba(0, 0, 0, 0.018);
+    --grain-opacity: 0.008;
   }
 
   .dark {
     color-scheme: dark;
-    --bg-base: 11 10 7;
-    --bg-elevated: 22 20 15;
-    --text-primary: 248 247 244;
-    --text-secondary: 200 195 184;
-    --text-tertiary: 140 132 118;
-    --border-subtle: 38 34 28;
+    --bg-base: 9 9 11;
+    --bg-elevated: 24 24 27;
+    --text-primary: 250 250 250;
+    --text-secondary: 212 212 216;
+    --text-tertiary: 161 161 170;
+    --border-subtle: 39 39 42;
     /* Hintergrund-Decor — kräftiger im Dark-Mode (mehr Sichtbarkeit auf Schwarz) */
-    --bg-grid: rgba(146, 15, 237, 0.09);
-    --bg-glow-strong: rgba(146, 15, 237, 0.18);
-    --bg-glow-soft: rgba(146, 15, 237, 0.07);
-    --grain-opacity: 0.018;
+    --bg-grid: rgba(255, 255, 255, 0.035);
+    --bg-glow-strong: rgba(255, 255, 255, 0.045);
+    --bg-glow-soft: rgba(255, 255, 255, 0.018);
+    --grain-opacity: 0.01;
   }
 
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* Fluid root font-size: alles rem-basierte skaliert automatisch mit */
+    font-size: 16px;
+  }
+
+  /* QHD / 1440p */
+  @media screen and (min-width: 2048px) {
+    html { font-size: 18px; }
+  }
+
+  /* QHD+ / 2560p */
+  @media screen and (min-width: 2560px) {
+    html { font-size: 20px; }
+  }
+
+  /* 4K */
+  @media screen and (min-width: 3200px) {
+    html { font-size: 24px; }
   }
 
   body {
@@ -50,7 +67,7 @@
     background-attachment: fixed;
   }
 
-  /* Layer 1: Lila-Grid-Pattern, fadet zu den Rändern aus.
+  /* Layer 1: Neutral grid pattern, fading towards the edges.
    * Mask-image macht aus dem unendlichen Grid einen weichen Lichtkegel. */
   body::before {
     content: '';
@@ -67,7 +84,7 @@
     mask-image: radial-gradient(ellipse 80% 75% at center, black 5%, transparent 80%);
   }
 
-  /* Layer 2: Brand-Color-Glow oben und unten als Lighting. */
+  /* Layer 2: Restrained neutral lighting. */
   body::after {
     content: '';
     position: fixed;
@@ -80,7 +97,7 @@
   }
 
   ::selection {
-    @apply bg-diggy-400/30 text-diggy-900 dark:text-diggy-50;
+    @apply bg-ink-900/15 text-ink-950 dark:bg-ink-50/20 dark:text-ink-50;
   }
 }
 
@@ -95,7 +112,7 @@
 
   /* Animated dots loader for Diggy */
   .dig-dots span {
-    @apply inline-block w-1.5 h-1.5 rounded-full bg-diggy-500;
+    @apply inline-block w-1.5 h-1.5 rounded-full bg-ink-50 dark:bg-ink-950;
     animation: pulse-soft 1.4s ease-in-out infinite;
   }
   .dig-dots span:nth-child(2) { animation-delay: 0.2s; }
@@ -110,5 +127,16 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes scanBar {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scaleX(0.45);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1);
   }
 }

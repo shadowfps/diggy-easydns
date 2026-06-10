@@ -121,4 +121,5 @@ export const MOCK_REPORT: LookupReport = {
     verdict: 'Solides Setup',
     counts: { success: 12, info: 3, warning: 2, critical: 1 },
   },
+  techStack: [],
 };
