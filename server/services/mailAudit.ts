@@ -52,10 +52,11 @@ export async function auditMail(
   /** SPF aus dem Apex-TXT-Lookup, falls schon vorhanden */
   spfRecord?: string
 ): Promise<MailSecurity> {
-  const [dmarc, dkimSelectors, mtaSts] = await Promise.all([
+  const [dmarc, dkimSelectors, mtaSts, hasMx] = await Promise.all([
     lookupDmarc(domain),
     probeDkimSelectors(domain),
     lookupMtaSts(domain),
+    hasMxRecords(domain),
   ]);
 
   const spf = analyzeSpf(spfRecord);
@@ -65,6 +66,7 @@ export async function auditMail(
     dmarc,
     dkim: { selectors: dkimSelectors },
     mtaSts,
+    hasMx,
   };
 }
 
@@ -199,5 +201,14 @@ async function lookupMtaSts(domain: string): Promise<MailSecurity['mtaSts']> {
     return { present: !!mtaSts };
   } catch {
     return { present: false };
+  }
+}
+
+async function hasMxRecords(domain: string): Promise<boolean> {
+  try {
+    const records = await resolver.resolveMx(domain);
+    return records.length > 0;
+  } catch {
+    return false;
   }
 }

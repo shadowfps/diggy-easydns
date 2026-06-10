@@ -9,10 +9,13 @@ const resolver = new dnsPromises.Resolver({ timeout: 5000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
 
 /**
- * Welche Record-Typen wir standardmäßig abfragen.
+ * Welche Record-Typen wir für die Apex-Domain abfragen.
  * CNAME wird separat behandelt (kann Apex-A/AAAA "ersetzen").
  */
-const STANDARD_TYPES: RecordType[] = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CAA', 'SOA'];
+const APEX_TYPES: RecordType[] = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CAA', 'SOA'];
+
+/** Hostname-relevante Typen für Subdomains (z. B. www.example.com). */
+const HOSTNAME_TYPES: RecordType[] = ['A', 'AAAA', 'TXT'];
 
 interface LookupOptions {
   /** Zusätzlich gängige Subdomains probieren (www, mail) */
@@ -28,10 +31,11 @@ export async function lookupStandardRecords(
   options: LookupOptions = {}
 ): Promise<DnsRecord[]> {
   const records: DnsRecord[] = [];
+  const typesToQuery = isApexDomain(domain) ? APEX_TYPES : HOSTNAME_TYPES;
 
   // Alle Record-Typen parallel abfragen
   const results = await Promise.allSettled(
-    STANDARD_TYPES.map((type) => lookupSingleType(domain, type))
+    typesToQuery.map((type) => lookupSingleType(domain, type))
   );
 
   results.forEach((result, idx) => {
@@ -39,7 +43,7 @@ export async function lookupStandardRecords(
       records.push(...result.value);
     } else {
       // Logging für Debugging — fehlende Records sind erwartbar (z.B. keine MX)
-      const type = STANDARD_TYPES[idx];
+      const type = typesToQuery[idx];
       const err = result.reason as NodeJS.ErrnoException;
       if (err.code !== 'ENODATA' && err.code !== 'ENOTFOUND') {
         console.warn(`[dns] ${type} lookup failed for ${domain}:`, err.code ?? err.message);
@@ -191,15 +195,41 @@ export function isValidDomain(input: string): boolean {
 }
 
 /**
- * Normalisiert eine Eingabe — entfernt Protokoll, www., trailing slash, etc.
- * Damit der User auch "https://example.com/" eingeben kann.
+ * Normalisiert eine Eingabe — entfernt Protokoll, Pfad, Port, trailing dot.
+ * Subdomains (z. B. www.) bleiben erhalten, damit gezielt geprüft werden kann.
  */
 export function normalizeDomain(input: string): string {
   return input
     .trim()
     .toLowerCase()
     .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
     .replace(/\/.*$/, '')
-    .replace(/:\d+$/, ''); // Port entfernen
+    .replace(/:\d+$/, '') // Port entfernen
+    .replace(/\.$/, ''); // DNS-Notation example.com.
+}
+
+/**
+ * Ermittelt die Apex-Domain für Zonen-/Mail-Checks.
+ * Heuristik: letzte zwei Labels (z. B. www.mittwald.de → mittwald.de).
+ */
+export function getApexDomain(domain: string): string {
+  const parts = domain.split('.').filter(Boolean);
+  if (parts.length <= 2) return domain;
+  return parts.slice(-2).join('.');
+}
+
+export function isApexDomain(domain: string): boolean {
+  return domain === getApexDomain(domain);
+}
+
+/** Holt den SPF-Record von der Apex-Domain (für Mail-Audit bei Subdomain-Lookups). */
+export async function lookupSpfRecord(domain: string): Promise<string | undefined> {
+  try {
+    const results = await resolver.resolveTxt(domain);
+    return results
+      .map((chunks) => chunks.join(''))
+      .find((value) => value.toLowerCase().startsWith('v=spf1'));
+  } catch {
+    return undefined;
+  }
 }

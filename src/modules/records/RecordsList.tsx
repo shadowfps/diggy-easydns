@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useState, useMemo } from 'react';
 import type { DnsRecord, RecordType } from '@/types/dns';
 import { cn } from '@/lib/cn';
-import { IpAddressLink, isInspectableIp } from '@/components/ip/IpAddressLink';
+import { IpAddressLink, IpOwnerLabel, isInspectableIp } from '@/components/ip/IpAddressLink';
 
 interface RecordsListProps {
   records: DnsRecord[];
@@ -56,14 +56,17 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
               <span className="text-xs font-mono font-medium text-ink-700 dark:text-ink-300">
                 {record.type}
               </span>
-              <span className="min-w-0 flex items-center font-mono text-xs text-ink-900/80 dark:text-ink-50/80">
+              <span className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-xs text-ink-900/80 dark:text-ink-50/80">
                 {record.priority !== undefined && (
                   <span className="text-ink-900/40 dark:text-ink-50/40 mr-2 shrink-0">
                     {record.priority}
                   </span>
                 )}
                 {hasIpDetails ? (
-                  <IpAddressLink ip={record.value} className="text-ink-900/80 dark:text-ink-50/80" />
+                  <>
+                    <IpAddressLink ip={record.value} className="text-ink-900/80 dark:text-ink-50/80" />
+                    <IpOwnerLabel ip={record.value} />
+                  </>
                 ) : record.type === 'NS' && onUseDomain ? (
                   <NameserverButton value={record.value} onClick={() => onUseDomain(record.value)} />
                 ) : (

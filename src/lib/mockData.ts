@@ -68,6 +68,7 @@ export const MOCK_REPORT: LookupReport = {
       ],
     },
     mtaSts: { present: false },
+    hasMx: false,
   },
   whois: {
     registrar: 'IANA Reserved',

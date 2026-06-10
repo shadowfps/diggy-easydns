@@ -7,10 +7,11 @@ import { cn } from '@/lib/cn';
 interface HeaderProps {
   onHome?: () => void;
   onHistory?: () => void;
+  onAvailability?: () => void;
   onAbout?: () => void;
 }
 
-export function Header({ onHome, onHistory, onAbout }: HeaderProps) {
+export function Header({ onHome, onHistory, onAvailability, onAbout }: HeaderProps) {
   const { theme, toggle } = useTheme();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,11 @@ export function Header({ onHome, onHistory, onAbout }: HeaderProps) {
   const handleAbout = () => {
     setOpen(false);
     onAbout?.();
+  };
+
+  const handleAvailability = () => {
+    setOpen(false);
+    onAvailability?.();
   };
 
   return (
@@ -126,6 +132,7 @@ export function Header({ onHome, onHistory, onAbout }: HeaderProps) {
                 className="absolute right-0 top-full mt-2 w-72 rounded-2xl bg-white dark:bg-ink-900 border border-ink-100 dark:border-ink-900/80 shadow-2xl shadow-black/10 dark:shadow-black/40 p-2 origin-top-right"
               >
                 <MenuItem onClick={handleHistory} label="History" />
+                <MenuItem onClick={handleAvailability} label="Available Check" />
                 <MenuItem onClick={handleAbout} label="About" />
 
                 <div className="border-t border-ink-100 dark:border-ink-900/80 my-2" />

@@ -13,6 +13,7 @@ import type {
 
 interface BuildReportInput {
   domain: string;
+  apexDomain: string;
   records: DnsRecord[];
   propagation: ResolverResult[];
   dnssec: DnssecInfo;
@@ -30,8 +31,8 @@ interface BuildReportInput {
  */
 export function buildReport(input: BuildReportInput): LookupReport {
   const findings: Finding[] = [
-    ...dnsFindings(input.records),
-    ...mailFindings(input.records, input.mail, input.domain),
+    ...dnsFindings(input.records, input.domain, input.apexDomain),
+    ...mailFindings(input.mail, input.apexDomain),
     ...dnssecFindings(input.dnssec),
     ...sslFindings(input.ssl),
     ...propagationFindings(input.propagation),
@@ -57,17 +58,20 @@ export function buildReport(input: BuildReportInput): LookupReport {
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
-function dnsFindings(records: DnsRecord[]): Finding[] {
+function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {
   const findings: Finding[] = [];
   const types = new Set(records.map((r) => r.type));
-  const apex = records[0]?.name ?? 'example.com';
+  const isApex = domain === apexDomain;
+  const hostLabel = domain;
 
   if (!types.has('A') && !types.has('AAAA') && !types.has('CNAME')) {
     findings.push({
       id: 'no-address',
       severity: 'critical',
       title: 'Keine A/AAAA/CNAME-Records gefunden',
-      description: 'Die Domain löst zu keiner IP auf. Besucher können die Seite nicht erreichen.',
+      description: isApex
+        ? 'Die Domain löst zu keiner IP auf. Besucher können die Seite nicht erreichen.'
+        : `Der Hostname ${domain} löst zu keiner IP auf. Besucher können diesen Host nicht erreichen.`,
       category: 'dns',
     });
   }
@@ -77,12 +81,14 @@ function dnsFindings(records: DnsRecord[]): Finding[] {
       id: 'no-ipv6',
       severity: 'info',
       title: 'Kein IPv6 (AAAA-Record)',
-      description: 'Domain ist nur über IPv4 erreichbar. IPv6 verbessert Erreichbarkeit für moderne Netzwerke.',
+      description: isApex
+        ? 'Domain ist nur über IPv4 erreichbar. IPv6 verbessert Erreichbarkeit für moderne Netzwerke.'
+        : `${domain} ist nur über IPv4 erreichbar.`,
       category: 'dns',
     });
   }
 
-  if (!types.has('NS')) {
+  if (isApex && !types.has('NS')) {
     findings.push({
       id: 'no-ns',
       severity: 'critical',
@@ -92,7 +98,7 @@ function dnsFindings(records: DnsRecord[]): Finding[] {
     });
   }
 
-  if (!types.has('CAA')) {
+  if (isApex && !types.has('CAA')) {
     findings.push({
       id: 'no-caa',
       severity: 'info',
@@ -100,11 +106,11 @@ function dnsFindings(records: DnsRecord[]): Finding[] {
       description: 'Mit CAA-Records legst du fest, welche Certificate Authorities für deine Domain Zertifikate ausstellen dürfen — ein einfacher Schutz gegen Mis-Issuance.',
       fix: {
         explanation: 'Lege einen CAA-Record an, der nur deine genutzte CA erlaubt.',
-        snippet: `${apex}  CAA  0 issue "letsencrypt.org"`,
+        snippet: `${hostLabel}  CAA  0 issue "letsencrypt.org"`,
       },
       category: 'security',
     });
-  } else {
+  } else if (isApex) {
     findings.push({
       id: 'caa-present',
       severity: 'success',
@@ -119,13 +125,9 @@ function dnsFindings(records: DnsRecord[]): Finding[] {
 
 /* ─── Mail ────────────────────────────────────────────────────────────── */
 
-function mailFindings(
-  records: DnsRecord[],
-  mail: MailSecurity,
-  domain: string
-): Finding[] {
+function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
   const findings: Finding[] = [];
-  const hasMx = records.some((r) => r.type === 'MX');
+  const hasMx = mail.hasMx;
 
   // Wenn keine MX → nicht für Mail eingerichtet, aber wir prüfen trotzdem
   // Spoofing-Schutz (jemand kann ja in deinem Namen Mails versenden, auch
@@ -142,8 +144,8 @@ function mailFindings(
       fix: {
         explanation: 'Lege einen SPF-Record als TXT-Record auf der Domain an.',
         snippet: hasMx
-          ? `${domain}  TXT  "v=spf1 mx ~all"`
-          : `${domain}  TXT  "v=spf1 -all"`,
+          ? `${apexDomain}  TXT  "v=spf1 mx ~all"`
+          : `${apexDomain}  TXT  "v=spf1 -all"`,
       },
       category: 'mail',
     });
@@ -176,7 +178,7 @@ function mailFindings(
       description: 'Ohne DMARC können Angreifer leichter E-Mails in deinem Namen verschicken (Spoofing).',
       fix: {
         explanation: 'Lege einen DMARC-Record an. Mit p=none läuft erstmal nur Reporting, ohne abzulehnen.',
-        snippet: `_dmarc.${domain}  TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@${domain}"`,
+        snippet: `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@${apexDomain}"`,
       },
       category: 'mail',
     });

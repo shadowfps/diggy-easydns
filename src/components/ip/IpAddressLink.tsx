@@ -27,6 +27,100 @@ interface IpAddressLinkProps {
 }
 
 const detailsCache = new Map<string, IpDetails>();
+const pendingRequests = new Map<string, Promise<IpDetails>>();
+
+async function loadIpDetails(ip: string): Promise<IpDetails> {
+  const cached = detailsCache.get(ip);
+  if (cached) return cached;
+
+  const pending = pendingRequests.get(ip);
+  if (pending) return pending;
+
+  const request = lookupIpDetails(ip)
+    .then((result) => {
+      detailsCache.set(ip, result);
+      return result;
+    })
+    .finally(() => {
+      pendingRequests.delete(ip);
+    });
+
+  pendingRequests.set(ip, request);
+  return request;
+}
+
+export function formatIpOwnerLabel(details: IpDetails): string | null {
+  return details.organization ?? details.isp ?? details.asnName ?? details.asn ?? null;
+}
+
+export function useIpDetails(ip: string, enabled = true) {
+  const [details, setDetails] = useState<IpDetails | null>(() => detailsCache.get(ip) ?? null);
+  const [loading, setLoading] = useState(enabled && !detailsCache.has(ip));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const cached = detailsCache.get(ip);
+    if (cached) {
+      setDetails(cached);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    let stale = false;
+    setLoading(true);
+    setError(null);
+
+    loadIpDetails(ip)
+      .then((result) => {
+        if (stale) return;
+        setDetails(result);
+      })
+      .catch((err) => {
+        if (stale) return;
+        setError(err instanceof Error ? err.message : 'IP-Details konnten nicht geladen werden.');
+      })
+      .finally(() => {
+        if (!stale) setLoading(false);
+      });
+
+    return () => {
+      stale = true;
+    };
+  }, [enabled, ip]);
+
+  return { details, loading, error };
+}
+
+export function IpOwnerLabel({ ip, className }: { ip: string; className?: string }) {
+  const { details, loading } = useIpDetails(ip);
+
+  if (loading) {
+    return (
+      <span className={cn('text-xs text-ink-900/30 dark:text-ink-50/30', className)} aria-hidden>
+        …
+      </span>
+    );
+  }
+
+  const label = details ? formatIpOwnerLabel(details) : null;
+  if (!label) return null;
+
+  return (
+    <span
+      className={cn(
+        'min-w-0 truncate font-sans text-sm text-ink-900/55 dark:text-ink-50/55',
+        className
+      )}
+      title={label}
+    >
+      {label}
+    </span>
+  );
+}
+
 const IPV4_PATTERN =
   /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const IPV6_PATTERN = /^[0-9a-f:]+$/i;
@@ -96,10 +190,9 @@ function IpDetailsOverlay({
     setError(null);
     setDetails(null);
 
-    lookupIpDetails(ip)
+    loadIpDetails(ip)
       .then((result) => {
         if (stale) return;
-        detailsCache.set(ip, result);
         setDetails(result);
       })
       .catch((err) => {

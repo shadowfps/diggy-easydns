@@ -4,7 +4,7 @@ import cors from 'cors';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lookupStandardRecords, isValidDomain, normalizeDomain } from './services/dnsLookup.js';
+import { lookupStandardRecords, isValidDomain, normalizeDomain, getApexDomain, isApexDomain, lookupSpfRecord } from './services/dnsLookup.js';
 import { buildReport } from './services/reportBuilder.js';
 import { queryAllResolvers } from './services/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
@@ -15,13 +15,23 @@ import { lookupPageSpeed } from './services/pagespeed.js';
 import { scanVirusTotal } from './services/virusscan.js';
 import { isValidIpAddress, lookupIpDetails } from './services/ipDetails.js';
 import { detectTechStack } from './services/techstack.js';
+import { checkDomainsAvailability } from './services/domainAvailability.js';
+import { isContactMailConfigured, sendContactMessage } from './services/contactMail.js';
+import {
+  assertContactSubmissionAllowed,
+  clampContactFields,
+  ContactChallengeError,
+  ContactRateLimitError,
+  ContactSpamSilentError,
+  issueContactChallenge,
+} from './services/contactSpamGuard.js';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '64kb' }));
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'diggy-api', version: '0.2.0' });
@@ -100,6 +110,107 @@ app.get('/api/virusscan', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/api/contact/status', (_req: Request, res: Response) => {
+  res.json({ configured: isContactMailConfigured() });
+});
+
+app.get('/api/contact/challenge', (req: Request, res: Response) => {
+  if (!isContactMailConfigured()) {
+    return res.status(503).json({
+      error: 'contact_not_configured',
+      message: 'Das Kontaktformular ist derzeit nicht eingerichtet.',
+    });
+  }
+
+  try {
+    res.json(issueContactChallenge(req));
+  } catch (error) {
+    if (error instanceof ContactRateLimitError) {
+      return res.status(429).json({
+        error: 'contact_rate_limited',
+        message: error.message,
+      });
+    }
+    throw error;
+  }
+});
+
+app.post('/api/contact', async (req: Request, res: Response) => {
+  if (!isContactMailConfigured()) {
+    return res.status(503).json({
+      error: 'contact_not_configured',
+      message: 'Das Kontaktformular ist derzeit nicht eingerichtet.',
+    });
+  }
+
+  const body = req.body as Record<string, unknown> | undefined;
+  const fields = clampContactFields({
+    name: String(body?.name ?? ''),
+    email: String(body?.email ?? ''),
+    message: String(body?.message ?? ''),
+    website: body?.website !== undefined ? String(body.website) : undefined,
+    company: body?.company !== undefined ? String(body.company) : undefined,
+    token: String(body?.token ?? ''),
+  });
+
+  try {
+    assertContactSubmissionAllowed(req, fields);
+    const result = await sendContactMessage({
+      name: fields.name,
+      email: fields.email,
+      message: fields.message,
+      website: fields.website,
+      company: fields.company,
+    });
+    res.json(result);
+  } catch (error) {
+    if (error instanceof ContactSpamSilentError) {
+      return res.json({ sent: true });
+    }
+    if (error instanceof ContactRateLimitError) {
+      return res.status(429).json({
+        error: 'contact_rate_limited',
+        message: error.message,
+      });
+    }
+    if (error instanceof ContactChallengeError) {
+      return res.status(400).json({
+        error: 'contact_challenge_failed',
+        message: error.message,
+      });
+    }
+
+    const err = error as Error;
+    const isValidation = err.message.includes('Bitte') || err.message.includes('Nachricht');
+    return res.status(isValidation ? 400 : 502).json({
+      error: 'contact_failed',
+      message: err.message || 'Nachricht konnte nicht gesendet werden.',
+    });
+  }
+});
+
+app.get('/api/domain-check', async (req: Request, res: Response) => {
+  const query = String(req.query.q ?? req.query.domain ?? '').trim();
+
+  if (!query) {
+    return res.status(400).json({
+      error: 'invalid_query',
+      message: 'Bitte einen Domain-Namen eingeben.',
+    });
+  }
+
+  try {
+    const result = await checkDomainsAvailability(query);
+    res.json(result);
+  } catch (error) {
+    const err = error as Error;
+    return res.status(400).json({
+      error: 'domain_check_failed',
+      message: err.message || 'Verfügbarkeits-Check fehlgeschlagen.',
+    });
+  }
+});
+
 /**
  * Haupt-Lookup-Endpoint.
  *
@@ -120,26 +231,28 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
 
   try {
     const start = Date.now();
+    const apexDomain = getApexDomain(domain);
 
     // Standard-Records first — wenn die Domain nicht aufgelöst werden kann,
     // brauchen wir den Rest gar nicht zu probieren.
     const records = await lookupStandardRecords(domain);
 
-    // SPF aus Apex-TXT extrahieren — Mail-Audit kann es so wiederverwenden,
-    // ohne nochmal zu fragen.
-    const spfFromApex = records
-      .filter((r) => r.type === 'TXT')
-      .map((r) => r.value)
-      .find((v) => v.toLowerCase().startsWith('v=spf1'));
+    // SPF liegt auf der Apex-Domain — bei Subdomain-Lookups separat holen.
+    const spfFromApex = isApexDomain(domain)
+      ? records
+          .filter((r) => r.type === 'TXT')
+          .map((r) => r.value)
+          .find((v) => v.toLowerCase().startsWith('v=spf1'))
+      : await lookupSpfRecord(apexDomain);
 
     // Alle weiteren Sub-Checks parallel.
     // Promise.allSettled — ein einzelner Fehler killt den Report nicht.
     const [propagationRes, dnssecRes, sslRes, mailRes, whoisRes, techStackRes] = await Promise.allSettled([
       queryAllResolvers(domain, { types: ['A', 'AAAA'] }),
-      checkDnssec(domain),
+      checkDnssec(apexDomain),
       checkSsl(domain),
-      auditMail(domain, spfFromApex),
-      lookupWhois(domain),
+      auditMail(apexDomain, spfFromApex),
+      lookupWhois(apexDomain),
       detectTechStack(domain),
     ]);
 
@@ -155,11 +268,22 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
           dmarc: { present: false },
           dkim: { selectors: [] },
           mtaSts: { present: false },
+          hasMx: false,
         };
     const whois = whoisRes.status === 'fulfilled' ? whoisRes.value : null;
     const techStack = techStackRes.status === 'fulfilled' ? techStackRes.value : [];
 
-    const report = buildReport({ domain, records, propagation, dnssec, ssl, mail, whois, techStack });
+    const report = buildReport({
+      domain,
+      apexDomain,
+      records,
+      propagation,
+      dnssec,
+      ssl,
+      mail,
+      whois,
+      techStack,
+    });
     const elapsedMs = Date.now() - start;
 
     console.log(
@@ -185,7 +309,7 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
 });
 
 // Production: Frontend aus dist/ ausliefern (SPA).
-const distDir = resolve(__dirname, '../dist');
+const distDir = resolve(__dirname, '../../dist');
 const distIndex = resolve(distDir, 'index.html');
 if (existsSync(distIndex)) {
   app.use(express.static(distDir));

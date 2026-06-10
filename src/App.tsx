@@ -14,6 +14,8 @@ import { PageSpeedView } from '@/modules/speed/PageSpeedView';
 import { VirusScanView } from '@/modules/virusscan/VirusScanView';
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
+import { ImpressumView } from '@/modules/impressum/ImpressumView';
+import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { Loader2 } from 'lucide-react';
 import SplitText from '@/components/ui/SplitText';
@@ -29,7 +31,7 @@ import {
 } from '@/lib/lookupHistory';
 import type { LookupReport, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
-type AppView = 'lookup' | 'history' | 'about';
+type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum';
 
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
@@ -179,6 +181,42 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleAvailability = () => {
+    lookupSeqRef.current += 1;
+    setView('availability');
+    setReport(null);
+    setLoading(false);
+    setError(null);
+    setPageSpeed(null);
+    setPageSpeedLoading(false);
+    setPageSpeedError(null);
+    setVirusScan(null);
+    setVirusScanLoading(false);
+    setVirusScanError(null);
+    if (window.location.pathname !== '/availability') {
+      window.history.pushState(null, '', '/availability');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleImpressum = () => {
+    lookupSeqRef.current += 1;
+    setView('impressum');
+    setReport(null);
+    setLoading(false);
+    setError(null);
+    setPageSpeed(null);
+    setPageSpeedLoading(false);
+    setPageSpeedError(null);
+    setVirusScan(null);
+    setVirusScanLoading(false);
+    setVirusScanError(null);
+    if (window.location.pathname !== '/impressum') {
+      window.history.pushState(null, '', '/impressum');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleClearHistory = () => {
     setHistoryEntries(clearLookupHistory());
   };
@@ -205,6 +243,14 @@ export default function App() {
     }
     if (window.location.pathname === '/about') {
       setView('about');
+      return;
+    }
+    if (window.location.pathname === '/availability') {
+      setView('availability');
+      return;
+    }
+    if (window.location.pathname === '/impressum') {
+      setView('impressum');
       return;
     }
     const domainFromPath = getDomainFromLookupPath(window.location.pathname);
@@ -245,7 +291,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
-      <Header onHome={handleHome} onHistory={handleHistory} onAbout={handleAbout} />
+      <Header
+        onHome={handleHome}
+        onHistory={handleHistory}
+        onAvailability={handleAvailability}
+        onAbout={handleAbout}
+      />
 
       <main
         className={cn(
@@ -263,6 +314,10 @@ export default function App() {
         )}
 
         {view === 'about' && <AboutView />}
+
+        {view === 'availability' && <AvailabilityView />}
+
+        {view === 'impressum' && <ImpressumView />}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -483,9 +538,21 @@ export default function App() {
         )}
       </main>
 
-      <footer className="px-6 md:px-8 py-8 border-t border-ink-100 dark:border-ink-900">
-        <div className="flex items-center justify-between text-xs text-ink-900/40 dark:text-ink-50/40">
-          <span>diggy · DNS made friendly</span>
+      <footer className="border-t border-ink-100 px-6 py-8 dark:border-ink-900 md:px-8">
+        <div className="flex flex-col gap-3 text-xs text-ink-900/40 dark:text-ink-50/40 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>diggy · DNS made friendly</span>
+            <span className="hidden text-ink-900/20 dark:text-ink-50/20 sm:inline" aria-hidden>
+              ·
+            </span>
+            <button
+              type="button"
+              onClick={handleImpressum}
+              className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
+            >
+              Impressum
+            </button>
+          </div>
           <span>v0.1.0</span>
         </div>
       </footer>
