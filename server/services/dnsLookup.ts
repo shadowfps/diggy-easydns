@@ -1,4 +1,5 @@
 import { promises as dnsPromises } from 'node:dns';
+import { domainToASCII } from 'node:url';
 import type { DnsRecord, RecordType } from '../types.js';
 
 /**
@@ -197,15 +198,22 @@ export function isValidDomain(input: string): boolean {
 /**
  * Normalisiert eine Eingabe — entfernt Protokoll, Pfad, Port, trailing dot.
  * Subdomains (z. B. www.) bleiben erhalten, damit gezielt geprüft werden kann.
+ * IDN-Eingaben (z. B. münsterland.it) werden nach Punycode konvertiert,
+ * damit isValidDomain und DNS-Lookups die ASCII-Form sehen.
  */
 export function normalizeDomain(input: string): string {
-  return input
+  const cleaned = input
     .trim()
     .toLowerCase()
     .replace(/^https?:\/\//, '')
     .replace(/\/.*$/, '')
     .replace(/:\d+$/, '') // Port entfernen
     .replace(/\.$/, ''); // DNS-Notation example.com.
+
+  // domainToASCII liefert '' bei ungültiger Eingabe — dann roh zurückgeben,
+  // damit isValidDomain sauber ablehnen kann.
+  const ascii = domainToASCII(cleaned);
+  return ascii || cleaned;
 }
 
 /**
