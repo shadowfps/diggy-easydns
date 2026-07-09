@@ -580,7 +580,7 @@ export default function App() {
               Impressum
             </button>
           </div>
-          <span>v0.1.0</span>
+          <span>v0.3.0</span>
         </div>
       </footer>
     </div>

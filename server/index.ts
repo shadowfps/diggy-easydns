@@ -34,7 +34,7 @@ app.use(cors());
 app.use(express.json({ limit: '64kb' }));
 
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'diggy-api', version: '0.2.0' });
+  res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
 });
 
 app.get('/api/ip-details', async (req: Request, res: Response) => {
