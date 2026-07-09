@@ -10,7 +10,7 @@ interface SearchBarProps {
   loading?: boolean;
 }
 
-const EXAMPLES = ['github.com', 'www.cloudflare.com', 'www.mittwald.de'];
+const EXAMPLES = ['github.com', 'www.mittwald.de', '1.1.1.1'];
 
 export function SearchBar({
   onSearch,
@@ -49,7 +49,7 @@ export function SearchBar({
           type="text"
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          placeholder="example.com oder www.example.com"
+          placeholder="example.com, www.example.com oder 185.215.158.218"
           autoComplete="off"
           spellCheck={false}
           className="w-full h-14 pl-11 pr-32 rounded-xl bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 font-mono text-base placeholder:text-ink-900/30 dark:placeholder:text-ink-50/30 focus:outline-none focus:ring-2 focus:ring-ink-900/20 dark:focus:ring-ink-50/25 focus:border-ink-900/60 dark:focus:border-ink-50/60 transition-all"

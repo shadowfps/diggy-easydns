@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import type { IpDetails } from '../types.js';
+import { lookupPtrRecords } from './dnsLookup.js';
 
 interface IpWhoResponse {
   success?: boolean;
@@ -73,22 +74,26 @@ export async function lookupIpDetails(ip: string, timeoutMs = 6000): Promise<IpD
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
-  const [geoResult, rdapResult] = await Promise.allSettled([
+  const [geoResult, rdapResult, ptrResult] = await Promise.allSettled([
     fetchIpWho(normalizedIp, timeoutMs),
     fetchRdap(normalizedIp, timeoutMs),
+    lookupPtrRecords(normalizedIp),
   ]);
 
   const geo = geoResult.status === 'fulfilled' ? geoResult.value : null;
   const rdap = rdapResult.status === 'fulfilled' ? rdapResult.value : null;
+  const ptr = ptrResult.status === 'fulfilled' ? ptrResult.value : [];
 
-  if (!geo && !rdap) {
+  if (!geo && !rdap && ptr.length === 0) {
     throw new Error('Keine IP-Details verfügbar.');
   }
 
   const details: IpDetails = {
     ip: geo?.ip ?? normalizedIp,
     type: geo?.type ?? (isIP(normalizedIp) === 4 ? 'IPv4' : 'IPv6'),
-    reverse: cleanText(geo?.reverse),
+    // Echter PTR-Lookup hat Vorrang vor dem Reverse-Feld der Geo-API.
+    reverse: ptr[0] ?? cleanText(geo?.reverse),
+    ptr: ptr.length > 0 ? ptr : undefined,
     organization: cleanText(geo?.org) ?? cleanText(geo?.connection?.org) ?? rdap?.organization ?? rdap?.networkName,
     isp: cleanText(geo?.isp) ?? cleanText(geo?.connection?.isp),
     asn: formatAsn(geo?.asn ?? geo?.connection?.asn),

@@ -230,6 +230,20 @@ export function isApexDomain(domain: string): boolean {
   return domain === getApexDomain(domain);
 }
 
+/**
+ * Reverse-DNS-Lookup (PTR) für eine IP-Adresse.
+ * Liefert alle Hostnamen, auf die die IP zeigt — leer, wenn kein PTR gesetzt ist.
+ */
+export async function lookupPtrRecords(ip: string): Promise<string[]> {
+  try {
+    const hostnames = await resolver.reverse(ip);
+    return hostnames.map((h) => h.replace(/\.$/, ''));
+  } catch {
+    // ENOTFOUND/ENODATA — kein PTR konfiguriert, das ist kein Fehler.
+    return [];
+  }
+}
+
 /** Holt den SPF-Record von der Apex-Domain (für Mail-Audit bei Subdomain-Lookups). */
 export async function lookupSpfRecord(domain: string): Promise<string | undefined> {
   try {

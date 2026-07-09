@@ -127,6 +127,8 @@ export interface IpDetails {
   ip: string;
   type?: 'IPv4' | 'IPv6' | string;
   reverse?: string;
+  /** PTR-Records aus einem echten Reverse-DNS-Lookup (kann mehrere Hostnamen enthalten). */
+  ptr?: string[];
   organization?: string;
   isp?: string;
   asn?: string;

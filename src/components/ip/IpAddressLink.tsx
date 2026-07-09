@@ -313,14 +313,28 @@ function IpDetailsOverlay({
   );
 }
 
-function IpDetailsRows({ details }: { details: IpDetails }) {
+export function IpDetailsRows({ details }: { details: IpDetails }) {
+  const ptrHosts = details.ptr && details.ptr.length > 0 ? details.ptr : details.reverse ? [details.reverse] : [];
+
   return (
     <div className="space-y-2.5">
       <DetailRow icon={<Network className="h-4 w-4" />} label="IP" value={details.ip} mono />
       <DetailRow
         icon={<Server className="h-4 w-4" />}
-        label="Reverse"
-        value={details.reverse ?? <MissingValue>nicht konfiguriert</MissingValue>}
+        label="PTR (Reverse)"
+        value={
+          ptrHosts.length > 0 ? (
+            <span className="flex flex-col items-end gap-0.5 font-mono text-xs">
+              {ptrHosts.map((host) => (
+                <span key={host} className="break-all">
+                  {host}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <MissingValue>nicht konfiguriert</MissingValue>
+          )
+        }
       />
       <DetailRow
         icon={<Building2 className="h-4 w-4" />}

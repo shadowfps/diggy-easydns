@@ -29,6 +29,7 @@ Diggy ist ein webbasiertes DNS-Audit-Tool. Domain eingeben, fertig: Records, Mai
 
 ### Weitere Funktionen
 
+- **IP-Lookup / Reverse DNS** — reine IP-Adresse (IPv4/IPv6) eingeben und PTR-Record, ASN, Netz & Geolocation abrufen
 - **Available Check** — Domain-Verfügbarkeit prüfen (RDAP, u. a. `.de`, `.com`, `.net`)
 - **Lookup-History** — zuletzt abgefragte Domains (lokal im Browser)
 - **Permalinks** — direkt verlinkbare Ergebnisseiten (`/lookup/<domain>`)
@@ -149,6 +150,7 @@ diggy/
 - [x] Tech-Stack-Erkennung
 - [x] Multi-Resolver-Propagation via DNS-over-HTTPS
 - [x] Domain-Verfügbarkeits-Check
+- [x] IP-Lookup mit Reverse DNS (PTR) direkt über die Suche
 - [x] Permalinks & JSON-Export
 - [x] Lookup-History (Browser-lokal)
 - [x] Impressum & Kontaktformular (SMTP, Auto-Reply, Anti-Spam)

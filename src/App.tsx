@@ -16,6 +16,8 @@ import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
 import { ImpressumView } from '@/modules/impressum/ImpressumView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
+import { IpResultView } from '@/modules/ip/IpResultView';
+import { isInspectableIp } from '@/components/ip/IpAddressLink';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { Loader2 } from 'lucide-react';
 import SplitText from '@/components/ui/SplitText';
@@ -36,6 +38,7 @@ type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum';
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
   const [report, setReport] = useState<LookupReport | null>(null);
+  const [ipQuery, setIpQuery] = useState<string | null>(null);
   const [historyEntries, setHistoryEntries] = useState<LookupHistoryEntry[]>(() =>
     readLookupHistory()
   );
@@ -62,13 +65,29 @@ export default function App() {
     const normalizedDomain = domain.trim().toLowerCase();
     if (!normalizedDomain) return;
     const seq = ++lookupSeqRef.current;
-    window.scrollTo({ top: 0, behavior: report ? 'smooth' : 'auto' });
+    window.scrollTo({ top: 0, behavior: report || ipQuery ? 'smooth' : 'auto' });
     setView('lookup');
     setSearchValue(normalizedDomain);
     // Vorherigen Report sofort wegräumen, damit es nie zwei Reports
     // gleichzeitig im DOM gibt (alte Antwort + neue Antwort untereinander).
     setReport(null);
     setError(null);
+
+    // Reine IP-Adresse → Reverse-DNS/PTR-Ansicht statt Domain-Lookup.
+    if (isInspectableIp(normalizedDomain)) {
+      setIpQuery(normalizedDomain);
+      setPageSpeed(null);
+      setPageSpeedError(null);
+      setPageSpeedLoading(false);
+      setVirusScan(null);
+      setVirusScanError(null);
+      setVirusScanLoading(false);
+      setLoading(false);
+      replaceLookupPath(normalizedDomain);
+      return;
+    }
+
+    setIpQuery(null);
     setPageSpeed(null);
     setPageSpeedError(null);
     setPageSpeedLoading(false);
@@ -126,6 +145,7 @@ export default function App() {
     lookupSeqRef.current += 1;
     setView('lookup');
     setReport(null);
+    setIpQuery(null);
     setLoading(false);
     setError(null);
     setPageSpeed(null);
@@ -148,6 +168,7 @@ export default function App() {
     lookupSeqRef.current += 1;
     setView('history');
     setReport(null);
+    setIpQuery(null);
     setLoading(false);
     setError(null);
     setPageSpeed(null);
@@ -167,6 +188,7 @@ export default function App() {
     lookupSeqRef.current += 1;
     setView('about');
     setReport(null);
+    setIpQuery(null);
     setLoading(false);
     setError(null);
     setPageSpeed(null);
@@ -185,6 +207,7 @@ export default function App() {
     lookupSeqRef.current += 1;
     setView('availability');
     setReport(null);
+    setIpQuery(null);
     setLoading(false);
     setError(null);
     setPageSpeed(null);
@@ -203,6 +226,7 @@ export default function App() {
     lookupSeqRef.current += 1;
     setView('impressum');
     setReport(null);
+    setIpQuery(null);
     setLoading(false);
     setError(null);
     setPageSpeed(null);
@@ -287,7 +311,7 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const lookupHasOutput = view === 'lookup' && Boolean(report || loading || error);
+  const lookupHasOutput = view === 'lookup' && Boolean(report || loading || error || ipQuery);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -324,7 +348,7 @@ export default function App() {
             Render blockieren. Da ein Loading-Zwischenstate sowieso die
             Lücke füllt, gibt es kein Overlap-Risiko. */}
         <AnimatePresence>
-          {view === 'lookup' && !report && !loading && (
+          {view === 'lookup' && !report && !loading && !ipQuery && (
             <motion.div
               key="hero"
               initial={{ opacity: 0 }}
@@ -412,6 +436,9 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* IP-Adresse → Reverse-DNS/PTR-Ansicht */}
+        {view === 'lookup' && ipQuery && !loading && <IpResultView ip={ipQuery} />}
 
         {/* Error */}
         {view === 'lookup' && error && (
