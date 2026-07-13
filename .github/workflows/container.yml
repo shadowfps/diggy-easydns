@@ -19,6 +19,8 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  MITTWALD_STACK_ID: 86540922-d203-4150-8776-9cc4e22352bd
+  MITTWALD_CLI_VERSION: v1.20.2
 
 jobs:
   publish:
@@ -64,3 +66,28 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+  deploy:
+    needs: publish
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install mittwald CLI
+        run: |
+          curl -fsSL -o mw.tgz "https://github.com/mittwald/cli/releases/download/${MITTWALD_CLI_VERSION}/mw-${MITTWALD_CLI_VERSION}-9b7de74-linux-x64.tar.gz"
+          tar -xzf mw.tgz
+          echo "$PWD/mw/bin" >> "$GITHUB_PATH"
+
+      - name: Deploy stack to Mittwald
+        env:
+          MITTWALD_API_TOKEN: ${{ secrets.MITTWALD_API_TOKEN }}
+        run: |
+          mw stack deploy \
+            --token "$MITTWALD_API_TOKEN" \
+            --stack-id "$MITTWALD_STACK_ID" \
+            --compose-file compose.mittwald.yml \
+            --env-file mittwald.env.example

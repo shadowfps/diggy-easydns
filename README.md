@@ -113,13 +113,15 @@ Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
 ghcr.io/shadowfps/diggy-easydns:latest
 ```
 
+Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert. Dafür muss im Repository unter **Settings → Secrets and variables → Actions** ein Secret `MITTWALD_API_TOKEN` mit einem gültigen mStudio-API-Token hinterlegt sein.
+
 Versions-Tags wie `v0.3.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
 
 - Projekt: `p-nmi5ji`
 - Container-Stack: `86540922-d203-4150-8776-9cc4e22352bd`
 - Container-Port: `3001/tcp`
 
-Vor einem CLI-Deployment zuerst prüfen, ob der Ziel-Stack weitere Services enthält, da nicht in der Compose-Datei enthaltene Services beim Stack-Abgleich entfernt werden können:
+Für manuelles Deployment zuerst prüfen, ob der Ziel-Stack weitere Services enthält, da nicht in der Compose-Datei enthaltene Services beim Stack-Abgleich entfernt werden können:
 
 ```bash
 mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
