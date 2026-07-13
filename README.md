@@ -96,6 +96,38 @@ openssl rand -base64 32
 
 Das Kontaktformular ist deaktiviert, solange SMTP nicht konfiguriert ist. Anti-Spam: Honeypot, Timing-Token, Rate-Limits, Inhaltsfilter.
 
+## Container & Deployment
+
+Das Production-Image enthält Frontend und API in einem nicht privilegierten Node.js-Prozess. Es lauscht standardmäßig auf Port `3001` und stellt unter `/api/health` einen Healthcheck bereit.
+
+Lokal bauen und starten:
+
+```bash
+docker build -t diggy:local .
+docker run --rm -p 3001:3001 --env-file .env diggy:local
+```
+
+Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
+
+```text
+ghcr.io/shadowfps/diggy-easydns:latest
+```
+
+Versions-Tags wie `v0.3.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
+
+- Projekt: `p-nmi5ji`
+- Container-Stack: `86540922-d203-4150-8776-9cc4e22352bd`
+- Container-Port: `3001/tcp`
+
+Vor einem CLI-Deployment zuerst prüfen, ob der Ziel-Stack weitere Services enthält, da nicht in der Compose-Datei enthaltene Services beim Stack-Abgleich entfernt werden können:
+
+```bash
+mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
+mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file mittwald.env.example
+```
+
+Optionale API-Keys und SMTP-Zugangsdaten werden als Umgebungsvariablen bzw. Secrets direkt am mittwald-Container gepflegt und gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
+
 ## Routen
 
 | Pfad | Beschreibung |
