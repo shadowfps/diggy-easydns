@@ -113,7 +113,14 @@ Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
 ghcr.io/shadowfps/diggy-easydns:latest
 ```
 
-Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert. Dafür muss im Repository unter **Settings → Secrets and variables → Actions** ein Secret `MITTWALD_API_TOKEN` mit einem gültigen mStudio-API-Token hinterlegt sein.
+Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die `${…}`-Platzhalter von `compose.mittwald.yml` interpoliert. Dafür müssen im Repository unter **Settings → Secrets and variables → Actions** folgende **Repository-Secrets** hinterlegt sein:
+
+- `MITTWALD_API_TOKEN` — gültiges mStudio-API-Token
+- SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`
+- Kontakt: `CONTACT_TO`, `CONTACT_FROM`, `CONTACT_FORM_SECRET`
+- Optional: `PAGESPEED_API_KEY`, `VIRUS_TOTAL_API_KEY`
+
+Fehlt eines der SMTP-/Kontakt-Secrets, bricht der Deploy bewusst ab, statt die Stack-Env leer zu überschreiben.
 
 Versions-Tags wie `v0.3.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
 
@@ -125,10 +132,10 @@ Für manuelles Deployment zuerst prüfen, ob der Ziel-Stack weitere Services ent
 
 ```bash
 mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
-mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file mittwald.env.example
+mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file .env
 ```
 
-Optionale API-Keys und SMTP-Zugangsdaten werden als Umgebungsvariablen bzw. Secrets direkt am mittwald-Container gepflegt und gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
+Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Platzhalter in `compose.mittwald.yml` (im CI übernehmen das die GitHub-Secrets). Die Runtime-Secrets gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
 
 ## Routen
 
