@@ -19,11 +19,19 @@ import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { isInspectableIp } from '@/components/ip/IpAddressLink';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
+import {
+  ScoreCardSkeleton,
+  SectionCardsSkeleton,
+  PropagationSkeleton,
+  WhoisSkeleton,
+  ListSkeleton,
+} from '@/components/ui/Skeleton';
 import { Loader2 } from 'lucide-react';
 import SplitText from '@/components/ui/SplitText';
 import TextType from '@/components/ui/TextType';
 import ShinyText from '@/components/ui/ShinyText';
-import { lookupDomain, lookupPageSpeed, lookupVirusScan } from '@/lib/api';
+import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
+import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import {
   clearLookupHistory,
@@ -31,19 +39,19 @@ import {
   saveLookupToHistory,
   type LookupHistoryEntry,
 } from '@/lib/lookupHistory';
-import type { LookupReport, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
+import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
 type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum';
 
+const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
-  const [report, setReport] = useState<LookupReport | null>(null);
+  const lookup = useProgressiveLookup();
   const [ipQuery, setIpQuery] = useState<string | null>(null);
   const [historyEntries, setHistoryEntries] = useState<LookupHistoryEntry[]>(() =>
     readLookupHistory()
   );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pageSpeed, setPageSpeed] = useState<PageSpeedReport | null>(null);
   const [pageSpeedLoading, setPageSpeedLoading] = useState(false);
   const [pageSpeedError, setPageSpeedError] = useState<string | null>(null);
@@ -56,38 +64,14 @@ export default function App() {
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const initialPathHandledRef = useRef(false);
-  // Sequenz-Counter: nur das Ergebnis des zuletzt gestarteten Lookups
-  // darf den State updaten — sonst überschreibt eine späte Antwort eine
-  // frischere und der UI bleibt im falschen Zustand stehen.
-  const lookupSeqRef = useRef(0);
 
-  const handleSearch = async (domain: string) => {
-    const normalizedDomain = domain.trim().toLowerCase();
-    if (!normalizedDomain) return;
-    const seq = ++lookupSeqRef.current;
-    window.scrollTo({ top: 0, behavior: report || ipQuery ? 'smooth' : 'auto' });
-    setView('lookup');
-    setSearchValue(normalizedDomain);
-    // Vorherigen Report sofort wegräumen, damit es nie zwei Reports
-    // gleichzeitig im DOM gibt (alte Antwort + neue Antwort untereinander).
-    setReport(null);
-    setError(null);
+  const report = lookup.report;
+  const records = lookup.records;
+  const recordsLoading = lookup.recordsStatus === 'loading';
+  const recordsErrored = lookup.recordsStatus === 'error';
+  const showReport = view === 'lookup' && lookup.recordsStatus === 'done' && records;
 
-    // Reine IP-Adresse → Reverse-DNS/PTR-Ansicht statt Domain-Lookup.
-    if (isInspectableIp(normalizedDomain)) {
-      setIpQuery(normalizedDomain);
-      setPageSpeed(null);
-      setPageSpeedError(null);
-      setPageSpeedLoading(false);
-      setVirusScan(null);
-      setVirusScanError(null);
-      setVirusScanLoading(false);
-      setLoading(false);
-      replaceLookupPath(normalizedDomain);
-      return;
-    }
-
-    setIpQuery(null);
+  const resetSecondaryScans = () => {
     setPageSpeed(null);
     setPageSpeedError(null);
     setPageSpeedLoading(false);
@@ -95,30 +79,57 @@ export default function App() {
     setVirusScan(null);
     setVirusScanError(null);
     setVirusScanLoading(false);
-    setLoading(true);
-    try {
-      const result = await lookupDomain(normalizedDomain);
-      // Verzichte auf den State-Update, falls inzwischen ein neuer Lookup
-      // gestartet wurde — wir wollen kein Flackern oder falsche Anzeige.
-      if (seq !== lookupSeqRef.current) return;
-      setReport(result);
-      setHistoryEntries(saveLookupToHistory(result));
-      setActiveTab('records');
-      replaceLookupPath(result.domain);
-    } catch (e) {
-      if (seq !== lookupSeqRef.current) return;
-      setError(e instanceof Error ? e.message : 'Lookup fehlgeschlagen');
-    } finally {
-      if (seq === lookupSeqRef.current) setLoading(false);
-    }
   };
 
+  /** Räumt den kompletten Lookup-State ab (beim Verlassen der Lookup-Ansicht). */
+  const clearLookup = () => {
+    lookup.reset();
+    setIpQuery(null);
+    resetSecondaryScans();
+    setPermalinkCopied(false);
+  };
+
+  const handleSearch = (domain: string) => {
+    const normalizedDomain = domain.trim().toLowerCase();
+    if (!normalizedDomain) return;
+    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
+    setView('lookup');
+    setSearchValue(normalizedDomain);
+    resetSecondaryScans();
+
+    // Reine IP-Adresse → Reverse-DNS/PTR-Ansicht statt Domain-Lookup.
+    if (isInspectableIp(normalizedDomain)) {
+      lookup.reset();
+      setIpQuery(normalizedDomain);
+      replaceLookupPath(normalizedDomain);
+      return;
+    }
+
+    setIpQuery(null);
+    setActiveTab('records');
+    lookup.run(normalizedDomain);
+  };
+
+  // Records da → Permalink auf die (server-normalisierte) Domain setzen.
+  useEffect(() => {
+    if (lookup.recordsStatus === 'done' && lookup.domain) {
+      replaceLookupPath(lookup.domain);
+    }
+  }, [lookup.recordsStatus, lookup.domain]);
+
+  // Alle Sektionen fertig → vollständigen Report in die History schreiben.
+  useEffect(() => {
+    if (lookup.allSettled && lookup.report) {
+      setHistoryEntries(saveLookupToHistory(lookup.report));
+    }
+  }, [lookup.allSettled, lookup.report]);
+
   const handleRunVirusScan = async () => {
-    if (!report?.domain || virusScanLoading) return;
+    if (!lookup.domain || virusScanLoading) return;
     setVirusScanError(null);
     setVirusScanLoading(true);
     try {
-      const result = await lookupVirusScan(report.domain);
+      const result = await lookupVirusScan(lookup.domain);
       setVirusScan(result);
     } catch (e) {
       setVirusScanError(e instanceof Error ? e.message : 'VirusTotal-Scan fehlgeschlagen');
@@ -128,11 +139,11 @@ export default function App() {
   };
 
   const handleRunPageSpeed = async () => {
-    if (!report?.domain || pageSpeedLoading) return;
+    if (!lookup.domain || pageSpeedLoading) return;
     setPageSpeedError(null);
     setPageSpeedLoading(true);
     try {
-      const result = await lookupPageSpeed(report.domain, pageSpeedStrategy);
+      const result = await lookupPageSpeed(lookup.domain, pageSpeedStrategy);
       setPageSpeed(result);
     } catch (e) {
       setPageSpeedError(e instanceof Error ? e.message : 'PageSpeed fehlgeschlagen');
@@ -142,20 +153,8 @@ export default function App() {
   };
 
   const handleHome = () => {
-    lookupSeqRef.current += 1;
+    clearLookup();
     setView('lookup');
-    setReport(null);
-    setIpQuery(null);
-    setLoading(false);
-    setError(null);
-    setPageSpeed(null);
-    setPageSpeedLoading(false);
-    setPageSpeedError(null);
-    setPageSpeedStrategy('mobile');
-    setVirusScan(null);
-    setVirusScanLoading(false);
-    setVirusScanError(null);
-    setPermalinkCopied(false);
     setActiveTab('records');
     setSearchValue('');
     if (window.location.pathname !== '/') {
@@ -165,18 +164,8 @@ export default function App() {
   };
 
   const handleHistory = () => {
-    lookupSeqRef.current += 1;
+    clearLookup();
     setView('history');
-    setReport(null);
-    setIpQuery(null);
-    setLoading(false);
-    setError(null);
-    setPageSpeed(null);
-    setPageSpeedLoading(false);
-    setPageSpeedError(null);
-    setVirusScan(null);
-    setVirusScanLoading(false);
-    setVirusScanError(null);
     setHistoryEntries(readLookupHistory());
     if (window.location.pathname !== '/history') {
       window.history.pushState(null, '', '/history');
@@ -185,18 +174,8 @@ export default function App() {
   };
 
   const handleAbout = () => {
-    lookupSeqRef.current += 1;
+    clearLookup();
     setView('about');
-    setReport(null);
-    setIpQuery(null);
-    setLoading(false);
-    setError(null);
-    setPageSpeed(null);
-    setPageSpeedLoading(false);
-    setPageSpeedError(null);
-    setVirusScan(null);
-    setVirusScanLoading(false);
-    setVirusScanError(null);
     if (window.location.pathname !== '/about') {
       window.history.pushState(null, '', '/about');
     }
@@ -204,18 +183,8 @@ export default function App() {
   };
 
   const handleAvailability = () => {
-    lookupSeqRef.current += 1;
+    clearLookup();
     setView('availability');
-    setReport(null);
-    setIpQuery(null);
-    setLoading(false);
-    setError(null);
-    setPageSpeed(null);
-    setPageSpeedLoading(false);
-    setPageSpeedError(null);
-    setVirusScan(null);
-    setVirusScanLoading(false);
-    setVirusScanError(null);
     if (window.location.pathname !== '/availability') {
       window.history.pushState(null, '', '/availability');
     }
@@ -223,18 +192,8 @@ export default function App() {
   };
 
   const handleImpressum = () => {
-    lookupSeqRef.current += 1;
+    clearLookup();
     setView('impressum');
-    setReport(null);
-    setIpQuery(null);
-    setLoading(false);
-    setError(null);
-    setPageSpeed(null);
-    setPageSpeedLoading(false);
-    setPageSpeedError(null);
-    setVirusScan(null);
-    setVirusScanLoading(false);
-    setVirusScanError(null);
     if (window.location.pathname !== '/impressum') {
       window.history.pushState(null, '', '/impressum');
     }
@@ -251,7 +210,7 @@ export default function App() {
     setView('lookup');
     setSearchValue(nextValue);
     setSearchFocusSignal((value) => value + 1);
-    if (!report && window.location.pathname !== '/') {
+    if (!records && window.location.pathname !== '/') {
       window.history.pushState(null, '', '/');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -279,12 +238,13 @@ export default function App() {
     }
     const domainFromPath = getDomainFromLookupPath(window.location.pathname);
     if (!domainFromPath) return;
-    void handleSearch(domainFromPath);
+    handleSearch(domainFromPath);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCopyPermalink = async () => {
-    if (!report?.domain) return;
-    const url = getLookupUrl(report.domain);
+    if (!lookup.domain) return;
+    const url = getLookupUrl(lookup.domain);
     try {
       await navigator.clipboard.writeText(url);
       setPermalinkCopied(true);
@@ -311,7 +271,18 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const lookupHasOutput = view === 'lookup' && Boolean(report || loading || error || ipQuery);
+  const lookupHasOutput =
+    view === 'lookup' && Boolean(records || recordsLoading || recordsErrored || ipQuery);
+
+  const { propagation, dnssec, ssl, mail, whois, techStack } = lookup.sections;
+  const mailData = mail.data;
+  const mailCount = mailData
+    ? (mailData.spf.present ? 1 : 0) +
+        (mailData.dmarc.present ? 1 : 0) +
+        mailData.dkim.selectors.length +
+        (mailData.mtaSts.present ? 1 : 0) || undefined
+    : undefined;
+  const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -348,7 +319,7 @@ export default function App() {
             Render blockieren. Da ein Loading-Zwischenstate sowieso die
             Lücke füllt, gibt es kein Overlap-Risiko. */}
         <AnimatePresence>
-          {view === 'lookup' && !report && !loading && !ipQuery && (
+          {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
             <motion.div
               key="hero"
               initial={{ opacity: 0 }}
@@ -416,13 +387,14 @@ export default function App() {
             onValueChange={setSearchValue}
             focusSignal={searchFocusSignal}
             onSearch={handleSearch}
-            loading={loading}
+            loading={recordsLoading}
           />
         )}
 
-        {/* Loading State */}
+        {/* Loading State — nur bis die Records da sind. Danach übernimmt der
+            Report mit Skeletons für die noch ladenden Sektionen. */}
         <AnimatePresence>
-          {view === 'lookup' && loading && (
+          {view === 'lookup' && recordsLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -438,21 +410,17 @@ export default function App() {
         </AnimatePresence>
 
         {/* IP-Adresse → Reverse-DNS/PTR-Ansicht */}
-        {view === 'lookup' && ipQuery && !loading && <IpResultView ip={ipQuery} />}
+        {view === 'lookup' && ipQuery && !recordsLoading && <IpResultView ip={ipQuery} />}
 
         {/* Error */}
-        {view === 'lookup' && error && (
+        {view === 'lookup' && recordsErrored && (
           <div className="mx-auto mt-8 max-w-2xl rounded-xl bg-red-500/10 p-4 text-center text-sm text-red-600 dark:text-red-400">
-            {error}
+            {lookup.recordsError}
           </div>
         )}
 
         {/* Report */}
-        {/* Kein mode="wait" — der Loading-State zwischen zwei Reports sorgt
-            für eine saubere Lücke. Verschachteltes AnimatePresence-mode-wait
-            (Tabs innen) kann sonst die Exit-Promise nicht resolven und
-            den ganzen Block hängen lassen. */}
-        {view === 'lookup' && report && !loading && (
+        {showReport && report && (
           <motion.div
             key={report.domain + report.timestamp}
             initial={{ opacity: 0, y: 10 }}
@@ -468,8 +436,15 @@ export default function App() {
 
               {/* Score + Quick Facts */}
               <div className="grid md:grid-cols-2 gap-4 mb-8">
-                <ScoreCard score={report.healthScore} />
-                <QuickFacts report={report} onUseDomain={handleUseDomainInSearch} />
+                {lookup.allSettled ? <ScoreCard score={lookup.healthScore} /> : <ScoreCardSkeleton />}
+                <QuickFacts
+                  records={report.records}
+                  ssl={ssl}
+                  dnssec={dnssec}
+                  mail={mail}
+                  techStack={techStack}
+                  onUseDomain={handleUseDomainInSearch}
+                />
               </div>
 
               {/* Tabs */}
@@ -481,22 +456,28 @@ export default function App() {
                   {
                     id: 'propagation',
                     label: 'Propagation',
-                    count: report.propagation.length || undefined,
+                    count: propagation.data?.length || undefined,
                   },
                   { id: 'security', label: 'Security' },
+                  { id: 'mail', label: 'Mail', count: mailCount },
                   {
-                    id: 'mail',
-                    label: 'Mail',
-                    count:
-                      (report.mail.spf.present ? 1 : 0) +
-                      (report.mail.dmarc.present ? 1 : 0) +
-                      report.mail.dkim.selectors.length +
-                      (report.mail.mtaSts.present ? 1 : 0) || undefined,
+                    id: 'findings',
+                    label: 'Findings',
+                    count: lookup.allSettled ? lookup.findings.length : undefined,
                   },
-                  { id: 'findings', label: 'Findings', count: report.findings.length },
-                  { id: 'whois', label: 'WHOIS', count: report.whois ? 1 : undefined },
+                  {
+                    id: 'whois',
+                    label: 'WHOIS',
+                    count: whois.status === 'done' && whois.data ? 1 : undefined,
+                  },
                   { id: 'speed', label: 'Speed', count: pageSpeed ? 1 : undefined },
-                  { id: 'virusscan', label: 'Virus Scan', count: virusScan ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined : undefined },
+                  {
+                    id: 'virusscan',
+                    label: 'Virus Scan',
+                    count: virusScan
+                      ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
+                      : undefined,
+                  },
                 ]}
               />
 
@@ -515,22 +496,52 @@ export default function App() {
                         onUseDomain={handleUseDomainInSearch}
                       />
                     )}
-                    {activeTab === 'propagation' && (
-                      report.propagation.length > 0
-                        ? <PropagationView results={report.propagation} />
-                        : <Placeholder title="Multi-Resolver-Propagation" subtitle="Keine Resolver-Antworten — Lookup eventuell fehlgeschlagen." />
-                    )}
-                    {activeTab === 'findings' && <FindingsList findings={report.findings} />}
-                    {activeTab === 'security' && (
-                      <SecurityView ssl={report.ssl} dnssec={report.dnssec} />
-                    )}
-                    {activeTab === 'mail' && <MailView mail={report.mail} />}
-                    {activeTab === 'whois' && (
-                      <WhoisView
-                        whois={report.whois}
-                        onUseDomain={handleUseDomainInSearch}
-                      />
-                    )}
+                    {activeTab === 'propagation' &&
+                      (propagation.status === 'loading' ? (
+                        <PropagationSkeleton />
+                      ) : propagation.status === 'error' ? (
+                        <SectionError message={propagation.error} />
+                      ) : propagation.data && propagation.data.length > 0 ? (
+                        <PropagationView results={propagation.data} />
+                      ) : (
+                        <Placeholder
+                          title="Multi-Resolver-Propagation"
+                          subtitle="Keine Resolver-Antworten — Lookup eventuell fehlgeschlagen."
+                        />
+                      ))}
+                    {activeTab === 'findings' &&
+                      (lookup.allSettled ? (
+                        <FindingsList findings={lookup.findings} />
+                      ) : (
+                        <ListSkeleton rows={5} />
+                      ))}
+                    {activeTab === 'security' &&
+                      (securityLoading ? (
+                        <SectionCardsSkeleton count={2} />
+                      ) : (
+                        <SecurityView
+                          ssl={ssl.data ?? undefined}
+                          dnssec={dnssec.data ?? NO_DNSSEC}
+                        />
+                      ))}
+                    {activeTab === 'mail' &&
+                      (mail.status === 'loading' ? (
+                        <SectionCardsSkeleton count={4} />
+                      ) : mail.status === 'error' ? (
+                        <SectionError message={mail.error} />
+                      ) : mailData ? (
+                        <MailView mail={mailData} />
+                      ) : (
+                        <SectionCardsSkeleton count={4} />
+                      ))}
+                    {activeTab === 'whois' &&
+                      (whois.status === 'loading' ? (
+                        <WhoisSkeleton />
+                      ) : whois.status === 'error' ? (
+                        <SectionError message={whois.error} />
+                      ) : (
+                        <WhoisView whois={whois.data ?? undefined} onUseDomain={handleUseDomainInSearch} />
+                      ))}
                     {activeTab === 'speed' && (
                       <PageSpeedView
                         data={pageSpeed}
@@ -592,6 +603,14 @@ function Placeholder({ title, subtitle }: { title: string; subtitle: string }) {
     <div className="surface rounded-xl p-12 text-center">
       <h3 className="text-base font-medium mb-1">{title}</h3>
       <p className="text-sm text-ink-900/50 dark:text-ink-50/50">{subtitle}</p>
+    </div>
+  );
+}
+
+function SectionError({ message }: { message?: string }) {
+  return (
+    <div className="surface rounded-xl p-8 text-center text-sm text-red-600 dark:text-red-400">
+      {message ?? 'Dieser Check ist fehlgeschlagen.'}
     </div>
   );
 }

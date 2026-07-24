@@ -3,13 +3,13 @@ import type {
   DnsRecord,
   DnssecInfo,
   Finding,
-  HealthScore,
   LookupReport,
   MailSecurity,
   ResolverResult,
   SslInfo,
   WhoisInfo,
 } from '../types.js';
+import { calculateScore } from '../../shared/scoring.js';
 
 interface BuildReportInput {
   domain: string;
@@ -58,7 +58,7 @@ export function buildReport(input: BuildReportInput): LookupReport {
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
-function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {
+export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {
   const findings: Finding[] = [];
   const types = new Set(records.map((r) => r.type));
   const isApex = domain === apexDomain;
@@ -125,7 +125,7 @@ function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): 
 
 /* ─── Mail ────────────────────────────────────────────────────────────── */
 
-function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
+export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
   const findings: Finding[] = [];
   const hasMx = mail.hasMx;
 
@@ -236,7 +236,7 @@ function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
-function dnssecFindings(dnssec: DnssecInfo): Finding[] {
+export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
   if (!dnssec.enabled) {
     return [{
       id: 'dnssec-off',
@@ -283,7 +283,7 @@ function dnssecFindings(dnssec: DnssecInfo): Finding[] {
 
 /* ─── SSL ─────────────────────────────────────────────────────────────── */
 
-function sslFindings(ssl: SslInfo | null): Finding[] {
+export function sslFindings(ssl: SslInfo | null): Finding[] {
   if (!ssl) {
     return [{
       id: 'no-ssl',
@@ -347,7 +347,7 @@ function sslFindings(ssl: SslInfo | null): Finding[] {
 
 /* ─── Propagation ────────────────────────────────────────────────────── */
 
-function propagationFindings(results: ResolverResult[]): Finding[] {
+export function propagationFindings(results: ResolverResult[]): Finding[] {
   if (results.length === 0) return [];
 
   // Wir vergleichen die Sets der A-Records. Sortiert + gejoint = stabiler Key.
@@ -399,7 +399,7 @@ const CRITICAL_STATUS = new Set([
   'redemptionperiod',
 ]);
 
-function whoisFindings(whois: WhoisInfo | null): Finding[] {
+export function whoisFindings(whois: WhoisInfo | null): Finding[] {
   if (!whois) {
     return [{
       id: 'whois-unavailable',
@@ -492,31 +492,6 @@ function getStatusExplanation(status: string): string {
     redemptionperiod: 'Die Domain ist abgelaufen, kann aber noch eingelöst werden (gegen Gebühr).',
   };
   return map[status] ?? 'Achtung: ungewöhnlicher Status-Code.';
-}
-
-/* ─── Score ───────────────────────────────────────────────────────────── */
-
-function calculateScore(findings: Finding[]): HealthScore {
-  const counts = { success: 0, info: 0, warning: 0, critical: 0 };
-  let score = 100;
-
-  for (const f of findings) {
-    counts[f.severity]++;
-    if (f.severity === 'critical') score -= 25;
-    else if (f.severity === 'warning') score -= 8;
-    else if (f.severity === 'info') score -= 2;
-  }
-
-  score = Math.max(0, Math.min(100, score));
-
-  let verdict: string;
-  if (score >= 90) verdict = 'Hervorragend';
-  else if (score >= 75) verdict = 'Solides Setup';
-  else if (score >= 55) verdict = 'Optimierbar';
-  else if (score >= 30) verdict = 'Lückenhaft';
-  else verdict = 'Kritisch';
-
-  return { score, verdict, counts };
 }
 
 /* ─── Helpers ─────────────────────────────────────────────────────────── */

@@ -4,7 +4,9 @@ const USER_AGENT =
   'Mozilla/5.0 (compatible; Diggy-Bot/1.0) Safari/537.36';
 
 const MAX_BYTES = 100_000; // 100 KB
-const TIMEOUT_MS = 8_000;
+// Kurzer Timeout: der Tech-Stack ist ein sekundärer Hintergrund-Check und
+// blockiert weder Records noch Score. Lieber schnell aufgeben als 8s hängen.
+const TIMEOUT_MS = 5_000;
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 

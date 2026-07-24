@@ -60,27 +60,49 @@ const TLD_FALLBACKS: Record<string, string> = {
   de: 'https://rdap.denic.de/domain',
 };
 
-export async function lookupWhois(domain: string, timeoutMs = 6000): Promise<WhoisInfo | null> {
-  // 1. Primary: rdap.org Bootstrap
-  try {
-    const result = await tryEndpoint(PRIMARY_ENDPOINT, domain, timeoutMs);
-    if (result) return result;
-  } catch {
-    // ignore — fallback unten
-  }
-
-  // 2. TLD-spezifischer Fallback
+export async function lookupWhois(domain: string, timeoutMs = 5000): Promise<WhoisInfo | null> {
+  // Primary (rdap.org Bootstrap) und ggf. TLD-Fallback PARALLEL abfragen —
+  // wir nehmen die erste brauchbare Antwort. Früher liefen die beiden
+  // sequenziell (6s + 6s = bis zu 12s Worst Case); jetzt bestimmt der
+  // schnellere Endpoint die Latenz.
+  const endpoints = [PRIMARY_ENDPOINT];
   const tld = domain.split('.').pop()?.toLowerCase();
-  if (tld && TLD_FALLBACKS[tld]) {
-    try {
-      const result = await tryEndpoint(TLD_FALLBACKS[tld], domain, timeoutMs);
-      if (result) return result;
-    } catch {
-      // ignore
-    }
-  }
+  if (tld && TLD_FALLBACKS[tld]) endpoints.push(TLD_FALLBACKS[tld]);
 
-  return null;
+  const attempts = endpoints.map((endpoint) =>
+    tryEndpoint(endpoint, domain, timeoutMs).catch(() => null)
+  );
+
+  return firstNonNull(attempts);
+}
+
+/**
+ * Resolved mit dem ersten Promise, das einen Nicht-null-Wert liefert.
+ * Wenn alle null (oder gescheitert) sind, resolved es mit null —
+ * es rejected nie.
+ */
+function firstNonNull<T>(promises: Promise<T | null>[]): Promise<T | null> {
+  return new Promise((resolve) => {
+    let pending = promises.length;
+    if (pending === 0) {
+      resolve(null);
+      return;
+    }
+    let done = false;
+    for (const promise of promises) {
+      promise
+        .then((value) => {
+          if (!done && value != null) {
+            done = true;
+            resolve(value);
+          }
+        })
+        .finally(() => {
+          pending -= 1;
+          if (!done && pending === 0) resolve(null);
+        });
+    }
+  });
 }
 
 async function tryEndpoint(

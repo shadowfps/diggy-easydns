@@ -29,7 +29,7 @@ interface PeerCert {
  * Versucht das Zertifikat zu holen. Bei jedem Fehler
  * (Timeout, Cert-invalid, kein TLS) → null.
  */
-export async function checkSsl(domain: string, timeoutMs = 6000): Promise<SslInfo | null> {
+export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslInfo | null> {
   return new Promise<SslInfo | null>((resolve) => {
     let resolved = false;
     const safeResolve = (value: SslInfo | null) => {

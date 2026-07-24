@@ -1,0 +1,33 @@
+# Lokales Build & Run — baut das Image aus dem Dockerfile (inkl. aktueller
+# Arbeitskopie) statt es aus GHCR zu ziehen. Für den Produktiv-Deploy siehe
+# compose.mittwald.yml.
+#
+#   docker compose -f compose.local.yml up -d --build
+#
+# Secrets (SMTP, API-Keys) kommen aus der lokalen .env (gitignored).
+services:
+  diggy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: diggy:local
+    container_name: diggy-local
+    restart: unless-stopped
+    ports:
+      - "3002:3001/tcp"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      TRUST_PROXY: "true"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,8 +1,17 @@
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Check, X } from 'lucide-react';
-import type { DetectedTech, LookupReport, TechCategory } from '@/types/dns';
+import type {
+  DetectedTech,
+  DnsRecord,
+  DnssecInfo,
+  MailSecurity,
+  SslInfo,
+  TechCategory,
+} from '@/types/dns';
+import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink, isInspectableIp } from '@/components/ip/IpAddressLink';
 
 /* ─── Tech-Stack SVG logos ───────────────────────────────────────────────── */
@@ -290,15 +299,29 @@ function getTechSvg(name: string): ReactNode {
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
+interface QuickFactItem {
+  label: string;
+  value?: ReactNode;
+  mono?: boolean;
+  muted?: boolean;
+  ok?: boolean;
+  bad?: boolean;
+  loading?: boolean;
+}
+
 interface QuickFactsProps {
-  report: LookupReport;
+  records: DnsRecord[];
+  ssl: SectionSlice<SslInfo | null>;
+  dnssec: SectionSlice<DnssecInfo>;
+  mail: SectionSlice<MailSecurity>;
+  techStack: SectionSlice<DetectedTech[]>;
   onUseDomain?: (domain: string) => void;
 }
 
-export function QuickFacts({ report, onUseDomain }: QuickFactsProps) {
-  const aRecord = report.records.find((r) => r.type === 'A');
-  const mxRecord = report.records.find((r) => r.type === 'MX');
-  const nsRecord = report.records.find((r) => r.type === 'NS');
+export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain }: QuickFactsProps) {
+  const aRecord = records.find((r) => r.type === 'A');
+  const mxRecord = records.find((r) => r.type === 'MX');
+  const nsRecord = records.find((r) => r.type === 'NS');
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
       <IpAddressLink ip={aRecord.value} className="text-ink-900/80 dark:text-ink-50/80" />
@@ -320,33 +343,52 @@ export function QuickFacts({ report, onUseDomain }: QuickFactsProps) {
       nsRecord?.value ?? '—'
     );
 
-  const items = [
+  // A/NS/MX kommen aus den Records und stehen sofort. SSL/DNSSEC/DMARC laden
+  // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts.
+  const sslInfo = ssl.data;
+  const sslItem: QuickFactItem =
+    ssl.status !== 'done'
+      ? { label: 'SSL', loading: true }
+      : {
+          label: 'SSL',
+          value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
+          ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
+          bad: !sslInfo?.valid || (sslInfo?.daysUntilExpiry ?? 999) < 14,
+        };
+
+  const dnssecInfo = dnssec.data;
+  const dnssecItem: QuickFactItem =
+    dnssec.status !== 'done'
+      ? { label: 'DNSSEC', loading: true }
+      : {
+          label: 'DNSSEC',
+          value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
+          ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
+          bad: !dnssecInfo?.enabled,
+        };
+
+  const dmarcPresent = mail.data?.dmarc.present;
+  const dmarcItem: QuickFactItem =
+    mail.status !== 'done'
+      ? { label: 'DMARC', loading: true }
+      : {
+          label: 'DMARC',
+          value: dmarcPresent ? 'gesetzt' : 'fehlt',
+          ok: Boolean(dmarcPresent),
+          bad: !dmarcPresent,
+        };
+
+  const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
     { label: 'NS', value: nsValue, mono: true },
     { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord },
-    {
-      label: 'SSL',
-      value: report.ssl
-        ? `${report.ssl.daysUntilExpiry} Tage`
-        : 'kein Cert',
-      ok: report.ssl?.valid && (report.ssl?.daysUntilExpiry ?? 0) > 14,
-      bad: !report.ssl?.valid || (report.ssl?.daysUntilExpiry ?? 999) < 14,
-    },
-    {
-      label: 'DNSSEC',
-      value: report.dnssec.enabled && report.dnssec.valid ? 'aktiv' : 'inaktiv',
-      ok: report.dnssec.enabled && report.dnssec.valid,
-      bad: !report.dnssec.enabled,
-    },
-    {
-      label: 'DMARC',
-      value: report.mail.dmarc.present ? 'gesetzt' : 'fehlt',
-      ok: report.mail.dmarc.present,
-      bad: !report.mail.dmarc.present,
-    },
+    sslItem,
+    dnssecItem,
+    dmarcItem,
   ];
 
-  const sortedTech = sortTech(report.techStack ?? []);
+  const techLoading = techStack.status !== 'done';
+  const sortedTech = sortTech(techStack.data ?? []);
 
   return (
     <motion.div
@@ -365,32 +407,36 @@ export function QuickFacts({ report, onUseDomain }: QuickFactsProps) {
             <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 w-14 shrink-0 font-medium">
               {item.label}
             </span>
-            <span
-              className={cn(
-                'truncate',
-                item.mono && 'font-mono text-xs',
-                item.muted && 'text-ink-900/30 dark:text-ink-50/30',
-                item.ok && 'text-emerald-600 dark:text-emerald-400 flex items-center gap-1',
-                item.bad && 'text-red-600 dark:text-red-400 flex items-center gap-1'
-              )}
-            >
-              {item.ok && <Check className="w-3.5 h-3.5 shrink-0" />}
-              {item.bad && <X className="w-3.5 h-3.5 shrink-0" />}
-              {item.value}
-            </span>
+            {item.loading ? (
+              <Skeleton className="h-3.5 w-16" />
+            ) : (
+              <span
+                className={cn(
+                  'truncate',
+                  item.mono && 'font-mono text-xs',
+                  item.muted && 'text-ink-900/30 dark:text-ink-50/30',
+                  item.ok && 'text-emerald-600 dark:text-emerald-400 flex items-center gap-1',
+                  item.bad && 'text-red-600 dark:text-red-400 flex items-center gap-1'
+                )}
+              >
+                {item.ok && <Check className="w-3.5 h-3.5 shrink-0" />}
+                {item.bad && <X className="w-3.5 h-3.5 shrink-0" />}
+                {item.value}
+              </span>
+            )}
           </div>
         ))}
       </div>
 
-      {sortedTech.length > 0 && (
+      {(techLoading || sortedTech.length > 0) && (
         <div className="mt-4 pt-4 border-t border-ink-100 dark:border-ink-900/60">
           <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 font-medium">
             Tech-Stack
           </span>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {sortedTech.map((tech) => (
-              <TechIcon key={tech.name} tech={tech} />
-            ))}
+            {techLoading
+              ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-8 rounded-lg" />)
+              : sortedTech.map((tech) => <TechIcon key={tech.name} tech={tech} />)}
           </div>
         </div>
       )}

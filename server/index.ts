@@ -4,8 +4,16 @@ import cors from 'cors';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lookupStandardRecords, isValidDomain, normalizeDomain, getApexDomain, isApexDomain, lookupSpfRecord } from './services/dnsLookup.js';
-import { buildReport } from './services/reportBuilder.js';
+import { lookupStandardRecords, isValidDomain, normalizeDomain, getApexDomain, lookupSpfRecord } from './services/dnsLookup.js';
+import {
+  dnsFindings,
+  sslFindings,
+  dnssecFindings,
+  mailFindings,
+  propagationFindings,
+  whoisFindings,
+} from './services/reportBuilder.js';
+import { cached } from './lib/cache.js';
 import { queryAllResolvers } from './services/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
@@ -32,6 +40,33 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
+
+/** TTL für gecachte Lookup-Ergebnisse — kurz genug, um frisch zu bleiben. */
+const LOOKUP_TTL_MS = 60_000;
+
+/**
+ * Validiert & normalisiert den `domain`-Query-Param. Sendet bei ungültiger
+ * Eingabe selbst eine 400 und gibt null zurück — der Aufrufer bricht dann ab.
+ */
+function resolveDomainParam(req: Request, res: Response): string | null {
+  const rawInput = String(req.query.domain ?? '');
+  const domain = normalizeDomain(rawInput);
+  if (!isValidDomain(domain)) {
+    res.status(400).json({
+      error: 'invalid_domain',
+      message: `"${rawInput}" sieht nicht nach einer gültigen Domain aus.`,
+    });
+    return null;
+  }
+  return domain;
+}
+
+/** Einheitliche Fehlerantwort für die einzelnen Sub-Check-Endpoints. */
+function sectionError(res: Response, code: string, error: unknown): void {
+  const err = error as Error;
+  const status = err.name === 'AbortError' ? 504 : 502;
+  res.status(status).json({ error: code, message: err.message || 'Sub-Check fehlgeschlagen.' });
+}
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
@@ -212,84 +247,33 @@ app.get('/api/domain-check', async (req: Request, res: Response) => {
 });
 
 /**
- * Haupt-Lookup-Endpoint.
+ * Primär-Endpoint: NUR die DNS-Records (+ die daraus abgeleiteten Findings).
  *
- * Wir machen alles parallel — der gesamte Lookup blockiert maximal so lange
- * wie der langsamste Sub-Check (etwa 6s SSL-Timeout im worst case).
- * Die meisten Domains liegen bei 1-3s gesamt.
+ * Das ist der schnelle Kern (meist 0,2-0,8s) und wird sofort zurückgegeben,
+ * damit das Frontend die Records ohne Wartezeit rendern kann. Alle langsamen
+ * Sub-Checks (SSL, WHOIS, Mail, …) laufen über die /api/lookup/*-Endpoints und
+ * werden vom Client im Hintergrund nachgeladen.
  */
 app.get('/api/lookup', async (req: Request, res: Response) => {
-  const rawInput = String(req.query.domain ?? '');
-  const domain = normalizeDomain(rawInput);
-
-  if (!isValidDomain(domain)) {
-    return res.status(400).json({
-      error: 'invalid_domain',
-      message: `"${rawInput}" sieht nicht nach einer gültigen Domain aus.`,
-    });
-  }
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
 
   try {
     const start = Date.now();
     const apexDomain = getApexDomain(domain);
 
-    // Standard-Records first — wenn die Domain nicht aufgelöst werden kann,
-    // brauchen wir den Rest gar nicht zu probieren.
-    const records = await lookupStandardRecords(domain);
-
-    // SPF liegt auf der Apex-Domain — bei Subdomain-Lookups separat holen.
-    const spfFromApex = isApexDomain(domain)
-      ? records
-          .filter((r) => r.type === 'TXT')
-          .map((r) => r.value)
-          .find((v) => v.toLowerCase().startsWith('v=spf1'))
-      : await lookupSpfRecord(apexDomain);
-
-    // Alle weiteren Sub-Checks parallel.
-    // Promise.allSettled — ein einzelner Fehler killt den Report nicht.
-    const [propagationRes, dnssecRes, sslRes, mailRes, whoisRes, techStackRes] = await Promise.allSettled([
-      queryAllResolvers(domain, { types: ['A', 'AAAA'] }),
-      checkDnssec(apexDomain),
-      checkSsl(domain),
-      auditMail(apexDomain, spfFromApex),
-      lookupWhois(apexDomain),
-      detectTechStack(domain),
-    ]);
-
-    const propagation = propagationRes.status === 'fulfilled' ? propagationRes.value : [];
-    const dnssec = dnssecRes.status === 'fulfilled'
-      ? dnssecRes.value
-      : { enabled: false, valid: false, chainOfTrust: 'none' as const };
-    const ssl = sslRes.status === 'fulfilled' ? sslRes.value : null;
-    const mail = mailRes.status === 'fulfilled'
-      ? mailRes.value
-      : {
-          spf: { present: !!spfFromApex, record: spfFromApex, valid: !!spfFromApex, issues: [] },
-          dmarc: { present: false },
-          dkim: { selectors: [] },
-          mtaSts: { present: false },
-          hasMx: false,
-        };
-    const whois = whoisRes.status === 'fulfilled' ? whoisRes.value : null;
-    const techStack = techStackRes.status === 'fulfilled' ? techStackRes.value : [];
-
-    const report = buildReport({
-      domain,
-      apexDomain,
-      records,
-      propagation,
-      dnssec,
-      ssl,
-      mail,
-      whois,
-      techStack,
-    });
-    const elapsedMs = Date.now() - start;
-
-    console.log(
-      `[lookup] ${domain} → ${records.length} records, ${propagation.length} resolvers, ssl=${!!ssl}, dnssec=${dnssec.enabled}, whois=${!!whois}, techStack=${techStack.length} in ${elapsedMs}ms`
+    const records = await cached(`records:${domain}`, LOOKUP_TTL_MS, () =>
+      lookupStandardRecords(domain)
     );
-    res.json(report);
+    const findings = dnsFindings(records, domain, apexDomain);
+
+    console.log(`[lookup] ${domain} → ${records.length} records in ${Date.now() - start}ms`);
+    res.json({
+      domain,
+      timestamp: new Date().toISOString(),
+      records,
+      findings,
+    });
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     console.error(`[lookup] ${domain} failed:`, err);
@@ -305,6 +289,90 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
       error: 'lookup_failed',
       message: err.message ?? 'Unbekannter Fehler beim Lookup.',
     });
+  }
+});
+
+/* ─── Sekundäre Sub-Checks — je ein Endpoint, parallel nachgeladen ─────── */
+
+app.get('/api/lookup/propagation', async (req: Request, res: Response) => {
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
+  try {
+    const propagation = await cached(`propagation:${domain}`, LOOKUP_TTL_MS, () =>
+      queryAllResolvers(domain, { types: ['A', 'AAAA'] })
+    );
+    res.json({ propagation, findings: propagationFindings(propagation) });
+  } catch (error) {
+    sectionError(res, 'propagation_failed', error);
+  }
+});
+
+app.get('/api/lookup/dnssec', async (req: Request, res: Response) => {
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
+  const apexDomain = getApexDomain(domain);
+  try {
+    const dnssec = await cached(`dnssec:${apexDomain}`, LOOKUP_TTL_MS, () =>
+      checkDnssec(apexDomain)
+    );
+    res.json({ dnssec, findings: dnssecFindings(dnssec) });
+  } catch (error) {
+    sectionError(res, 'dnssec_failed', error);
+  }
+});
+
+app.get('/api/lookup/ssl', async (req: Request, res: Response) => {
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
+  try {
+    const ssl = await cached(`ssl:${domain}`, LOOKUP_TTL_MS, () => checkSsl(domain));
+    res.json({ ssl, findings: sslFindings(ssl) });
+  } catch (error) {
+    sectionError(res, 'ssl_failed', error);
+  }
+});
+
+app.get('/api/lookup/mail', async (req: Request, res: Response) => {
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
+  const apexDomain = getApexDomain(domain);
+  try {
+    // SPF liegt auf der Apex-Domain — hier eigenständig holen (der Primär-
+    // Endpoint liefert die Records ja nicht mehr an diesen Endpoint durch).
+    const mail = await cached(`mail:${apexDomain}`, LOOKUP_TTL_MS, async () => {
+      const spf = await lookupSpfRecord(apexDomain);
+      return auditMail(apexDomain, spf);
+    });
+    res.json({ mail, findings: mailFindings(mail, apexDomain) });
+  } catch (error) {
+    sectionError(res, 'mail_failed', error);
+  }
+});
+
+app.get('/api/lookup/whois', async (req: Request, res: Response) => {
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
+  const apexDomain = getApexDomain(domain);
+  try {
+    const whois = await cached(`whois:${apexDomain}`, LOOKUP_TTL_MS, () =>
+      lookupWhois(apexDomain)
+    );
+    res.json({ whois, findings: whoisFindings(whois) });
+  } catch (error) {
+    sectionError(res, 'whois_failed', error);
+  }
+});
+
+app.get('/api/lookup/techstack', async (req: Request, res: Response) => {
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
+  try {
+    const techStack = await cached(`techstack:${domain}`, LOOKUP_TTL_MS, () =>
+      detectTechStack(domain)
+    );
+    res.json({ techStack });
+  } catch (error) {
+    sectionError(res, 'techstack_failed', error);
   }
 });
 
