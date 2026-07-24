@@ -8,6 +8,19 @@ services:
       NODE_ENV: production
       PORT: "3001"
       TRUST_PROXY: "true"
+      # Runtime-Secrets werden beim Deploy per ${VAR}-Interpolation aus dem
+      # --env-file gefüllt (CI: aus GitHub-Secrets, lokal: aus .env). Nur die
+      # Namen stehen hier — keine Werte im Repo.
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      CONTACT_TO: ${CONTACT_TO}
+      CONTACT_FROM: ${CONTACT_FROM}
+      CONTACT_FORM_SECRET: ${CONTACT_FORM_SECRET}
+      PAGESPEED_API_KEY: ${PAGESPEED_API_KEY}
+      VIRUS_TOTAL_API_KEY: ${VIRUS_TOTAL_API_KEY}
     healthcheck:
       test:
         - CMD

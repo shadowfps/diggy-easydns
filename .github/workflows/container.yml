@@ -85,9 +85,49 @@ jobs:
       - name: Deploy stack to Mittwald
         env:
           MITTWALD_API_TOKEN: ${{ secrets.MITTWALD_API_TOKEN }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          CONTACT_TO: ${{ secrets.CONTACT_TO }}
+          CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
+          CONTACT_FORM_SECRET: ${{ secrets.CONTACT_FORM_SECRET }}
+          PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
+          VIRUS_TOTAL_API_KEY: ${{ secrets.VIRUS_TOTAL_API_KEY }}
         run: |
+          # Deklarativer Deploy: mw ersetzt die Stack-Env durch das aufgelöste
+          # compose.mittwald.yml. Die dortigen ${VAR} werden aus diesem env-file
+          # interpoliert; Werte kommen aus GitHub-Secrets (nichts Geheimes im
+          # Repo). NODE_ENV/PORT/TRUST_PROXY stehen fest im compose-File.
+
+          # Schutz gegen versehentliches Leer-Deploy (würde die Env überschreiben):
+          # fehlt ein Kern-Secret, bricht der Deploy hier ab statt zu wischen.
+          : "${SMTP_HOST:?fehlt — GitHub-Secret setzen, sonst wird die Stack-Env geleert}"
+          : "${SMTP_USER:?fehlt — GitHub-Secret setzen}"
+          : "${SMTP_PASS:?fehlt — GitHub-Secret setzen}"
+          : "${CONTACT_TO:?fehlt — GitHub-Secret setzen}"
+          : "${CONTACT_FROM:?fehlt — GitHub-Secret setzen}"
+          : "${CONTACT_FORM_SECRET:?fehlt — GitHub-Secret setzen}"
+
+          umask 077
+          {
+            echo "SMTP_HOST=${SMTP_HOST}"
+            echo "SMTP_PORT=${SMTP_PORT}"
+            echo "SMTP_SECURE=${SMTP_SECURE}"
+            echo "SMTP_USER=${SMTP_USER}"
+            echo "SMTP_PASS=${SMTP_PASS}"
+            echo "CONTACT_TO=${CONTACT_TO}"
+            echo "CONTACT_FROM=${CONTACT_FROM}"
+            echo "CONTACT_FORM_SECRET=${CONTACT_FORM_SECRET}"
+            echo "PAGESPEED_API_KEY=${PAGESPEED_API_KEY}"
+            echo "VIRUS_TOTAL_API_KEY=${VIRUS_TOTAL_API_KEY}"
+          } > runtime.env
+
           mw stack deploy \
             --token "$MITTWALD_API_TOKEN" \
             --stack-id "$MITTWALD_STACK_ID" \
             --compose-file compose.mittwald.yml \
-            --env-file mittwald.env.example
+            --env-file runtime.env
+
+          rm -f runtime.env
