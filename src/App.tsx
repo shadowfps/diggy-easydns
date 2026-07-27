@@ -17,6 +17,7 @@ import { AboutView } from '@/modules/about/AboutView';
 import { ImpressumView } from '@/modules/impressum/ImpressumView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
+import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { isInspectableIp } from '@/components/ip/IpAddressLink';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import {
@@ -390,6 +391,13 @@ export default function App() {
             loading={recordsLoading}
           />
         )}
+
+        {/* Promo für das Schwester-Tool — nur auf der Landing-Page (Idle) */}
+        <AnimatePresence>
+          {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
+            <ConverterPromo key="converter-promo" />
+          )}
+        </AnimatePresence>
 
         {/* Loading State — nur bis die Records da sind. Danach übernimmt der
             Report mit Skeletons für die noch ladenden Sektionen. */}
