@@ -1,5 +1,6 @@
 import { promises as dnsPromises } from 'node:dns';
 import { domainToASCII } from 'node:url';
+import { getDomain } from 'tldts';
 import type { DnsRecord, RecordType } from '../types.js';
 
 /**
@@ -10,13 +11,27 @@ const resolver = new dnsPromises.Resolver({ timeout: 5000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
 
 /**
- * Welche Record-Typen wir für die Apex-Domain abfragen.
- * CNAME wird separat behandelt (kann Apex-A/AAAA "ersetzen").
+ * Welche Record-Typen wir abfragen — für jeden Namen gleich, Apex wie Subdomain.
+ * Subdomains führen sehr wohl eigene Records: mail.example.com kann eigene MX
+ * haben, abgetrennte Zonen (blog.example.com) eigene NS/SOA, und CAA darf auf
+ * jeder Ebene stehen. CNAME wird separat behandelt (kann Apex-A/AAAA "ersetzen").
  */
-const APEX_TYPES: RecordType[] = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CAA', 'SOA'];
+const QUERY_TYPES: RecordType[] = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CAA', 'SOA'];
 
-/** Hostname-relevante Typen für Subdomains (z. B. www.example.com). */
-const HOSTNAME_TYPES: RecordType[] = ['A', 'AAAA', 'TXT'];
+/**
+ * Zonen-Records, die bei einem CNAME-Alias NICHT dem gefragten Namen gehören.
+ * Ein Name mit CNAME darf laut RFC 1034 §3.6.2 keine weiteren Daten führen —
+ * der Resolver folgt dem CNAME und antwortet mit der Zone des Ziels. Würden wir
+ * das als NS/SOA der Subdomain ausgeben (www.github.com → github.com), täuschte
+ * die Anzeige eine eigene Delegation vor, die es nicht gibt.
+ */
+const CNAME_MASKED_TYPES = new Set<RecordType>(['NS', 'SOA']);
+
+/**
+ * Erwartbare Resolver-Fehler: der Name führt diesen Typ einfach nicht.
+ * EBADRESP kommt regelmäßig bei SOA-Abfragen auf CNAME-Aliasse.
+ */
+const EXPECTED_DNS_ERRORS = new Set(['ENODATA', 'ENOTFOUND', 'EBADRESP']);
 
 interface LookupOptions {
   /** Zusätzlich gängige Subdomains probieren (www, mail) */
@@ -32,28 +47,30 @@ export async function lookupStandardRecords(
   options: LookupOptions = {}
 ): Promise<DnsRecord[]> {
   const records: DnsRecord[] = [];
-  const typesToQuery = isApexDomain(domain) ? APEX_TYPES : HOSTNAME_TYPES;
 
-  // Alle Record-Typen parallel abfragen
-  const results = await Promise.allSettled(
-    typesToQuery.map((type) => lookupSingleType(domain, type))
-  );
+  // CNAME parallel mitziehen — das Ergebnis entscheidet, ob NS/SOA wirklich dem
+  // gefragten Namen gehören oder nur vom CNAME-Ziel durchgereicht wurden.
+  const [cnames, results] = await Promise.all([
+    lookupCname(domain),
+    Promise.allSettled(QUERY_TYPES.map((type) => lookupSingleType(domain, type))),
+  ]);
+
+  const isCnameAlias = cnames.length > 0;
 
   results.forEach((result, idx) => {
+    const type = QUERY_TYPES[idx];
     if (result.status === 'fulfilled') {
+      if (isCnameAlias && CNAME_MASKED_TYPES.has(type)) return;
       records.push(...result.value);
     } else {
       // Logging für Debugging — fehlende Records sind erwartbar (z.B. keine MX)
-      const type = typesToQuery[idx];
       const err = result.reason as NodeJS.ErrnoException;
-      if (err.code !== 'ENODATA' && err.code !== 'ENOTFOUND') {
+      if (!EXPECTED_DNS_ERRORS.has(err.code ?? '')) {
         console.warn(`[dns] ${type} lookup failed for ${domain}:`, err.code ?? err.message);
       }
     }
   });
 
-  // CNAME für Apex und/oder www separat
-  const cnames = await lookupCname(domain);
   records.push(...cnames);
 
   if (options.includeCommonSubdomains) {
@@ -217,17 +234,20 @@ export function normalizeDomain(input: string): string {
 }
 
 /**
- * Ermittelt die Apex-Domain für Zonen-/Mail-Checks.
- * Heuristik: letzte zwei Labels (z. B. www.mittwald.de → mittwald.de).
+ * Ermittelt die Apex-Domain (registrierbare Domain) für Zonen-/Mail-Checks.
+ *
+ * Nutzt die Public Suffix List statt "letzte zwei Labels": bei mehrteiligen
+ * Suffixen lag die alte Heuristik falsch und hat echte Apex-Domains als
+ * Subdomain behandelt — bbc.co.uk → co.uk, sydney.edu.au → edu.au.
+ *
+ * allowPrivateDomains, weil bei Hosting-Suffixen die eigene Zone eine Ebene
+ * tiefer liegt: für myapp.github.io ist github.io GitHubs Domain, nicht die des
+ * Nutzers — ein SPF-/WHOIS-Check dort wäre wertlos.
  */
 export function getApexDomain(domain: string): string {
-  const parts = domain.split('.').filter(Boolean);
-  if (parts.length <= 2) return domain;
-  return parts.slice(-2).join('.');
-}
-
-export function isApexDomain(domain: string): boolean {
-  return domain === getApexDomain(domain);
+  // null bei Public Suffixes selbst (gov.uk, co.uk) und bei unauflösbaren
+  // Namen — dann ist der Name selbst der Anfang der Zone.
+  return getDomain(domain, { allowPrivateDomains: true }) ?? domain;
 }
 
 /**
