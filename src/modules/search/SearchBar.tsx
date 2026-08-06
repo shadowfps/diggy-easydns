@@ -7,19 +7,35 @@ interface SearchBarProps {
   value: string;
   onValueChange: (value: string) => void;
   focusSignal?: number;
+  autoFocus?: boolean;
   loading?: boolean;
 }
 
 const EXAMPLES = ['github.com', 'www.mittwald.de', 'www.cloudflare.com'];
+
+// Auf Touch-Geräten würde ein Autofokus die Bildschirmtastatur aufziehen
+// und das halbe Viewport verdecken — dort bleibt das Feld unberührt.
+function prefersAutoFocus(): boolean {
+  if (typeof window.matchMedia !== 'function') return true;
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
 
 export function SearchBar({
   onSearch,
   value,
   onValueChange,
   focusSignal = 0,
+  autoFocus = false,
   loading,
 }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!autoFocus || !prefersAutoFocus()) return;
+    // preventScroll: der Browser soll beim Fokussieren nicht zum Feld springen.
+    inputRef.current?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (focusSignal <= 0) return;

@@ -65,6 +65,10 @@ export default function App() {
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const initialPathHandledRef = useRef(false);
+  // Beim Direktaufruf der Startseite soll der Cursor sofort im Suchfeld stehen,
+  // damit man ohne Klick per Strg+V einfügen und suchen kann. Bei Deep-Links
+  // (Permalink oder Unterseite) übernimmt der Routing-Effekt.
+  const [autoFocusSearch] = useState(() => window.location.pathname === '/');
 
   const report = lookup.report;
   const records = lookup.records;
@@ -387,6 +391,7 @@ export default function App() {
             value={searchValue}
             onValueChange={setSearchValue}
             focusSignal={searchFocusSignal}
+            autoFocus={autoFocusSearch}
             onSearch={handleSearch}
             loading={recordsLoading}
           />
