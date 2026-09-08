@@ -195,8 +195,8 @@ const TextType = ({
     variableSpeed,
     getRandomSpeed,
     onSentenceComplete,
-  ,
-    reducedMotion]);
+    reducedMotion,
+  ]);
 
   const shouldHideCursor =
     hideCursorWhileTyping &&

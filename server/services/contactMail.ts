@@ -34,6 +34,9 @@ export class ContactValidationError extends Error {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_NAME_LENGTH = 120;
 const MAX_MESSAGE_LENGTH = 5000;
+// Steuerzeichen aufzuspüren IST hier der Zweck (Header-Injection, kaputte
+// Mail-Bodies) — die Regel meldet genau das Muster, das wir brauchen.
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
 
 /** Verhindert E-Mail-Header-Injection in Display-Namen. */

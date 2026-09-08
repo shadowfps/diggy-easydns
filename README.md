@@ -101,6 +101,23 @@ Das Kontaktformular ist deaktiviert, solange SMTP nicht konfiguriert ist. Anti-S
 
 Die API ist IP-basiert begrenzt: 120 Requests/Minute allgemein, 10/Stunde je Fremd-API-Provider (PageSpeed, VirusTotal — getrennte Zähler), 20/Minute für den Verfügbarkeits-Check. Dazu ein Concurrency-Deckel von 4 für die langlaufenden Checks. `/api/health` liegt bewusst vor dem Limiter, damit fremder Traffic den Container-Healthcheck nicht auf `unhealthy` dreht.
 
+## Entwicklung
+
+```bash
+npm run lint        # ESLint 9 (Flat Config, inkl. react-hooks)
+npm run typecheck   # tsc für Client und Server
+npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
+npm run verify      # alle drei, so wie die CI es fährt
+```
+
+Die Tests decken bewusst die reine Logik ab, die der Nutzer als „Diggy sagt"
+liest: Domain-Validierung und Apex-Auflösung, SPF-Lookup-Zählung nach
+RFC 7208 §4.6.4, DoH-TXT-Zusammenbau, IP-Klassifizierung des SSRF-Guards,
+Cache-Verhalten und die Token-Prüfung des Kontaktformulars.
+
+Jeder Push auf `main` läuft zuerst durch den `verify`-Job; erst danach werden
+Image-Build und Deploy angestoßen.
+
 ## Container & Deployment
 
 Das Production-Image enthält Frontend und API in einem nicht privilegierten Node.js-Prozess. Es lauscht standardmäßig auf Port `3001` und stellt unter `/api/health` einen Healthcheck bereit.

@@ -180,7 +180,9 @@ const SplitText: React.FC<SplitTextProps> = ({
         JSON.stringify(to),
         threshold,
         rootMargin,
-        fontsLoaded,, reducedMotion],
+        fontsLoaded,
+        reducedMotion,
+      ],
       scope: ref,
     }
   );

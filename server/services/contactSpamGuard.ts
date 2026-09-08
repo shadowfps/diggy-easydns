@@ -183,7 +183,15 @@ export function issueContactChallenge(req: Request): { token: string; minDelayMs
   assertChallengeRequestAllowed(req);
 
   const issuedAt = Date.now();
-  const payload = Buffer.from(JSON.stringify({ t: issuedAt }), 'utf8').toString('base64url');
+  // Nonce ist nötig, nicht Zierde: mit reinem Zeitstempel als Payload sind zwei
+  // Token aus derselben Millisekunde byte-identisch. Die Replay-Erkennung
+  // arbeitet über den Token-Hash — der erste Absender hätte damit das Token
+  // eines gleichzeitigen zweiten Nutzers entwertet, und dessen Absendung wäre
+  // als stiller Scheinerfolg verlorengegangen.
+  const nonce = crypto.randomBytes(9).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ t: issuedAt, n: nonce }), 'utf8').toString(
+    'base64url'
+  );
   const sig = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
   return { token: `${payload}.${sig}`, minDelayMs: MIN_SUBMIT_DELAY_MS };
 }
@@ -223,7 +231,10 @@ function verifyChallengeToken(token: string): void {
 
   let issuedAt: number;
   try {
-    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { t?: number };
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      t?: number;
+      n?: string;
+    };
     if (typeof parsed.t !== 'number') throw new Error('invalid');
     issuedAt = parsed.t;
   } catch {

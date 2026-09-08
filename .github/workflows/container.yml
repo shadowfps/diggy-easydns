@@ -23,7 +23,37 @@ env:
   MITTWALD_CLI_VERSION: v1.20.2
 
 jobs:
+  # Gate vor dem Deploy. Vorher ging jeder Push auf main ungeprüft in
+  # Produktion — das einzige Kriterium war, dass `tsc -p tsconfig.server.json`
+  # im Docker-Build durchläuft. Client-Typfehler und Lint-Verstöße kamen so
+  # unbemerkt ins Image.
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
   publish:
+    needs: verify
     runs-on: ubuntu-latest
 
     steps:
