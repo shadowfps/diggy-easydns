@@ -6,6 +6,12 @@ on:
       - main
     tags:
       - "v*"
+  # Auch auf Pull Requests, damit der verify-Job VOR dem Merge läuft. Ohne das
+  # gatete er nur den Deploy: auf einem PR lief gar kein Check, die Prüfung kam
+  # also erst, wenn der Code schon auf main war.
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -54,6 +60,9 @@ jobs:
 
   publish:
     needs: verify
+    # Auf einem PR nur prüfen, nicht veröffentlichen: ein Image aus einem
+    # offenen PR gehört nicht nach GHCR, und der Deploy erst gar nicht.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
