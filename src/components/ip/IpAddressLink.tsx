@@ -157,12 +157,26 @@ const IPV6_PATTERN = new RegExp(
 
 export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
   const [open, setOpen] = useState(false);
+  /*
+   * Hält das Portal noch, bis die Exit-Animation durch ist.
+   *
+   * Ein rein an `open` gekoppeltes Portal unmountet sofort beim Schließen, und
+   * damit lief die AnimatePresence-Exit-Animation nie — der Dialog verschwand
+   * hart. Ein reines `open`-Rendering war aber nötig, weil sonst für jede
+   * angezeigte IP ein leeres Portal in document.body lag.
+   */
+  const [mounted, setMounted] = useState(false);
+
+  const handleOpen = () => {
+    setMounted(true);
+    setOpen(true);
+  };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className={cn(
           'group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md text-left font-mono text-xs transition-colors',
           'hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:hover:text-white dark:focus-visible:outline-ink-50',
@@ -180,10 +194,15 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
         erzeugt — bei einer Domain mit einem Dutzend A-Records lagen ebenso
         viele leere Portale in document.body, jedes mit eigenen Effects.
       */}
-      {open &&
+      {mounted &&
         typeof document !== 'undefined' &&
         createPortal(
-          <IpDetailsOverlay ip={ip} open onClose={() => setOpen(false)} />,
+          <IpDetailsOverlay
+            ip={ip}
+            open={open}
+            onClose={() => setOpen(false)}
+            onExited={() => setMounted(false)}
+          />,
           document.body
         )}
     </>
@@ -200,10 +219,13 @@ function IpDetailsOverlay({
   ip,
   open,
   onClose,
+  onExited,
 }: {
   ip: string;
   open: boolean;
   onClose: () => void;
+  /** Feuert, wenn die Exit-Animation durch ist — dann darf das Portal weg. */
+  onExited: () => void;
 }) {
   const [details, setDetails] = useState<IpDetails | null>(null);
   const [loading, setLoading] = useState(false);
@@ -276,7 +298,7 @@ function IpDetailsOverlay({
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={onExited}>
       {open && (
         <motion.div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/45 p-4 backdrop-blur-sm"

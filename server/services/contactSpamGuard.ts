@@ -101,8 +101,18 @@ export function assertContactSecretConfigured(): void {
   getSecret();
 }
 
-function trustProxyHeaders(): boolean {
-  return process.env.TRUST_PROXY === 'true';
+/**
+ * Anzahl der vertrauenswürdigen Proxy-Hops vor dieser App.
+ *
+ * `TRUST_PROXY=true` entspricht einem Hop (der übliche Fall: ein Reverse-Proxy
+ * direkt davor). Eine Zahl erlaubt tiefere Ketten, z. B. CDN + Ingress.
+ */
+export function trustedProxyHops(): number {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw || raw === 'false') return 0;
+  if (raw === 'true') return 1;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
 }
 
 function pruneRateLimits(now: number): void {
@@ -129,14 +139,26 @@ function pruneUsedTokens(now: number): void {
   }
 }
 
+/**
+ * Client-IP für alle Rate-Limits.
+ *
+ * Nutzt `req.ip`, das Express anhand der `trust proxy`-Einstellung berechnet
+ * (in index.ts aus trustedProxyHops() gesetzt).
+ *
+ * Vorher wurde der ERSTE Wert aus `X-Forwarded-For` genommen. Das war falsch
+ * und hob jedes Limit auf: ein Proxy APPENDIERT die gesehene Peer-IP rechts,
+ * der linke Wert kommt also immer vom Client selbst. Bei `TRUST_PROXY=true`
+ * — im Compose fest gesetzt — reichte ein beliebiger, pro Request wechselnder
+ * X-Forwarded-For-Header, um für jede Anfrage einen frischen Zähler zu
+ * bekommen. Betroffen war damit jedes Limit: API, Fremd-API-Kontingente,
+ * Kontaktformular und die Duplikat-Erkennung.
+ *
+ * Express zählt mit `trust proxy: n` vom RECHTEN Ende und liefert die erste
+ * nicht vertrauenswürdige Adresse — also die, die der äußerste vertraute Proxy
+ * tatsächlich gesehen hat.
+ */
 export function getClientIp(req: Request): string {
-  if (trustProxyHeaders()) {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.trim()) {
-      return forwarded.split(',')[0].trim();
-    }
-  }
-  return req.socket.remoteAddress ?? 'unknown';
+  return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
 function incrementRateBucket(

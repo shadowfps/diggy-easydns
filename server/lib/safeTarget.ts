@@ -253,8 +253,15 @@ export async function resolvePublicHost(hostname: string): Promise<ResolvedTarge
 
   for (const entry of resolved) {
     if (!isPublicIp(entry.address)) {
+      // Die aufgelöste Adresse gehört ins Log, nicht in die Antwort: sonst ist
+      // der Endpoint ein Auskunftsdienst für interne Zonen — `isValidDomain`
+      // lässt Namen wie `db.svc.cluster.local` durch, und die Antwort hätte
+      // deren interne IP verraten.
+      console.warn(
+        `[ssrf] ${hostname} zeigt auf nicht-öffentliche Adresse ${entry.address} — geblockt.`
+      );
       throw new BlockedTargetError(
-        `Ziel ${hostname} zeigt auf eine nicht-öffentliche Adresse (${entry.address}).`
+        `Das Ziel "${hostname}" ist keine öffentlich erreichbare Adresse.`
       );
     }
   }
@@ -327,6 +334,16 @@ export interface SafeGetResult {
 
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 
+/**
+ * Ports, auf die ein Redirect führen darf.
+ *
+ * Der erste Hop ist ohnehin auf 80/443 festgelegt, weil `isValidDomain` keinen
+ * Doppelpunkt zulässt. Ein Redirect konnte den Server aber auf einen
+ * beliebigen Port einer öffentlichen IP schicken — als blinden TCP-Client
+ * gegen z. B. Port 22. Der Rückkanal war minimal, die Fläche unnötig.
+ */
+const ALLOWED_PORTS = new Set(['', '80', '443', '8080', '8443']);
+
 function toHeaders(raw: IncomingMessage['headers']): Headers {
   const headers = new Headers();
   for (const [key, value] of Object.entries(raw)) {
@@ -360,7 +377,19 @@ export async function safeGet(
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
     if (current.protocol !== 'http:' && current.protocol !== 'https:') {
-      throw new BlockedTargetError(`Protokoll ${current.protocol} ist nicht erlaubt.`);
+      // Beim ersten Hop ist das eine Aussage über die Eingabe; danach über die
+      // Fremdseite, die weiterleitet — dann liefern wir schlicht kein Ergebnis.
+      if (hop === 0) {
+        throw new BlockedTargetError(`Protokoll ${current.protocol} ist nicht erlaubt.`);
+      }
+      return null;
+    }
+
+    if (!ALLOWED_PORTS.has(current.port)) {
+      if (hop === 0) {
+        throw new BlockedTargetError(`Port ${current.port} ist nicht erlaubt.`);
+      }
+      return null;
     }
 
     const remaining = deadline - Date.now();
@@ -450,12 +479,15 @@ export function httpGetWithoutGuard(
         lookup: pinnedLookup(target),
         // Redirects verfolgen wir selbst, damit jeder Hop geprüft wird.
         headers: {
-          host: url.host,
           // Manche Server (Fastly & Co.) komprimieren auch ohne
           // accept-encoding. Wir fragen es aktiv an und dekomprimieren unten
           // selbst — sonst landen Gzip-Bytes in der Erkennung.
           'accept-encoding': 'gzip, deflate, br',
           ...options.headers,
+          // host ZULETZT: der Spread darf ihn nicht überschreiben können.
+          // Vorher stand er davor, ein 'Host'-Key in options.headers hätte
+          // also gewonnen und das Ziel verschoben.
+          host: url.host,
         },
       },
       (res) => {

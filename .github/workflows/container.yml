@@ -123,6 +123,7 @@ jobs:
           CONTACT_TO: ${{ secrets.CONTACT_TO }}
           CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
           CONTACT_FORM_SECRET: ${{ secrets.CONTACT_FORM_SECRET }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
           VIRUS_TOTAL_API_KEY: ${{ secrets.VIRUS_TOTAL_API_KEY }}
         run: |
@@ -141,6 +142,10 @@ jobs:
           : "${CONTACT_FORM_SECRET:?fehlt — GitHub-Secret setzen}"
 
           umask 077
+          # Aufräumen auch bei Abbruch: `rm` am Ende des Skripts läuft bei
+          # einem Fehler in `mw stack deploy` nicht mehr, die Datei mit allen
+          # Secrets bliebe dann im Workspace liegen.
+          trap 'rm -f runtime.env' EXIT
           {
             echo "SMTP_HOST=${SMTP_HOST}"
             echo "SMTP_PORT=${SMTP_PORT}"
@@ -150,6 +155,7 @@ jobs:
             echo "CONTACT_TO=${CONTACT_TO}"
             echo "CONTACT_FROM=${CONTACT_FROM}"
             echo "CONTACT_FORM_SECRET=${CONTACT_FORM_SECRET}"
+            echo "PUBLIC_ORIGIN=${PUBLIC_ORIGIN}"
             echo "PAGESPEED_API_KEY=${PAGESPEED_API_KEY}"
             echo "VIRUS_TOTAL_API_KEY=${VIRUS_TOTAL_API_KEY}"
           } > runtime.env

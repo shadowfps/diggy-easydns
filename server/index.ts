@@ -41,6 +41,7 @@ import {
   ContactRateLimitError,
   ContactSpamSilentError,
   assertContactSecretConfigured,
+  trustedProxyHops,
   isHoneypotTriggered,
   issueContactChallenge,
 } from './services/contactSpamGuard.js';
@@ -84,6 +85,17 @@ const scriptHashes = inlineScriptHashes();
 /* ─── Sicherheits-Header (#9) ────────────────────────────────────────────── */
 
 app.disable('x-powered-by');
+
+/**
+ * Proxy-Vertrauen EINMAL zentral setzen, damit `req.ip` überall stimmt.
+ *
+ * Ohne diese Einstellung liefert req.ip die Socket-Adresse — hinter einem
+ * Reverse-Proxy also immer die des Proxys, wodurch alle Nutzer einen Zähler
+ * teilen. Mit ihr rechnet Express vom rechten Ende von X-Forwarded-For und
+ * ignoriert die vom Client selbst gesetzten Einträge links davon.
+ */
+const proxyHops = trustedProxyHops();
+if (proxyHops > 0) app.set('trust proxy', proxyHops);
 
 /**
  * Die CSP ist auf die tatsächlich genutzten Quellen zugeschnitten:
@@ -137,6 +149,14 @@ const corsOrigins = process.env.CORS_ORIGINS?.split(',')
   .map((value) => value.trim())
   .filter(Boolean);
 
+/**
+ * Öffentliche Origin dieser Installation, z. B. `https://diggy.example`.
+ *
+ * Vertrauenswürdige Referenz für die CSRF-Prüfung, damit sich die Schranke
+ * nicht aus Headern definiert, die der Aufrufer mitliefert.
+ */
+const publicOrigin = process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, '');
+
 if (corsOrigins?.length) {
   app.use(cors({ origin: corsOrigins }));
 } else if (process.env.NODE_ENV !== 'production') {
@@ -154,28 +174,60 @@ app.use(express.json({ limit: '64kb' }));
  * einer fremden Seite trägt deren Origin — und wird hier abgelehnt, bevor
  * Token- und Rate-Limit-Budget verbraucht werden.
  */
+/**
+ * Weist Cross-Site-Aufrufe anhand von `Sec-Fetch-Site` ab.
+ *
+ * Für GET-Endpoints ist eine Origin-Prüfung wirkungslos: bei Same-Origin-GETs
+ * schickt der Browser keinen Origin-Header, und ein fremdes `<img>` ebenso
+ * nicht. `Sec-Fetch-Site` schickt der Browser dagegen immer und lässt sich aus
+ * JavaScript nicht setzen.
+ *
+ * Gedacht für die Endpoints mit Fremd-API-Kontingent: ohne das ließen sie sich
+ * über ein `<img>` auf einer fremden Seite auslösen, wodurch das Kontingent auf
+ * den IPs unbeteiligter Besucher verbrennt. Fehlt der Header (curl, alte
+ * Browser), wird durchgelassen — er ist eine Zusatzschranke, kein Ersatz für
+ * das Rate-Limit.
+ */
+function rejectCrossSite(req: Request, res: Response, next: NextFunction): void {
+  const site = req.get('sec-fetch-site');
+  if (site && site !== 'same-origin' && site !== 'none') {
+    res.status(403).json({
+      error: 'cross_site_denied',
+      message: 'Dieser Check kann nur direkt in diggy ausgelöst werden.',
+    });
+    return;
+  }
+  next();
+}
+
 function assertSameOrigin(req: Request, res: Response, next: NextFunction): void {
   const origin = req.get('origin');
   if (!origin) return next(); // kein Origin -> kein Cross-Site-Fetch
 
   const allowed = new Set(corsOrigins ?? []);
 
-  // Hinter einem Reverse-Proxy trägt `Host` den internen Namen, während der
-  // Browser die öffentliche Origin schickt. Ohne X-Forwarded-Host liefen dann
-  // ALLE echten Formular-Sendungen in den 403. Nur auswerten, wenn wir dem
-  // Proxy ohnehin vertrauen (TRUST_PROXY) — sonst wäre der Header ein
-  // Selbstbedienungsladen für den Client.
-  const hosts = [req.get('host')];
-  if (process.env.TRUST_PROXY === 'true') {
-    const forwardedHost = req.get('x-forwarded-host');
-    if (forwardedHost) hosts.push(forwardedHost.split(',')[0].trim());
+  /*
+   * Bevorzugt die KONFIGURIERTE Origin, nicht einen Request-Header.
+   *
+   * Vorher landeten `Host` und (bei TRUST_PROXY) `X-Forwarded-Host` in der
+   * Allowlist. Aus dem Browser war das nicht erreichbar — `Host` ist dort ein
+   * Forbidden Header, und `X-Forwarded-Host` löst einen Preflight aus, den es
+   * in Produktion ohne CORS-Middleware gar nicht gibt. Trotzdem definierte
+   * sich die Schranke aus Daten des Aufrufers. Mit PUBLIC_ORIGIN hängt sie an
+   * der Konfiguration.
+   */
+  if (publicOrigin) allowed.add(publicOrigin);
+
+  if (!publicOrigin && !corsOrigins?.length) {
+    // Rückfall, damit die Prüfung ohne Konfiguration nicht alles blockt.
+    // http:// bleibt in Produktion draußen — dort läuft TLS.
+    const host = req.get('host');
+    if (host) {
+      allowed.add(`https://${host}`);
+      if (process.env.NODE_ENV !== 'production') allowed.add(`http://${host}`);
+    }
   }
 
-  for (const host of hosts) {
-    if (!host) continue;
-    allowed.add(`https://${host}`);
-    allowed.add(`http://${host}`);
-  }
   if (process.env.NODE_ENV !== 'production') {
     allowed.add('http://localhost:5173');
     allowed.add('http://127.0.0.1:5173');
@@ -356,7 +408,7 @@ app.get('/api/ip-details', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/pagespeed', pageSpeedLimiter, pageSpeedConcurrency, async (req: Request, res: Response) => {
+app.get('/api/pagespeed', rejectCrossSite, pageSpeedLimiter, pageSpeedConcurrency, async (req: Request, res: Response) => {
   const rawInput = String(req.query.domain ?? '');
   const domain = normalizeDomain(rawInput);
   const strategy = req.query.strategy === 'desktop' ? 'desktop' : 'mobile';
@@ -385,7 +437,7 @@ app.get('/api/pagespeed', pageSpeedLimiter, pageSpeedConcurrency, async (req: Re
   }
 });
 
-app.get('/api/virusscan', virusScanLimiter, virusScanConcurrency, async (req: Request, res: Response) => {
+app.get('/api/virusscan', rejectCrossSite, virusScanLimiter, virusScanConcurrency, async (req: Request, res: Response) => {
   const rawInput = String(req.query.domain ?? '');
   const domain = normalizeDomain(rawInput);
 
@@ -503,10 +555,14 @@ app.post('/api/contact', assertSameOrigin, async (req: Request, res: Response) =
       });
     }
 
+    // Transport-Fehler nur ins Log: err.message von nodemailer enthält den
+    // SMTP-Endpunkt ("connect ECONNREFUSED 127.0.0.1:1") und bei Auth-Fehlern
+    // das Server-Banner. Für den Nutzer ist davon nichts verwertbar.
     const err = error as Error;
+    console.error('[contact] Versand fehlgeschlagen:', err.message || error);
     return res.status(502).json({
       error: 'contact_failed',
-      message: err.message || 'Nachricht konnte nicht gesendet werden.',
+      message: 'Die Nachricht konnte gerade nicht gesendet werden. Bitte später erneut versuchen.',
     });
   }
 });

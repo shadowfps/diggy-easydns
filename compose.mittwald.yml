@@ -8,6 +8,9 @@ services:
       NODE_ENV: production
       PORT: "3001"
       TRUST_PROXY: "true"
+      # Vertrauenswürdige Referenz für die CSRF-Prüfung, damit sie nicht auf
+      # Request-Headern beruht.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN}
       # Runtime-Secrets werden beim Deploy per ${VAR}-Interpolation aus dem
       # --env-file gefüllt (CI: aus GitHub-Secrets, lokal: aus .env). Nur die
       # Namen stehen hier — keine Werte im Repo.

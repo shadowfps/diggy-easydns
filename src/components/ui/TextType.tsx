@@ -105,17 +105,25 @@ const TextType = ({
 
   // Cursor-Blink mit GSAP — yoyo-Loop
   useEffect(() => {
-    if (showCursor && cursorRef.current) {
-      gsap.set(cursorRef.current, { opacity: 1 });
-      gsap.to(cursorRef.current, {
-        opacity: 0,
-        duration: cursorBlinkDuration,
-        repeat: -1,
-        yoyo: true,
-        ease: 'power2.inOut',
-      });
-    }
-  }, [showCursor, cursorBlinkDuration]);
+    if (!showCursor || !cursorRef.current) return;
+
+    gsap.set(cursorRef.current, { opacity: 1 });
+    // Blinken ist eine Dauer-Animation ohne Stopp-Möglichkeit — WCAG 2.2.2
+    // nennt "blinking" ausdrücklich. Bei reduzierter Bewegung bleibt der
+    // Cursor sichtbar stehen.
+    if (reducedMotion) return;
+
+    const tween = gsap.to(cursorRef.current, {
+      opacity: 0,
+      duration: cursorBlinkDuration,
+      repeat: -1,
+      yoyo: true,
+      ease: 'power2.inOut',
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [showCursor, cursorBlinkDuration, reducedMotion]);
 
   // Type/Delete-Schleife
   useEffect(() => {
@@ -126,6 +134,12 @@ const TextType = ({
     if (reducedMotion) {
       const first = textArray[0] ?? '';
       setDisplayedText(first);
+      // Index MIT setzen: sonst steht displayedText auf dem vollen Satz,
+      // currentCharIndex aber auf 0 — schaltet der Nutzer die Präferenz zur
+      // Laufzeit wieder aus, tippt die Schleife den Satz an den vorhandenen
+      // Text an und verdoppelt ihn.
+      setCurrentCharIndex(first.length);
+      setIsDeleting(false);
       return;
     }
 

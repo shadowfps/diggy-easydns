@@ -16,7 +16,6 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [website, setWebsite] = useState('');
-  const [company, setCompany] = useState('');
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [readyAt, setReadyAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -97,27 +96,35 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
     setError(null);
     setSuccess(false);
 
+    let sent = false;
     try {
-      await sendContactMessage({ name, email, message, website, company, token: challengeToken });
+      await sendContactMessage({ name, email, message, website, token: challengeToken });
+      sent = true;
       setSuccess(true);
       setName('');
       setEmail('');
       setMessage('');
       setWebsite('');
-      setCompany('');
-      await loadChallenge();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nachricht konnte nicht gesendet werden.');
+    }
 
-      // Der verbrauchte Token ist jetzt wertlos. Ohne Nachladen liefe ein
-      // Korrektur-Versuch in die Replay-Erkennung des Servers und würde
-      // fälschlich als gesendet gemeldet.
-      setChallengeToken(null);
-      try {
-        await loadChallenge();
-      } catch {
-        setError('Bitte lade die Seite neu und versuche es erneut.');
-      }
+    // Token-Nachladen bewusst AUSSERHALB des Sende-try:
+    //
+    // Der Server entwertet den Token einmalig, ein Retry braucht also einen
+    // frischen. Lag der Refetch im try, drehte ein fehlgeschlagenes Nachladen
+    // nach erfolgreichem Versand die Meldung in einen Fehler — bei weiterhin
+    // gesetztem success. Dann standen "Danke, gesendet" und eine
+    // Fehlermeldung gleichzeitig da. Passiert real, wenn
+    // /api/contact/challenge ins Rate-Limit läuft.
+    setChallengeToken(null);
+    try {
+      await loadChallenge();
+    } catch {
+      // Nach erfolgreichem Versand ist das kein Fehler für den Nutzer — die
+      // Nachricht ist raus. Nur wenn er erneut senden will, fehlt der Token,
+      // und dann sagt es der deaktivierte Button.
+      if (!sent) setError('Bitte lade die Seite neu und versuche es erneut.');
     } finally {
       setLoading(false);
     }
@@ -164,7 +171,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
         </div>
       )}
 
-      {error && (
+      {error && !success && (
         <div
           ref={statusRef}
           role="alert"
@@ -250,18 +257,18 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
             autoComplete="off"
           />
         </div>
-        <div className={honeypotClassName} aria-hidden>
-          <label htmlFor="contact-company">Firma</label>
-          <input
-            id="contact-company"
-            type="text"
-            name="company"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            tabIndex={-1}
-            autoComplete="off"
-          />
-        </div>
+        {/*
+          Das zweite Honeypot-Feld hieß "company" mit Label "Firma". Chrome
+          ignoriert autocomplete="off" in Adressformularen weitgehend und
+          mappt company auf "Organisation" — ein echter Nutzer mit Autofill
+          wäre also in die Bot-Falle gelaufen und hätte "Deine Nachricht wurde
+          gesendet" gesehen, während die Nachricht verworfen wird.
+
+          Client-seitig ist das Feld daher weg. Die Server-Prüfung auf
+          `company` bleibt (siehe isHoneypotTriggered): Bots, die direkt auf
+          den Endpoint posten und alle Felder ausfüllen, laufen weiter hinein —
+          nur eben kein Mensch mehr.
+        */}
 
         <button
           type="submit"

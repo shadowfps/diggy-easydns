@@ -38,6 +38,16 @@ import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import {
+  buildDocumentTitle,
+  formatExportTimestamp,
+  getDomainFromLookupPath,
+  lookupPathFor,
+  normalizeSearchDomain,
+  sanitizeFilename,
+  STATIC_ROUTES,
+  type AppView,
+} from '@/lib/lookupPath';
+import {
   clearLookupHistory,
   readLookupHistory,
   saveLookupToHistory,
@@ -45,19 +55,7 @@ import {
 } from '@/lib/lookupHistory';
 import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
-type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum' | 'datenschutz';
-
 const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
-
-/** Pfad → View für die statischen Routen. Einzige Quelle für beide Richtungen. */
-const STATIC_ROUTES: Record<string, AppView | undefined> = {
-  '/': 'lookup',
-  '/history': 'history',
-  '/about': 'about',
-  '/availability': 'availability',
-  '/impressum': 'impressum',
-  '/datenschutz': 'datenschutz',
-};
 
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
@@ -133,12 +131,22 @@ export default function App() {
 
   const handleSearch = (domain: string) => {
     window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
-    // Erste Suche von einer statischen Route: einen History-Eintrag anlegen,
-    // statt ihn per replaceState zu überschreiben. Sonst führte Zurück nach
-    // der ersten Suche aus der App heraus statt zur Startseite.
-    if (!records && !ipQuery) {
+    /*
+     * Eintrag nur anlegen, wenn wir NICHT schon auf einem Lookup-Pfad sind.
+     *
+     * Die Bedingung hing vorher an `records || ipQuery` und war damit
+     * inkonsistent: während ein Lookup lädt, ist `records` bereits null (der
+     * Reducer setzt beim Start auf INITIAL), eine Suche in diesem Moment legte
+     * also einen Eintrag an — nach dem Laden dagegen nicht. Und ein erneuter
+     * Versuch derselben Domain nach einem Fehler erzeugte einen doppelten
+     * Eintrag mit identischer URL.
+     *
+     * Der Pfad ist die verlässlichere Quelle: von einer statischen Route aus
+     * pushState, innerhalb der Lookup-Ansicht übernimmt replaceLookupPath.
+     */
+    if (!window.location.pathname.startsWith('/lookup/')) {
       const target = domain.trim().toLowerCase();
-      if (target) window.history.pushState(null, '', `/lookup/${encodeURIComponent(target)}`);
+      if (target) window.history.pushState(null, '', lookupPathFor(target));
     }
     runLookup(domain);
   };
@@ -726,50 +734,13 @@ function ActionButton({
   );
 }
 
-const VIEW_TITLES: Record<Exclude<AppView, 'lookup'>, string> = {
-  history: 'History',
-  availability: 'Available Check',
-  about: 'About',
-  impressum: 'Impressum',
-  datenschutz: 'Datenschutz',
-};
-
-function buildDocumentTitle(view: AppView, domain: string | null, ipQuery: string | null): string {
-  if (view !== 'lookup') return `${VIEW_TITLES[view]} — diggy`;
-  const subject = domain ?? ipQuery;
-  return subject ? `${subject} — diggy` : 'diggy — DNS made friendly';
-}
-
 function getLookupUrl(domain: string): string {
-  return `${window.location.origin}/lookup/${encodeURIComponent(domain)}`;
+  return `${window.location.origin}${lookupPathFor(domain)}`;
 }
 
 function replaceLookupPath(domain: string): void {
-  const nextPath = `/lookup/${encodeURIComponent(domain)}`;
+  const nextPath = lookupPathFor(domain);
   if (window.location.pathname === nextPath) return;
   window.history.replaceState(null, '', nextPath);
 }
 
-function getDomainFromLookupPath(pathname: string): string | null {
-  const match = pathname.match(/^\/lookup\/([^/]+)\/?$/i);
-  if (!match?.[1]) return null;
-  try {
-    return decodeURIComponent(match[1]).trim().toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
-function normalizeSearchDomain(domain: string): string {
-  return domain.trim().toLowerCase().replace(/\.$/, '');
-}
-
-function sanitizeFilename(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-function formatExportTimestamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return 'report';
-  return date.toISOString().replace(/[:.]/g, '-');
-}

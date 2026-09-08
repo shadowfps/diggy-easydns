@@ -31,7 +31,23 @@ export class ContactValidationError extends Error {
   }
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * E-Mail-Validierung, absichtlich strenger als "irgendwas@irgendwas.tld".
+ *
+ * Die alte Fassung `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` erlaubte Komma und
+ * Semikolon im Local-Part. Nodemailer interpretiert so einen Wert als
+ * ADRESSLISTE: aus `a,opfer@example.com` wurde ein Versand an
+ * `opfer@example.com`. Damit waren drei Schutzmechanismen gleichzeitig
+ * umgangen — der Tageszähler pro Empfänger (er schlüsselt auf den Rohstring,
+ * also zählte jedes Präfix als neue Adresse), die Selbstsende-Prüfung und der
+ * Duplikat-Hash. In Kette ergab das eine unbegrenzte Mailbombe über das
+ * SMTP-Konto des Betreibers.
+ *
+ * Ausgeschlossen sind daher alle Zeichen mit Bedeutung in der
+ * Adress-Grammatik nach RFC 5322.
+ */
+const EMAIL_PATTERN =
+  /^[^\s@,;<>"\\()[\]:]+@[^\s@,;<>"\\()[\]:]+\.[^\s@,;<>"\\()[\]:]{2,}$/;
 const MAX_NAME_LENGTH = 120;
 const MAX_MESSAGE_LENGTH = 5000;
 // Steuerzeichen aufzuspüren IST hier der Zweck (Header-Injection, kaputte

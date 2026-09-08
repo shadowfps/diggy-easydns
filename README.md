@@ -85,7 +85,8 @@ Alle Secrets gehören in `.env` (liegt in `.gitignore`). Vorlage: `.env.example`
 | `CONTACT_TO` | Empfänger der Kontaktanfragen |
 | `CONTACT_FROM` | Absender (Admin-Mail + Bestätigung an Nutzer) |
 | `CONTACT_FORM_SECRET` | Geheimer Schlüssel für Anti-Spam-Token. **In Produktion Pflicht** (mind. 32 Zeichen) — ohne ihn startet der Server nicht, sobald SMTP konfiguriert ist. |
-| `TRUST_PROXY` | `true` hinter Reverse-Proxy (nginx, Caddy) für korrektes IP-Rate-Limiting |
+| `TRUST_PROXY` | Anzahl vertrauenswürdiger Proxy-Hops (`true` = 1) für korrektes IP-Rate-Limiting. **Nur setzen, wenn tatsächlich ein Proxy davor liegt** — sonst kann sich jeder per `X-Forwarded-For` einen frischen Zähler holen. |
+| `PUBLIC_ORIGIN` | Öffentliche Origin der Installation (z. B. `https://diggy.example`). Vertrauenswürdige Referenz für die CSRF-Prüfung des Kontaktformulars — ohne sie fällt die Prüfung auf den `Host`-Header zurück. |
 | `CORS_ORIGINS` | Optional — komma-separierte Origins, die per CORS zugreifen dürfen. Leer lassen, wenn Frontend und API unter derselben Origin laufen (Standard). |
 | `PORT` | Backend-Port (Standard: `3001`) |
 
