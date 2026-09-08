@@ -105,6 +105,15 @@ technischen Fakten:
 Health-Score bewertet die technische Konfiguration einer Domain, nicht eine
 Person, und hat keine rechtliche Wirkung für Betroffene.
 
+**Offener Punkt:** Der Datenschutztext nennt Mittwald als Auftragsverarbeiter
+nach Art. 28 DSGVO. Der Abschluss eines Auftragsverarbeitungsvertrags ist damit
+vorausgesetzt — bitte prüfen, dass er tatsächlich vorliegt. Die Formulierung
+behauptet ihn nicht ausdrücklich, die Pflicht besteht aber unabhängig davon.
+
+Anschriften geprüft am 8. September 2026 gegen die jeweiligen Impressen:
+Mittwald CM Service GmbH & Co. KG, Königsberger Straße 4–6, 32339 Espelkamp ·
+LDI NRW, Kavalleriestraße 2–4, 40213 Düsseldorf.
+
 **Drittlandübermittlung:** Die Checks fragen unter anderem Dienste in den USA
 ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app). Übermittelt wird
 dabei die abgefragte Domain bzw. IP-Adresse — die Anfragen gehen vom Server aus,

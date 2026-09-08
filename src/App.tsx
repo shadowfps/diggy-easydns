@@ -10,8 +10,7 @@ import { FindingsList } from '@/modules/findings/FindingsList';
 import { SecurityView } from '@/modules/security/SecurityView';
 import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
-import { PageSpeedView } from '@/modules/speed/PageSpeedView';
-import { VirusScanView } from '@/modules/virusscan/VirusScanView';
+
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
 import { ImpressumView } from '@/modules/impressum/ImpressumView';
@@ -31,9 +30,35 @@ import {
   ListSkeleton,
 } from '@/components/ui/Skeleton';
 import { Loader2 } from 'lucide-react';
-import SplitText from '@/components/ui/SplitText';
-import TextType from '@/components/ui/TextType';
-import ShinyText from '@/components/ui/ShinyText';
+import { lazy, Suspense } from 'react';
+
+/*
+ * Die drei Hero-Komponenten werden nachgeladen.
+ *
+ * Alle drei erscheinen ausschließlich auf der Startseite im Idle-Zustand. Wer
+ * über einen Permalink (/lookup/<domain>) einsteigt, sieht sie nie — hat ihren
+ * Code aber bisher im kritischen Pfad geladen. Zusammen bringen sie GSAP
+ * (Core, SplitText-Plugin, ScrollTrigger) mit, das bei aktivem "Bewegung
+ * reduzieren" sogar geladen, initialisiert und dann bewusst nicht benutzt wurde.
+ *
+ * SplitText und TextType rendern ihren Text ohnehin als Kind bzw. progressiv,
+ * die Fallbacks entsprechen also dem Endzustand.
+ */
+const SplitText = lazy(() => import('@/components/ui/SplitText'));
+const TextType = lazy(() => import('@/components/ui/TextType'));
+const ShinyText = lazy(() => import('@/components/ui/ShinyText'));
+
+/*
+ * Die beiden On-Demand-Tabs: sie holen ihre Daten erst, wenn der Nutzer den
+ * Check ausdrücklich anstößt. Ihr Code gehört damit nicht in das Bundle, das
+ * den ersten Report blockiert.
+ */
+const PageSpeedView = lazy(() =>
+  import('@/modules/speed/PageSpeedView').then((m) => ({ default: m.PageSpeedView }))
+);
+const VirusScanView = lazy(() =>
+  import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
+);
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
@@ -385,49 +410,73 @@ export default function App() {
                 transition={{ duration: 0.5 }}
                 className="mb-5"
               >
-                <ShinyText
-                  text="diggy"
-                  className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase dark:invert"
-                  color="#111111"
-                  shineColor="#737373"
-                  speed={2.5}
-                  spread={120}
-                  direction="left"
-                />
+                <Suspense
+                  fallback={
+                    <span className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase text-ink-950 dark:text-ink-50">
+                      diggy
+                    </span>
+                  }
+                >
+                  <ShinyText
+                    text="diggy"
+                    className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase dark:invert"
+                    color="#111111"
+                    shineColor="#737373"
+                    speed={2.5}
+                    spread={120}
+                    direction="left"
+                  />
+                </Suspense>
               </motion.div>
               <div className="mb-3">
-                <SplitText
-                  text="Was steckt hinter deiner Domain?"
-                  tag="h1"
-                  className="text-4xl md:text-5xl font-medium tracking-tight"
-                  delay={40}
-                  duration={0.9}
-                  ease="power3.out"
-                  splitType="chars"
-                  from={{ opacity: 0, y: 30 }}
-                  to={{ opacity: 1, y: 0 }}
-                  threshold={0.1}
-                  rootMargin="-50px"
-                  textAlign="center"
-                />
+                <Suspense
+                  fallback={
+                    <h1 className="text-4xl md:text-5xl font-medium tracking-tight">
+                      Was steckt hinter deiner Domain?
+                    </h1>
+                  }
+                >
+                  <SplitText
+                    text="Was steckt hinter deiner Domain?"
+                    tag="h1"
+                    className="text-4xl md:text-5xl font-medium tracking-tight"
+                    delay={40}
+                    duration={0.9}
+                    ease="power3.out"
+                    splitType="chars"
+                    from={{ opacity: 0, y: 30 }}
+                    to={{ opacity: 1, y: 0 }}
+                    threshold={0.1}
+                    rootMargin="-50px"
+                    textAlign="center"
+                  />
+                </Suspense>
               </div>
               <div className="mb-10 max-w-md mx-auto">
-                <TextType
-                  as="p"
-                  className="text-base text-ink-900/60 dark:text-ink-50/60"
-                  text={[
-                    'DNS, SSL, Mail-Security und Propagation auf einen Blick.',
-                    'Ohne Fachchinesisch, mit Empfehlungen.',
-                    'Alles, was du wissen musst — in einem Tool.',
-                  ]}
-                  typingSpeed={45}
-                  pauseDuration={2200}
-                  deletingSpeed={25}
-                  cursorCharacter="▍"
-                  cursorClassName="text-ink-900 dark:text-ink-50"
-                  cursorBlinkDuration={0.6}
-                  initialDelay={500}
-                />
+                <Suspense
+                  fallback={
+                    <p className="text-base text-ink-900/60 dark:text-ink-50/60">
+                      DNS, SSL, Mail-Security und Propagation auf einen Blick.
+                    </p>
+                  }
+                >
+                  <TextType
+                    as="p"
+                    className="text-base text-ink-900/60 dark:text-ink-50/60"
+                    text={[
+                      'DNS, SSL, Mail-Security und Propagation auf einen Blick.',
+                      'Ohne Fachchinesisch, mit Empfehlungen.',
+                      'Alles, was du wissen musst — in einem Tool.',
+                    ]}
+                    typingSpeed={45}
+                    pauseDuration={2200}
+                    deletingSpeed={25}
+                    cursorCharacter="▍"
+                    cursorClassName="text-ink-900 dark:text-ink-50"
+                    cursorBlinkDuration={0.6}
+                    initialDelay={500}
+                  />
+                </Suspense>
               </div>
             </motion.div>
           )}
@@ -626,6 +675,7 @@ export default function App() {
                         <WhoisView whois={whois.data ?? undefined} onUseDomain={handleUseDomainInSearch} />
                       ))}
                     {activeTab === 'speed' && (
+                      <Suspense fallback={<SectionCardsSkeleton count={2} />}>
                       <PageSpeedView
                         data={pageSpeed}
                         loading={pageSpeedLoading}
@@ -634,14 +684,17 @@ export default function App() {
                         onStrategyChange={setPageSpeedStrategy}
                         onRun={handleRunPageSpeed}
                       />
+                      </Suspense>
                     )}
                     {activeTab === 'virusscan' && (
+                      <Suspense fallback={<SectionCardsSkeleton count={2} />}>
                       <VirusScanView
                         data={virusScan}
                         loading={virusScanLoading}
                         error={virusScanError}
                         onRun={handleRunVirusScan}
                       />
+                      </Suspense>
                     )}
                   </motion.div>
                 </AnimatePresence>

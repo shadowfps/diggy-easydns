@@ -100,9 +100,8 @@ export function DatenschutzView({ onOpenImpressum }: DatenschutzViewProps) {
           <p>
             Die Anwendung läuft bei der Mittwald CM Service GmbH &amp; Co. KG,
             Königsberger Straße 4–6, 32339 Espelkamp, Deutschland. Der Dienstleister
-            verarbeitet die oben genannten Verbindungsdaten als Auftragsverarbeiter
-            (Art. 28 DSGVO), gebunden an einen Auftragsverarbeitungsvertrag. Die
-            Server stehen in Deutschland.
+            verarbeitet die oben genannten Verbindungsdaten in unserem Auftrag
+            (Art. 28 DSGVO). Die Server stehen in Deutschland.
           </p>
         </Section>
 
@@ -249,7 +248,7 @@ export function DatenschutzView({ onOpenImpressum }: DatenschutzViewProps) {
             dich bei einer Datenschutz-Aufsichtsbehörde beschweren (Art. 77 DSGVO).
             Zuständig für den Verantwortlichen ist die Landesbeauftragte für Datenschutz
             und Informationsfreiheit Nordrhein-Westfalen, Kavalleriestraße 2–4,
-            40213 Düsseldorf.
+            40213 Düsseldorf (Postfach 20 04 44, 40102 Düsseldorf).
           </p>
         </Section>
 
