@@ -65,6 +65,11 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
+    outputs:
+      # Der Digest macht den Deploy unveränderlich und erzwingt den Rollout,
+      # siehe Kommentar im deploy-Job.
+      digest: ${{ steps.build.outputs.digest }}
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -93,6 +98,7 @@ jobs:
             org.opencontainers.image.description=DNS, SSL and domain audit web application
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -124,6 +130,7 @@ jobs:
       - name: Deploy stack to Mittwald
         env:
           MITTWALD_API_TOKEN: ${{ secrets.MITTWALD_API_TOKEN }}
+          DIGGY_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.publish.outputs.digest }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
@@ -136,6 +143,19 @@ jobs:
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
           VIRUS_TOTAL_API_KEY: ${{ secrets.VIRUS_TOTAL_API_KEY }}
         run: |
+          # Das Image wird per DIGEST referenziert, nicht per `:latest`.
+          #
+          # Mit `:latest` blieb der Rollout aus: `mw stack deploy` vergleicht
+          # die Compose-DEFINITION, und die änderte sich nicht — der Tag-String
+          # war identisch. Das Log meldete dann
+          # "Deployment successful. No services were restarted.",
+          # während der Container weiter das alte Image lief. Der Deploy war
+          # also grün, der Code aber nicht draußen.
+          #
+          # Der Digest ändert sich bei jedem Build, erzwingt damit den Restart
+          # und macht den Deploy reproduzierbar: ein Rollback ist ein Deploy
+          # mit dem alten Digest.
+          #
           # Deklarativer Deploy: mw ersetzt die Stack-Env durch das aufgelöste
           # compose.mittwald.yml. Die dortigen ${VAR} werden aus diesem env-file
           # interpoliert; Werte kommen aus GitHub-Secrets (nichts Geheimes im
@@ -143,6 +163,11 @@ jobs:
 
           # Schutz gegen versehentliches Leer-Deploy (würde die Env überschreiben):
           # fehlt ein Kern-Secret, bricht der Deploy hier ab statt zu wischen.
+          #
+          # DIGGY_IMAGE gehört dazu: ohne den Digest würde die Compose auf
+          # `latest` zurückfallen und der Rollout wieder stillschweigend
+          # ausbleiben (siehe unten).
+          : "${DIGGY_IMAGE:?fehlt — Digest aus dem publish-Job kam nicht an}"
           : "${SMTP_HOST:?fehlt — GitHub-Secret setzen, sonst wird die Stack-Env geleert}"
           : "${SMTP_USER:?fehlt — GitHub-Secret setzen}"
           : "${SMTP_PASS:?fehlt — GitHub-Secret setzen}"
@@ -165,6 +190,7 @@ jobs:
             echo "CONTACT_FROM=${CONTACT_FROM}"
             echo "CONTACT_FORM_SECRET=${CONTACT_FORM_SECRET}"
             echo "PUBLIC_ORIGIN=${PUBLIC_ORIGIN}"
+            echo "DIGGY_IMAGE=${DIGGY_IMAGE}"
             echo "PAGESPEED_API_KEY=${PAGESPEED_API_KEY}"
             echo "VIRUS_TOTAL_API_KEY=${VIRUS_TOTAL_API_KEY}"
           } > runtime.env

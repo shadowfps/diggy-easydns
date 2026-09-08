@@ -136,7 +136,16 @@ Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
 ghcr.io/shadowfps/diggy-easydns:latest
 ```
 
-Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die `${…}`-Platzhalter von `compose.mittwald.yml` interpoliert. Dafür müssen im Repository unter **Settings → Secrets and variables → Actions** folgende **Repository-Secrets** hinterlegt sein:
+Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert.
+Das Image wird dabei **per Digest** referenziert (`DIGGY_IMAGE`), nicht per
+`:latest`.
+
+Das ist keine Kosmetik: `mw stack deploy` vergleicht die Compose-*Definition*.
+Mit einem festen `:latest` änderte sich die nicht, der Deploy meldete
+`No services were restarted` — und der Container lief weiter mit dem alten
+Image. Grüner Deploy, alter Code. Der Digest ändert sich bei jedem Build und
+erzwingt den Restart; außerdem ist ein Rollback damit einfach ein Deploy mit
+dem vorherigen Digest. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die `${…}`-Platzhalter von `compose.mittwald.yml` interpoliert. Dafür müssen im Repository unter **Settings → Secrets and variables → Actions** folgende **Repository-Secrets** hinterlegt sein:
 
 - `MITTWALD_API_TOKEN` — gültiges mStudio-API-Token
 - SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`
@@ -155,6 +164,10 @@ Für manuelles Deployment zuerst prüfen, ob der Ziel-Stack weitere Services ent
 
 ```bash
 mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
+# DIGGY_IMAGE muss gesetzt sein, sonst fällt die Compose auf :latest zurück
+# und der Rollout bleibt aus. Digest oder Versions-Tag verwenden:
+export DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.3.0
+
 mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file .env
 ```
 
