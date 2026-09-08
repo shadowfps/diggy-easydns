@@ -87,8 +87,13 @@ export function ContactForm() {
       <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink-900/50 dark:text-ink-50/50">
         Kontaktformular
       </h2>
-      <p className="mb-5 text-sm text-ink-900/60 dark:text-ink-50/60">
+      <p className="mb-2 text-sm text-ink-900/60 dark:text-ink-50/60">
         Schreib mir alternativ direkt über das Formular — ich melde mich per E-Mail zurück.
+      </p>
+      <p className="mb-5 text-xs text-ink-900/45 dark:text-ink-50/45">
+        Name, E-Mail und Nachricht werden per E-Mail an mich zugestellt und nur zur
+        Beantwortung genutzt. An deine Adresse geht eine Empfangsbestätigung. Details
+        unter <a href="/datenschutz" className="underline underline-offset-2">Datenschutz</a>.
       </p>
 
       {success && (

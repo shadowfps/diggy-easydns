@@ -84,8 +84,9 @@ Alle Secrets gehören in `.env` (liegt in `.gitignore`). Vorlage: `.env.example`
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | SMTP für das Kontaktformular |
 | `CONTACT_TO` | Empfänger der Kontaktanfragen |
 | `CONTACT_FROM` | Absender (Admin-Mail + Bestätigung an Nutzer) |
-| `CONTACT_FORM_SECRET` | Geheimer Schlüssel für Anti-Spam-Token (in Produktion setzen) |
+| `CONTACT_FORM_SECRET` | Geheimer Schlüssel für Anti-Spam-Token. **In Produktion Pflicht** (mind. 32 Zeichen) — ohne ihn startet der Server nicht, sobald SMTP konfiguriert ist. |
 | `TRUST_PROXY` | `true` hinter Reverse-Proxy (nginx, Caddy) für korrektes IP-Rate-Limiting |
+| `CORS_ORIGINS` | Optional — komma-separierte Origins, die per CORS zugreifen dürfen. Leer lassen, wenn Frontend und API unter derselben Origin laufen (Standard). |
 | `PORT` | Backend-Port (Standard: `3001`) |
 
 Secret generieren (WSL/Linux):
@@ -95,6 +96,10 @@ openssl rand -base64 32
 ```
 
 Das Kontaktformular ist deaktiviert, solange SMTP nicht konfiguriert ist. Anti-Spam: Honeypot, Timing-Token, Rate-Limits, Inhaltsfilter.
+
+### Rate-Limits
+
+Die API ist IP-basiert begrenzt: 120 Requests/Minute allgemein, 10/Stunde je Fremd-API-Provider (PageSpeed, VirusTotal — getrennte Zähler), 20/Minute für den Verfügbarkeits-Check. Dazu ein Concurrency-Deckel von 4 für die langlaufenden Checks. `/api/health` liegt bewusst vor dem Limiter, damit fremder Traffic den Container-Healthcheck nicht auf `unhealthy` dreht.
 
 ## Container & Deployment
 
@@ -147,6 +152,7 @@ Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Plat
 | `/availability` | Domain-Verfügbarkeit |
 | `/about` | Info-Seite |
 | `/impressum` | Impressum & Kontaktformular |
+| `/datenschutz` | Datenschutzhinweise |
 
 ## Projekt-Struktur
 

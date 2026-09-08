@@ -1,1 +1,1 @@
-export * from '../../shared/types/dns';
+export * from '@shared/types/dns';

@@ -154,13 +154,11 @@ export function buildContactEmailText(payload: ContactEmailPayload): string {
 
 interface ContactAutoReplyPayload {
   name: string;
-  message: string;
 }
 
 /** Bestätigung an den Absender — gleicher diggy-Look. */
 export function buildContactAutoReplyHtml(payload: ContactAutoReplyPayload): string {
   const name = escapeHtml(payload.name);
-  const messagePreview = escapeHtml(payload.message).replace(/\n/g, '<br />');
   const sentAt = escapeHtml(
     new Date().toLocaleString('de-DE', {
       dateStyle: 'medium',
@@ -215,18 +213,13 @@ export function buildContactAutoReplyHtml(payload: ContactAutoReplyPayload): str
                   </td>
                 </tr>
 
-                <tr>
-                  <td>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#09090B;border:1px solid #27272A;border-radius:12px;">
-                      <tr>
-                        <td style="padding:14px 16px;">
-                          <div style="font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#71717A;margin-bottom:10px;">Deine Nachricht</div>
-                          <div style="font-size:14px;line-height:1.65;color:#A1A1AA;">${messagePreview}</div>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
+                <!-- Bewusst OHNE Zitat der eingereichten Nachricht.
+                     Die Empfänger-Adresse ist unbestätigt: wer eine fremde
+                     Adresse einträgt, könnte den Auto-Reply sonst als
+                     Transportmittel für eigenen Text an Dritte missbrauchen
+                     (Backscatter). Ohne Zitat ist die Mail für Missbrauch
+                     wertlos, für echte Absender aber weiterhin die
+                     Empfangsbestätigung, die sie sein soll. -->
 
                 <tr>
                   <td style="padding-top:20px;font-size:13px;line-height:1.5;color:#71717A;">
@@ -259,10 +252,8 @@ export function buildContactAutoReplyText(payload: ContactAutoReplyPayload): str
     '',
     'wir haben deine Anfrage über diggy erhalten und setzen uns zeitnah mit dir in Verbindung.',
     '',
-    'Deine Nachricht:',
-    '─'.repeat(32),
-    payload.message,
-    '',
+    // Kein Zitat der eingereichten Nachricht — siehe Kommentar in der
+    // HTML-Variante: die Empfänger-Adresse ist unbestätigt.
     '─'.repeat(32),
     'Du musst nichts weiter tun. Falls du noch etwas ergänzen möchtest, antworte einfach auf diese E-Mail.',
     '',

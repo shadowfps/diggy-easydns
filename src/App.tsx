@@ -15,6 +15,7 @@ import { VirusScanView } from '@/modules/virusscan/VirusScanView';
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
 import { ImpressumView } from '@/modules/impressum/ImpressumView';
+import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
@@ -42,9 +43,19 @@ import {
 } from '@/lib/lookupHistory';
 import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
-type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum';
+type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum' | 'datenschutz';
 
 const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+
+/** Pfad → View für die statischen Routen. Einzige Quelle für beide Richtungen. */
+const STATIC_ROUTES: Record<string, AppView | undefined> = {
+  '/': 'lookup',
+  '/history': 'history',
+  '/about': 'about',
+  '/availability': 'availability',
+  '/impressum': 'impressum',
+  '/datenschutz': 'datenschutz',
+};
 
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
@@ -65,6 +76,10 @@ export default function App() {
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const initialPathHandledRef = useRef(false);
+  // applyPath schließt über aktuellen State. Der popstate-Listener wird nur
+  // einmal gebunden, greift die Funktion aber über diese Ref ab, damit er
+  // nicht auf einer veralteten Closure sitzt.
+  const applyPathRef = useRef<(pathname: string) => void>(() => {});
   // Beim Direktaufruf der Startseite soll der Cursor sofort im Suchfeld stehen,
   // damit man ohne Klick per Strg+V einfügen und suchen kann. Bei Deep-Links
   // (Permalink oder Unterseite) übernimmt der Routing-Effekt.
@@ -94,10 +109,9 @@ export default function App() {
     setPermalinkCopied(false);
   };
 
-  const handleSearch = (domain: string) => {
+  const runLookup = (domain: string, options: { updatePath?: boolean } = {}) => {
     const normalizedDomain = domain.trim().toLowerCase();
     if (!normalizedDomain) return;
-    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
     setView('lookup');
     setSearchValue(normalizedDomain);
     resetSecondaryScans();
@@ -106,13 +120,18 @@ export default function App() {
     if (isInspectableIp(normalizedDomain)) {
       lookup.reset();
       setIpQuery(normalizedDomain);
-      replaceLookupPath(normalizedDomain);
+      if (options.updatePath !== false) replaceLookupPath(normalizedDomain);
       return;
     }
 
     setIpQuery(null);
     setActiveTab('records');
     lookup.run(normalizedDomain);
+  };
+
+  const handleSearch = (domain: string) => {
+    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
+    runLookup(domain);
   };
 
   // Records da → Permalink auf die (server-normalisierte) Domain setzen.
@@ -157,53 +176,56 @@ export default function App() {
     }
   };
 
-  const handleHome = () => {
+  /**
+   * Wendet einen Pfad auf den State an — ohne die History zu verändern.
+   *
+   * Wird von zwei Seiten gebraucht: beim ersten Laden (Deep-Link/Permalink)
+   * und bei `popstate`. Vorher gab es nur den Init-Pfad, deshalb hat der
+   * Zurück-Button nur die URL geändert und die Ansicht stehen gelassen.
+   */
+  const applyPath = (pathname: string) => {
+    const staticView = STATIC_ROUTES[pathname];
+    if (staticView) {
+      clearLookup();
+      setView(staticView);
+      if (staticView === 'history') setHistoryEntries(readLookupHistory());
+      return;
+    }
+
+    const domainFromPath = getDomainFromLookupPath(pathname);
+    if (domainFromPath) {
+      // Der Pfad steht schon — nicht erneut hineinschreiben, sonst würde ein
+      // replaceState den History-Eintrag überschreiben, zu dem wir gerade
+      // zurückgesprungen sind.
+      runLookup(domainFromPath, { updatePath: false });
+      return;
+    }
+
+    // Unbekannter Pfad → Startseite.
     clearLookup();
     setView('lookup');
     setActiveTab('records');
     setSearchValue('');
-    if (window.location.pathname !== '/') {
-      window.history.pushState(null, '', '/');
+  };
+
+  // Ref bei jedem Render auf die frische Closure zeigen lassen.
+  applyPathRef.current = applyPath;
+
+  /** Navigiert per pushState und wendet den Pfad direkt an. */
+  const navigate = (pathname: string) => {
+    if (window.location.pathname !== pathname) {
+      window.history.pushState(null, '', pathname);
     }
+    applyPath(pathname);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleHistory = () => {
-    clearLookup();
-    setView('history');
-    setHistoryEntries(readLookupHistory());
-    if (window.location.pathname !== '/history') {
-      window.history.pushState(null, '', '/history');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleAbout = () => {
-    clearLookup();
-    setView('about');
-    if (window.location.pathname !== '/about') {
-      window.history.pushState(null, '', '/about');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleAvailability = () => {
-    clearLookup();
-    setView('availability');
-    if (window.location.pathname !== '/availability') {
-      window.history.pushState(null, '', '/availability');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleImpressum = () => {
-    clearLookup();
-    setView('impressum');
-    if (window.location.pathname !== '/impressum') {
-      window.history.pushState(null, '', '/impressum');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const handleHome = () => navigate('/');
+  const handleHistory = () => navigate('/history');
+  const handleAbout = () => navigate('/about');
+  const handleAvailability = () => navigate('/availability');
+  const handleImpressum = () => navigate('/impressum');
+  const handleDatenschutz = () => navigate('/datenschutz');
 
   const handleClearHistory = () => {
     setHistoryEntries(clearLookupHistory());
@@ -221,30 +243,19 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Erstes Laden: Deep-Link/Permalink anwenden.
   useEffect(() => {
     if (initialPathHandledRef.current) return;
     initialPathHandledRef.current = true;
-    if (window.location.pathname === '/history') {
-      setView('history');
-      setHistoryEntries(readLookupHistory());
-      return;
-    }
-    if (window.location.pathname === '/about') {
-      setView('about');
-      return;
-    }
-    if (window.location.pathname === '/availability') {
-      setView('availability');
-      return;
-    }
-    if (window.location.pathname === '/impressum') {
-      setView('impressum');
-      return;
-    }
-    const domainFromPath = getDomainFromLookupPath(window.location.pathname);
-    if (!domainFromPath) return;
-    handleSearch(domainFromPath);
+    applyPath(window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
+  useEffect(() => {
+    const handlePopState = () => applyPathRef.current(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const handleCopyPermalink = async () => {
@@ -318,6 +329,8 @@ export default function App() {
         {view === 'availability' && <AvailabilityView />}
 
         {view === 'impressum' && <ImpressumView />}
+
+        {view === 'datenschutz' && <DatenschutzView />}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -498,6 +511,10 @@ export default function App() {
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeTab}
+                    role="tabpanel"
+                    id={`panel-${activeTab}`}
+                    aria-labelledby={`tab-${activeTab}`}
+                    tabIndex={0}
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
@@ -602,6 +619,16 @@ export default function App() {
               className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
             >
               Impressum
+            </button>
+            <span className="hidden text-ink-900/20 dark:text-ink-50/20 sm:inline" aria-hidden>
+              ·
+            </span>
+            <button
+              type="button"
+              onClick={handleDatenschutz}
+              className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
+            >
+              Datenschutz
             </button>
           </div>
           <span>v0.3.0</span>

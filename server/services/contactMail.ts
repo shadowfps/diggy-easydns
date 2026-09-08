@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { claimAutoReplySlot, maskEmail } from './contactSpamGuard.js';
 import { buildContactAutoReplyHtml, buildContactAutoReplyText, buildContactEmailHtml, buildContactEmailText } from './contactEmailTemplate.js';
 
 export interface ContactMessageInput {
@@ -135,10 +136,18 @@ export async function sendContactMessage(input: ContactMessageInput): Promise<Co
     text: buildContactEmailText(payload),
     html: buildContactEmailHtml(payload),
   });
-  console.log(`[contact] Benachrichtigung gesendet an ${to}`);
+  console.log('[contact] Benachrichtigung an den Betreiber gesendet.');
 
   if (payload.email.toLowerCase() === to.toLowerCase()) {
-    console.log(`[contact] Bestätigung übersprungen — Absender-Adresse ist identisch mit ${to}`);
+    return { sent: true };
+  }
+
+  // Die Empfänger-Adresse ist unbestätigt — höchstens eine Bestätigung pro
+  // Adresse und Tag, damit der Endpoint niemanden mit Mails zudecken kann.
+  if (!claimAutoReplySlot(payload.email)) {
+    console.log(
+      `[contact] Bestätigung an ${maskEmail(payload.email)} übersprungen (Tageslimit erreicht).`
+    );
     return { sent: true };
   }
 
@@ -151,10 +160,13 @@ export async function sendContactMessage(input: ContactMessageInput): Promise<Co
       text: buildContactAutoReplyText(payload),
       html: buildContactAutoReplyHtml(payload),
     });
-    console.log(`[contact] Bestätigung gesendet an ${payload.email}`);
+    console.log(`[contact] Bestätigung gesendet an ${maskEmail(payload.email)}`);
   } catch (autoReplyError) {
     const err = autoReplyError as Error;
-    console.error(`[contact] Bestätigung an ${payload.email} fehlgeschlagen:`, err.message || autoReplyError);
+    console.error(
+      `[contact] Bestätigung an ${maskEmail(payload.email)} fehlgeschlagen:`,
+      err.message || autoReplyError
+    );
   }
 
   return { sent: true };

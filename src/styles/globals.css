@@ -1,3 +1,24 @@
+/*
+ * Schriften lokal, nicht von fonts.googleapis.com.
+ *
+ * Vorher lud index.html Geist/Geist Mono/Goldman zur Laufzeit von Googles CDN.
+ * Damit ging bei jedem Seitenaufruf die IP des Besuchers ohne Einwilligung an
+ * Google (LG München I, 3 O 17493/20). Nebeneffekt des Umstiegs: zwei
+ * DNS-Lookups und zwei TLS-Handshakes weniger im kritischen Rendering-Pfad,
+ * und die CSP kommt ohne Google-Hosts aus.
+ *
+ * Nur die tatsächlich genutzten Schnitte — jeder Import ist eine Datei im Bundle.
+ */
+@import '@fontsource/geist/latin-300.css';
+@import '@fontsource/geist/latin-400.css';
+@import '@fontsource/geist/latin-500.css';
+@import '@fontsource/geist/latin-600.css';
+@import '@fontsource/geist/latin-700.css';
+@import '@fontsource/geist-mono/latin-400.css';
+@import '@fontsource/geist-mono/latin-500.css';
+@import '@fontsource/goldman/latin-400.css';
+@import '@fontsource/goldman/latin-700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

@@ -1,6 +1,7 @@
 import 'dotenv/config';
-import express, { type Request, type Response } from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +39,7 @@ import {
   ContactChallengeError,
   ContactRateLimitError,
   ContactSpamSilentError,
+  assertContactSecretConfigured,
   isHoneypotTriggered,
   issueContactChallenge,
 } from './services/contactSpamGuard.js';
@@ -46,8 +48,104 @@ const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-app.use(cors());
+/* ─── Sicherheits-Header (#9) ────────────────────────────────────────────── */
+
+app.disable('x-powered-by');
+
+/**
+ * Die CSP ist auf die tatsächlich genutzten Quellen zugeschnitten:
+ *  - `style-src` braucht 'unsafe-inline', weil Framer Motion und GSAP
+ *    Inline-Styles für Transforms setzen. Ohne das bricht jede Animation.
+ *  - `img-src data:` ist Pflicht für die SVG-Grain-Textur im Body-Background
+ *    (src/styles/globals.css).
+ *  - Keine Fremd-Hosts: Schriften liegen lokal im Bundle (#13), die App lädt
+ *    zur Laufzeit nichts von Dritten.
+ */
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        fontSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+      },
+    },
+    // Die App liefert keine Cross-Origin-Embeds aus; COEP würde nur die
+    // Google-Fonts brechen, ohne hier etwas zu gewinnen.
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    hsts: {
+      maxAge: 31_536_000,
+      includeSubDomains: true,
+      preload: false,
+    },
+  })
+);
+
+/* ─── CORS (#8) ──────────────────────────────────────────────────────────── */
+
+/**
+ * In Produktion liefert dieser Prozess Frontend UND API unter derselben Origin
+ * aus — CORS ist dort schlicht nicht nötig. Vorher stand hier `cors()` ohne
+ * Optionen, also `Access-Control-Allow-Origin: *` auf allen Routen, inklusive
+ * POST /api/contact: jede fremde Seite konnte über die Browser ihrer Besucher
+ * Kontaktnachrichten absetzen, wobei das IP-Rate-Limit die Besucher-IP traf
+ * statt die des Angreifers.
+ */
+const corsOrigins = process.env.CORS_ORIGINS?.split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+if (corsOrigins?.length) {
+  app.use(cors({ origin: corsOrigins }));
+} else if (process.env.NODE_ENV !== 'production') {
+  // Dev: Vite läuft auf 5173 und proxyt /api hierher.
+  app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
+}
+
 app.use(express.json({ limit: '64kb' }));
+
+/**
+ * CSRF-Riegel für den einzigen schreibenden Endpoint.
+ *
+ * Same-Origin-Requests des eigenen Frontends senden entweder keinen Origin
+ * (klassisches Formular) oder die eigene Origin. Ein Cross-Site-Aufruf aus
+ * einer fremden Seite trägt deren Origin — und wird hier abgelehnt, bevor
+ * Token- und Rate-Limit-Budget verbraucht werden.
+ */
+function assertSameOrigin(req: Request, res: Response, next: NextFunction): void {
+  const origin = req.get('origin');
+  if (!origin) return next(); // kein Origin -> kein Cross-Site-Fetch
+
+  const allowed = new Set(corsOrigins ?? []);
+  const host = req.get('host');
+  if (host) {
+    allowed.add(`https://${host}`);
+    allowed.add(`http://${host}`);
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    allowed.add('http://localhost:5173');
+    allowed.add('http://127.0.0.1:5173');
+  }
+
+  if (!allowed.has(origin)) {
+    res.status(403).json({
+      error: 'cross_origin_denied',
+      message: 'Anfragen von einer fremden Origin sind für diesen Endpoint nicht erlaubt.',
+    });
+    return;
+  }
+
+  next();
+}
 
 /** TTL für gecachte Lookup-Ergebnisse — kurz genug, um frisch zu bleiben. */
 const LOOKUP_TTL_MS = 60_000;
@@ -245,7 +343,7 @@ app.get('/api/contact/challenge', (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/contact', async (req: Request, res: Response) => {
+app.post('/api/contact', assertSameOrigin, async (req: Request, res: Response) => {
   if (!isContactMailConfigured()) {
     return res.status(503).json({
       error: 'contact_not_configured',
@@ -481,6 +579,11 @@ if (existsSync(distIndex)) {
     if (req.path.startsWith('/api/')) return next();
     return res.sendFile(distIndex);
   });
+}
+
+// Fehlkonfiguration soll beim Start auffallen, nicht beim ersten Formular-Request.
+if (isContactMailConfigured()) {
+  assertContactSecretConfigured();
 }
 
 app.listen(PORT, () => {

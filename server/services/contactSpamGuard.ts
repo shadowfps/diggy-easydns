@@ -38,22 +38,61 @@ interface RateBucket {
 }
 
 const rateByIp = new Map<string, RateBucket>();
+/**
+ * Wie oft eine bestimmte Empfänger-Adresse eine Auto-Reply bekommen darf.
+ *
+ * Das IP-Limit allein schützt das Opfer nicht: verteilt über viele IPs (oder
+ * über die Browser fremder Besucher) könnte dieselbe Adresse beliebig oft
+ * angeschrieben werden. Dieser Zähler hängt an der Adresse, nicht am Absender.
+ */
+const autoReplyByRecipient = new Map<string, number>();
+const AUTO_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const challengeRateByIp = new Map<string, RateBucket>();
 const recentHashes = new Map<string, number>();
 const usedTokenHashes = new Map<string, number>();
 
+const MIN_SECRET_LENGTH = 32;
+
+/**
+ * HMAC-Schlüssel für die Challenge-Token.
+ *
+ * In Produktion ist CONTACT_FORM_SECRET Pflicht. Vorher gab es eine
+ * Fallback-Kette (SMTP_PASS, dann ein hartkodiertes Dev-Secret) mit bloßer
+ * console.warn — beides war unhaltbar:
+ *
+ *  - DEV_FALLBACK_SECRET steht in diesem öffentlichen Repo. Wer es kennt,
+ *    kann beliebig viele gültige Token mit beliebigem issuedAt selbst
+ *    signieren; Timing-Check und Replay-Schutz sind damit wirkungslos.
+ *  - SMTP_PASS als HMAC-Key ist Schlüssel-Wiederverwendung über eine
+ *    Vertrauensgrenze: die Signaturen sind über /api/contact/challenge
+ *    öffentlich abrufbar und wären damit ein Orakel über das Mail-Passwort.
+ */
 function getSecret(): string {
   const secret = process.env.CONTACT_FORM_SECRET?.trim();
-  if (secret) return secret;
 
   if (process.env.NODE_ENV === 'production') {
-    console.warn('[contact] CONTACT_FORM_SECRET fehlt — Token-Signatur ist in Produktion unsicher.');
+    if (!secret) {
+      throw new Error(
+        'CONTACT_FORM_SECRET muss in Produktion gesetzt sein (z. B. `openssl rand -base64 32`).'
+      );
+    }
+    if (secret.length < MIN_SECRET_LENGTH) {
+      throw new Error(
+        `CONTACT_FORM_SECRET ist zu kurz (${secret.length} Zeichen, mindestens ${MIN_SECRET_LENGTH}).`
+      );
+    }
+    return secret;
   }
 
-  const smtpPass = process.env.SMTP_PASS?.trim();
-  if (smtpPass) return smtpPass;
+  return secret || DEV_FALLBACK_SECRET;
+}
 
-  return DEV_FALLBACK_SECRET;
+/**
+ * Prüft die Konfiguration beim Start, statt erst beim ersten Formular-Request
+ * zu scheitern. So fällt eine Fehlkonfiguration sofort im Deploy auf.
+ */
+export function assertContactSecretConfigured(): void {
+  getSecret();
 }
 
 function trustProxyHeaders(): boolean {
@@ -239,6 +278,36 @@ function assertNotDuplicate(ip: string, email: string, message: string): void {
   }
 
   recentHashes.set(hash, now);
+}
+
+/**
+ * true, wenn an diese Adresse jetzt eine Bestätigung gehen darf.
+ *
+ * Verbraucht bei Erfolg direkt einen Slot — der Aufrufer muss also nur dann
+ * fragen, wenn er tatsächlich senden will.
+ */
+export function claimAutoReplySlot(email: string): boolean {
+  const now = Date.now();
+  const key = email.trim().toLowerCase();
+
+  if (autoReplyByRecipient.size > 5_000) {
+    for (const [address, sentAt] of autoReplyByRecipient) {
+      if (now - sentAt > AUTO_REPLY_WINDOW_MS) autoReplyByRecipient.delete(address);
+    }
+  }
+
+  const previous = autoReplyByRecipient.get(key);
+  if (previous && now - previous < AUTO_REPLY_WINDOW_MS) return false;
+
+  autoReplyByRecipient.set(key, now);
+  return true;
+}
+
+/** Maskiert eine Adresse fürs Log — `max@example.com` -> `m***@example.com`. */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '***';
+  return `${local.slice(0, 1)}***@${domain}`;
 }
 
 export function isHoneypotTriggered(fields: { website?: string; company?: string }): boolean {

@@ -1,1 +1,1 @@
-export * from '../../shared/scoring';
+export * from '@shared/scoring';
