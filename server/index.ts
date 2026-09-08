@@ -283,13 +283,25 @@ app.use('/api', apiLimiter);
  * Validiert & normalisiert den `domain`-Query-Param. Sendet bei ungültiger
  * Eingabe selbst eine 400 und gibt null zurück — der Aufrufer bricht dann ab.
  */
+/**
+ * Kürzt die Nutzereingabe für die Fehlermeldung.
+ *
+ * Der Rohwert kommt ungekürzt aus dem Query-String und wurde vor der
+ * Längenprüfung in die Antwort gespiegelt — ein mehrere Kilobyte langer
+ * Parameter kam damit vollständig zurück. Kein XSS (React escapt, und die
+ * Antwort ist JSON), aber unnötige Reflexionsfläche und eine unlesbare Meldung.
+ */
+function forMessage(rawInput: string): string {
+  return rawInput.length > 80 ? `${rawInput.slice(0, 80)}…` : rawInput;
+}
+
 function resolveDomainParam(req: Request, res: Response): string | null {
   const rawInput = String(req.query.domain ?? '');
   const domain = normalizeDomain(rawInput);
   if (!isValidDomain(domain)) {
     res.status(400).json({
       error: 'invalid_domain',
-      message: `"${rawInput}" sieht nicht nach einer gültigen Domain aus.`,
+      message: `"${forMessage(rawInput)}" sieht nicht nach einer gültigen Domain aus.`,
     });
     return null;
   }
@@ -315,7 +327,7 @@ app.get('/api/ip-details', async (req: Request, res: Response) => {
   if (!isLookupableIpAddress(ip)) {
     return res.status(400).json({
       error: 'invalid_ip',
-      message: `"${ip.slice(0, 80)}" ist keine öffentliche IP-Adresse.`,
+      message: `"${forMessage(ip)}" ist keine öffentliche IP-Adresse.`,
     });
   }
 
@@ -340,7 +352,7 @@ app.get('/api/pagespeed', pageSpeedLimiter, pageSpeedConcurrency, async (req: Re
   if (!isValidDomain(domain)) {
     return res.status(400).json({
       error: 'invalid_domain',
-      message: `"${rawInput}" sieht nicht nach einer gültigen Domain aus.`,
+      message: `"${forMessage(rawInput)}" sieht nicht nach einer gültigen Domain aus.`,
     });
   }
 
@@ -368,7 +380,7 @@ app.get('/api/virusscan', virusScanLimiter, virusScanConcurrency, async (req: Re
   if (!isValidDomain(domain)) {
     return res.status(400).json({
       error: 'invalid_domain',
-      message: `"${rawInput}" sieht nicht nach einer gültigen Domain aus.`,
+      message: `"${forMessage(rawInput)}" sieht nicht nach einer gültigen Domain aus.`,
     });
   }
 

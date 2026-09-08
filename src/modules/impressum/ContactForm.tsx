@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { fetchContactChallenge, sendContactMessage } from '@/lib/api';
 
@@ -22,6 +22,16 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+  /**
+   * Tickt sekündlich, solange die Mindestwartezeit läuft.
+   *
+   * Der Server verlangt 4 s zwischen Token-Ausgabe und Absenden (Bot-Signal,
+   * keine Wartezeit für Menschen). Vorher war der Button in dieser Zeit
+   * klickbar und quittierte mit "Bitte nimm dir einen kurzen Moment" — ohne zu
+   * sagen, wie lange noch. Jetzt ist er sichtbar deaktiviert und zählt runter.
+   */
+  const [now, setNow] = useState(() => Date.now());
 
   /**
    * Holt einen frischen Challenge-Token.
@@ -35,6 +45,27 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
     setChallengeToken(challenge.token);
     setReadyAt(Date.now() + challenge.minDelayMs);
   }, []);
+
+  const waitSeconds = readyAt ? Math.max(0, Math.ceil((readyAt - now) / 1000)) : 0;
+
+  useEffect(() => {
+    if (!readyAt) return;
+    // Nur von readyAt abhängig: mit `now` in den Dependencies würde der
+    // Intervall bei jedem Tick neu aufgesetzt. Der Timer stoppt sich selbst,
+    // sobald die Wartezeit vorbei ist.
+    const timer = window.setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (current >= readyAt) window.clearInterval(timer);
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [readyAt]);
+
+  // Nach dem Absenden Fokus auf die Statusmeldung: sonst bleibt er auf dem
+  // Submit-Button und die Meldung erscheint stumm darüber.
+  useEffect(() => {
+    if (success || error) statusRef.current?.focus();
+  }, [success, error]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +86,10 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
     if (loading || !challengeToken) return;
 
     if (readyAt && Date.now() < readyAt) {
-      setError('Bitte nimm dir einen kurzen Moment, bevor du die Nachricht absendest.');
+      // Sollte durch den deaktivierten Button nicht mehr auftreten — bleibt
+      // als Absicherung für Enter im Textfeld o. Ä.
+      const remaining = Math.ceil((readyAt - Date.now()) / 1000);
+      setError(`Das Formular ist in ${remaining} Sekunden bereit.`);
       return;
     }
 
@@ -90,6 +124,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
   };
 
   const formReady = Boolean(challengeToken);
+  const tooShort = message.trim().length > 0 && message.trim().length < MIN_MESSAGE_LENGTH;
 
   return (
     <section className="border-t border-ink-100 pt-8 dark:border-ink-900/80">
@@ -113,19 +148,36 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
         .
       </p>
 
+      {/*
+        role/aria-live sind hier nicht Kosmetik: ohne sie bekommt ein
+        Screenreader-Nutzer nach dem Absenden gar keine Rückmeldung — der Fokus
+        bleibt auf dem Button, die Meldung erscheint stumm darüber.
+      */}
       {success && (
-        <div className="mb-4 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+        <div
+          ref={statusRef}
+          role="status"
+          tabIndex={-1}
+          className="mb-4 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 outline-none dark:text-emerald-300"
+        >
           Danke! Deine Nachricht wurde gesendet.
         </div>
       )}
 
       {error && (
-        <div className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+        <div
+          ref={statusRef}
+          role="alert"
+          tabIndex={-1}
+          className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 outline-none dark:text-red-400"
+        >
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* relative: die Honeypot-Felder liegen absolut und sollen sich am
+          Formular ausrichten, nicht an einem weiter oben liegenden Container. */}
+      <form onSubmit={handleSubmit} className="relative space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" id="contact-name" required>
             <input
@@ -161,11 +213,28 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
             onChange={(e) => setMessage(e.target.value)}
             required
             minLength={10}
-            maxLength={5000}
+            maxLength={MAX_MESSAGE_LENGTH}
             rows={6}
+            aria-describedby="contact-message-counter"
             className={`${inputClassName} min-h-[9rem] resize-y`}
             placeholder="Worum geht es?"
           />
+          {/*
+            Ohne Zähler hörte das Tippen bei 5000 Zeichen einfach auf, ohne
+            Hinweis warum. Die Mindestlänge wird erst nach dem ersten
+            Absendeversuch angemahnt, damit es nicht beim Tippen meckert.
+          */}
+          <div
+            id="contact-message-counter"
+            className="mt-1.5 flex justify-between text-xs text-ink-900/40 dark:text-ink-50/40"
+          >
+            <span>
+              {tooShort ? `Noch mindestens ${MIN_MESSAGE_LENGTH - message.trim().length} Zeichen` : ''}
+            </span>
+            <span className="tabular-nums">
+              {message.length} / {MAX_MESSAGE_LENGTH}
+            </span>
+          </div>
         </Field>
 
         {/* Honeypots — für Menschen unsichtbar, nicht per display:none (Bot-Trap) */}
@@ -196,11 +265,15 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
 
         <button
           type="submit"
-          disabled={loading || !formReady}
+          disabled={loading || !formReady || waitSeconds > 0}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-ink-950 px-5 text-sm font-medium text-white transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-ink-50 dark:text-ink-950 dark:hover:bg-ink-200"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {formReady ? 'Nachricht senden' : 'Formular wird geladen…'}
+          {!formReady
+            ? 'Formular wird geladen…'
+            : waitSeconds > 0
+              ? `Gleich bereit (${waitSeconds} s)`
+              : 'Nachricht senden'}
         </button>
       </form>
     </section>
@@ -228,6 +301,10 @@ function Field({
     </div>
   );
 }
+
+/** Spiegelt die Server-Grenzen aus contactMail.ts. */
+const MIN_MESSAGE_LENGTH = 10;
+const MAX_MESSAGE_LENGTH = 5000;
 
 const inputClassName =
   'w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 placeholder:text-ink-900/35 focus:border-ink-900/40 focus:outline-none focus:ring-2 focus:ring-ink-900/10 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50 dark:placeholder:text-ink-50/35 dark:focus:border-ink-50/40 dark:focus:ring-ink-50/10';

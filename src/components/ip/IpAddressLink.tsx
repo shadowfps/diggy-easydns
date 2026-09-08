@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -20,6 +20,7 @@ import {
 import { lookupIpDetails } from '@/lib/api';
 import type { IpDetails } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface IpAddressLinkProps {
   ip: string;
@@ -123,7 +124,36 @@ export function IpOwnerLabel({ ip, className }: { ip: string; className?: string
 
 const IPV4_PATTERN =
   /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-const IPV6_PATTERN = /^[0-9a-f:]+$/i;
+
+/**
+ * IPv6 mit korrekter Struktur statt der alten Hex-Heuristik `/^[0-9a-f:]+$/`.
+ *
+ * Die ließ alles durch, was nur Hex-Zeichen und Doppelpunkte enthält — auch
+ * `ab:cd` oder `cafe:babe`. Relevant, weil isInspectableIp in App.tsx die
+ * Suche steuert: eine Eingabe wie `ab:cd` landete in der PTR-Ansicht mit einer
+ * API-Fehlermeldung statt in der verständlicheren Domain-Validierung.
+ */
+const IPV6_PATTERN = new RegExp(
+  '^(' +
+    // Volle Form: 8 Hextets
+    '([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}' +
+    // Komprimierte Formen mit ::
+    '|([0-9a-f]{1,4}:){1,7}:' +
+    '|([0-9a-f]{1,4}:){1,6}:[0-9a-f]{1,4}' +
+    '|([0-9a-f]{1,4}:){1,5}(:[0-9a-f]{1,4}){1,2}' +
+    '|([0-9a-f]{1,4}:){1,4}(:[0-9a-f]{1,4}){1,3}' +
+    '|([0-9a-f]{1,4}:){1,3}(:[0-9a-f]{1,4}){1,4}' +
+    '|([0-9a-f]{1,4}:){1,2}(:[0-9a-f]{1,4}){1,5}' +
+    '|[0-9a-f]{1,4}:(:[0-9a-f]{1,4}){1,6}' +
+    '|:((:[0-9a-f]{1,4}){1,7}|:)' +
+    // Link-local mit Zone-ID
+    '|fe80:(:[0-9a-f]{0,4}){0,4}%[0-9a-z]+' +
+    // IPv4-in-IPv6
+    '|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])' +
+    '|([0-9a-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])' +
+    ')$',
+  'i'
+);
 
 export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
   const [open, setOpen] = useState(false);
@@ -145,9 +175,15 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
         <Link2 className="h-3.5 w-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
       </button>
 
-      {typeof document !== 'undefined' &&
+      {/*
+        Portal nur bei offenem Dialog. Vorher wurde es für JEDE angezeigte IP
+        erzeugt — bei einer Domain mit einem Dutzend A-Records lagen ebenso
+        viele leere Portale in document.body, jedes mit eigenen Effects.
+      */}
+      {open &&
+        typeof document !== 'undefined' &&
         createPortal(
-          <IpDetailsOverlay ip={ip} open={open} onClose={() => setOpen(false)} />,
+          <IpDetailsOverlay ip={ip} open onClose={() => setOpen(false)} />,
           document.body
         )}
     </>
@@ -173,6 +209,9 @@ function IpDetailsOverlay({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -247,6 +286,8 @@ function IpDetailsOverlay({
           onClick={onClose}
         >
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="ip-details-title"

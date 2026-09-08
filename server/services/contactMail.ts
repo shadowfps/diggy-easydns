@@ -54,12 +54,25 @@ function sanitizeMailSubjectPart(value: string): string {
 
 let transporter: nodemailer.Transporter | undefined;
 
+/**
+ * CONTACT_TO gehört mit in die Prüfung: ohne Empfänger ist das Formular nicht
+ * eingerichtet. Vorher gab es einen hartkodierten Fallback auf eine private
+ * Adresse — in einer fremden Installation dieses Open-Source-Projekts wären
+ * Kontaktanfragen still dorthin gegangen.
+ */
 export function isContactMailConfigured(): boolean {
-  return Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim());
+  return Boolean(
+    process.env.SMTP_HOST?.trim() &&
+      process.env.SMTP_USER?.trim() &&
+      process.env.SMTP_PASS?.trim() &&
+      process.env.CONTACT_TO?.trim()
+  );
 }
 
 function getContactTo(): string {
-  return process.env.CONTACT_TO?.trim() || 'hallo@cavara.dev';
+  const to = process.env.CONTACT_TO?.trim();
+  if (!to) throw new Error('CONTACT_TO ist nicht konfiguriert.');
+  return to;
 }
 
 function getTransporter(): nodemailer.Transporter {
