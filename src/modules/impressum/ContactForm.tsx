@@ -2,7 +2,16 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { fetchContactChallenge, sendContactMessage } from '@/lib/api';
 
-export function ContactForm() {
+interface ContactFormProps {
+  /**
+   * Navigation zur Datenschutzseite über das Client-Routing. Ein normaler
+   * <a href> löste hier einen vollen Reload aus und hätte die bereits
+   * getippte Nachricht verworfen.
+   */
+  onOpenDatenschutz?: () => void;
+}
+
+export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -93,7 +102,15 @@ export function ContactForm() {
       <p className="mb-5 text-xs text-ink-900/45 dark:text-ink-50/45">
         Name, E-Mail und Nachricht werden per E-Mail an mich zugestellt und nur zur
         Beantwortung genutzt. An deine Adresse geht eine Empfangsbestätigung. Details
-        unter <a href="/datenschutz" className="underline underline-offset-2">Datenschutz</a>.
+        unter{' '}
+        <button
+          type="button"
+          onClick={onOpenDatenschutz}
+          className="underline underline-offset-2 hover:text-ink-900/70 dark:hover:text-ink-50/70"
+        >
+          Datenschutz
+        </button>
+        .
       </p>
 
       {success && (

@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { cached } from '../lib/cache.js';
 import { isPublicIp } from '../lib/safeTarget.js';
 import type { IpDetails } from '../types.js';
 import { lookupPtrRecords } from './dnsLookup.js';
@@ -59,8 +60,6 @@ const IPWHO_ENDPOINT = 'https://ipwhois.app/json';
 const RDAP_ENDPOINT = 'https://rdap.org/ip';
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
-const cache = new Map<string, { expiresAt: number; value: IpDetails }>();
-
 export function isValidIpAddress(ip: string): boolean {
   return isIP(ip) !== 0;
 }
@@ -76,16 +75,22 @@ export function isLookupableIpAddress(ip: string): boolean {
   return isValidIpAddress(ip) && isPublicIp(ip);
 }
 
-export async function lookupIpDetails(ip: string, timeoutMs = 6000): Promise<IpDetails> {
+export function lookupIpDetails(ip: string, timeoutMs = 6000): Promise<IpDetails> {
   const normalizedIp = ip.trim();
   if (!isValidIpAddress(normalizedIp)) {
-    throw new Error('Ungültige IP-Adresse.');
+    return Promise.reject(new Error('Ungültige IP-Adresse.'));
   }
 
-  const cacheKey = normalizedIp.toLowerCase();
-  const cached = cache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  // Über den gemeinsamen Cache statt einer eigenen Map: die hatte weder
+  // Obergrenze noch Eviction und wuchs damit über die Prozess-Laufzeit
+  // monoton — bei einem Container mit `restart: unless-stopped` und einem
+  // /api/ip-details-Aufruf pro A-Record jedes Lookups ein echtes Leck.
+  return cached(`ip:${normalizedIp.toLowerCase()}`, CACHE_TTL_MS, () =>
+    fetchIpDetails(normalizedIp, timeoutMs)
+  );
+}
 
+async function fetchIpDetails(normalizedIp: string, timeoutMs: number): Promise<IpDetails> {
   const [geoResult, rdapResult, ptrResult] = await Promise.allSettled([
     fetchIpWho(normalizedIp, timeoutMs),
     fetchRdap(normalizedIp, timeoutMs),
@@ -121,7 +126,6 @@ export async function lookupIpDetails(ip: string, timeoutMs = 6000): Promise<IpD
     source: [geo ? 'ipwhois.app' : null, rdap ? 'rdap.org' : null].filter(Boolean).join(' + '),
   };
 
-  cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, value: details });
   return details;
 }
 

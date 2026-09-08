@@ -3,8 +3,14 @@ import type { Request } from 'express';
 
 const MIN_SUBMIT_DELAY_MS = 4_000;
 const MAX_TOKEN_AGE_MS = 60 * 60 * 1000;
-const MAX_PER_HOUR = 3;
-const MAX_PER_DAY = 10;
+/**
+ * Absendeversuche pro IP. Etwas großzügiger als zuvor (3/h): der Guard läuft
+ * jetzt erst NACH der Feldvalidierung, ein Tippfehler kostet also keinen
+ * Versuch mehr — dafür soll eine echte Nachfrage nicht an der Grenze scheitern.
+ * Die Hauptlast des Spam-Schutzes tragen Honeypot, Token und Content-Filter.
+ */
+const MAX_PER_HOUR = 5;
+const MAX_PER_DAY = 12;
 const MAX_CHALLENGES_PER_HOUR = 30;
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
 const DEV_FALLBACK_SECRET = 'diggy-contact-dev-only-change-in-production';

@@ -33,8 +33,16 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
     const button = activeRef.current;
     if (!list || !button) return;
 
-    const overflowLeft = button.offsetLeft - list.scrollLeft;
-    const overflowRight = overflowLeft + button.offsetWidth - list.clientWidth;
+    // Per getBoundingClientRect, NICHT per offsetLeft: offsetLeft bezieht sich
+    // auf den offsetParent, und der Container ist nicht positioniert — der
+    // nächste positionierte Vorfahre ist der Root-Wrapper. offsetLeft trug
+    // damit konstant das Seiten-Padding mit und die Korrektur landete um
+    // dessen Breite daneben.
+    const listBox = list.getBoundingClientRect();
+    const buttonBox = button.getBoundingClientRect();
+
+    const overflowLeft = buttonBox.left - listBox.left;
+    const overflowRight = buttonBox.right - listBox.right;
 
     if (overflowLeft < 0) list.scrollLeft += overflowLeft;
     else if (overflowRight > 0) list.scrollLeft += overflowRight;
@@ -89,7 +97,13 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
             role="tab"
             id={`tab-${tab.id}`}
             aria-selected={selected}
-            aria-controls={`panel-${tab.id}`}
+            /*
+             * aria-controls nur am aktiven Tab: im DOM existiert immer nur
+             * dessen Panel (der Panel-Container ist auf activeTab gekeyt).
+             * Bei den inaktiven Tabs hätte das Attribut auf eine nicht
+             * vorhandene ID gezeigt — Screenreader finden dann kein Ziel.
+             */
+            aria-controls={selected ? `panel-${tab.id}` : undefined}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             className={cn(

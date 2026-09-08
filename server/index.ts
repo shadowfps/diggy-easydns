@@ -2,7 +2,8 @@ import 'dotenv/config';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lookupStandardRecords, isValidDomain, normalizeDomain, getApexDomain, lookupSpfRecord } from './services/dnsLookup.js';
@@ -48,6 +49,38 @@ const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Production: Frontend aus dist/ ausliefern (SPA). Die Pfade werden schon hier
+// gebraucht, weil die CSP die Hashes der Inline-Scripts aus dem HTML zieht.
+const distDir = resolve(__dirname, '../../dist');
+const distIndex = resolve(distDir, 'index.html');
+
+/**
+ * SHA-256-Hashes aller Inline-`<script>`-Blöcke im gebauten index.html.
+ *
+ * index.html enthält bewusst ein blockierendes Inline-Script, das das Theme
+ * vor dem ersten Paint setzt. Mit `script-src 'self'` würde die CSP es
+ * blockieren. Die Hashes hier fest einzutragen wäre fragil — sie würden beim
+ * nächsten Edit am HTML stillschweigend falsch. Stattdessen werden sie beim
+ * Start aus der Datei abgeleitet: Script und CSP können nicht auseinanderlaufen.
+ */
+function inlineScriptHashes(): string[] {
+  if (!existsSync(distIndex)) return [];
+
+  try {
+    const html = readFileSync(distIndex, 'utf8');
+    const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+    return blocks
+      .map((match) => match[1])
+      .filter((code) => code.trim().length > 0)
+      .map((code) => `'sha256-${createHash('sha256').update(code, 'utf8').digest('base64')}'`);
+  } catch (error) {
+    console.warn('[csp] Inline-Script-Hashes konnten nicht gelesen werden:', error);
+    return [];
+  }
+}
+
+const scriptHashes = inlineScriptHashes();
+
 /* ─── Sicherheits-Header (#9) ────────────────────────────────────────────── */
 
 app.disable('x-powered-by');
@@ -70,7 +103,7 @@ app.use(
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
         formAction: ["'self'"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", ...scriptHashes],
         styleSrc: ["'self'", "'unsafe-inline'"],
         fontSrc: ["'self'"],
         imgSrc: ["'self'", 'data:'],
@@ -149,6 +182,17 @@ function assertSameOrigin(req: Request, res: Response, next: NextFunction): void
 
 /** TTL für gecachte Lookup-Ergebnisse — kurz genug, um frisch zu bleiben. */
 const LOOKUP_TTL_MS = 60_000;
+
+/**
+ * Eigene, deutlich längere TTLs für die beiden teuren Fremd-API-Checks.
+ *
+ * Die 60 s der Lookups sind hier sinnlos: ein PageSpeed-Run dauert bis zu 45 s,
+ * ein Nutzer, der zwischen Mobile und Desktop hin- und herschaltet, würde jedes
+ * Mal einen neuen Call verbrennen. VirusTotal-Daten sind ohnehin träge — das
+ * gemeldete last_analysis_date liegt meist Tage zurück.
+ */
+const PAGESPEED_TTL_MS = 15 * 60_000;
+const VIRUSSCAN_TTL_MS = 6 * 60 * 60_000;
 
 /* ─── Rate-Limits ────────────────────────────────────────────────────────── */
 
@@ -290,7 +334,10 @@ app.get('/api/pagespeed', pageSpeedLimiter, pageSpeedConcurrency, async (req: Re
   }
 
   try {
-    const result = await lookupPageSpeed(domain, strategy);
+    // strategy gehört in den Key — mobile und desktop sind verschiedene Runs.
+    const result = await cached(`pagespeed:${strategy}:${domain}`, PAGESPEED_TTL_MS, () =>
+      lookupPageSpeed(domain, strategy)
+    );
     res.json(result);
   } catch (error) {
     const err = error as Error;
@@ -315,7 +362,9 @@ app.get('/api/virusscan', virusScanLimiter, virusScanConcurrency, async (req: Re
   }
 
   try {
-    const result = await scanVirusTotal(domain);
+    const result = await cached(`virusscan:${domain}`, VIRUSSCAN_TTL_MS, () =>
+      scanVirusTotal(domain)
+    );
     res.json(result);
   } catch (error) {
     const err = error as Error;
@@ -438,7 +487,11 @@ app.get('/api/domain-check', availabilityLimiter, async (req: Request, res: Resp
   }
 
   try {
-    const result = await checkDomainsAvailability(query);
+    // Bis zu 10 RDAP-Abfragen pro Aufruf — der Cache verhindert, dass ein
+    // erneutes Absenden derselben Suche die Registries nochmal belastet.
+    const result = await cached(`availability:${query.toLowerCase()}`, LOOKUP_TTL_MS, () =>
+      checkDomainsAvailability(query)
+    );
     res.json(result);
   } catch (error) {
     const err = error as Error;
@@ -579,9 +632,6 @@ app.get('/api/lookup/techstack', techStackConcurrency, async (req: Request, res:
   }
 });
 
-// Production: Frontend aus dist/ ausliefern (SPA).
-const distDir = resolve(__dirname, '../../dist');
-const distIndex = resolve(distDir, 'index.html');
 if (existsSync(distIndex)) {
   app.use(express.static(distDir));
   app.get('*', (req: Request, res: Response, next) => {

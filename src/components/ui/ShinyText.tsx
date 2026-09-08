@@ -15,6 +15,7 @@ import {
   useState,
 } from 'react';
 import { motion, useAnimationFrame, useMotionValue, useTransform } from 'framer-motion';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import './ShinyText.css';
 
 interface ShinyTextProps {
@@ -45,6 +46,7 @@ const ShinyText: FC<ShinyTextProps> = ({
   delay = 0,
 }) => {
   const [isPaused, setIsPaused] = useState(false);
+  const reducedMotion = useReducedMotion();
   const progress = useMotionValue(0);
   const elapsedRef = useRef(0);
   const lastTimeRef = useRef<number | null>(null);
@@ -54,6 +56,10 @@ const ShinyText: FC<ShinyTextProps> = ({
   const delayDuration = delay * 1000;
 
   useAnimationFrame((time) => {
+    // Dauerhafter Shine ist reine Zierde — bei reduzierter Bewegung aus.
+    // useAnimationFrame ist eine manuelle rAF-Schleife; MotionConfig
+    // reducedMotion deckt nur die deklarativen Animationen ab.
+    if (reducedMotion) return;
     if (disabled || isPaused) {
       lastTimeRef.current = null;
       return;

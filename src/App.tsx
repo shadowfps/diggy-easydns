@@ -21,6 +21,8 @@ import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { isInspectableIp } from '@/components/ip/IpAddressLink';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
+import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
+import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';
 import {
   ScoreCardSkeleton,
   SectionCardsSkeleton,
@@ -131,6 +133,13 @@ export default function App() {
 
   const handleSearch = (domain: string) => {
     window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
+    // Erste Suche von einer statischen Route: einen History-Eintrag anlegen,
+    // statt ihn per replaceState zu überschreiben. Sonst führte Zurück nach
+    // der ersten Suche aus der App heraus statt zur Startseite.
+    if (!records && !ipQuery) {
+      const target = domain.trim().toLowerCase();
+      if (target) window.history.pushState(null, '', `/lookup/${encodeURIComponent(target)}`);
+    }
     runLookup(domain);
   };
 
@@ -188,6 +197,12 @@ export default function App() {
     if (staticView) {
       clearLookup();
       setView(staticView);
+      // Auch Suchfeld und Tab zurücksetzen. Das machte das alte handleHome()
+      // und ist beim Zusammenfassen der fünf Handler verloren gegangen: die
+      // SearchBar wird bei view==='lookup' nicht neu gemountet, also blieb
+      // nach Home/Zurück die alte Domain im Feld stehen.
+      setSearchValue('');
+      setActiveTab('records');
       if (staticView === 'history') setHistoryEntries(readLookupHistory());
       return;
     }
@@ -250,6 +265,17 @@ export default function App() {
     applyPath(window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Dokumenttitel mitführen.
+   *
+   * Permalinks sind ein Kernfeature — ohne das hießen alle offenen Tabs
+   * "diggy — DNS made friendly" und waren beim Vergleich mehrerer Domains
+   * nicht unterscheidbar, ebenso Lesezeichen und Browser-History.
+   */
+  useEffect(() => {
+    document.title = buildDocumentTitle(view, lookup.domain, ipQuery);
+  }, [view, lookup.domain, ipQuery]);
 
   // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
   useEffect(() => {
@@ -328,7 +354,7 @@ export default function App() {
 
         {view === 'availability' && <AvailabilityView />}
 
-        {view === 'impressum' && <ImpressumView />}
+        {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
 
         {view === 'datenschutz' && <DatenschutzView />}
 
@@ -507,6 +533,18 @@ export default function App() {
                 ]}
               />
 
+              {/* Zweite, feinere Boundary: reißt ein Sektions-Renderer ab,
+                  bleiben Score, QuickFacts und die anderen Tabs nutzbar.
+                  key auf activeTab, damit ein Tab-Wechsel den Fehlerzustand
+                  nicht mitschleppt. */}
+              <ErrorBoundary
+                key={`boundary-${activeTab}`}
+                fallback={({ error, reset }) => (
+                  <div className="mt-6">
+                    <SectionErrorFallback error={error} reset={reset} />
+                  </div>
+                )}
+              >
               <div className="mt-6">
                 <AnimatePresence mode="wait">
                   <motion.div
@@ -520,8 +558,15 @@ export default function App() {
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.2 }}
                   >
+                    {/* key pro Domain: RecordsList und PropagationView halten
+                        lokalen Filter-/Typ-State. Ohne Remount blieb der über
+                        einen Domain-Wechsel hinweg stehen — bei
+                        PropagationView führte das zu einer scheinbar leeren
+                        Ansicht, wenn die neue Domain den vorher gewählten
+                        Record-Typ nicht hat. */}
                     {activeTab === 'records' && (
                       <RecordsList
+                        key={report.domain}
                         records={report.records}
                         onUseDomain={handleUseDomainInSearch}
                       />
@@ -532,7 +577,7 @@ export default function App() {
                       ) : propagation.status === 'error' ? (
                         <SectionError message={propagation.error} />
                       ) : propagation.data && propagation.data.length > 0 ? (
-                        <PropagationView results={propagation.data} />
+                        <PropagationView key={report.domain} results={propagation.data} />
                       ) : (
                         <Placeholder
                           title="Multi-Resolver-Propagation"
@@ -593,6 +638,7 @@ export default function App() {
                   </motion.div>
                 </AnimatePresence>
               </div>
+              </ErrorBoundary>
 
               {/* Footer-Actions */}
               <div className="mt-12 flex justify-end gap-2">
@@ -600,7 +646,10 @@ export default function App() {
                 <ActionButton onClick={handleCopyPermalink}>
                   {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
                 </ActionButton>
-                <ActionButton>Watch 🔔</ActionButton>
+                {/* "Watch 🔔" war hier ein Button ohne Handler — sah aus wie
+                    die anderen, tat aber nichts. Das Feature steht in der
+                    Roadmap als offen; bis dahin ist kein Button ehrlicher als
+                    ein wirkungsloser. */}
               </div>
           </motion.div>
         )}
@@ -655,21 +704,40 @@ function SectionError({ message }: { message?: string }) {
   );
 }
 
+/**
+ * `onClick` ist bewusst verpflichtend: ein Button ohne Handler ist für Nutzer
+ * nicht von einem kaputten unterscheidbar. So fängt der Compiler das ab.
+ */
 function ActionButton({
   children,
   onClick,
 }: {
   children: React.ReactNode;
-  onClick?: () => void | Promise<void>;
+  onClick: () => void | Promise<void>;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="px-3.5 py-2 text-xs font-medium rounded-lg border border-ink-100 dark:border-ink-900/80 hover:bg-ink-100/60 dark:hover:bg-ink-900 transition-colors"
     >
       {children}
     </button>
   );
+}
+
+const VIEW_TITLES: Record<Exclude<AppView, 'lookup'>, string> = {
+  history: 'History',
+  availability: 'Available Check',
+  about: 'About',
+  impressum: 'Impressum',
+  datenschutz: 'Datenschutz',
+};
+
+function buildDocumentTitle(view: AppView, domain: string | null, ipQuery: string | null): string {
+  if (view !== 'lookup') return `${VIEW_TITLES[view]} — diggy`;
+  const subject = domain ?? ipQuery;
+  return subject ? `${subject} — diggy` : 'diggy — DNS made friendly';
 }
 
 function getLookupUrl(domain: string): string {

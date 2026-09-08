@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { gsap } from 'gsap';
 import './TextType.css';
 
@@ -63,6 +64,7 @@ const TextType = ({
   reverseMode = false,
   ...props
 }: TextTypeProps & Omit<HTMLAttributes<HTMLElement>, 'children'>) => {
+  const reducedMotion = useReducedMotion();
   const [displayedText, setDisplayedText] = useState('');
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -118,6 +120,14 @@ const TextType = ({
   // Type/Delete-Schleife
   useEffect(() => {
     if (!isVisible) return;
+    // Bewegung reduzieren: erster Satz statisch, keine Tipp-/Löschschleife.
+    // WCAG 2.2.2 — die Animation lief bisher dauerhaft und ließ sich nicht
+    // anhalten. MotionConfig greift hier nicht, das sind setTimeout-Ketten.
+    if (reducedMotion) {
+      const first = textArray[0] ?? '';
+      setDisplayedText(first);
+      return;
+    }
 
     let timeout: ReturnType<typeof setTimeout>;
 
@@ -185,7 +195,8 @@ const TextType = ({
     variableSpeed,
     getRandomSpeed,
     onSentenceComplete,
-  ]);
+  ,
+    reducedMotion]);
 
   const shouldHideCursor =
     hideCursorWhileTyping &&

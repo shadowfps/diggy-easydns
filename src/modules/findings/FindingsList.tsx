@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { AlertCircle, AlertTriangle, Info, Check, Copy } from 'lucide-react';
 import type { Finding, Severity } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface FindingsListProps {
   findings: Finding[];
@@ -41,6 +42,7 @@ const SEVERITY_CONFIG: Record<
 const SEVERITY_ORDER: Severity[] = ['critical', 'warning', 'info', 'success'];
 
 export function FindingsList({ findings }: FindingsListProps) {
+  const reduced = useReducedMotion();
   const sorted = [...findings].sort(
     (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)
   );
@@ -48,7 +50,7 @@ export function FindingsList({ findings }: FindingsListProps) {
   return (
     <div className="space-y-2.5">
       {sorted.map((finding, i) => (
-        <FindingCard key={finding.id} finding={finding} delay={i * 0.06} />
+        <FindingCard key={finding.id} finding={finding} delay={staggerDelay(i, 0.06, reduced)} />
       ))}
     </div>
   );

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" class="dark">
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/diggy-icon.svg" />
@@ -8,6 +8,32 @@
     <meta name="theme-color" content="#09090B" />
 
     <!-- Schriften kommen lokal aus dem Bundle, siehe src/styles/globals.css -->
+
+    <!--
+      Theme VOR dem ersten Paint setzen.
+
+      Vorher stand class="dark" fest im html-Tag und useTheme korrigierte es
+      erst in einem useEffect, also nach dem Mount der Header-Komponente:
+      jeder Light-Mode-Nutzer sah bei jedem Aufruf ein dunkles Aufblitzen, auf
+      langsamen Verbindungen umso länger. theme-color war ebenfalls fest dunkel.
+
+      Das Script ist absichtlich blockierend und inline — eine eigene Datei
+      wäre ein zusätzlicher Roundtrip vor dem Paint. Der Server nimmt den
+      SHA-256 dieses Blocks beim Start aus dem gebauten HTML und trägt ihn in
+      die CSP ein (server/index.ts), damit script-src 'self' bleiben kann.
+    -->
+    <script>
+      try {
+        var stored = localStorage.getItem('diggy-theme');
+        var dark = stored === 'dark' || (!stored && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+        var meta = document.querySelector('meta[name=theme-color]');
+        if (meta) meta.setAttribute('content', dark ? '#09090B' : '#FAFAFA');
+      } catch (e) {
+        /* localStorage kann in privaten Fenstern werfen — dann bleibt der
+           Light-Default aus globals.css stehen. */
+      }
+    </script>
 
     <title>diggy — DNS made friendly</title>
   </head>
