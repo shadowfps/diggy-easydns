@@ -2,7 +2,11 @@ import { motion } from 'framer-motion';
 import { Scale } from 'lucide-react';
 import { ContactForm } from '@/modules/impressum/ContactForm';
 
-export function ImpressumView() {
+interface ImpressumViewProps {
+  onOpenDatenschutz?: () => void;
+}
+
+export function ImpressumView({ onOpenDatenschutz }: ImpressumViewProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -57,7 +61,7 @@ export function ImpressumView() {
           </dl>
         </section>
 
-        <ContactForm />
+        <ContactForm onOpenDatenschutz={onOpenDatenschutz} />
 
         <section className="border-t border-ink-100 pt-6 dark:border-ink-900/80">
           <p className="text-sm leading-relaxed text-ink-900/65 dark:text-ink-50/65">

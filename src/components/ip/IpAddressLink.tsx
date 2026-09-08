@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -20,6 +20,7 @@ import {
 import { lookupIpDetails } from '@/lib/api';
 import type { IpDetails } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface IpAddressLinkProps {
   ip: string;
@@ -123,16 +124,59 @@ export function IpOwnerLabel({ ip, className }: { ip: string; className?: string
 
 const IPV4_PATTERN =
   /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-const IPV6_PATTERN = /^[0-9a-f:]+$/i;
+
+/**
+ * IPv6 mit korrekter Struktur statt der alten Hex-Heuristik `/^[0-9a-f:]+$/`.
+ *
+ * Die ließ alles durch, was nur Hex-Zeichen und Doppelpunkte enthält — auch
+ * `ab:cd` oder `cafe:babe`. Relevant, weil isInspectableIp in App.tsx die
+ * Suche steuert: eine Eingabe wie `ab:cd` landete in der PTR-Ansicht mit einer
+ * API-Fehlermeldung statt in der verständlicheren Domain-Validierung.
+ */
+const IPV6_PATTERN = new RegExp(
+  '^(' +
+    // Volle Form: 8 Hextets
+    '([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}' +
+    // Komprimierte Formen mit ::
+    '|([0-9a-f]{1,4}:){1,7}:' +
+    '|([0-9a-f]{1,4}:){1,6}:[0-9a-f]{1,4}' +
+    '|([0-9a-f]{1,4}:){1,5}(:[0-9a-f]{1,4}){1,2}' +
+    '|([0-9a-f]{1,4}:){1,4}(:[0-9a-f]{1,4}){1,3}' +
+    '|([0-9a-f]{1,4}:){1,3}(:[0-9a-f]{1,4}){1,4}' +
+    '|([0-9a-f]{1,4}:){1,2}(:[0-9a-f]{1,4}){1,5}' +
+    '|[0-9a-f]{1,4}:(:[0-9a-f]{1,4}){1,6}' +
+    '|:((:[0-9a-f]{1,4}){1,7}|:)' +
+    // Link-local mit Zone-ID
+    '|fe80:(:[0-9a-f]{0,4}){0,4}%[0-9a-z]+' +
+    // IPv4-in-IPv6
+    '|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])' +
+    '|([0-9a-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])' +
+    ')$',
+  'i'
+);
 
 export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
   const [open, setOpen] = useState(false);
+  /*
+   * Hält das Portal noch, bis die Exit-Animation durch ist.
+   *
+   * Ein rein an `open` gekoppeltes Portal unmountet sofort beim Schließen, und
+   * damit lief die AnimatePresence-Exit-Animation nie — der Dialog verschwand
+   * hart. Ein reines `open`-Rendering war aber nötig, weil sonst für jede
+   * angezeigte IP ein leeres Portal in document.body lag.
+   */
+  const [mounted, setMounted] = useState(false);
+
+  const handleOpen = () => {
+    setMounted(true);
+    setOpen(true);
+  };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className={cn(
           'group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md text-left font-mono text-xs transition-colors',
           'hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:hover:text-white dark:focus-visible:outline-ink-50',
@@ -145,9 +189,20 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
         <Link2 className="h-3.5 w-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
       </button>
 
-      {typeof document !== 'undefined' &&
+      {/*
+        Portal nur bei offenem Dialog. Vorher wurde es für JEDE angezeigte IP
+        erzeugt — bei einer Domain mit einem Dutzend A-Records lagen ebenso
+        viele leere Portale in document.body, jedes mit eigenen Effects.
+      */}
+      {mounted &&
+        typeof document !== 'undefined' &&
         createPortal(
-          <IpDetailsOverlay ip={ip} open={open} onClose={() => setOpen(false)} />,
+          <IpDetailsOverlay
+            ip={ip}
+            open={open}
+            onClose={() => setOpen(false)}
+            onExited={() => setMounted(false)}
+          />,
           document.body
         )}
     </>
@@ -164,15 +219,21 @@ function IpDetailsOverlay({
   ip,
   open,
   onClose,
+  onExited,
 }: {
   ip: string;
   open: boolean;
   onClose: () => void;
+  /** Feuert, wenn die Exit-Animation durch ist — dann darf das Portal weg. */
+  onExited: () => void;
 }) {
   const [details, setDetails] = useState<IpDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -237,7 +298,7 @@ function IpDetailsOverlay({
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={onExited}>
       {open && (
         <motion.div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/45 p-4 backdrop-blur-sm"
@@ -247,6 +308,8 @@ function IpDetailsOverlay({
           onClick={onClose}
         >
           <motion.div
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="ip-details-title"

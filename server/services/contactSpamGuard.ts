@@ -3,8 +3,14 @@ import type { Request } from 'express';
 
 const MIN_SUBMIT_DELAY_MS = 4_000;
 const MAX_TOKEN_AGE_MS = 60 * 60 * 1000;
-const MAX_PER_HOUR = 3;
-const MAX_PER_DAY = 10;
+/**
+ * Absendeversuche pro IP. Etwas großzügiger als zuvor (3/h): der Guard läuft
+ * jetzt erst NACH der Feldvalidierung, ein Tippfehler kostet also keinen
+ * Versuch mehr — dafür soll eine echte Nachfrage nicht an der Grenze scheitern.
+ * Die Hauptlast des Spam-Schutzes tragen Honeypot, Token und Content-Filter.
+ */
+const MAX_PER_HOUR = 5;
+const MAX_PER_DAY = 12;
 const MAX_CHALLENGES_PER_HOUR = 30;
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
 const DEV_FALLBACK_SECRET = 'diggy-contact-dev-only-change-in-production';
@@ -38,26 +44,75 @@ interface RateBucket {
 }
 
 const rateByIp = new Map<string, RateBucket>();
+/**
+ * Wie oft eine bestimmte Empfänger-Adresse eine Auto-Reply bekommen darf.
+ *
+ * Das IP-Limit allein schützt das Opfer nicht: verteilt über viele IPs (oder
+ * über die Browser fremder Besucher) könnte dieselbe Adresse beliebig oft
+ * angeschrieben werden. Dieser Zähler hängt an der Adresse, nicht am Absender.
+ */
+const autoReplyByRecipient = new Map<string, number>();
+const AUTO_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const challengeRateByIp = new Map<string, RateBucket>();
 const recentHashes = new Map<string, number>();
 const usedTokenHashes = new Map<string, number>();
 
+const MIN_SECRET_LENGTH = 32;
+
+/**
+ * HMAC-Schlüssel für die Challenge-Token.
+ *
+ * In Produktion ist CONTACT_FORM_SECRET Pflicht. Vorher gab es eine
+ * Fallback-Kette (SMTP_PASS, dann ein hartkodiertes Dev-Secret) mit bloßer
+ * console.warn — beides war unhaltbar:
+ *
+ *  - DEV_FALLBACK_SECRET steht in diesem öffentlichen Repo. Wer es kennt,
+ *    kann beliebig viele gültige Token mit beliebigem issuedAt selbst
+ *    signieren; Timing-Check und Replay-Schutz sind damit wirkungslos.
+ *  - SMTP_PASS als HMAC-Key ist Schlüssel-Wiederverwendung über eine
+ *    Vertrauensgrenze: die Signaturen sind über /api/contact/challenge
+ *    öffentlich abrufbar und wären damit ein Orakel über das Mail-Passwort.
+ */
 function getSecret(): string {
   const secret = process.env.CONTACT_FORM_SECRET?.trim();
-  if (secret) return secret;
 
   if (process.env.NODE_ENV === 'production') {
-    console.warn('[contact] CONTACT_FORM_SECRET fehlt — Token-Signatur ist in Produktion unsicher.');
+    if (!secret) {
+      throw new Error(
+        'CONTACT_FORM_SECRET muss in Produktion gesetzt sein (z. B. `openssl rand -base64 32`).'
+      );
+    }
+    if (secret.length < MIN_SECRET_LENGTH) {
+      throw new Error(
+        `CONTACT_FORM_SECRET ist zu kurz (${secret.length} Zeichen, mindestens ${MIN_SECRET_LENGTH}).`
+      );
+    }
+    return secret;
   }
 
-  const smtpPass = process.env.SMTP_PASS?.trim();
-  if (smtpPass) return smtpPass;
-
-  return DEV_FALLBACK_SECRET;
+  return secret || DEV_FALLBACK_SECRET;
 }
 
-function trustProxyHeaders(): boolean {
-  return process.env.TRUST_PROXY === 'true';
+/**
+ * Prüft die Konfiguration beim Start, statt erst beim ersten Formular-Request
+ * zu scheitern. So fällt eine Fehlkonfiguration sofort im Deploy auf.
+ */
+export function assertContactSecretConfigured(): void {
+  getSecret();
+}
+
+/**
+ * Anzahl der vertrauenswürdigen Proxy-Hops vor dieser App.
+ *
+ * `TRUST_PROXY=true` entspricht einem Hop (der übliche Fall: ein Reverse-Proxy
+ * direkt davor). Eine Zahl erlaubt tiefere Ketten, z. B. CDN + Ingress.
+ */
+export function trustedProxyHops(): number {
+  const raw = process.env.TRUST_PROXY?.trim();
+  if (!raw || raw === 'false') return 0;
+  if (raw === 'true') return 1;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
 }
 
 function pruneRateLimits(now: number): void {
@@ -84,14 +139,26 @@ function pruneUsedTokens(now: number): void {
   }
 }
 
+/**
+ * Client-IP für alle Rate-Limits.
+ *
+ * Nutzt `req.ip`, das Express anhand der `trust proxy`-Einstellung berechnet
+ * (in index.ts aus trustedProxyHops() gesetzt).
+ *
+ * Vorher wurde der ERSTE Wert aus `X-Forwarded-For` genommen. Das war falsch
+ * und hob jedes Limit auf: ein Proxy APPENDIERT die gesehene Peer-IP rechts,
+ * der linke Wert kommt also immer vom Client selbst. Bei `TRUST_PROXY=true`
+ * — im Compose fest gesetzt — reichte ein beliebiger, pro Request wechselnder
+ * X-Forwarded-For-Header, um für jede Anfrage einen frischen Zähler zu
+ * bekommen. Betroffen war damit jedes Limit: API, Fremd-API-Kontingente,
+ * Kontaktformular und die Duplikat-Erkennung.
+ *
+ * Express zählt mit `trust proxy: n` vom RECHTEN Ende und liefert die erste
+ * nicht vertrauenswürdige Adresse — also die, die der äußerste vertraute Proxy
+ * tatsächlich gesehen hat.
+ */
 export function getClientIp(req: Request): string {
-  if (trustProxyHeaders()) {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.trim()) {
-      return forwarded.split(',')[0].trim();
-    }
-  }
-  return req.socket.remoteAddress ?? 'unknown';
+  return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
 function incrementRateBucket(
@@ -138,7 +205,15 @@ export function issueContactChallenge(req: Request): { token: string; minDelayMs
   assertChallengeRequestAllowed(req);
 
   const issuedAt = Date.now();
-  const payload = Buffer.from(JSON.stringify({ t: issuedAt }), 'utf8').toString('base64url');
+  // Nonce ist nötig, nicht Zierde: mit reinem Zeitstempel als Payload sind zwei
+  // Token aus derselben Millisekunde byte-identisch. Die Replay-Erkennung
+  // arbeitet über den Token-Hash — der erste Absender hätte damit das Token
+  // eines gleichzeitigen zweiten Nutzers entwertet, und dessen Absendung wäre
+  // als stiller Scheinerfolg verlorengegangen.
+  const nonce = crypto.randomBytes(9).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ t: issuedAt, n: nonce }), 'utf8').toString(
+    'base64url'
+  );
   const sig = crypto.createHmac('sha256', getSecret()).update(payload).digest('base64url');
   return { token: `${payload}.${sig}`, minDelayMs: MIN_SUBMIT_DELAY_MS };
 }
@@ -178,7 +253,10 @@ function verifyChallengeToken(token: string): void {
 
   let issuedAt: number;
   try {
-    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { t?: number };
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      t?: number;
+      n?: string;
+    };
     if (typeof parsed.t !== 'number') throw new Error('invalid');
     issuedAt = parsed.t;
   } catch {
@@ -239,6 +317,36 @@ function assertNotDuplicate(ip: string, email: string, message: string): void {
   }
 
   recentHashes.set(hash, now);
+}
+
+/**
+ * true, wenn an diese Adresse jetzt eine Bestätigung gehen darf.
+ *
+ * Verbraucht bei Erfolg direkt einen Slot — der Aufrufer muss also nur dann
+ * fragen, wenn er tatsächlich senden will.
+ */
+export function claimAutoReplySlot(email: string): boolean {
+  const now = Date.now();
+  const key = email.trim().toLowerCase();
+
+  if (autoReplyByRecipient.size > 5_000) {
+    for (const [address, sentAt] of autoReplyByRecipient) {
+      if (now - sentAt > AUTO_REPLY_WINDOW_MS) autoReplyByRecipient.delete(address);
+    }
+  }
+
+  const previous = autoReplyByRecipient.get(key);
+  if (previous && now - previous < AUTO_REPLY_WINDOW_MS) return false;
+
+  autoReplyByRecipient.set(key, now);
+  return true;
+}
+
+/** Maskiert eine Adresse fürs Log — `max@example.com` -> `m***@example.com`. */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '***';
+  return `${local.slice(0, 1)}***@${domain}`;
 }
 
 export function isHoneypotTriggered(fields: { website?: string; company?: string }): boolean {

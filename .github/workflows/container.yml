@@ -6,6 +6,12 @@ on:
       - main
     tags:
       - "v*"
+  # Auch auf Pull Requests, damit der verify-Job VOR dem Merge läuft. Ohne das
+  # gatete er nur den Deploy: auf einem PR lief gar kein Check, die Prüfung kam
+  # also erst, wenn der Code schon auf main war.
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -23,7 +29,40 @@ env:
   MITTWALD_CLI_VERSION: v1.20.2
 
 jobs:
+  # Gate vor dem Deploy. Vorher ging jeder Push auf main ungeprüft in
+  # Produktion — das einzige Kriterium war, dass `tsc -p tsconfig.server.json`
+  # im Docker-Build durchläuft. Client-Typfehler und Lint-Verstöße kamen so
+  # unbemerkt ins Image.
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
   publish:
+    needs: verify
+    # Auf einem PR nur prüfen, nicht veröffentlichen: ein Image aus einem
+    # offenen PR gehört nicht nach GHCR, und der Deploy erst gar nicht.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -93,6 +132,7 @@ jobs:
           CONTACT_TO: ${{ secrets.CONTACT_TO }}
           CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
           CONTACT_FORM_SECRET: ${{ secrets.CONTACT_FORM_SECRET }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
           PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
           VIRUS_TOTAL_API_KEY: ${{ secrets.VIRUS_TOTAL_API_KEY }}
         run: |
@@ -111,6 +151,10 @@ jobs:
           : "${CONTACT_FORM_SECRET:?fehlt — GitHub-Secret setzen}"
 
           umask 077
+          # Aufräumen auch bei Abbruch: `rm` am Ende des Skripts läuft bei
+          # einem Fehler in `mw stack deploy` nicht mehr, die Datei mit allen
+          # Secrets bliebe dann im Workspace liegen.
+          trap 'rm -f runtime.env' EXIT
           {
             echo "SMTP_HOST=${SMTP_HOST}"
             echo "SMTP_PORT=${SMTP_PORT}"
@@ -120,6 +164,7 @@ jobs:
             echo "CONTACT_TO=${CONTACT_TO}"
             echo "CONTACT_FROM=${CONTACT_FROM}"
             echo "CONTACT_FORM_SECRET=${CONTACT_FORM_SECRET}"
+            echo "PUBLIC_ORIGIN=${PUBLIC_ORIGIN}"
             echo "PAGESPEED_API_KEY=${PAGESPEED_API_KEY}"
             echo "VIRUS_TOTAL_API_KEY=${VIRUS_TOTAL_API_KEY}"
           } > runtime.env

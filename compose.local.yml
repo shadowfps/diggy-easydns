@@ -20,7 +20,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3001"
-      TRUST_PROXY: "true"
+      # Bewusst NICHT gesetzt: hier ist der Port direkt gemappt, es steht kein
+      # Proxy davor. Mit TRUST_PROXY würde die App X-Forwarded-For glauben und
+      # jeder könnte sich per beliebigem Header einen frischen Rate-Limit-Zähler
+      # holen. In compose.mittwald.yml ist es richtig, dort liegt ein Proxy davor.
+      # TRUST_PROXY: "true"
     healthcheck:
       test:
         - CMD

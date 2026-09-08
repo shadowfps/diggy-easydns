@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react';
 import type { DnsRecord, RecordType } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { IpAddressLink, IpOwnerLabel, isInspectableIp } from '@/components/ip/IpAddressLink';
+import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface RecordsListProps {
   records: DnsRecord[];
@@ -11,6 +12,7 @@ interface RecordsListProps {
 
 export function RecordsList({ records, onUseDomain }: RecordsListProps) {
   const [filter, setFilter] = useState<RecordType | 'ALL'>('ALL');
+  const reduced = useReducedMotion();
 
   const types = useMemo(() => {
     const counts = new Map<RecordType, number>();
@@ -47,7 +49,7 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
               key={`${record.type}-${i}-${record.value}`}
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.03 }}
+              transition={{ duration: 0.3, delay: staggerDelay(i, 0.03, reduced) }}
               className={cn(
                 'grid grid-cols-[60px_minmax(0,1fr)_auto] gap-3 px-4 py-3 items-center',
                 i !== filtered.length - 1 && 'border-b border-ink-100 dark:border-ink-900/80'

@@ -12,6 +12,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { SplitText as GSAPSplitText } from 'gsap/SplitText';
 import { useGSAP } from '@gsap/react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 gsap.registerPlugin(ScrollTrigger, GSAPSplitText, useGSAP);
 
@@ -48,6 +49,7 @@ const SplitText: React.FC<SplitTextProps> = ({
 }) => {
   const ref = useRef<HTMLElement | null>(null);
   const animationCompletedRef = useRef(false);
+  const reducedMotion = useReducedMotion();
   const onCompleteRef = useRef(onLetterAnimationComplete);
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
@@ -71,6 +73,14 @@ const SplitText: React.FC<SplitTextProps> = ({
     () => {
       if (!ref.current || !text || !fontsLoaded) return;
       if (animationCompletedRef.current) return;
+      // Bewegung reduzieren: gar nicht splitten und nicht animieren. Der Tag
+      // rendert {text} direkt als Kind, der Text steht also ohnehin fertig da
+      // — MotionConfig greift hier nicht, das ist GSAP.
+      if (reducedMotion) {
+        animationCompletedRef.current = true;
+        onCompleteRef.current?.();
+        return;
+      }
 
       const el = ref.current as HTMLElement & {
         _rbsplitInstance?: GSAPSplitText;
@@ -171,6 +181,7 @@ const SplitText: React.FC<SplitTextProps> = ({
         threshold,
         rootMargin,
         fontsLoaded,
+        reducedMotion,
       ],
       scope: ref,
     }

@@ -84,8 +84,10 @@ Alle Secrets gehören in `.env` (liegt in `.gitignore`). Vorlage: `.env.example`
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | SMTP für das Kontaktformular |
 | `CONTACT_TO` | Empfänger der Kontaktanfragen |
 | `CONTACT_FROM` | Absender (Admin-Mail + Bestätigung an Nutzer) |
-| `CONTACT_FORM_SECRET` | Geheimer Schlüssel für Anti-Spam-Token (in Produktion setzen) |
-| `TRUST_PROXY` | `true` hinter Reverse-Proxy (nginx, Caddy) für korrektes IP-Rate-Limiting |
+| `CONTACT_FORM_SECRET` | Geheimer Schlüssel für Anti-Spam-Token. **In Produktion Pflicht** (mind. 32 Zeichen) — ohne ihn startet der Server nicht, sobald SMTP konfiguriert ist. |
+| `TRUST_PROXY` | Anzahl vertrauenswürdiger Proxy-Hops (`true` = 1) für korrektes IP-Rate-Limiting. **Nur setzen, wenn tatsächlich ein Proxy davor liegt** — sonst kann sich jeder per `X-Forwarded-For` einen frischen Zähler holen. |
+| `PUBLIC_ORIGIN` | Öffentliche Origin der Installation (z. B. `https://diggy.example`). Vertrauenswürdige Referenz für die CSRF-Prüfung des Kontaktformulars — ohne sie fällt die Prüfung auf den `Host`-Header zurück. |
+| `CORS_ORIGINS` | Optional — komma-separierte Origins, die per CORS zugreifen dürfen. Leer lassen, wenn Frontend und API unter derselben Origin laufen (Standard). |
 | `PORT` | Backend-Port (Standard: `3001`) |
 
 Secret generieren (WSL/Linux):
@@ -95,6 +97,27 @@ openssl rand -base64 32
 ```
 
 Das Kontaktformular ist deaktiviert, solange SMTP nicht konfiguriert ist. Anti-Spam: Honeypot, Timing-Token, Rate-Limits, Inhaltsfilter.
+
+### Rate-Limits
+
+Die API ist IP-basiert begrenzt: 120 Requests/Minute allgemein, 10/Stunde je Fremd-API-Provider (PageSpeed, VirusTotal — getrennte Zähler), 20/Minute für den Verfügbarkeits-Check. Dazu ein Concurrency-Deckel von 4 für die langlaufenden Checks. `/api/health` liegt bewusst vor dem Limiter, damit fremder Traffic den Container-Healthcheck nicht auf `unhealthy` dreht.
+
+## Entwicklung
+
+```bash
+npm run lint        # ESLint 9 (Flat Config, inkl. react-hooks)
+npm run typecheck   # tsc für Client und Server
+npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
+npm run verify      # alle drei, so wie die CI es fährt
+```
+
+Die Tests decken bewusst die reine Logik ab, die der Nutzer als „Diggy sagt"
+liest: Domain-Validierung und Apex-Auflösung, SPF-Lookup-Zählung nach
+RFC 7208 §4.6.4, DoH-TXT-Zusammenbau, IP-Klassifizierung des SSRF-Guards,
+Cache-Verhalten und die Token-Prüfung des Kontaktformulars.
+
+Jeder Push auf `main` läuft zuerst durch den `verify`-Job; erst danach werden
+Image-Build und Deploy angestoßen.
 
 ## Container & Deployment
 
@@ -137,6 +160,23 @@ mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file c
 
 Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Platzhalter in `compose.mittwald.yml` (im CI übernehmen das die GitHub-Secrets). Die Runtime-Secrets gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
 
+## Recht & Compliance
+
+`docs/COMPLIANCE.md` hält die technische Einordnung fest: Speicherdauern und
+Rechtsgrundlagen je Verarbeitung, sowie die Prüfung gegen den EU AI Act.
+
+Kurzfassung zum AI Act: **Diggy ist kein KI-System im Sinne von Art. 3 Nr. 1
+VO (EU) 2024/1689.** Alle Ausgaben — Health-Score, Findings,
+Tech-Stack-Erkennung, Mail-Bewertung — entstehen aus fest programmierten
+Regeln. Es gibt kein Modell, keine Inferenz und keine Anpassung nach der
+Inbetriebnahme; Erwägungsgrund 12 nimmt solche Systeme ausdrücklich aus. Es
+bestehen daher keine Pflichten aus der Verordnung. Sollte später ein
+LLM-Feature dazukommen, ist die Einordnung neu zu prüfen — die Datei nennt die
+Auslöser.
+
+Der Datenschutztext unter `/datenschutz` ist aus dem Code abgeleitet und
+technisch korrekt, aber **nicht juristisch geprüft**.
+
 ## Routen
 
 | Pfad | Beschreibung |
@@ -147,6 +187,7 @@ Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Plat
 | `/availability` | Domain-Verfügbarkeit |
 | `/about` | Info-Seite |
 | `/impressum` | Impressum & Kontaktformular |
+| `/datenschutz` | Datenschutzhinweise |
 
 ## Projekt-Struktur
 

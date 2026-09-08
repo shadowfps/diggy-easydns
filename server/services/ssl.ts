@@ -10,6 +10,7 @@
  */
 
 import { connect } from 'node:tls';
+import { pinnedLookup, resolvePublicHost, UnresolvableTargetError } from '../lib/safeTarget.js';
 import type { SslInfo } from '../types.js';
 
 interface PeerCert {
@@ -30,6 +31,19 @@ interface PeerCert {
  * (Timeout, Cert-invalid, kein TLS) → null.
  */
 export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslInfo | null> {
+  // SSRF-Guard: nicht gegen interne Adressen handshaken. Wirft
+  // BlockedTargetError, wenn die Domain auf ein nicht-öffentliches Ziel zeigt.
+  let target;
+  try {
+    target = await resolvePublicHost(domain);
+  } catch (error) {
+    // Kein A/AAAA-Record (Mail-only-Domain, geparkte Domain, Public Suffix):
+    // gültige Eingabe, es gibt dort nur kein Zertifikat. Der Aufrufer macht
+    // daraus das Finding "Kein TLS auf Port 443 erreichbar".
+    if (error instanceof UnresolvableTargetError) return null;
+    throw error;
+  }
+
   return new Promise<SslInfo | null>((resolve) => {
     let resolved = false;
     const safeResolve = (value: SslInfo | null) => {
@@ -47,6 +61,9 @@ export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslInf
       host: domain,
       port: 443,
       servername: domain, // SNI
+      // Verbindung auf die geprüften Adressen pinnen — sonst bliebe zwischen
+      // Prüfung und Handshake ein DNS-Rebinding-Fenster.
+      lookup: pinnedLookup(target),
       // Wir wollen WISSEN ob das Cert gültig ist.
       // rejectUnauthorized=true → bei Cert-Fehler → 'error'-Event.
       // Aber wir möchten bei einem ungültigen Cert trotzdem das Cert

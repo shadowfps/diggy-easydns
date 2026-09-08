@@ -8,3 +8,11 @@ dist-server/
 .vscode/
 .idea/
 .claude/
+
+# Build-Artefakte — kompilierte Configs und tsc-Caches gehören nicht ins Repo.
+# vite.config.js war eine veraltete Übersetzung von vite.config.ts und hat sie
+# lokal ausgehebelt (Vite probiert .js VOR .ts), während der Container-Build
+# nur die .ts kopiert: Dev und Prod liefen mit unterschiedlicher Config.
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

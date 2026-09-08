@@ -72,7 +72,7 @@ export async function auditMail(
 
 /* ─── SPF ─────────────────────────────────────────────────────────────── */
 
-interface AnalyzedSpf {
+export interface AnalyzedSpf {
   present: boolean;
   record?: string;
   lookupCount?: number;
@@ -80,15 +80,53 @@ interface AnalyzedSpf {
   issues: string[];
 }
 
-function analyzeSpf(record?: string): AnalyzedSpf {
+/**
+ * Zählt die Mechanismen, die laut RFC 7208 §4.6.4 gegen das 10er-Lookup-Limit
+ * gehen: include, a, mx, ptr, exists, redirect.
+ *
+ * Bewusst tokenweise statt per Regex über den ganzen Record. Die alte Regex
+ * `\b(include|a|mx|exists|ptr|redirect)[:=]` verlangte einen Doppelpunkt und
+ * hat damit die BLANKEN Mechanismen `a`, `mx` und `ptr` nicht gezählt — die
+ * zählen aber genauso mit. Für das M365-typische `v=spf1 a mx include:… -all`
+ * ergab sie 1 statt 3.
+ *
+ * Folge des Unterzählens: eine Domain, die real bei 11 Lookups liegt und deren
+ * SPF damit hart fehlschlägt, wurde als "vorhanden und plausibel" mit
+ * severity=success gemeldet — ein falsches OK an genau der Stelle, wo Nutzer
+ * sich auf die Aussage verlassen.
+ */
+export function countSpfLookups(record: string): number {
+  let count = 0;
+
+  for (const rawTerm of record.trim().split(/\s+/)) {
+    // Version-Tag und leere Tokens überspringen.
+    if (!rawTerm || /^v=/i.test(rawTerm)) continue;
+
+    // Qualifier (+ - ~ ?) steht nur vor Mechanismen, nicht vor Modifiern.
+    const term = rawTerm.replace(/^[+\-~?]/, '').toLowerCase();
+
+    // Modifier und Mechanismen mit zwingendem Argument.
+    if (term.startsWith('include:') || term.startsWith('exists:') || term.startsWith('redirect=')) {
+      count += 1;
+      continue;
+    }
+
+    // a / mx / ptr — mit oder ohne Domain-Spec und CIDR-Länge:
+    // "a", "a:mail.example.com", "a/24", "mx:x.de/24", "ptr", "ptr:x.de"
+    const name = term.split(/[:/]/)[0];
+    if (name === 'a' || name === 'mx' || name === 'ptr') count += 1;
+  }
+
+  return count;
+}
+
+export function analyzeSpf(record?: string): AnalyzedSpf {
   if (!record) {
     return { present: false, valid: false, issues: [] };
   }
 
   const issues: string[] = [];
-  // RFC 7208: include, a, mx, exists, ptr, redirect zählen zum Lookup-Limit
-  const lookupRegex = /\b(include|a|mx|exists|ptr|redirect)[:=]/gi;
-  const lookupCount = (record.match(lookupRegex) ?? []).length;
+  const lookupCount = countSpfLookups(record);
 
   if (lookupCount > 10) {
     issues.push(`${lookupCount} DNS-Lookups — RFC-Limit ist 10, SPF schlägt fehl.`);

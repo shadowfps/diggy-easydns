@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { gsap } from 'gsap';
 import './TextType.css';
 
@@ -63,6 +64,7 @@ const TextType = ({
   reverseMode = false,
   ...props
 }: TextTypeProps & Omit<HTMLAttributes<HTMLElement>, 'children'>) => {
+  const reducedMotion = useReducedMotion();
   const [displayedText, setDisplayedText] = useState('');
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -103,21 +105,43 @@ const TextType = ({
 
   // Cursor-Blink mit GSAP — yoyo-Loop
   useEffect(() => {
-    if (showCursor && cursorRef.current) {
-      gsap.set(cursorRef.current, { opacity: 1 });
-      gsap.to(cursorRef.current, {
-        opacity: 0,
-        duration: cursorBlinkDuration,
-        repeat: -1,
-        yoyo: true,
-        ease: 'power2.inOut',
-      });
-    }
-  }, [showCursor, cursorBlinkDuration]);
+    if (!showCursor || !cursorRef.current) return;
+
+    gsap.set(cursorRef.current, { opacity: 1 });
+    // Blinken ist eine Dauer-Animation ohne Stopp-Möglichkeit — WCAG 2.2.2
+    // nennt "blinking" ausdrücklich. Bei reduzierter Bewegung bleibt der
+    // Cursor sichtbar stehen.
+    if (reducedMotion) return;
+
+    const tween = gsap.to(cursorRef.current, {
+      opacity: 0,
+      duration: cursorBlinkDuration,
+      repeat: -1,
+      yoyo: true,
+      ease: 'power2.inOut',
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [showCursor, cursorBlinkDuration, reducedMotion]);
 
   // Type/Delete-Schleife
   useEffect(() => {
     if (!isVisible) return;
+    // Bewegung reduzieren: erster Satz statisch, keine Tipp-/Löschschleife.
+    // WCAG 2.2.2 — die Animation lief bisher dauerhaft und ließ sich nicht
+    // anhalten. MotionConfig greift hier nicht, das sind setTimeout-Ketten.
+    if (reducedMotion) {
+      const first = textArray[0] ?? '';
+      setDisplayedText(first);
+      // Index MIT setzen: sonst steht displayedText auf dem vollen Satz,
+      // currentCharIndex aber auf 0 — schaltet der Nutzer die Präferenz zur
+      // Laufzeit wieder aus, tippt die Schleife den Satz an den vorhandenen
+      // Text an und verdoppelt ihn.
+      setCurrentCharIndex(first.length);
+      setIsDeleting(false);
+      return;
+    }
 
     let timeout: ReturnType<typeof setTimeout>;
 
@@ -185,6 +209,7 @@ const TextType = ({
     variableSpeed,
     getRandomSpeed,
     onSentenceComplete,
+    reducedMotion,
   ]);
 
   const shouldHideCursor =

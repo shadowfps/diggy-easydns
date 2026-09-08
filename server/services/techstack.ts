@@ -1,3 +1,4 @@
+import { BlockedTargetError, decodeBodyAsText, safeGet, UnresolvableTargetError } from '../lib/safeTarget.js';
 import type { DetectedTech, TechCategory } from '../types.js';
 
 const USER_AGENT =
@@ -23,55 +24,42 @@ function push(
   }
 }
 
-/** Fetch up to MAX_BYTES from a URL, following redirects (max 3). */
+/**
+ * Holt maximal MAX_BYTES von einer URL.
+ *
+ * Läuft über `safeGet`, das das Ziel gegen die SSRF-Blockliste prüft, die
+ * Verbindung auf die geprüften Adressen pinnt und jeden Redirect erneut
+ * prüft. Ein nicht erlaubtes Ziel wirft `BlockedTargetError` — das muss nach
+ * oben durchschlagen, damit der Endpoint 400 statt "keine Technologien"
+ * antwortet.
+ */
 async function fetchTruncated(url: string): Promise<{ html: string; headers: Headers } | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const result = await safeGet(url, {
+    timeoutMs: TIMEOUT_MS,
+    maxBytes: MAX_BYTES,
+    maxRedirects: 3,
+    headers: {
+      'User-Agent': USER_AGENT,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+    },
+  });
 
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-    });
+  if (!result) return null;
+  if (result.status < 200 || result.status >= 300) return null;
 
-    if (!res.ok || !res.body) return null;
+  // Nur HTML auswerten. Ohne diese Prüfung würde ein PDF, ein Bild oder eine
+  // JSON-Antwort durch die Regex-Erkennung laufen und Zufallstreffer liefern.
+  const contentType = result.headers.get('content-type') ?? '';
+  const isHtml = /^(?:text\/html|application\/xhtml\+xml|text\/plain)/i.test(contentType);
+  if (contentType && !isHtml) return null;
 
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalBytes = 0;
+  // Dekomprimiert (siehe decodeBodyAsText): manche Server komprimieren auch
+  // ohne accept-encoding, dann wären es sonst Gzip-Bytes im Regex-Matching.
+  const html = decodeBodyAsText(result.body, result.headers, MAX_BYTES);
+  if (html === null) return null;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      chunks.push(value);
-      totalBytes += value.byteLength;
-      if (totalBytes >= MAX_BYTES) {
-        reader.cancel().catch(() => undefined);
-        break;
-      }
-    }
-
-    const combined = new Uint8Array(totalBytes > MAX_BYTES ? MAX_BYTES : totalBytes);
-    let offset = 0;
-    for (const chunk of chunks) {
-      const end = Math.min(chunk.byteLength, MAX_BYTES - offset);
-      combined.set(chunk.subarray(0, end), offset);
-      offset += end;
-      if (offset >= MAX_BYTES) break;
-    }
-
-    const html = new TextDecoder('utf-8', { fatal: false }).decode(combined);
-    return { html, headers: res.headers };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+  return { html, headers: result.headers };
 }
 
 /* ─── Detection ──────────────────────────────────────────────────────────── */
@@ -250,8 +238,14 @@ export async function detectTechStack(domain: string): Promise<DetectedTech[]> {
 
     detectFromHeaders(headers, results);
     detectFromHtml(html, results);
-  } catch {
-    // Never throw — return whatever we collected so far
+  } catch (error) {
+    // Ein geblocktes Ziel ist ein Eingabe-Fehler, kein leeres Ergebnis —
+    // durchwerfen, damit der Endpoint das sichtbar machen kann.
+    if (error instanceof BlockedTargetError) throw error;
+    // Eine Domain ohne A/AAAA (Mail-only, geparkt) ist dagegen eine gültige
+    // Eingabe: dort gibt es einfach nichts zu erkennen.
+    if (error instanceof UnresolvableTargetError) return [];
+    // Sonst: nie werfen, das Gesammelte zurückgeben.
   }
 
   return results;

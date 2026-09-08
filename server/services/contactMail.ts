@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { claimAutoReplySlot, maskEmail } from './contactSpamGuard.js';
 import { buildContactAutoReplyHtml, buildContactAutoReplyText, buildContactEmailHtml, buildContactEmailText } from './contactEmailTemplate.js';
 
 export interface ContactMessageInput {
@@ -15,9 +16,43 @@ export interface ContactMessageResult {
   sent: boolean;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * Formfehler in der Eingabe — abgrenzbar von Transport-/SMTP-Fehlern.
+ *
+ * Wichtig für den Endpoint: ein Formfehler ist eine 400 und darf weder
+ * Challenge-Token noch Rate-Limit-Budget verbrauchen. Vorher wurde das per
+ * String-Matching auf die Fehlermeldung unterschieden, was bei jeder
+ * Umformulierung brach.
+ */
+export class ContactValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ContactValidationError';
+  }
+}
+
+/**
+ * E-Mail-Validierung, absichtlich strenger als "irgendwas@irgendwas.tld".
+ *
+ * Die alte Fassung `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` erlaubte Komma und
+ * Semikolon im Local-Part. Nodemailer interpretiert so einen Wert als
+ * ADRESSLISTE: aus `a,opfer@example.com` wurde ein Versand an
+ * `opfer@example.com`. Damit waren drei Schutzmechanismen gleichzeitig
+ * umgangen — der Tageszähler pro Empfänger (er schlüsselt auf den Rohstring,
+ * also zählte jedes Präfix als neue Adresse), die Selbstsende-Prüfung und der
+ * Duplikat-Hash. In Kette ergab das eine unbegrenzte Mailbombe über das
+ * SMTP-Konto des Betreibers.
+ *
+ * Ausgeschlossen sind daher alle Zeichen mit Bedeutung in der
+ * Adress-Grammatik nach RFC 5322.
+ */
+const EMAIL_PATTERN =
+  /^[^\s@,;<>"\\()[\]:]+@[^\s@,;<>"\\()[\]:]+\.[^\s@,;<>"\\()[\]:]{2,}$/;
 const MAX_NAME_LENGTH = 120;
 const MAX_MESSAGE_LENGTH = 5000;
+// Steuerzeichen aufzuspüren IST hier der Zweck (Header-Injection, kaputte
+// Mail-Bodies) — die Regel meldet genau das Muster, das wir brauchen.
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
 
 /** Verhindert E-Mail-Header-Injection in Display-Namen. */
@@ -35,12 +70,25 @@ function sanitizeMailSubjectPart(value: string): string {
 
 let transporter: nodemailer.Transporter | undefined;
 
+/**
+ * CONTACT_TO gehört mit in die Prüfung: ohne Empfänger ist das Formular nicht
+ * eingerichtet. Vorher gab es einen hartkodierten Fallback auf eine private
+ * Adresse — in einer fremden Installation dieses Open-Source-Projekts wären
+ * Kontaktanfragen still dorthin gegangen.
+ */
 export function isContactMailConfigured(): boolean {
-  return Boolean(process.env.SMTP_HOST?.trim() && process.env.SMTP_USER?.trim() && process.env.SMTP_PASS?.trim());
+  return Boolean(
+    process.env.SMTP_HOST?.trim() &&
+      process.env.SMTP_USER?.trim() &&
+      process.env.SMTP_PASS?.trim() &&
+      process.env.CONTACT_TO?.trim()
+  );
 }
 
 function getContactTo(): string {
-  return process.env.CONTACT_TO?.trim() || 'hallo@cavara.dev';
+  const to = process.env.CONTACT_TO?.trim();
+  if (!to) throw new Error('CONTACT_TO ist nicht konfiguriert.');
+  return to;
 }
 
 function getTransporter(): nodemailer.Transporter {
@@ -74,23 +122,25 @@ export function validateContactInput(input: ContactMessageInput): ContactMessage
   const message = input.message.trim();
 
   if (CONTROL_CHARS.test(name) || CONTROL_CHARS.test(message)) {
-    throw new Error('Bitte keine ungültigen Steuerzeichen verwenden.');
+    throw new ContactValidationError('Bitte keine ungültigen Steuerzeichen verwenden.');
   }
 
   if (!name || name.length > MAX_NAME_LENGTH) {
-    throw new Error('Bitte einen gültigen Namen angeben.');
+    throw new ContactValidationError('Bitte einen gültigen Namen angeben.');
   }
 
   if (!email || !EMAIL_PATTERN.test(email) || email.length > 254) {
-    throw new Error('Bitte eine gültige E-Mail-Adresse angeben.');
+    throw new ContactValidationError('Bitte eine gültige E-Mail-Adresse angeben.');
   }
 
   if (!message || message.length < 10) {
-    throw new Error('Die Nachricht sollte mindestens 10 Zeichen lang sein.');
+    throw new ContactValidationError('Die Nachricht sollte mindestens 10 Zeichen lang sein.');
   }
 
   if (message.length > MAX_MESSAGE_LENGTH) {
-    throw new Error(`Die Nachricht darf maximal ${MAX_MESSAGE_LENGTH} Zeichen lang sein.`);
+    throw new ContactValidationError(
+      `Die Nachricht darf maximal ${MAX_MESSAGE_LENGTH} Zeichen lang sein.`
+    );
   }
 
   return { name, email, message };
@@ -118,10 +168,18 @@ export async function sendContactMessage(input: ContactMessageInput): Promise<Co
     text: buildContactEmailText(payload),
     html: buildContactEmailHtml(payload),
   });
-  console.log(`[contact] Benachrichtigung gesendet an ${to}`);
+  console.log('[contact] Benachrichtigung an den Betreiber gesendet.');
 
   if (payload.email.toLowerCase() === to.toLowerCase()) {
-    console.log(`[contact] Bestätigung übersprungen — Absender-Adresse ist identisch mit ${to}`);
+    return { sent: true };
+  }
+
+  // Die Empfänger-Adresse ist unbestätigt — höchstens eine Bestätigung pro
+  // Adresse und Tag, damit der Endpoint niemanden mit Mails zudecken kann.
+  if (!claimAutoReplySlot(payload.email)) {
+    console.log(
+      `[contact] Bestätigung an ${maskEmail(payload.email)} übersprungen (Tageslimit erreicht).`
+    );
     return { sent: true };
   }
 
@@ -134,10 +192,13 @@ export async function sendContactMessage(input: ContactMessageInput): Promise<Co
       text: buildContactAutoReplyText(payload),
       html: buildContactAutoReplyHtml(payload),
     });
-    console.log(`[contact] Bestätigung gesendet an ${payload.email}`);
+    console.log(`[contact] Bestätigung gesendet an ${maskEmail(payload.email)}`);
   } catch (autoReplyError) {
     const err = autoReplyError as Error;
-    console.error(`[contact] Bestätigung an ${payload.email} fehlgeschlagen:`, err.message || autoReplyError);
+    console.error(
+      `[contact] Bestätigung an ${maskEmail(payload.email)} fehlgeschlagen:`,
+      err.message || autoReplyError
+    );
   }
 
   return { sent: true };

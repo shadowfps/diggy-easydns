@@ -10,16 +10,18 @@ import { FindingsList } from '@/modules/findings/FindingsList';
 import { SecurityView } from '@/modules/security/SecurityView';
 import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
-import { PageSpeedView } from '@/modules/speed/PageSpeedView';
-import { VirusScanView } from '@/modules/virusscan/VirusScanView';
+
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
 import { ImpressumView } from '@/modules/impressum/ImpressumView';
+import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { isInspectableIp } from '@/components/ip/IpAddressLink';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
+import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
+import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';
 import {
   ScoreCardSkeleton,
   SectionCardsSkeleton,
@@ -28,12 +30,48 @@ import {
   ListSkeleton,
 } from '@/components/ui/Skeleton';
 import { Loader2 } from 'lucide-react';
-import SplitText from '@/components/ui/SplitText';
-import TextType from '@/components/ui/TextType';
-import ShinyText from '@/components/ui/ShinyText';
+import { lazy, Suspense } from 'react';
+
+/*
+ * Die drei Hero-Komponenten werden nachgeladen.
+ *
+ * Alle drei erscheinen ausschließlich auf der Startseite im Idle-Zustand. Wer
+ * über einen Permalink (/lookup/<domain>) einsteigt, sieht sie nie — hat ihren
+ * Code aber bisher im kritischen Pfad geladen. Zusammen bringen sie GSAP
+ * (Core, SplitText-Plugin, ScrollTrigger) mit, das bei aktivem "Bewegung
+ * reduzieren" sogar geladen, initialisiert und dann bewusst nicht benutzt wurde.
+ *
+ * SplitText und TextType rendern ihren Text ohnehin als Kind bzw. progressiv,
+ * die Fallbacks entsprechen also dem Endzustand.
+ */
+const SplitText = lazy(() => import('@/components/ui/SplitText'));
+const TextType = lazy(() => import('@/components/ui/TextType'));
+const ShinyText = lazy(() => import('@/components/ui/ShinyText'));
+
+/*
+ * Die beiden On-Demand-Tabs: sie holen ihre Daten erst, wenn der Nutzer den
+ * Check ausdrücklich anstößt. Ihr Code gehört damit nicht in das Bundle, das
+ * den ersten Report blockiert.
+ */
+const PageSpeedView = lazy(() =>
+  import('@/modules/speed/PageSpeedView').then((m) => ({ default: m.PageSpeedView }))
+);
+const VirusScanView = lazy(() =>
+  import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
+);
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import {
+  buildDocumentTitle,
+  formatExportTimestamp,
+  getDomainFromLookupPath,
+  lookupPathFor,
+  normalizeSearchDomain,
+  sanitizeFilename,
+  STATIC_ROUTES,
+  type AppView,
+} from '@/lib/lookupPath';
 import {
   clearLookupHistory,
   readLookupHistory,
@@ -41,8 +79,6 @@ import {
   type LookupHistoryEntry,
 } from '@/lib/lookupHistory';
 import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
-
-type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum';
 
 const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
 
@@ -65,6 +101,10 @@ export default function App() {
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const initialPathHandledRef = useRef(false);
+  // applyPath schließt über aktuellen State. Der popstate-Listener wird nur
+  // einmal gebunden, greift die Funktion aber über diese Ref ab, damit er
+  // nicht auf einer veralteten Closure sitzt.
+  const applyPathRef = useRef<(pathname: string) => void>(() => {});
   // Beim Direktaufruf der Startseite soll der Cursor sofort im Suchfeld stehen,
   // damit man ohne Klick per Strg+V einfügen und suchen kann. Bei Deep-Links
   // (Permalink oder Unterseite) übernimmt der Routing-Effekt.
@@ -94,10 +134,9 @@ export default function App() {
     setPermalinkCopied(false);
   };
 
-  const handleSearch = (domain: string) => {
+  const runLookup = (domain: string, options: { updatePath?: boolean } = {}) => {
     const normalizedDomain = domain.trim().toLowerCase();
     if (!normalizedDomain) return;
-    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
     setView('lookup');
     setSearchValue(normalizedDomain);
     resetSecondaryScans();
@@ -106,13 +145,35 @@ export default function App() {
     if (isInspectableIp(normalizedDomain)) {
       lookup.reset();
       setIpQuery(normalizedDomain);
-      replaceLookupPath(normalizedDomain);
+      if (options.updatePath !== false) replaceLookupPath(normalizedDomain);
       return;
     }
 
     setIpQuery(null);
     setActiveTab('records');
     lookup.run(normalizedDomain);
+  };
+
+  const handleSearch = (domain: string) => {
+    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
+    /*
+     * Eintrag nur anlegen, wenn wir NICHT schon auf einem Lookup-Pfad sind.
+     *
+     * Die Bedingung hing vorher an `records || ipQuery` und war damit
+     * inkonsistent: während ein Lookup lädt, ist `records` bereits null (der
+     * Reducer setzt beim Start auf INITIAL), eine Suche in diesem Moment legte
+     * also einen Eintrag an — nach dem Laden dagegen nicht. Und ein erneuter
+     * Versuch derselben Domain nach einem Fehler erzeugte einen doppelten
+     * Eintrag mit identischer URL.
+     *
+     * Der Pfad ist die verlässlichere Quelle: von einer statischen Route aus
+     * pushState, innerhalb der Lookup-Ansicht übernimmt replaceLookupPath.
+     */
+    if (!window.location.pathname.startsWith('/lookup/')) {
+      const target = domain.trim().toLowerCase();
+      if (target) window.history.pushState(null, '', lookupPathFor(target));
+    }
+    runLookup(domain);
   };
 
   // Records da → Permalink auf die (server-normalisierte) Domain setzen.
@@ -157,53 +218,62 @@ export default function App() {
     }
   };
 
-  const handleHome = () => {
+  /**
+   * Wendet einen Pfad auf den State an — ohne die History zu verändern.
+   *
+   * Wird von zwei Seiten gebraucht: beim ersten Laden (Deep-Link/Permalink)
+   * und bei `popstate`. Vorher gab es nur den Init-Pfad, deshalb hat der
+   * Zurück-Button nur die URL geändert und die Ansicht stehen gelassen.
+   */
+  const applyPath = (pathname: string) => {
+    const staticView = STATIC_ROUTES[pathname];
+    if (staticView) {
+      clearLookup();
+      setView(staticView);
+      // Auch Suchfeld und Tab zurücksetzen. Das machte das alte handleHome()
+      // und ist beim Zusammenfassen der fünf Handler verloren gegangen: die
+      // SearchBar wird bei view==='lookup' nicht neu gemountet, also blieb
+      // nach Home/Zurück die alte Domain im Feld stehen.
+      setSearchValue('');
+      setActiveTab('records');
+      if (staticView === 'history') setHistoryEntries(readLookupHistory());
+      return;
+    }
+
+    const domainFromPath = getDomainFromLookupPath(pathname);
+    if (domainFromPath) {
+      // Der Pfad steht schon — nicht erneut hineinschreiben, sonst würde ein
+      // replaceState den History-Eintrag überschreiben, zu dem wir gerade
+      // zurückgesprungen sind.
+      runLookup(domainFromPath, { updatePath: false });
+      return;
+    }
+
+    // Unbekannter Pfad → Startseite.
     clearLookup();
     setView('lookup');
     setActiveTab('records');
     setSearchValue('');
-    if (window.location.pathname !== '/') {
-      window.history.pushState(null, '', '/');
+  };
+
+  // Ref bei jedem Render auf die frische Closure zeigen lassen.
+  applyPathRef.current = applyPath;
+
+  /** Navigiert per pushState und wendet den Pfad direkt an. */
+  const navigate = (pathname: string) => {
+    if (window.location.pathname !== pathname) {
+      window.history.pushState(null, '', pathname);
     }
+    applyPath(pathname);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleHistory = () => {
-    clearLookup();
-    setView('history');
-    setHistoryEntries(readLookupHistory());
-    if (window.location.pathname !== '/history') {
-      window.history.pushState(null, '', '/history');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleAbout = () => {
-    clearLookup();
-    setView('about');
-    if (window.location.pathname !== '/about') {
-      window.history.pushState(null, '', '/about');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleAvailability = () => {
-    clearLookup();
-    setView('availability');
-    if (window.location.pathname !== '/availability') {
-      window.history.pushState(null, '', '/availability');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleImpressum = () => {
-    clearLookup();
-    setView('impressum');
-    if (window.location.pathname !== '/impressum') {
-      window.history.pushState(null, '', '/impressum');
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const handleHome = () => navigate('/');
+  const handleHistory = () => navigate('/history');
+  const handleAbout = () => navigate('/about');
+  const handleAvailability = () => navigate('/availability');
+  const handleImpressum = () => navigate('/impressum');
+  const handleDatenschutz = () => navigate('/datenschutz');
 
   const handleClearHistory = () => {
     setHistoryEntries(clearLookupHistory());
@@ -221,30 +291,30 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Erstes Laden: Deep-Link/Permalink anwenden.
   useEffect(() => {
     if (initialPathHandledRef.current) return;
     initialPathHandledRef.current = true;
-    if (window.location.pathname === '/history') {
-      setView('history');
-      setHistoryEntries(readLookupHistory());
-      return;
-    }
-    if (window.location.pathname === '/about') {
-      setView('about');
-      return;
-    }
-    if (window.location.pathname === '/availability') {
-      setView('availability');
-      return;
-    }
-    if (window.location.pathname === '/impressum') {
-      setView('impressum');
-      return;
-    }
-    const domainFromPath = getDomainFromLookupPath(window.location.pathname);
-    if (!domainFromPath) return;
-    handleSearch(domainFromPath);
+    applyPath(window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Dokumenttitel mitführen.
+   *
+   * Permalinks sind ein Kernfeature — ohne das hießen alle offenen Tabs
+   * "diggy — DNS made friendly" und waren beim Vergleich mehrerer Domains
+   * nicht unterscheidbar, ebenso Lesezeichen und Browser-History.
+   */
+  useEffect(() => {
+    document.title = buildDocumentTitle(view, lookup.domain, ipQuery);
+  }, [view, lookup.domain, ipQuery]);
+
+  // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
+  useEffect(() => {
+    const handlePopState = () => applyPathRef.current(window.location.pathname);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const handleCopyPermalink = async () => {
@@ -317,7 +387,9 @@ export default function App() {
 
         {view === 'availability' && <AvailabilityView />}
 
-        {view === 'impressum' && <ImpressumView />}
+        {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
+
+        {view === 'datenschutz' && <DatenschutzView onOpenImpressum={handleImpressum} />}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -338,49 +410,73 @@ export default function App() {
                 transition={{ duration: 0.5 }}
                 className="mb-5"
               >
-                <ShinyText
-                  text="diggy"
-                  className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase dark:invert"
-                  color="#111111"
-                  shineColor="#737373"
-                  speed={2.5}
-                  spread={120}
-                  direction="left"
-                />
+                <Suspense
+                  fallback={
+                    <span className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase text-ink-950 dark:text-ink-50">
+                      diggy
+                    </span>
+                  }
+                >
+                  <ShinyText
+                    text="diggy"
+                    className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase dark:invert"
+                    color="#111111"
+                    shineColor="#737373"
+                    speed={2.5}
+                    spread={120}
+                    direction="left"
+                  />
+                </Suspense>
               </motion.div>
               <div className="mb-3">
-                <SplitText
-                  text="Was steckt hinter deiner Domain?"
-                  tag="h1"
-                  className="text-4xl md:text-5xl font-medium tracking-tight"
-                  delay={40}
-                  duration={0.9}
-                  ease="power3.out"
-                  splitType="chars"
-                  from={{ opacity: 0, y: 30 }}
-                  to={{ opacity: 1, y: 0 }}
-                  threshold={0.1}
-                  rootMargin="-50px"
-                  textAlign="center"
-                />
+                <Suspense
+                  fallback={
+                    <h1 className="text-4xl md:text-5xl font-medium tracking-tight">
+                      Was steckt hinter deiner Domain?
+                    </h1>
+                  }
+                >
+                  <SplitText
+                    text="Was steckt hinter deiner Domain?"
+                    tag="h1"
+                    className="text-4xl md:text-5xl font-medium tracking-tight"
+                    delay={40}
+                    duration={0.9}
+                    ease="power3.out"
+                    splitType="chars"
+                    from={{ opacity: 0, y: 30 }}
+                    to={{ opacity: 1, y: 0 }}
+                    threshold={0.1}
+                    rootMargin="-50px"
+                    textAlign="center"
+                  />
+                </Suspense>
               </div>
               <div className="mb-10 max-w-md mx-auto">
-                <TextType
-                  as="p"
-                  className="text-base text-ink-900/60 dark:text-ink-50/60"
-                  text={[
-                    'DNS, SSL, Mail-Security und Propagation auf einen Blick.',
-                    'Ohne Fachchinesisch, mit Empfehlungen.',
-                    'Alles, was du wissen musst — in einem Tool.',
-                  ]}
-                  typingSpeed={45}
-                  pauseDuration={2200}
-                  deletingSpeed={25}
-                  cursorCharacter="▍"
-                  cursorClassName="text-ink-900 dark:text-ink-50"
-                  cursorBlinkDuration={0.6}
-                  initialDelay={500}
-                />
+                <Suspense
+                  fallback={
+                    <p className="text-base text-ink-900/60 dark:text-ink-50/60">
+                      DNS, SSL, Mail-Security und Propagation auf einen Blick.
+                    </p>
+                  }
+                >
+                  <TextType
+                    as="p"
+                    className="text-base text-ink-900/60 dark:text-ink-50/60"
+                    text={[
+                      'DNS, SSL, Mail-Security und Propagation auf einen Blick.',
+                      'Ohne Fachchinesisch, mit Empfehlungen.',
+                      'Alles, was du wissen musst — in einem Tool.',
+                    ]}
+                    typingSpeed={45}
+                    pauseDuration={2200}
+                    deletingSpeed={25}
+                    cursorCharacter="▍"
+                    cursorClassName="text-ink-900 dark:text-ink-50"
+                    cursorBlinkDuration={0.6}
+                    initialDelay={500}
+                  />
+                </Suspense>
               </div>
             </motion.div>
           )}
@@ -494,17 +590,40 @@ export default function App() {
                 ]}
               />
 
+              {/* Zweite, feinere Boundary: reißt ein Sektions-Renderer ab,
+                  bleiben Score, QuickFacts und die anderen Tabs nutzbar.
+                  key auf activeTab, damit ein Tab-Wechsel den Fehlerzustand
+                  nicht mitschleppt. */}
+              <ErrorBoundary
+                key={`boundary-${activeTab}`}
+                fallback={({ error, reset }) => (
+                  <div className="mt-6">
+                    <SectionErrorFallback error={error} reset={reset} />
+                  </div>
+                )}
+              >
               <div className="mt-6">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeTab}
+                    role="tabpanel"
+                    id={`panel-${activeTab}`}
+                    aria-labelledby={`tab-${activeTab}`}
+                    tabIndex={0}
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.2 }}
                   >
+                    {/* key pro Domain: RecordsList und PropagationView halten
+                        lokalen Filter-/Typ-State. Ohne Remount blieb der über
+                        einen Domain-Wechsel hinweg stehen — bei
+                        PropagationView führte das zu einer scheinbar leeren
+                        Ansicht, wenn die neue Domain den vorher gewählten
+                        Record-Typ nicht hat. */}
                     {activeTab === 'records' && (
                       <RecordsList
+                        key={report.domain}
                         records={report.records}
                         onUseDomain={handleUseDomainInSearch}
                       />
@@ -515,7 +634,7 @@ export default function App() {
                       ) : propagation.status === 'error' ? (
                         <SectionError message={propagation.error} />
                       ) : propagation.data && propagation.data.length > 0 ? (
-                        <PropagationView results={propagation.data} />
+                        <PropagationView key={report.domain} results={propagation.data} />
                       ) : (
                         <Placeholder
                           title="Multi-Resolver-Propagation"
@@ -556,6 +675,7 @@ export default function App() {
                         <WhoisView whois={whois.data ?? undefined} onUseDomain={handleUseDomainInSearch} />
                       ))}
                     {activeTab === 'speed' && (
+                      <Suspense fallback={<SectionCardsSkeleton count={2} />}>
                       <PageSpeedView
                         data={pageSpeed}
                         loading={pageSpeedLoading}
@@ -564,18 +684,22 @@ export default function App() {
                         onStrategyChange={setPageSpeedStrategy}
                         onRun={handleRunPageSpeed}
                       />
+                      </Suspense>
                     )}
                     {activeTab === 'virusscan' && (
+                      <Suspense fallback={<SectionCardsSkeleton count={2} />}>
                       <VirusScanView
                         data={virusScan}
                         loading={virusScanLoading}
                         error={virusScanError}
                         onRun={handleRunVirusScan}
                       />
+                      </Suspense>
                     )}
                   </motion.div>
                 </AnimatePresence>
               </div>
+              </ErrorBoundary>
 
               {/* Footer-Actions */}
               <div className="mt-12 flex justify-end gap-2">
@@ -583,7 +707,10 @@ export default function App() {
                 <ActionButton onClick={handleCopyPermalink}>
                   {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
                 </ActionButton>
-                <ActionButton>Watch 🔔</ActionButton>
+                {/* "Watch 🔔" war hier ein Button ohne Handler — sah aus wie
+                    die anderen, tat aber nichts. Das Feature steht in der
+                    Roadmap als offen; bis dahin ist kein Button ehrlicher als
+                    ein wirkungsloser. */}
               </div>
           </motion.div>
         )}
@@ -602,6 +729,16 @@ export default function App() {
               className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
             >
               Impressum
+            </button>
+            <span className="hidden text-ink-900/20 dark:text-ink-50/20 sm:inline" aria-hidden>
+              ·
+            </span>
+            <button
+              type="button"
+              onClick={handleDatenschutz}
+              className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
+            >
+              Datenschutz
             </button>
           </div>
           <span>v0.3.0</span>
@@ -628,15 +765,20 @@ function SectionError({ message }: { message?: string }) {
   );
 }
 
+/**
+ * `onClick` ist bewusst verpflichtend: ein Button ohne Handler ist für Nutzer
+ * nicht von einem kaputten unterscheidbar. So fängt der Compiler das ab.
+ */
 function ActionButton({
   children,
   onClick,
 }: {
   children: React.ReactNode;
-  onClick?: () => void | Promise<void>;
+  onClick: () => void | Promise<void>;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="px-3.5 py-2 text-xs font-medium rounded-lg border border-ink-100 dark:border-ink-900/80 hover:bg-ink-100/60 dark:hover:bg-ink-900 transition-colors"
     >
@@ -646,35 +788,12 @@ function ActionButton({
 }
 
 function getLookupUrl(domain: string): string {
-  return `${window.location.origin}/lookup/${encodeURIComponent(domain)}`;
+  return `${window.location.origin}${lookupPathFor(domain)}`;
 }
 
 function replaceLookupPath(domain: string): void {
-  const nextPath = `/lookup/${encodeURIComponent(domain)}`;
+  const nextPath = lookupPathFor(domain);
   if (window.location.pathname === nextPath) return;
   window.history.replaceState(null, '', nextPath);
 }
 
-function getDomainFromLookupPath(pathname: string): string | null {
-  const match = pathname.match(/^\/lookup\/([^/]+)\/?$/i);
-  if (!match?.[1]) return null;
-  try {
-    return decodeURIComponent(match[1]).trim().toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
-function normalizeSearchDomain(domain: string): string {
-  return domain.trim().toLowerCase().replace(/\.$/, '');
-}
-
-function sanitizeFilename(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-function formatExportTimestamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return 'report';
-  return date.toISOString().replace(/[:.]/g, '-');
-}
