@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { fetchContactChallenge, sendContactMessage } from '@/lib/api';
 
@@ -14,25 +14,32 @@ export function ContactForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  /**
+   * Holt einen frischen Challenge-Token.
+   *
+   * Wird nicht nur beim Mount gebraucht, sondern auch nach jedem
+   * Absende-Versuch: der Server entwertet den Token einmalig. Ohne Nachladen
+   * würde ein zweiter Versuch mit demselben Token als Replay gewertet.
+   */
+  const loadChallenge = useCallback(async () => {
+    const challenge = await fetchContactChallenge();
+    setChallengeToken(challenge.token);
+    setReadyAt(Date.now() + challenge.minDelayMs);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
-    fetchContactChallenge()
-      .then((challenge) => {
-        if (cancelled) return;
-        setChallengeToken(challenge.token);
-        setReadyAt(Date.now() + challenge.minDelayMs);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError('Kontaktformular konnte nicht initialisiert werden. Bitte Seite neu laden.');
-        }
-      });
+    loadChallenge().catch(() => {
+      if (!cancelled) {
+        setError('Kontaktformular konnte nicht initialisiert werden. Bitte Seite neu laden.');
+      }
+    });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadChallenge]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -55,12 +62,19 @@ export function ContactForm() {
       setMessage('');
       setWebsite('');
       setCompany('');
-
-      const challenge = await fetchContactChallenge();
-      setChallengeToken(challenge.token);
-      setReadyAt(Date.now() + challenge.minDelayMs);
+      await loadChallenge();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nachricht konnte nicht gesendet werden.');
+
+      // Der verbrauchte Token ist jetzt wertlos. Ohne Nachladen liefe ein
+      // Korrektur-Versuch in die Replay-Erkennung des Servers und würde
+      // fälschlich als gesendet gemeldet.
+      setChallengeToken(null);
+      try {
+        await loadChallenge();
+      } catch {
+        setError('Bitte lade die Seite neu und versuche es erneut.');
+      }
     } finally {
       setLoading(false);
     }

@@ -14,6 +14,8 @@ import {
   whoisFindings,
 } from './services/reportBuilder.js';
 import { cached } from './lib/cache.js';
+import { BlockedTargetError } from './lib/safeTarget.js';
+import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { queryAllResolvers } from './services/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
@@ -21,16 +23,22 @@ import { auditMail } from './services/mailAudit.js';
 import { lookupWhois } from './services/whois.js';
 import { lookupPageSpeed } from './services/pagespeed.js';
 import { scanVirusTotal } from './services/virusscan.js';
-import { isValidIpAddress, lookupIpDetails } from './services/ipDetails.js';
+import { isLookupableIpAddress, lookupIpDetails } from './services/ipDetails.js';
 import { detectTechStack } from './services/techstack.js';
 import { checkDomainsAvailability } from './services/domainAvailability.js';
-import { isContactMailConfigured, sendContactMessage } from './services/contactMail.js';
+import {
+  ContactValidationError,
+  isContactMailConfigured,
+  sendContactMessage,
+  validateContactInput,
+} from './services/contactMail.js';
 import {
   assertContactSubmissionAllowed,
   clampContactFields,
   ContactChallengeError,
   ContactRateLimitError,
   ContactSpamSilentError,
+  isHoneypotTriggered,
   issueContactChallenge,
 } from './services/contactSpamGuard.js';
 
@@ -43,6 +51,71 @@ app.use(express.json({ limit: '64kb' }));
 
 /** TTL für gecachte Lookup-Ergebnisse — kurz genug, um frisch zu bleiben. */
 const LOOKUP_TTL_MS = 60_000;
+
+/* ─── Rate-Limits ────────────────────────────────────────────────────────── */
+
+/**
+ * Basis-Limit für die gesamte API. Bemessen an einem echten Lookup: ein
+ * Report löst 7 Requests aus (Records + 6 Sektionen), dazu ein /api/ip-details
+ * pro A-Record. 120/min lässt also gut ein Dutzend Lookups pro Minute zu und
+ * greift erst deutlich oberhalb normaler Nutzung.
+ */
+const apiLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 120,
+  message: 'Zu viele Anfragen. Bitte kurz warten und erneut versuchen.',
+});
+
+/**
+ * Deutlich strenger für die Endpoints, die auf kontingentierte Fremd-APIs
+ * gehen. Diese Checks sind bewusst On-Demand (Nutzer klickt aktiv) — 10/Stunde
+ * reichen für echte Nutzung und schützen den Key.
+ *
+ * Getrennte Buckets pro Anbieter: PageSpeed und VirusTotal haben eigene
+ * Kontingente, ein gemeinsamer Zähler würde das eine Feature durch Nutzung des
+ * anderen sperren.
+ */
+function quotaLimiter(provider: string) {
+  return rateLimit({
+    windowMs: 60 * 60_000,
+    max: 10,
+    code: 'quota_rate_limited',
+    message: `Der ${provider}-Check ist auf 10 Abfragen pro Stunde begrenzt, weil er ein externes API-Kontingent nutzt.`,
+  });
+}
+
+const pageSpeedLimiter = quotaLimiter('PageSpeed');
+const virusScanLimiter = quotaLimiter('VirusTotal');
+
+/** Der Verfügbarkeits-Check fragt bis zu 10 RDAP-Server pro Request ab. */
+const availabilityLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  message: 'Zu viele Verfügbarkeits-Checks. Bitte kurz warten.',
+});
+
+/**
+ * Concurrency-Deckel für die langlaufenden Checks. PageSpeed läuft bis zu 45 s;
+ * ohne diesen Deckel würden wenige parallele Requests von verschiedenen IPs den
+ * Prozess belegen, ohne je ein Rate-Limit zu reißen.
+ */
+const pageSpeedConcurrency = concurrencyLimit(
+  4,
+  'Es laufen gerade zu viele PageSpeed-Analysen. Bitte in einer Minute erneut versuchen.'
+);
+const virusScanConcurrency = concurrencyLimit(
+  4,
+  'Es laufen gerade zu viele VirusTotal-Scans. Bitte kurz warten.'
+);
+
+// Health VOR dem Limiter: der Docker-Healthcheck fragt alle 30 s an und darf
+// nie durch fremden Traffic in ein 429 laufen — sonst gilt der Container als
+// unhealthy, obwohl er läuft.
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
+});
+
+app.use('/api', apiLimiter);
 
 /**
  * Validiert & normalisiert den `domain`-Query-Param. Sendet bei ungültiger
@@ -63,22 +136,24 @@ function resolveDomainParam(req: Request, res: Response): string | null {
 
 /** Einheitliche Fehlerantwort für die einzelnen Sub-Check-Endpoints. */
 function sectionError(res: Response, code: string, error: unknown): void {
+  // Ein geblocktes Ziel ist ein Fehler der Eingabe (400), kein Upstream-Ausfall.
+  if (error instanceof BlockedTargetError) {
+    res.status(400).json({ error: 'blocked_target', message: error.message });
+    return;
+  }
+
   const err = error as Error;
   const status = err.name === 'AbortError' ? 504 : 502;
   res.status(status).json({ error: code, message: err.message || 'Sub-Check fehlgeschlagen.' });
 }
 
-app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
-});
-
 app.get('/api/ip-details', async (req: Request, res: Response) => {
   const ip = String(req.query.ip ?? '').trim();
 
-  if (!isValidIpAddress(ip)) {
+  if (!isLookupableIpAddress(ip)) {
     return res.status(400).json({
       error: 'invalid_ip',
-      message: `"${ip}" sieht nicht nach einer gültigen IP-Adresse aus.`,
+      message: `"${ip.slice(0, 80)}" ist keine öffentliche IP-Adresse.`,
     });
   }
 
@@ -95,7 +170,7 @@ app.get('/api/ip-details', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/pagespeed', async (req: Request, res: Response) => {
+app.get('/api/pagespeed', pageSpeedLimiter, pageSpeedConcurrency, async (req: Request, res: Response) => {
   const rawInput = String(req.query.domain ?? '');
   const domain = normalizeDomain(rawInput);
   const strategy = req.query.strategy === 'desktop' ? 'desktop' : 'mobile';
@@ -121,7 +196,7 @@ app.get('/api/pagespeed', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/virusscan', async (req: Request, res: Response) => {
+app.get('/api/virusscan', virusScanLimiter, virusScanConcurrency, async (req: Request, res: Response) => {
   const rawInput = String(req.query.domain ?? '');
   const domain = normalizeDomain(rawInput);
 
@@ -189,14 +264,29 @@ app.post('/api/contact', async (req: Request, res: Response) => {
   });
 
   try {
-    assertContactSubmissionAllowed(req, fields);
-    const result = await sendContactMessage({
+    // Reihenfolge ist wichtig:
+    //
+    // 1. Honeypot zuerst — Bots füllen die versteckten Felder und lassen echte
+    //    Felder oft leer. Sie sollen keine Validierungsmeldung als Signal
+    //    bekommen, sondern einen stillen Scheinerfolg.
+    if (isHoneypotTriggered(fields)) {
+      throw new ContactSpamSilentError();
+    }
+
+    // 2. Feldvalidierung VOR dem Spam-Guard. Vorher lief es umgekehrt, dadurch
+    //    verbrauchte ein simpler Tippfehler den Challenge-Token und einen von
+    //    drei Stundenversuchen — und der zweite Versuch meldete wegen des
+    //    verbrauchten Tokens fälschlich Erfolg, ohne etwas zu senden.
+    const payload = validateContactInput({
       name: fields.name,
       email: fields.email,
       message: fields.message,
-      website: fields.website,
-      company: fields.company,
     });
+
+    // 3. Erst jetzt Token entwerten, Rate-Limit zählen, Duplikate und Inhalt prüfen.
+    assertContactSubmissionAllowed(req, { ...fields, ...payload });
+
+    const result = await sendContactMessage(payload);
     res.json(result);
   } catch (error) {
     if (error instanceof ContactSpamSilentError) {
@@ -215,16 +305,22 @@ app.post('/api/contact', async (req: Request, res: Response) => {
       });
     }
 
+    if (error instanceof ContactValidationError) {
+      return res.status(400).json({
+        error: 'contact_invalid_input',
+        message: error.message,
+      });
+    }
+
     const err = error as Error;
-    const isValidation = err.message.includes('Bitte') || err.message.includes('Nachricht');
-    return res.status(isValidation ? 400 : 502).json({
+    return res.status(502).json({
       error: 'contact_failed',
       message: err.message || 'Nachricht konnte nicht gesendet werden.',
     });
   }
 });
 
-app.get('/api/domain-check', async (req: Request, res: Response) => {
+app.get('/api/domain-check', availabilityLimiter, async (req: Request, res: Response) => {
   const query = String(req.query.q ?? req.query.domain ?? '').trim();
 
   if (!query) {

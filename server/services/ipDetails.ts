@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { isPublicIp } from '../lib/safeTarget.js';
 import type { IpDetails } from '../types.js';
 import { lookupPtrRecords } from './dnsLookup.js';
 
@@ -62,6 +63,17 @@ const cache = new Map<string, { expiresAt: number; value: IpDetails }>();
 
 export function isValidIpAddress(ip: string): boolean {
   return isIP(ip) !== 0;
+}
+
+/**
+ * Zusätzlich zur Syntax: nur öffentlich routbare Adressen zulassen.
+ *
+ * Für 10.0.0.1 oder 169.254.169.254 gibt es hier nichts sinnvoll zu zeigen —
+ * ein PTR-Lookup und zwei Fremd-API-Calls wären reine Last, und der Endpoint
+ * soll nicht als Sonde für interne Netze taugen.
+ */
+export function isLookupableIpAddress(ip: string): boolean {
+  return isValidIpAddress(ip) && isPublicIp(ip);
 }
 
 export async function lookupIpDetails(ip: string, timeoutMs = 6000): Promise<IpDetails> {

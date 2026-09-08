@@ -15,6 +15,21 @@ export interface ContactMessageResult {
   sent: boolean;
 }
 
+/**
+ * Formfehler in der Eingabe — abgrenzbar von Transport-/SMTP-Fehlern.
+ *
+ * Wichtig für den Endpoint: ein Formfehler ist eine 400 und darf weder
+ * Challenge-Token noch Rate-Limit-Budget verbrauchen. Vorher wurde das per
+ * String-Matching auf die Fehlermeldung unterschieden, was bei jeder
+ * Umformulierung brach.
+ */
+export class ContactValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ContactValidationError';
+  }
+}
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_NAME_LENGTH = 120;
 const MAX_MESSAGE_LENGTH = 5000;
@@ -74,23 +89,25 @@ export function validateContactInput(input: ContactMessageInput): ContactMessage
   const message = input.message.trim();
 
   if (CONTROL_CHARS.test(name) || CONTROL_CHARS.test(message)) {
-    throw new Error('Bitte keine ungültigen Steuerzeichen verwenden.');
+    throw new ContactValidationError('Bitte keine ungültigen Steuerzeichen verwenden.');
   }
 
   if (!name || name.length > MAX_NAME_LENGTH) {
-    throw new Error('Bitte einen gültigen Namen angeben.');
+    throw new ContactValidationError('Bitte einen gültigen Namen angeben.');
   }
 
   if (!email || !EMAIL_PATTERN.test(email) || email.length > 254) {
-    throw new Error('Bitte eine gültige E-Mail-Adresse angeben.');
+    throw new ContactValidationError('Bitte eine gültige E-Mail-Adresse angeben.');
   }
 
   if (!message || message.length < 10) {
-    throw new Error('Die Nachricht sollte mindestens 10 Zeichen lang sein.');
+    throw new ContactValidationError('Die Nachricht sollte mindestens 10 Zeichen lang sein.');
   }
 
   if (message.length > MAX_MESSAGE_LENGTH) {
-    throw new Error(`Die Nachricht darf maximal ${MAX_MESSAGE_LENGTH} Zeichen lang sein.`);
+    throw new ContactValidationError(
+      `Die Nachricht darf maximal ${MAX_MESSAGE_LENGTH} Zeichen lang sein.`
+    );
   }
 
   return { name, email, message };
