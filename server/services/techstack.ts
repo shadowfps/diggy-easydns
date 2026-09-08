@@ -1,4 +1,4 @@
-import { BlockedTargetError, safeGet } from '../lib/safeTarget.js';
+import { BlockedTargetError, decodeBodyAsText, safeGet, UnresolvableTargetError } from '../lib/safeTarget.js';
 import type { DetectedTech, TechCategory } from '../types.js';
 
 const USER_AGENT =
@@ -54,7 +54,11 @@ async function fetchTruncated(url: string): Promise<{ html: string; headers: Hea
   const isHtml = /^(?:text\/html|application\/xhtml\+xml|text\/plain)/i.test(contentType);
   if (contentType && !isHtml) return null;
 
-  const html = new TextDecoder('utf-8', { fatal: false }).decode(result.body);
+  // Dekomprimiert (siehe decodeBodyAsText): manche Server komprimieren auch
+  // ohne accept-encoding, dann wären es sonst Gzip-Bytes im Regex-Matching.
+  const html = decodeBodyAsText(result.body, result.headers, MAX_BYTES);
+  if (html === null) return null;
+
   return { html, headers: result.headers };
 }
 
@@ -238,6 +242,9 @@ export async function detectTechStack(domain: string): Promise<DetectedTech[]> {
     // Ein geblocktes Ziel ist ein Eingabe-Fehler, kein leeres Ergebnis —
     // durchwerfen, damit der Endpoint das sichtbar machen kann.
     if (error instanceof BlockedTargetError) throw error;
+    // Eine Domain ohne A/AAAA (Mail-only, geparkt) ist dagegen eine gültige
+    // Eingabe: dort gibt es einfach nichts zu erkennen.
+    if (error instanceof UnresolvableTargetError) return [];
     // Sonst: nie werfen, das Gesammelte zurückgeben.
   }
 

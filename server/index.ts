@@ -205,6 +205,15 @@ const virusScanConcurrency = concurrencyLimit(
   4,
   'Es laufen gerade zu viele VirusTotal-Scans. Bitte kurz warten.'
 );
+/**
+ * Der Tech-Stack-Check baut eine ausgehende HTTP-Verbindung zu einem fremden
+ * Server auf. Ein absichtlich langsames Ziel bindet für die Dauer des Timeouts
+ * einen Slot — ohne Deckel ließen sich damit viele Verbindungen offen halten.
+ */
+const techStackConcurrency = concurrencyLimit(
+  8,
+  'Es laufen gerade zu viele Tech-Stack-Prüfungen. Bitte kurz warten.'
+);
 
 // Health VOR dem Limiter: der Docker-Healthcheck fragt alle 30 s an und darf
 // nie durch fremden Traffic in ein 429 laufen — sonst gilt der Container als
@@ -557,7 +566,7 @@ app.get('/api/lookup/whois', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/lookup/techstack', async (req: Request, res: Response) => {
+app.get('/api/lookup/techstack', techStackConcurrency, async (req: Request, res: Response) => {
   const domain = resolveDomainParam(req, res);
   if (!domain) return;
   try {

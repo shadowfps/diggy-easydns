@@ -16,6 +16,7 @@
 
 import { lookup as dnsLookupCb, promises as dnsPromises } from 'node:dns';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
+import { brotliDecompressSync, constants as zlibConstants, gunzipSync, inflateSync } from 'node:zlib';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
 import type { LookupFunction } from 'node:net';
@@ -24,6 +25,20 @@ export class BlockedTargetError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'BlockedTargetError';
+  }
+}
+
+/**
+ * Der Name existiert nicht oder führt keine Adressen.
+ *
+ * Bewusst getrennt von BlockedTargetError: eine Mail-only- oder geparkte
+ * Domain ohne A/AAAA ist eine völlig gültige Eingabe. Der Aufrufer soll daraus
+ * "kein Zertifikat" / "keine Technologien" machen, nicht einen 400er.
+ */
+export class UnresolvableTargetError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UnresolvableTargetError';
   }
 }
 
@@ -62,12 +77,26 @@ const BLOCKED_V4: Cidr[] = [
   v4(240, 0, 0, 0, 4), // reserviert (deckt 255.255.255.255 mit ab)
 ];
 
-/** Nicht-öffentliche IPv6-Bereiche. */
+/**
+ * Nicht-öffentliche IPv6-Bereiche.
+ *
+ * Die Transitions-Präfixe (6to4, Teredo, IPv4-compatible, Local-Use-NAT64)
+ * sind hier bewusst KOMPLETT geblockt, nicht nur mit Prüfung der eingebetteten
+ * IPv4: sie sind alle entweder deprecated (RFC 4291 §2.5.5.1, RFC 7526) oder
+ * kein reguläres Internet-Ziel. Ohne sie war der Klassifizierer fail-open —
+ * `::127.0.0.1` und `2002:7f00:1::` galten als öffentlich und wären auf einem
+ * Host mit entsprechender Route ein Bypass gewesen.
+ */
 const BLOCKED_V6: Cidr[] = [
-  { bytes: bytes16('00000000000000000000000000000000'), bits: 128 }, // ::
-  { bytes: bytes16('00000000000000000000000000000001'), bits: 128 }, // ::1
+  { bytes: bytes16('00000000000000000000000000000000'), bits: 96 }, // ::/96 — inkl. ::, ::1, ::a.b.c.d
   { bytes: bytes16('01000000000000000000000000000000'), bits: 64 }, // 100::/64 Discard
+  { bytes: bytes16('20010000000000000000000000000000'), bits: 32 }, // 2001::/32 Teredo
+  { bytes: bytes16('20010010000000000000000000000000'), bits: 28 }, // 2001:10::/28 ORCHID
+  { bytes: bytes16('20010020000000000000000000000000'), bits: 28 }, // 2001:20::/28 ORCHIDv2
   { bytes: bytes16('20010db8000000000000000000000000'), bits: 32 }, // Doku-Präfix
+  { bytes: bytes16('20020000000000000000000000000000'), bits: 16 }, // 2002::/16 6to4
+  { bytes: bytes16('0064ff9b000100000000000000000000'), bits: 48 }, // 64:ff9b:1::/48 Local-Use-NAT64
+  { bytes: bytes16('5f000000000000000000000000000000'), bits: 16 }, // 5f00::/16 SRv6 (RFC 9602)
   { bytes: bytes16('fc000000000000000000000000000000'), bits: 7 }, // ULA
   { bytes: bytes16('fe800000000000000000000000000000'), bits: 10 }, // Link-local
   { bytes: bytes16('ff000000000000000000000000000000'), bits: 8 }, // Multicast
@@ -161,8 +190,14 @@ export function isPublicIp(ip: string): boolean {
     // IPv4-mapped (::ffff:a.b.c.d) und NAT64 (64:ff9b::a.b.c.d) tragen eine
     // echte IPv4 im Rumpf — die muss gegen die IPv4-Liste geprüft werden,
     // sonst wäre ::ffff:127.0.0.1 ein Bypass.
+    // Präfixe, die eine echte IPv4 im Rumpf tragen: die muss zusätzlich gegen
+    // die IPv4-Liste laufen, sonst wäre ::ffff:127.0.0.1 ein Bypass.
     const isMapped =
+      // ::ffff:0:0/96 — IPv4-mapped
       inCidr(addr, { bytes: bytes16('00000000000000000000ffff00000000'), bits: 96 }) ||
+      // ::ffff:0:0:0/96 — IPv4-translated (RFC 2765)
+      inCidr(addr, { bytes: bytes16('0000000000000000ffff000000000000'), bits: 96 }) ||
+      // 64:ff9b::/96 — well-known NAT64
       inCidr(addr, { bytes: bytes16('0064ff9b000000000000000000000000'), bits: 96 });
     if (isMapped) {
       const embedded = addr.slice(12);
@@ -209,11 +244,11 @@ export async function resolvePublicHost(hostname: string): Promise<ResolvedTarge
   try {
     resolved = await dnsPromises.lookup(hostname, { all: true, verbatim: true });
   } catch {
-    throw new BlockedTargetError(`Ziel ${hostname} ist nicht auflösbar.`);
+    throw new UnresolvableTargetError(`Ziel ${hostname} ist nicht auflösbar.`);
   }
 
   if (resolved.length === 0) {
-    throw new BlockedTargetError(`Ziel ${hostname} hat keine Adressen.`);
+    throw new UnresolvableTargetError(`Ziel ${hostname} hat keine Adressen.`);
   }
 
   for (const entry of resolved) {
@@ -332,9 +367,20 @@ export async function safeGet(
     if (remaining <= 0) return null;
 
     // Pro Hop neu auflösen UND neu prüfen — ein Redirect ist ein neues Ziel.
-    const target = await resolvePublicHost(current.hostname);
+    //
+    // Nur beim ERSTEN Hop schlägt ein geblocktes/unauflösbares Ziel nach oben
+    // durch: da ist es eine Aussage über die Nutzereingabe. Leitet eine fremde
+    // Seite später intern weiter, ist das ihr Problem und nicht das des
+    // Nutzers — dann liefern wir schlicht kein Ergebnis.
+    let target: ResolvedTarget;
+    try {
+      target = await resolvePublicHost(current.hostname);
+    } catch (error) {
+      if (hop === 0) throw error;
+      return null;
+    }
 
-    const response = await singleGet(current, target, remaining, options);
+    const response = await httpGetWithoutGuard(current, target, remaining, options);
     if (!response) return null;
 
     const { res, body } = response;
@@ -364,7 +410,23 @@ export async function safeGet(
   return null;
 }
 
-function singleGet(
+/**
+ * Ein einzelner HTTP-GET ohne Redirect-Verfolgung UND OHNE SSRF-Guard.
+ *
+ * Exportiert nur, damit sich Timeout- und Dekompressions-Verhalten gegen einen
+ * lokalen Testserver prüfen lassen — den blockt `resolvePublicHost`
+ * (korrekterweise), weshalb `safeGet` dafür nicht taugt. Produktivcode nutzt
+ * ausschließlich `safeGet`; wer diese Funktion direkt aufruft, umgeht den
+ * Schutz und muss das Ziel selbst geprüft haben.
+ *
+ * `timeoutMs` ist hier ein HARTES Gesamt-Budget, kein Idle-Timeout.
+ * `req.setTimeout()` allein reicht dafür nicht: der Timer startet erst nach
+ * dem TCP-Connect und wird von jedem eintreffenden Byte zurückgesetzt. Ein
+ * Server, der ein Byte alle 400 ms schickt, konnte den Request damit auf
+ * `maxBytes × timeoutMs` strecken — gemessen 80 s bei einem 3-s-Timeout.
+ * Deshalb zusätzlich ein absoluter Timer, der die Verbindung zerstört.
+ */
+export function httpGetWithoutGuard(
   url: URL,
   target: ResolvedTarget,
   timeoutMs: number,
@@ -375,6 +437,7 @@ function singleGet(
     const finish = (value: { res: IncomingMessage; body: Buffer } | null) => {
       if (settled) return;
       settled = true;
+      clearTimeout(hardTimer);
       resolve(value);
     };
 
@@ -386,11 +449,21 @@ function singleGet(
         method: 'GET',
         lookup: pinnedLookup(target),
         // Redirects verfolgen wir selbst, damit jeder Hop geprüft wird.
-        headers: { host: url.host, ...options.headers },
+        headers: {
+          host: url.host,
+          // Manche Server (Fastly & Co.) komprimieren auch ohne
+          // accept-encoding. Wir fragen es aktiv an und dekomprimieren unten
+          // selbst — sonst landen Gzip-Bytes in der Erkennung.
+          'accept-encoding': 'gzip, deflate, br',
+          ...options.headers,
+        },
       },
       (res) => {
         const chunks: Buffer[] = [];
         let total = 0;
+        let completed = false;
+
+        const collected = () => Buffer.concat(chunks);
 
         res.on('data', (chunk: Buffer) => {
           if (total >= options.maxBytes) return;
@@ -399,18 +472,36 @@ function singleGet(
           chunks.push(slice);
           total += slice.length;
           if (total >= options.maxBytes) {
+            // Genug gelesen — das ist ein vollständiger Erfolg für unseren Zweck.
+            completed = true;
             res.destroy();
-            finish({ res, body: Buffer.concat(chunks) });
+            finish({ res, body: collected() });
           }
         });
 
-        res.on('end', () => finish({ res, body: Buffer.concat(chunks) }));
+        res.on('end', () => {
+          completed = true;
+          finish({ res, body: collected() });
+        });
+
         res.on('error', () => finish(null));
-        // Bei `res.destroy()` nach Byte-Limit kommt 'aborted'/'close' —
-        // finish() ist idempotent, der bereits gelesene Body bleibt gültig.
-        res.on('close', () => finish({ res, body: Buffer.concat(chunks) }));
+
+        // 'close' ohne vorheriges 'end' heißt: die Verbindung brach mitten im
+        // Body ab. Einen abgeschnittenen Body als Erfolg zu melden wäre falsch
+        // — bei Connection-close-Bodies kommt kein 'error', der Teil-Body wäre
+        // sonst stillschweigend durchgegangen.
+        res.on('close', () => {
+          if (completed) finish({ res, body: collected() });
+          else finish(null);
+        });
       }
     );
+
+    // Deckt auch die Connect-Phase ab, in der req.setTimeout noch nicht greift.
+    const hardTimer = setTimeout(() => {
+      req.destroy();
+      finish(null);
+    }, timeoutMs);
 
     req.setTimeout(timeoutMs, () => {
       req.destroy();
@@ -419,4 +510,58 @@ function singleGet(
     req.on('error', () => finish(null));
     req.end();
   });
+}
+
+/**
+ * Dekomprimiert einen Body gemäß `content-encoding`.
+ *
+ * Zwei Besonderheiten:
+ *  - Der Body ist bei uns absichtlich abgeschnitten (Byte-Limit). Ein
+ *    truncierter Gzip-Stream lässt sich nur mit Z_SYNC_FLUSH lesen, sonst
+ *    wirft zlib einen Buffer-Error.
+ *  - `maxOutputLength` deckelt Dekompressions-Bomben: 100 KB komprimiert
+ *    können sonst Gigabyte ergeben.
+ */
+function decompressBody(body: Buffer, encoding: string, maxOutputLength: number): Buffer | null {
+  const algorithm = encoding.trim().toLowerCase();
+  if (!algorithm || algorithm === 'identity') return body;
+
+  const zlibOptions = {
+    finishFlush: zlibConstants.Z_SYNC_FLUSH,
+    maxOutputLength,
+  };
+
+  try {
+    if (algorithm === 'gzip' || algorithm === 'x-gzip') return gunzipSync(body, zlibOptions);
+    if (algorithm === 'deflate') return inflateSync(body, zlibOptions);
+    if (algorithm === 'br') return brotliDecompressSync(body, { maxOutputLength });
+  } catch {
+    // Unlesbar (auch: Bombe über dem Limit) -> kein Ergebnis statt Müll.
+    return null;
+  }
+
+  // Unbekanntes Encoding -> nicht als Klartext interpretieren.
+  return null;
+}
+
+/**
+ * Liefert den Body als Text, nach Dekompression.
+ *
+ * Vorher lief der Fetch über undici, das `accept-encoding` automatisch setzt
+ * UND transparent dekomprimiert. Mit node:http muss das hier passieren — ohne
+ * diesen Schritt las der TextDecoder Gzip-Bytes als UTF-8 und die
+ * Tech-Stack-Erkennung fiel lautlos aus (nachgewiesen an python.org).
+ */
+export function decodeBodyAsText(
+  body: Buffer,
+  headers: Headers,
+  maxTextBytes: number
+): string | null {
+  const encoding = headers.get('content-encoding') ?? '';
+  const decompressed = decompressBody(body, encoding, maxTextBytes * 12);
+  if (!decompressed) return null;
+
+  const limited =
+    decompressed.length > maxTextBytes ? decompressed.subarray(0, maxTextBytes) : decompressed;
+  return new TextDecoder('utf-8', { fatal: false }).decode(limited);
 }
