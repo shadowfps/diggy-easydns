@@ -173,6 +173,28 @@ mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file c
 
 Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Platzhalter in `compose.mittwald.yml` (im CI übernehmen das die GitHub-Secrets). Die Runtime-Secrets gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
 
+## Sicherheit
+
+Was der Server tut, damit ein öffentlich erreichbares Lookup-Tool nicht selbst
+zum Werkzeug wird:
+
+| Schutz | Wo |
+|---|---|
+| **SSRF-Guard** — jedes nutzergewählte Ziel wird gegen eine Blockliste nicht-öffentlicher IP-Bereiche geprüft (IPv4 + IPv6 inkl. Transitions-Präfixe) und die Verbindung per `lookup`-Option auf die geprüften Adressen gepinnt. Ohne Pinning bliebe zwischen Prüfung und Connect ein DNS-Rebinding-Fenster. Redirects werden selbst verfolgt, jeder Hop neu geprüft. | `server/lib/safeTarget.ts` |
+| **Rate-Limits** — isolierte Zähler je Limiter, dazu ein Concurrency-Deckel für die langlaufenden Checks. `/api/health` liegt bewusst davor. | `server/lib/rateLimit.ts` |
+| **Security-Header** — CSP ohne Fremd-Hosts, HSTS, `nosniff`, `strict-origin-when-cross-origin`, `frame-ancestors 'none'`. Der SHA-256 des Inline-Theme-Scripts wird beim Start aus dem gebauten HTML abgeleitet, damit `script-src 'self'` bleiben kann. | `server/index.ts` |
+| **CSRF** — Origin-Prüfung gegen `PUBLIC_ORIGIN` für den schreibenden Endpoint, `Sec-Fetch-Site`-Riegel für die Endpoints mit Fremd-API-Kontingent. | `server/index.ts` |
+| **Anti-Spam** — Honeypot, signiertes Timing-Token mit Nonce und Einmalverwendung, IP-Limits, Duplikat-Erkennung, Inhaltsfilter, ein Auto-Reply pro Empfänger und Tag. | `server/services/contactSpamGuard.ts` |
+| **Graceful Shutdown** — Health auf 503, Drain-Fenster, dann `server.close()`. Request-Timeouts gegen Slowloris. | `server/index.ts` |
+
+Zwei Konfigurationswerte sind in Produktion Pflicht: `CONTACT_FORM_SECRET`
+(mindestens 32 Zeichen) und `CONTACT_TO`. Fehlt eines, startet der Server
+bewusst nicht, statt mit unsicherem Fallback zu laufen.
+
+`TRUST_PROXY` nur setzen, wenn tatsächlich ein Reverse-Proxy davor liegt —
+sonst kann sich jeder per `X-Forwarded-For` einen frischen Rate-Limit-Zähler
+holen.
+
 ## Recht & Compliance
 
 `docs/COMPLIANCE.md` hält die technische Einordnung fest: Speicherdauern und
@@ -206,18 +228,25 @@ technisch korrekt, aber **nicht juristisch geprüft**.
 
 ```
 diggy/
+├── docs/
+│   └── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
 ├── shared/
-│   └── types/              # Gemeinsame TypeScript-Typen (Frontend + Backend)
+│   ├── scoring.ts          # Health-Score — geteilt, damit Server und Client
+│   │                       # garantiert dasselbe rechnen
+│   └── types/              # Gemeinsame TypeScript-Typen
 ├── src/
-│   ├── components/         # Wiederverwendbare UI-Bausteine
+│   ├── components/         # Wiederverwendbare UI-Bausteine, Error Boundaries
 │   ├── modules/            # Feature-Module (Lookup, History, Availability, …)
-│   ├── lib/                # API-Client, History, Utilities
-│   ├── hooks/
+│   ├── lib/                # API-Client, History, Routing-Helfer, Utilities
+│   ├── hooks/              # Theme, progressiver Lookup, Reduced-Motion, Focus-Trap
 │   └── types/              # Re-Exports
 └── server/
-    ├── index.ts            # Express-App & API-Routen
+    ├── index.ts            # Express-App, Middleware-Kette & API-Routen
+    ├── lib/                # Cache, Rate-Limiting, SSRF-Guard
     └── services/           # DNS, SSL, Mail-Audit, Kontakt, …
 ```
+
+Tests liegen neben dem geprüften Code (`*.test.ts`).
 
 ## API (Auszug)
 
@@ -249,8 +278,11 @@ diggy/
 - [x] Permalinks & JSON-Export
 - [x] Lookup-History (Browser-lokal)
 - [x] Impressum & Kontaktformular (SMTP, Auto-Reply, Anti-Spam)
+- [x] Response-Caching im Backend (TTL pro Check, In-Flight-Dedup)
+- [x] Datenschutzhinweise & lokal gehostete Schriften
+- [x] Härtung: SSRF-Guard mit IP-Pinning, Rate-Limits, CSP/HSTS, CSRF-Riegel
+- [x] Tests, ESLint, Typecheck und ein verify-Gate in der CI
 - [ ] DNSSEC-Chain-Validierung (vertieft)
-- [ ] Response-Caching im Backend
 - [ ] Watch/Monitor-Feature (Domain-Änderungen per E-Mail)
 
 ## Mitmachen
