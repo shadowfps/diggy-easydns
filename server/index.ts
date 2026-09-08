@@ -262,7 +262,18 @@ const techStackConcurrency = concurrencyLimit(
 // Health VOR dem Limiter: der Docker-Healthcheck fragt alle 30 s an und darf
 // nie durch fremden Traffic in ein 429 laufen — sonst gilt der Container als
 // unhealthy, obwohl er läuft.
+/**
+ * Beim Shutdown liefert Health 503, damit ein Reverse-Proxy den Container aus
+ * der Rotation nimmt, BEVOR der Prozess weg ist. Ohne dieses Drain-Fenster
+ * schickt der Proxy bis zum letzten Moment neue Requests auf einen Server, der
+ * gerade zumacht.
+ */
+let shuttingDown = false;
+
 app.get('/api/health', (_req: Request, res: Response) => {
+  if (shuttingDown) {
+    return res.status(503).json({ status: 'shutting_down', service: 'diggy-api' });
+  }
   res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
 });
 
@@ -645,6 +656,76 @@ if (isContactMailConfigured()) {
   assertContactSecretConfigured();
 }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🐾 Diggy läuft auf http://localhost:${PORT}`);
+});
+
+/**
+ * Ohne diesen Handler stirbt der Prozess bei einem belegten Port an einem
+ * unbehandelten 'error'-Event mit Stacktrace statt mit einer verwertbaren
+ * Meldung.
+ */
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`[server] Port ${PORT} ist belegt — läuft schon eine Instanz?`);
+  } else {
+    console.error('[server] Konnte nicht starten:', error.message);
+  }
+  process.exit(1);
+});
+
+/*
+ * Request-Timeouts. Die AUSGEHENDEN Calls haben alle einen AbortController,
+ * der eingehende Request hatte bisher keine Obergrenze: eine langsam gesendete
+ * Anfrage konnte einen Connection-Slot dauerhaft halten (Slowloris-Muster).
+ * Das Budget deckt den langsamsten Endpoint ab (PageSpeed, bis 45 s).
+ */
+server.requestTimeout = 60_000;
+server.headersTimeout = 65_000; // muss über requestTimeout liegen
+server.keepAliveTimeout = 15_000;
+
+/**
+ * Sauberes Herunterfahren.
+ *
+ * Im Container läuft Node als PID 1 ohne Init-Prozess. Bei `docker stop` oder
+ * einem Stack-Redeploy kam SIGTERM und der Default-Handler beendete den Prozess
+ * sofort — laufende Requests wurden mitten in der Antwort abgeschnitten. Bei
+ * mehreren Deploys am Tag traf das regelmäßig Nutzer in einem PageSpeed-Run.
+ */
+function shutdown(signal: NodeJS.Signals): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[server] ${signal} empfangen — fahre herunter.`);
+
+  server.close(() => {
+    console.log('[server] Alle Verbindungen geschlossen.');
+    process.exit(0);
+  });
+
+  // Notbremse: hängt eine Verbindung, soll der Container trotzdem beenden.
+  // unref(), damit dieser Timer den Prozess nicht selbst am Leben hält.
+  setTimeout(() => {
+    console.warn('[server] Shutdown-Timeout — beende hart.');
+    process.exit(1);
+  }, 20_000).unref();
+}
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => shutdown(signal));
+}
+
+/*
+ * Ohne diese Handler verschwindet eine unbehandelte Rejection still bzw. der
+ * Prozess endet mit Node-Default-Verhalten — in beiden Fällen ohne Spur im Log,
+ * die auf die Ursache zeigt.
+ */
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] Unbehandelte Promise-Rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[server] Unbehandelte Exception:', error);
+  // Nach einer uncaughtException ist der Zustand unklar — geordnet beenden und
+  // den Container-Restart die Arbeit machen lassen.
+  shutdown('SIGTERM');
 });

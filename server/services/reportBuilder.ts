@@ -296,17 +296,24 @@ export function sslFindings(ssl: SslInfo | null): Finding[] {
 
   const findings: Finding[] = [];
 
-  if (!ssl.valid) {
+  const isExpired = ssl.daysUntilExpiry < 0;
+
+  // Kein doppeltes Finding für denselben Sachverhalt: ein abgelaufenes
+  // Zertifikat ist per Definition auch nicht vertrauenswürdig. Vorher feuerten
+  // beide, ein einziges Problem kostete damit 50 der 100 Score-Punkte und der
+  // Score unterschied nicht mehr zwischen einem und fünf Problemen. Das
+  // spezifischere Finding (ssl-expired) gewinnt, weil es die Ursache benennt.
+  if (!ssl.valid && !isExpired) {
     findings.push({
       id: 'ssl-invalid',
       severity: 'critical',
       title: 'SSL-Zertifikat ungültig',
-      description: 'Cert wird vom System nicht als vertrauenswürdig eingestuft. Möglicherweise selbstsigniert, abgelaufen, oder der Hostname passt nicht.',
+      description: 'Cert wird vom System nicht als vertrauenswürdig eingestuft. Möglicherweise selbstsigniert oder der Hostname passt nicht.',
       category: 'ssl',
     });
   }
 
-  if (ssl.daysUntilExpiry < 0) {
+  if (isExpired) {
     findings.push({
       id: 'ssl-expired',
       severity: 'critical',
@@ -401,13 +408,11 @@ const CRITICAL_STATUS = new Set([
 
 export function whoisFindings(whois: WhoisInfo | null): Finding[] {
   if (!whois) {
-    return [{
-      id: 'whois-unavailable',
-      severity: 'info',
-      title: 'WHOIS / RDAP nicht verfügbar',
-      description: 'Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.',
-      category: 'dns',
-    }];
+    // Gar kein Finding: dass eine ccTLD kein RDAP anbietet, ist eine
+    // Eigenschaft der Datenquelle und keine Schwäche der geprüften Domain.
+    // Als 'info' zog es Score-Punkte ab, als 'success' stünde ein grünes "OK"
+    // neben "nicht verfügbar". Die WHOIS-Ansicht sagt es ohnehin deutlich.
+    return [];
   }
 
   const findings: Finding[] = [];
@@ -445,8 +450,18 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
   }
 
   // ── Status-Codes ─────────────────────────────────────────────────────
+  //
+  // Ist die Domain schon als abgelaufen gemeldet, beschreiben
+  // redemptionPeriod und pendingDelete denselben Zustand aus einer zweiten
+  // Quelle — dann nicht zweimal abziehen.
+  const alreadyReportedExpired = findings.some(
+    (existing) => existing.id === 'domain-expired'
+  );
+  const REDUNDANT_WHEN_EXPIRED = new Set(['redemptionperiod', 'pendingdelete']);
+
   for (const status of whois.status ?? []) {
     const norm = status.toLowerCase().replace(/\s+/g, '');
+    if (alreadyReportedExpired && REDUNDANT_WHEN_EXPIRED.has(norm)) continue;
     if (CRITICAL_STATUS.has(norm)) {
       findings.push({
         id: `whois-status-${norm}`,

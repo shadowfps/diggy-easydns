@@ -27,6 +27,27 @@ describe('calculateScore', () => {
     expect(calculateScore(many).score).toBe(0);
   });
 
+  /**
+   * Info-Findings feuern bei üblichen Setups (kein IPv6, kein CAA, kein
+   * DNSSEC, kein MTA-STS). Eine einwandfrei konfigurierte Domain landete
+   * dadurch bei 92 und damit knapp unter "Hervorragend" — für Empfehlungen,
+   * nicht für Mängel.
+   */
+  it('deckelt den Abzug aus info-Findings', () => {
+    const infos = Array.from({ length: 6 }, (_, i) => finding('info', `i${i}`));
+    // 6 × 2 = 12 wären es ohne Deckel, der Deckel liegt bei 6.
+    expect(calculateScore(infos).score).toBe(94);
+  });
+
+  it('lässt critical und warning ungedeckelt', () => {
+    const mixed = [
+      finding('critical', 'c1'),
+      finding('warning', 'w1'),
+      ...Array.from({ length: 6 }, (_, i) => finding('info', `i${i}`)),
+    ];
+    expect(calculateScore(mixed).score).toBe(100 - 25 - 8 - 6);
+  });
+
   it('zählt die Severities mit', () => {
     const result = calculateScore([finding('critical'), finding('warning'), finding('info', 'i2')]);
     expect(result.counts).toEqual({ success: 0, info: 1, warning: 1, critical: 1 });
