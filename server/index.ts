@@ -159,8 +159,20 @@ function assertSameOrigin(req: Request, res: Response, next: NextFunction): void
   if (!origin) return next(); // kein Origin -> kein Cross-Site-Fetch
 
   const allowed = new Set(corsOrigins ?? []);
-  const host = req.get('host');
-  if (host) {
+
+  // Hinter einem Reverse-Proxy trägt `Host` den internen Namen, während der
+  // Browser die öffentliche Origin schickt. Ohne X-Forwarded-Host liefen dann
+  // ALLE echten Formular-Sendungen in den 403. Nur auswerten, wenn wir dem
+  // Proxy ohnehin vertrauen (TRUST_PROXY) — sonst wäre der Header ein
+  // Selbstbedienungsladen für den Client.
+  const hosts = [req.get('host')];
+  if (process.env.TRUST_PROXY === 'true') {
+    const forwardedHost = req.get('x-forwarded-host');
+    if (forwardedHost) hosts.push(forwardedHost.split(',')[0].trim());
+  }
+
+  for (const host of hosts) {
+    if (!host) continue;
     allowed.add(`https://${host}`);
     allowed.add(`http://${host}`);
   }
@@ -704,22 +716,47 @@ server.keepAliveTimeout = 15_000;
  * sofort — laufende Requests wurden mitten in der Antwort abgeschnitten. Bei
  * mehreren Deploys am Tag traf das regelmäßig Nutzer in einem PageSpeed-Run.
  */
+/**
+ * Drain-Fenster zwischen "Health auf 503" und dem Schließen des Listeners.
+ *
+ * Ohne diese Pause war der 503-Pfad toter Code: Flag setzen und
+ * `server.close()` im selben Tick heißt, dass der Listener sofort zumacht und
+ * neue Verbindungen ECONNREFUSED bekommen — den 503 sah nur, wer schon eine
+ * offene Keep-Alive-Verbindung hatte, und der Docker-Healthcheck öffnet pro
+ * Aufruf eine neue. Erst die Pause gibt einem Reverse-Proxy die Chance, den
+ * Container aus der Rotation zu nehmen, bevor er verschwindet.
+ *
+ * In Dev/Test auf 0, damit Ctrl+C sofort wirkt.
+ */
+const SHUTDOWN_DRAIN_MS = (() => {
+  const configured = Number(process.env.SHUTDOWN_DRAIN_MS);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return process.env.NODE_ENV === 'production' ? 5_000 : 0;
+})();
+
 function shutdown(signal: NodeJS.Signals): void {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[server] ${signal} empfangen — fahre herunter.`);
+  console.log(
+    `[server] ${signal} empfangen — Health auf 503, schließe in ${SHUTDOWN_DRAIN_MS} ms.`
+  );
 
-  server.close(() => {
-    console.log('[server] Alle Verbindungen geschlossen.');
-    process.exit(0);
-  });
+  const closeServer = () => {
+    server.close(() => {
+      console.log('[server] Alle Verbindungen geschlossen.');
+      process.exit(0);
+    });
+  };
+
+  if (SHUTDOWN_DRAIN_MS > 0) setTimeout(closeServer, SHUTDOWN_DRAIN_MS);
+  else closeServer();
 
   // Notbremse: hängt eine Verbindung, soll der Container trotzdem beenden.
   // unref(), damit dieser Timer den Prozess nicht selbst am Leben hält.
   setTimeout(() => {
     console.warn('[server] Shutdown-Timeout — beende hart.');
     process.exit(1);
-  }, 20_000).unref();
+  }, SHUTDOWN_DRAIN_MS + 20_000).unref();
 }
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

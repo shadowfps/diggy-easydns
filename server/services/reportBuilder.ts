@@ -457,7 +457,21 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
   const alreadyReportedExpired = findings.some(
     (existing) => existing.id === 'domain-expired'
   );
-  const REDUNDANT_WHEN_EXPIRED = new Set(['redemptionperiod', 'pendingdelete']);
+  /*
+   * Status-Codes, die bei einer bereits als abgelaufen gemeldeten Domain
+   * denselben Sachverhalt beschreiben.
+   *
+   * clientHold/serverHold gehören dazu: der Registrar stellt eine Domain beim
+   * Ablauf praktisch immer auf Hold. Ohne sie in dieser Liste ergaben
+   * domain-expired und whois-status-clienthold zusammen 50 Punkte Abzug für
+   * eine Ursache — genau die Doppelbestrafung, die dieser Fix beseitigen soll.
+   */
+  const REDUNDANT_WHEN_EXPIRED = new Set([
+    'redemptionperiod',
+    'pendingdelete',
+    'clienthold',
+    'serverhold',
+  ]);
 
   for (const status of whois.status ?? []) {
     const norm = status.toLowerCase().replace(/\s+/g, '');

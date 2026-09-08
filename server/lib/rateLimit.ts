@@ -65,6 +65,10 @@ export function rateLimit(options: RateLimitOptions) {
 
     if (!window || window.resetAt <= now) {
       window = { count: 0, resetAt: now + options.windowMs };
+      // delete vor set: sonst behält ein bestehender Key seine alte
+      // Insertion-Order und würde bei der Notfall-Eviction bevorzugt geworfen,
+      // obwohl sein Fenster gerade frisch ist.
+      windows.delete(ip);
       windows.set(ip, window);
     }
 

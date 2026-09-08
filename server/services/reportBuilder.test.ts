@@ -88,6 +88,23 @@ describe('whoisFindings', () => {
     expect(calculateScore(findings).score).toBe(75);
   });
 
+  /**
+   * Der Registrar stellt eine Domain beim Ablauf praktisch immer auf Hold.
+   * Ohne Dedup ergaben domain-expired und whois-status-clienthold zusammen
+   * 50 Punkte Abzug für eine Ursache.
+   */
+  it('zählt clientHold bei abgelaufener Domain nicht doppelt', () => {
+    const findings = whoisFindings(
+      whois({
+        expiresAt: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+        status: ['clientHold', 'redemptionPeriod'],
+      })
+    );
+    expect(findings.filter((f) => f.severity === 'critical')).toHaveLength(1);
+    expect(findings[0].id).toBe('domain-expired');
+    expect(calculateScore(findings).score).toBe(75);
+  });
+
   it('meldet clientHold auch ohne Ablaufdatum', () => {
     const findings = whoisFindings(whois({ status: ['clientHold'] }));
     expect(findings.map((f) => f.id)).toContain('whois-status-clienthold');
