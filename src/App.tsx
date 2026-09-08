@@ -356,7 +356,7 @@ export default function App() {
 
         {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
 
-        {view === 'datenschutz' && <DatenschutzView />}
+        {view === 'datenschutz' && <DatenschutzView onOpenImpressum={handleImpressum} />}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten

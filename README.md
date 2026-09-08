@@ -159,6 +159,23 @@ mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file c
 
 Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Platzhalter in `compose.mittwald.yml` (im CI übernehmen das die GitHub-Secrets). Die Runtime-Secrets gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
 
+## Recht & Compliance
+
+`docs/COMPLIANCE.md` hält die technische Einordnung fest: Speicherdauern und
+Rechtsgrundlagen je Verarbeitung, sowie die Prüfung gegen den EU AI Act.
+
+Kurzfassung zum AI Act: **Diggy ist kein KI-System im Sinne von Art. 3 Nr. 1
+VO (EU) 2024/1689.** Alle Ausgaben — Health-Score, Findings,
+Tech-Stack-Erkennung, Mail-Bewertung — entstehen aus fest programmierten
+Regeln. Es gibt kein Modell, keine Inferenz und keine Anpassung nach der
+Inbetriebnahme; Erwägungsgrund 12 nimmt solche Systeme ausdrücklich aus. Es
+bestehen daher keine Pflichten aus der Verordnung. Sollte später ein
+LLM-Feature dazukommen, ist die Einordnung neu zu prüfen — die Datei nennt die
+Auslöser.
+
+Der Datenschutztext unter `/datenschutz` ist aus dem Code abgeleitet und
+technisch korrekt, aber **nicht juristisch geprüft**.
+
 ## Routen
 
 | Pfad | Beschreibung |
