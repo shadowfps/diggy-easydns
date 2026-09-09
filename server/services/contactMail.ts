@@ -1,4 +1,7 @@
-import nodemailer from 'nodemailer';
+// Benannte Importe statt Default plus Namespace: @types/nodemailer 8 (für
+// nodemailer 10) deklariert keinen `nodemailer`-Namespace mehr, `Transporter`
+// ist ein benannter Typ-Export.
+import { createTransport, type Transporter } from 'nodemailer';
 import { claimAutoReplySlot, maskEmail } from './contactSpamGuard.js';
 import { buildContactAutoReplyHtml, buildContactAutoReplyText, buildContactEmailHtml, buildContactEmailText } from './contactEmailTemplate.js';
 
@@ -68,7 +71,7 @@ function sanitizeMailSubjectPart(value: string): string {
   return value.replace(/[\r\n\0]/g, '').slice(0, MAX_NAME_LENGTH);
 }
 
-let transporter: nodemailer.Transporter | undefined;
+let transporter: Transporter | undefined;
 
 /**
  * CONTACT_TO gehört mit in die Prüfung: ohne Empfänger ist das Formular nicht
@@ -91,7 +94,7 @@ function getContactTo(): string {
   return to;
 }
 
-function getTransporter(): nodemailer.Transporter {
+function getTransporter(): Transporter {
   if (transporter) return transporter;
 
   const host = process.env.SMTP_HOST?.trim();
@@ -106,7 +109,7 @@ function getTransporter(): nodemailer.Transporter {
   const secure =
     process.env.SMTP_SECURE === 'true' || (Number.isFinite(port) && port === 465);
 
-  transporter = nodemailer.createTransport({
+  transporter = createTransport({
     host,
     port: Number.isFinite(port) ? port : 587,
     secure,
@@ -123,6 +126,19 @@ export function validateContactInput(input: ContactMessageInput): ContactMessage
 
   if (CONTROL_CHARS.test(name) || CONTROL_CHARS.test(message)) {
     throw new ContactValidationError('Bitte keine ungültigen Steuerzeichen verwenden.');
+  }
+
+  // Zeilenumbrüche im NAMEN ablehnen, in der Nachricht erlauben.
+  //
+  // CONTROL_CHARS deckt \r und \n absichtlich nicht ab — eine Nachricht darf
+  // mehrzeilig sein. Ein Name nie: er landet im Subject und im Reply-To, also
+  // in Headern. sanitizeMailDisplayName und sanitizeMailSubjectPart entfernen
+  // die Umbrüche bereits, wodurch aus "Max\r\nBcc: x@y.de" ein harmloses
+  // "MaxBcc: x@y.de" wird. Hier abzulehnen ist ehrlicher: die Eingabe war
+  // nicht gemeint, und die Verteidigung soll nicht allein davon abhängen,
+  // dass später jemand daran denkt zu bereinigen.
+  if (/[\r\n]/.test(name)) {
+    throw new ContactValidationError('Der Name darf keine Zeilenumbrüche enthalten.');
   }
 
   if (!name || name.length > MAX_NAME_LENGTH) {
