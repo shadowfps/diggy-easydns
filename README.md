@@ -129,8 +129,11 @@ einmal ein Defekt saß — nicht nach Abdeckungsquote. `src/test/setup.ts`
 dokumentiert, welche Browser-APIs jsdom fehlen und warum sie dort ergänzt
 werden.
 
-Jeder Push auf `main` läuft zuerst durch den `verify`-Job; erst danach werden
-Image-Build und Deploy angestoßen.
+Jeder Push auf `main` und jeder Pull Request läuft durch den `verify`-Job;
+Image-Build und Deploy folgen nur auf `main`. Ein zweiter, **nicht
+blockierender** `audit`-Job hält den Zustand der Abhängigkeiten sichtbar, ohne
+dass ein neu veröffentlichter Advisory einen bis dahin grünen Build rot macht —
+die eigentliche Arbeit macht Dependabot (`.github/dependabot.yml`).
 
 ## Container & Deployment
 

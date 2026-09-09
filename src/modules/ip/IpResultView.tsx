@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { AlertCircle, Loader2, Server } from 'lucide-react';
-import { IpDetailsRows, formatIpOwnerLabel, useIpDetails } from '@/components/ip/IpAddressLink';
+import { IpDetailsRows } from '@/components/ip/IpAddressLink';
+import { formatIpOwnerLabel, useIpDetails } from '@/components/ip/useIpDetails';
 
 interface IpResultViewProps {
   ip: string;

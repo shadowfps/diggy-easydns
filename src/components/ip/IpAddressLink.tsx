@@ -17,82 +17,19 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
-import { lookupIpDetails } from '@/lib/api';
 import type { IpDetails } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import {
+  formatIpOwnerLabel,
+  getCachedIpDetails,
+  loadIpDetails,
+  useIpDetails,
+} from './useIpDetails';
 
 interface IpAddressLinkProps {
   ip: string;
   className?: string;
-}
-
-const detailsCache = new Map<string, IpDetails>();
-const pendingRequests = new Map<string, Promise<IpDetails>>();
-
-async function loadIpDetails(ip: string): Promise<IpDetails> {
-  const cached = detailsCache.get(ip);
-  if (cached) return cached;
-
-  const pending = pendingRequests.get(ip);
-  if (pending) return pending;
-
-  const request = lookupIpDetails(ip)
-    .then((result) => {
-      detailsCache.set(ip, result);
-      return result;
-    })
-    .finally(() => {
-      pendingRequests.delete(ip);
-    });
-
-  pendingRequests.set(ip, request);
-  return request;
-}
-
-export function formatIpOwnerLabel(details: IpDetails): string | null {
-  return details.organization ?? details.isp ?? details.asnName ?? details.asn ?? null;
-}
-
-export function useIpDetails(ip: string, enabled = true) {
-  const [details, setDetails] = useState<IpDetails | null>(() => detailsCache.get(ip) ?? null);
-  const [loading, setLoading] = useState(enabled && !detailsCache.has(ip));
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    const cached = detailsCache.get(ip);
-    if (cached) {
-      setDetails(cached);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    let stale = false;
-    setLoading(true);
-    setError(null);
-
-    loadIpDetails(ip)
-      .then((result) => {
-        if (stale) return;
-        setDetails(result);
-      })
-      .catch((err) => {
-        if (stale) return;
-        setError(err instanceof Error ? err.message : 'IP-Details konnten nicht geladen werden.');
-      })
-      .finally(() => {
-        if (!stale) setLoading(false);
-      });
-
-    return () => {
-      stale = true;
-    };
-  }, [enabled, ip]);
-
-  return { details, loading, error };
 }
 
 export function IpOwnerLabel({ ip, className }: { ip: string; className?: string }) {
@@ -121,39 +58,6 @@ export function IpOwnerLabel({ ip, className }: { ip: string; className?: string
     </span>
   );
 }
-
-const IPV4_PATTERN =
-  /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-/**
- * IPv6 mit korrekter Struktur statt der alten Hex-Heuristik `/^[0-9a-f:]+$/`.
- *
- * Die ließ alles durch, was nur Hex-Zeichen und Doppelpunkte enthält — auch
- * `ab:cd` oder `cafe:babe`. Relevant, weil isInspectableIp in App.tsx die
- * Suche steuert: eine Eingabe wie `ab:cd` landete in der PTR-Ansicht mit einer
- * API-Fehlermeldung statt in der verständlicheren Domain-Validierung.
- */
-const IPV6_PATTERN = new RegExp(
-  '^(' +
-    // Volle Form: 8 Hextets
-    '([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}' +
-    // Komprimierte Formen mit ::
-    '|([0-9a-f]{1,4}:){1,7}:' +
-    '|([0-9a-f]{1,4}:){1,6}:[0-9a-f]{1,4}' +
-    '|([0-9a-f]{1,4}:){1,5}(:[0-9a-f]{1,4}){1,2}' +
-    '|([0-9a-f]{1,4}:){1,4}(:[0-9a-f]{1,4}){1,3}' +
-    '|([0-9a-f]{1,4}:){1,3}(:[0-9a-f]{1,4}){1,4}' +
-    '|([0-9a-f]{1,4}:){1,2}(:[0-9a-f]{1,4}){1,5}' +
-    '|[0-9a-f]{1,4}:(:[0-9a-f]{1,4}){1,6}' +
-    '|:((:[0-9a-f]{1,4}){1,7}|:)' +
-    // Link-local mit Zone-ID
-    '|fe80:(:[0-9a-f]{0,4}){0,4}%[0-9a-z]+' +
-    // IPv4-in-IPv6
-    '|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])' +
-    '|([0-9a-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])' +
-    ')$',
-  'i'
-);
 
 export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
   const [open, setOpen] = useState(false);
@@ -209,12 +113,6 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
   );
 }
 
-export function isInspectableIp(value: string): boolean {
-  const normalized = value.trim();
-  if (IPV4_PATTERN.test(normalized)) return true;
-  return normalized.includes(':') && IPV6_PATTERN.test(normalized);
-}
-
 function IpDetailsOverlay({
   ip,
   open,
@@ -238,7 +136,7 @@ function IpDetailsOverlay({
   useEffect(() => {
     if (!open) return;
 
-    const cached = detailsCache.get(ip);
+    const cached = getCachedIpDetails(ip);
     if (cached) {
       setDetails(cached);
       setLoading(false);
