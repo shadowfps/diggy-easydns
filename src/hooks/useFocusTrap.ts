@@ -1,12 +1,22 @@
 import { useEffect, type RefObject } from 'react';
 
+/**
+ * Fokussierbare Elemente.
+ *
+ * Die Ausschlüsse stehen absichtlich im Selektor und nicht als
+ * JS-Nachfilterung: `:not([hidden])` und `:not([disabled])` sind CSS und
+ * funktionieren überall gleich. Vorher wurde zusätzlich `offsetParent !== null`
+ * geprüft — eine Layout-Abfrage, die in jsdom immer `null` liefert und den
+ * Hook damit untestbar machte, ohne im Browser mehr auszuschließen als der
+ * Selektor ohnehin.
+ */
 const FOCUSABLE = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
+  'a[href]:not([hidden])',
+  'button:not([disabled]):not([hidden])',
+  'input:not([disabled]):not([hidden])',
+  'select:not([disabled]):not([hidden])',
+  'textarea:not([disabled]):not([hidden])',
+  '[tabindex]:not([tabindex="-1"]):not([hidden])',
 ].join(',');
 
 /**
@@ -28,9 +38,7 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
     // Erstes fokussierbares Element anspringen, sonst den Container selbst
     // (der trägt tabIndex={-1}), damit Screenreader im Dialog landen.
     const focusables = () =>
-      Array.from(container?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).filter(
-        (element) => element.offsetParent !== null || element === container
-      );
+      Array.from(container?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
 
     (focusables()[0] ?? container)?.focus();
 

@@ -111,10 +111,23 @@ npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
 npm run verify      # alle drei, so wie die CI es fährt
 ```
 
-Die Tests decken bewusst die reine Logik ab, die der Nutzer als „Diggy sagt"
-liest: Domain-Validierung und Apex-Auflösung, SPF-Lookup-Zählung nach
-RFC 7208 §4.6.4, DoH-TXT-Zusammenbau, IP-Klassifizierung des SSRF-Guards,
-Cache-Verhalten und die Token-Prüfung des Kontaktformulars.
+Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
+
+- **server** (`node`) — die reine Logik, die der Nutzer als „Diggy sagt" liest:
+  Domain-Validierung und Apex-Auflösung, SPF-Lookup-Zählung nach
+  RFC 7208 §4.6.4, DoH-TXT-Zusammenbau, IP-Klassifizierung des SSRF-Guards,
+  Cache-Verhalten, Score-Aggregation und die Token-Prüfung des
+  Kontaktformulars. Dazu ein Integrationstest gegen eine echte Express-App,
+  der prüft, dass das Rate-Limit hinter einem Reverse-Proxy nicht per
+  `X-Forwarded-For` umgehbar ist.
+- **client** (`jsdom`) — Routing samt Zurück-Button, Tab-Semantik und
+  Tastatur-Bedienung, die Zustandsübergänge des Kontaktformulars, Error
+  Boundaries, Focus-Trap und das Verhalten bei `prefers-reduced-motion`.
+
+Geschrieben wurden die Frontend-Tests entlang der Pfade, auf denen schon
+einmal ein Defekt saß — nicht nach Abdeckungsquote. `src/test/setup.ts`
+dokumentiert, welche Browser-APIs jsdom fehlen und warum sie dort ergänzt
+werden.
 
 Jeder Push auf `main` läuft zuerst durch den `verify`-Job; erst danach werden
 Image-Build und Deploy angestoßen.

@@ -41,8 +41,14 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
    */
   const loadChallenge = useCallback(async () => {
     const challenge = await fetchContactChallenge();
+    const issuedAt = Date.now();
     setChallengeToken(challenge.token);
-    setReadyAt(Date.now() + challenge.minDelayMs);
+    setReadyAt(issuedAt + challenge.minDelayMs);
+    // `now` mitziehen, sonst rechnet der Countdown gegen einen veralteten
+    // Zeitstempel: nach einem Nachladen stand am Button für bis zu einen
+    // Intervall-Tick "Gleich bereit (1 s)", obwohl gar keine Wartezeit mehr
+    // besteht.
+    setNow(issuedAt);
   }, []);
 
   const waitSeconds = readyAt ? Math.max(0, Math.ceil((readyAt - now) / 1000)) : 0;
