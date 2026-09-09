@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cached, clearCache } from './cache.js';
 
 describe('cached', () => {
@@ -58,12 +58,28 @@ describe('cached', () => {
   });
 
   it('respektiert die TTL', async () => {
-    let calls = 0;
-    const produce = async () => ++calls;
-    await cached('ttl', 30, produce);
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    await cached('ttl', 30, produce);
-    expect(calls).toBe(2);
+    // Fake-Timer statt echter Wartezeit: der vorherige Test schlief 60 ms und
+    // wäre auf einem langsamen Runner potenziell flaky gewesen.
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const produce = async () => ++calls;
+
+      await cached('ttl', 30_000, produce);
+      expect(calls).toBe(1);
+
+      // Kurz vor Ablauf: weiterhin aus dem Cache.
+      vi.setSystemTime(Date.now() + 29_000);
+      await cached('ttl', 30_000, produce);
+      expect(calls).toBe(1);
+
+      // Nach Ablauf: neu produziert.
+      vi.setSystemTime(Date.now() + 2_000);
+      await cached('ttl', 30_000, produce);
+      expect(calls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('hält verschiedene Keys auseinander', async () => {

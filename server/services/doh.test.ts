@@ -19,11 +19,29 @@ describe('parseDohTxt', () => {
     expect(parseDohTxt('"sagt \\"hallo\\""')).toBe('sagt "hallo"');
   });
 
+  /**
+   * Der Fallback ist der Fall, der in der Praxis über Erfolg entscheidet:
+   * Resolver liefern TXT nicht einheitlich quotiert. Wird ein unquotierter
+   * Wert verschluckt, fehlt anschließend der SPF-/DMARC-Record.
+   */
   it('gibt unquotierte Eingaben unverändert zurück', () => {
-    expect(parseDohTxt('kein-quoting')).toBe('kein-quoting');
+    for (const raw of [
+      'kein-quoting',
+      'v=spf1 include:_spf.google.com ~all',
+      'v=DMARC1; p=reject; rua=mailto:x@example.com',
+      'google-site-verification=abc123',
+    ]) {
+      expect(parseDohTxt(raw), raw).toBe(raw);
+    }
   });
 
-  it('kommt mit leeren Chunks klar', () => {
+  it('behandelt Sonderfälle ohne zu werfen', () => {
     expect(parseDohTxt('""')).toBe('');
+    expect(parseDohTxt('')).toBe('');
+    // Halb offenes Quoting: kein Match, also unverändert durchreichen statt
+    // einen Teilstring zu erfinden.
+    expect(parseDohTxt('"unvollstaendig')).toBe('"unvollstaendig');
+    // Quotes mitten im Wert, aber nicht als Chunk-Trenner.
+    expect(parseDohTxt('"a" "" "b"')).toBe('ab');
   });
 });
