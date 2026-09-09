@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { sslFindings, whoisFindings } from './reportBuilder.js';
+import { dnsFindings, sslFindings, whoisFindings } from './reportBuilder.js';
 import { calculateScore } from '../../shared/scoring.js';
-import type { SslInfo, WhoisInfo } from '../types.js';
+import type { DnsRecord, SslInfo, WhoisInfo } from '../types.js';
 
 const ssl = (overrides: Partial<SslInfo> = {}): SslInfo => ({
   valid: true,
@@ -51,6 +51,56 @@ describe('sslFindings', () => {
 
   it('meldet fehlendes TLS', () => {
     expect(sslFindings(null).map((f) => f.id)).toEqual(['no-ssl']);
+  });
+});
+
+describe('dnsFindings — Zusammenspiel mit WHOIS', () => {
+  const noRecords: DnsRecord[] = [];
+
+  it('deklariert no-address und no-ns als Folge von Domain-Ablauf und Hold', () => {
+    const findings = dnsFindings(noRecords, 'example.com', 'example.com');
+    for (const id of ['no-address', 'no-ns']) {
+      const finding = findings.find((f) => f.id === id);
+      expect(finding?.causedBy, id).toContain('domain-expired');
+      expect(finding?.causedBy, id).toContain('whois-status-clienthold');
+    }
+  });
+
+  /**
+   * Der Gesamt-Score über beide Endpoints: eine abgelaufene, gehaltene Domain
+   * ergab vorher drei Criticals aus einer Ursache.
+   */
+  it('kostet bei abgelaufener Domain nur einmal Punkte', () => {
+    const dns = dnsFindings(noRecords, 'example.com', 'example.com');
+    const whois = whoisFindings({
+      registrar: 'Test',
+      nameServers: [],
+      status: ['clientHold'],
+      source: 'test',
+      expiresAt: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+    });
+
+    const all = [...dns, ...whois];
+    // Drei Criticals aus einer Ursache: no-address, no-ns, domain-expired.
+    expect(all.filter((f) => f.severity === 'critical')).toHaveLength(3);
+    // Abgezogen wird nur die Ursache (25) plus die Info-Findings
+    // (no-ipv6, no-caa = 4, unter dem Deckel von 6).
+    expect(calculateScore(all).score).toBe(71);
+  });
+
+  it('zählt no-address voll, wenn die Domain nicht abgelaufen ist', () => {
+    const dns = dnsFindings(noRecords, 'example.com', 'example.com');
+    const whois = whoisFindings({
+      registrar: 'Test',
+      nameServers: ['ns1.example.com'],
+      status: ['ok'],
+      source: 'test',
+      expiresAt: new Date(Date.now() + 300 * 86_400_000).toISOString(),
+    });
+    const all = [...dns, ...whois];
+    expect(all.some((f) => f.id === 'no-address')).toBe(true);
+    // no-address (25) plus no-ns (25) plus gedeckelte Infos (6).
+    expect(calculateScore(all).score).toBeLessThanOrEqual(50);
   });
 });
 

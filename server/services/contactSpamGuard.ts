@@ -53,6 +53,8 @@ const rateByIp = new Map<string, RateBucket>();
  */
 const autoReplyByRecipient = new Map<string, number>();
 const AUTO_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Obergrenze für die Empfänger-Map, damit sie nicht unbegrenzt wächst. */
+const MAX_TRACKED_RECIPIENTS = 5_000;
 const challengeRateByIp = new Map<string, RateBucket>();
 const recentHashes = new Map<string, number>();
 const usedTokenHashes = new Map<string, number>();
@@ -329,15 +331,30 @@ export function claimAutoReplySlot(email: string): boolean {
   const now = Date.now();
   const key = email.trim().toLowerCase();
 
-  if (autoReplyByRecipient.size > 5_000) {
+  if (autoReplyByRecipient.size > MAX_TRACKED_RECIPIENTS) {
     for (const [address, sentAt] of autoReplyByRecipient) {
       if (now - sentAt > AUTO_REPLY_WINDOW_MS) autoReplyByRecipient.delete(address);
+    }
+
+    // Harte Obergrenze. Vorher wurden nur abgelaufene Einträge geprunt, die
+    // Map konnte also über MAX_TRACKED_RECIPIENTS hinaus wachsen, wenn genug
+    // verschiedene Adressen innerhalb des Fensters auflaufen. Praktisch kaum
+    // erreichbar (5 Absendungen pro IP und Stunde, jede mit gültigem
+    // Einmal-Token), aber eine unbegrenzt wachsende Map gehört nicht in einen
+    // langlaufenden Prozess.
+    while (autoReplyByRecipient.size > MAX_TRACKED_RECIPIENTS) {
+      const oldest = autoReplyByRecipient.keys().next().value;
+      if (oldest === undefined) break;
+      autoReplyByRecipient.delete(oldest);
     }
   }
 
   const previous = autoReplyByRecipient.get(key);
   if (previous && now - previous < AUTO_REPLY_WINDOW_MS) return false;
 
+  // delete vor set, damit der Eintrag in der Insertion-Order nach hinten
+  // wandert und die Eviction oben wirklich den ältesten trifft.
+  autoReplyByRecipient.delete(key);
   autoReplyByRecipient.set(key, now);
   return true;
 }

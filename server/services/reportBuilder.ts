@@ -58,6 +58,21 @@ export function buildReport(input: BuildReportInput): LookupReport {
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
+/**
+ * Findings, die eine Domain aus dem DNS verschwinden lassen.
+ *
+ * Läuft eine Domain ab oder wird sie auf Hold gesetzt, zieht die Registry die
+ * Delegation ein: dann fehlen zwangsläufig sowohl Adress- als auch
+ * NS-Records. Beide Findings sind wahr und werden angezeigt, kosten aber keine
+ * zusätzlichen Score-Punkte, weil die Ursache schon gemeldet ist.
+ */
+const DOMAIN_LIFECYCLE_CAUSES = [
+  'domain-expired',
+  'whois-status-clienthold',
+  'whois-status-serverhold',
+  'whois-status-pendingdelete',
+];
+
 export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {
   const findings: Finding[] = [];
   const types = new Set(records.map((r) => r.type));
@@ -73,6 +88,7 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
         ? 'Die Domain löst zu keiner IP auf. Besucher können die Seite nicht erreichen.'
         : `Der Hostname ${domain} löst zu keiner IP auf. Besucher können diesen Host nicht erreichen.`,
       category: 'dns',
+      causedBy: DOMAIN_LIFECYCLE_CAUSES,
     });
   }
 
@@ -95,6 +111,9 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
       title: 'Keine Nameserver gefunden',
       description: 'Ohne NS-Records ist die Domain nicht aufgelöst. Vermutlich abgelaufen oder fehlerhaft delegiert.',
       category: 'dns',
+      // Die Beschreibung sagt es selbst: "vermutlich abgelaufen". Ist der
+      // Ablauf per WHOIS bestätigt, ist das hier die Folge davon.
+      causedBy: DOMAIN_LIFECYCLE_CAUSES,
     });
   }
 

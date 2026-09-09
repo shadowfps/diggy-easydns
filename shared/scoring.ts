@@ -31,11 +31,17 @@ const MAX_INFO_PENALTY = 6;
 
 export function calculateScore(findings: Finding[]): HealthScore {
   const counts = { success: 0, info: 0, warning: 0, critical: 0 };
+  const presentIds = new Set(findings.map((f) => f.id));
   let score = 100;
   let infoPenalty = 0;
 
   for (const f of findings) {
+    // Gezählt wird jedes Finding — die Liste soll vollständig bleiben.
     counts[f.severity]++;
+
+    // Nur die Folge einer anderen, bereits gemeldeten Ursache: anzeigen ja,
+    // ein zweites Mal abziehen nein.
+    if (f.causedBy?.some((cause) => presentIds.has(cause))) continue;
 
     if (f.severity === 'info') {
       infoPenalty += SEVERITY_PENALTY.info;

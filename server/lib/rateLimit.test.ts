@@ -78,7 +78,7 @@ describe('rateLimit', () => {
     expect(b.state.nextCalled).toBe(true);
   });
 
-  it('öffnet nach Ablauf des Fensters wieder', () => {
+  it('füllt sich nach Ablauf des Zeitraums wieder auf', () => {
     vi.useFakeTimers();
     const limiter = rateLimit({ windowMs: 1_000, max: 1, message: 'x' });
 
@@ -93,6 +93,69 @@ describe('rateLimit', () => {
     limiter(after.req, after.res, after.next);
     expect(after.state.nextCalled).toBe(true);
     vi.useRealTimers();
+  });
+
+  /**
+   * Der Grund für den Token Bucket. Ein festes Fenster ließ am Rand das
+   * Doppelte durch: `max` Requests kurz vor dem Reset, `max` direkt danach.
+   */
+  it('lässt am Zeitraum-Rand NICHT das Doppelte durch', () => {
+    vi.useFakeTimers();
+    const limiter = rateLimit({ windowMs: 60_000, max: 10, message: 'x' });
+    const ip = '203.0.113.20';
+
+    const send = () => {
+      const ex = fakeExchange(ip);
+      limiter(ex.req, ex.res, ex.next);
+      return ex.state.nextCalled;
+    };
+
+    // Budget aufbrauchen.
+    let passed = 0;
+    for (let i = 0; i < 10; i++) if (send()) passed++;
+    expect(passed).toBe(10);
+    expect(send()).toBe(false);
+
+    // Kurz vor dem Ende des Zeitraums: es darf nur nachgefüllt sein, was in
+    // der Zwischenzeit tatsächlich entstanden ist — nicht das volle Budget.
+    vi.advanceTimersByTime(59_000);
+    let burst = 0;
+    for (let i = 0; i < 20; i++) if (send()) burst++;
+    expect(burst).toBeLessThanOrEqual(10);
+    // Bei 59 s von 60 s sind ~9,8 Tokens nachgewachsen.
+    expect(burst).toBeGreaterThanOrEqual(9);
+
+    vi.useRealTimers();
+  });
+
+  it('füllt kontinuierlich auf, nicht sprunghaft', () => {
+    vi.useFakeTimers();
+    const limiter = rateLimit({ windowMs: 10_000, max: 10, message: 'x' });
+    const ip = '203.0.113.21';
+    const send = () => {
+      const ex = fakeExchange(ip);
+      limiter(ex.req, ex.res, ex.next);
+      return ex.state.nextCalled;
+    };
+
+    for (let i = 0; i < 10; i++) send();
+    expect(send()).toBe(false);
+
+    // 1 s = 1 Token bei 10 Tokens pro 10 s.
+    vi.advanceTimersByTime(1_000);
+    expect(send()).toBe(true);
+    expect(send()).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it('meldet Retry-After mindestens 1 Sekunde', () => {
+    const limiter = rateLimit({ windowMs: 60_000, max: 1, message: 'x' });
+    const first = fakeExchange('203.0.113.22');
+    limiter(first.req, first.res, first.next);
+    const blocked = fakeExchange('203.0.113.22');
+    limiter(blocked.req, blocked.res, blocked.next);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThanOrEqual(1);
   });
 
   it('hält getrennte Limiter-Instanzen unabhängig', () => {
