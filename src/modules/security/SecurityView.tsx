@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Lock, ShieldCheck, ShieldAlert, ShieldOff, Calendar, Award, Hash } from 'lucide-react';
 import type { DnssecInfo, SslInfo } from '@/types/dns';
 import { cn } from '@/lib/cn';

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { cn } from '@/lib/cn';
 
 export type TabId = 'records' | 'propagation' | 'security' | 'mail' | 'findings' | 'whois' | 'speed' | 'virusscan';

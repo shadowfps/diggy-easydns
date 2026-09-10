@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Check, Copy, Globe2, Loader2, Search, Sparkles, ArrowUpRight } from 'lucide-react';
 import { checkDomainAvailability } from '@/lib/api';
 import type { DomainAvailabilityResult, DomainCheckReport } from '@/types/dns';

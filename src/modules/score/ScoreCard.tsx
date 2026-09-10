@@ -1,4 +1,4 @@
-import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import { useEffect, useState } from 'react';
 import type { HealthScore } from '@/types/dns';
 import { cn } from '@/lib/cn';

@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useEffect, useRef, type FormEvent } from 'react';
 
 interface SearchBarProps {
