@@ -20,6 +20,24 @@ export interface LookupError {
 }
 
 /**
+ * Fehler mit dem Code des Servers, nicht nur mit der Meldung.
+ *
+ * Gebraucht vom Kontaktformular: es muss `contact_invalid_input` von den
+ * übrigen Fehlern unterscheiden können, weil der Server die Felder VOR der
+ * Token-Entwertung prüft. Ohne den Code warf das Formular bei jedem Tippfehler
+ * einen noch gültigen Challenge-Token weg.
+ */
+export class ApiError extends Error {
+  readonly code: string;
+
+  constructor(payload: LookupError) {
+    super(payload.message);
+    this.name = 'ApiError';
+    this.code = payload.error;
+  }
+}
+
+/**
  * GET-Request → JSON, mit einheitlichem Error-Handling.
  * Bei !res.ok wird die Server-Fehlermeldung (falls JSON) geworfen,
  * sonst die übergebene Fallback-Message.
@@ -198,7 +216,7 @@ export async function sendContactMessage(
     } catch {
       // JSON-parse fehlgeschlagen — Default-Message reicht
     }
-    throw new Error(errorPayload.message);
+    throw new ApiError(errorPayload);
   }
 
   return res.json();

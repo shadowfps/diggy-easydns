@@ -19,6 +19,10 @@
     "test:watch": "vitest",
     "verify": "npm run lint && npm run typecheck && npm run test"
   },
+  "//overrides": "qs: express 4 pinnt ~6.14.0, die drei Advisories (GHSA-4mjr-xmp4-gh2g, GHSA-x5fp-wj9c-mxmx, GHSA-q8mj-m7cp-5q26) sind erst in 6.15.4 behoben — npm audit fix kann den Pin nicht auflösen. body-parser, das express selbst mitbringt, steht schon auf ~6.16.0: der Override zieht nur express' eigenen Query-Parser auf dieselbe Reihe. Kann raus, sobald express die Range hebt.",
+  "overrides": {
+    "qs": "^6.16.0"
+  },
   "dependencies": {
     "@fontsource/geist": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",

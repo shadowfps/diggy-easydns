@@ -149,6 +149,100 @@ describe('rateLimit', () => {
     vi.useRealTimers();
   });
 
+  /**
+   * Der letzte erlaubte Request lässt den Bucket unter 1 Token zurück — der
+   * nächste wird blockiert. Vorher stand hier `RateLimit-Reset: 0` neben
+   * `RateLimit-Remaining: 0`, also "sofort wieder frei" bei anstehender Sperre.
+   */
+  it('meldet RateLimit-Reset > 0, wenn der letzte Token verbraucht ist', () => {
+    const limiter = rateLimit({ windowMs: 60_000, max: 2, message: 'x' });
+    const ip = '203.0.113.23';
+
+    const first = fakeExchange(ip);
+    limiter(first.req, first.res, first.next);
+    expect(first.headers['ratelimit-remaining']).toBe('1');
+    expect(first.headers['ratelimit-reset']).toBe('0');
+
+    const last = fakeExchange(ip);
+    limiter(last.req, last.res, last.next);
+    expect(last.state.nextCalled).toBe(true);
+    expect(last.headers['ratelimit-remaining']).toBe('0');
+    expect(Number(last.headers['ratelimit-reset'])).toBeGreaterThan(0);
+  });
+
+  /**
+   * `Date.now()` ist nicht monoton. Wird die Uhr zurückgestellt, war der
+   * Refill-Term negativ und zog dem Bucket Tokens ab — ein Client konnte durch
+   * eine NTP-Korrektur auf dem Server gesperrt werden.
+   */
+  it('verliert bei rückwärts gestellter Uhr keine Tokens', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-10T12:00:00Z'));
+    const limiter = rateLimit({ windowMs: 60_000, max: 3, message: 'x' });
+    const ip = '203.0.113.24';
+    const send = () => {
+      const ex = fakeExchange(ip);
+      limiter(ex.req, ex.res, ex.next);
+      return ex;
+    };
+
+    send();
+
+    // Uhr um eine Stunde zurück.
+    vi.setSystemTime(new Date('2026-09-10T11:00:00Z'));
+    const after = send();
+    expect(after.state.nextCalled).toBe(true);
+    expect(after.headers['ratelimit-remaining']).toBe('1');
+
+    expect(send().state.nextCalled).toBe(true);
+    expect(send().state.nextCalled).toBe(false);
+    vi.useRealTimers();
+  });
+
+  /**
+   * Hält die tatsächliche Zusicherung fest, damit sie nicht wieder
+   * überschätzt wird: der Bucket startet VOLL, `max` Requests sind also sofort
+   * möglich und über die folgende Fensterlänge wachsen weitere `max` nach.
+   * Über eine Fensterlänge gemessen ist das knapp das Doppelte — verteilt,
+   * nicht gebündelt. Das feste Fenster ließ dieselbe Menge in Sekunden durch,
+   * genau das ist der Unterschied (#40).
+   */
+  it('erlaubt über eine Fensterlänge knapp das Doppelte — verteilt, nicht gebündelt', () => {
+    vi.useFakeTimers();
+    const limiter = rateLimit({ windowMs: 60_000, max: 10, message: 'x' });
+    const ip = '203.0.113.25';
+    const send = () => {
+      const ex = fakeExchange(ip);
+      limiter(ex.req, ex.res, ex.next);
+      return ex.state.nextCalled;
+    };
+
+    // Aus dem Leerlauf: voller Burst sofort.
+    let passed = 0;
+    for (let i = 0; i < 20; i++) if (send()) passed++;
+    expect(passed).toBe(10);
+
+    // Unmittelbar nach dem Burst ist Schluss: ein Token braucht 6 s bei 10 pro
+    // Minute. Das ist der Unterschied zum festen Fenster, das hier weitere 10
+    // sofort durchgelassen hätte.
+    vi.advanceTimersByTime(1_000);
+    expect(send()).toBe(false);
+
+    // Danach im Sekundentakt über die restliche Fensterlänge weiter.
+    let trickled = 0;
+    for (let second = 1; second < 60; second++) {
+      vi.advanceTimersByTime(1_000);
+      if (send()) trickled++;
+    }
+
+    // Keine exakte Zahl: die Token-Arithmetik ist gebrochen, ob der Token bei
+    // 6,000 s oder 6,001 s kippt, ist Rundung. Die Zusicherung ist der Rahmen.
+    expect(trickled).toBeGreaterThanOrEqual(9);
+    expect(passed + trickled).toBeLessThanOrEqual(2 * 10);
+    expect(passed + trickled).toBeGreaterThan(10);
+    vi.useRealTimers();
+  });
+
   it('meldet Retry-After mindestens 1 Sekunde', () => {
     const limiter = rateLimit({ windowMs: 60_000, max: 1, message: 'x' });
     const first = fakeExchange('203.0.113.22');

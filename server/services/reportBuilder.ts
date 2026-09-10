@@ -71,6 +71,15 @@ const DOMAIN_LIFECYCLE_CAUSES = [
   'whois-status-clienthold',
   'whois-status-serverhold',
   'whois-status-pendingdelete',
+  // Beide beschreiben eine abgelaufene Domain und ziehen dieselbe Folge nach
+  // sich. Sie fehlten hier, waren aber der einzige Weg, auf dem der alte
+  // Dreifach-Abzug übrig blieb: `whoisFindings` unterdrückt sie nur, wenn
+  // `domain-expired` selbst gemeldet wurde — und das hängt an `expiresAt`.
+  // Fehlt das Feld im RDAP-Datensatz (kommt bei einigen Registries vor),
+  // steht der Status-Code allein da und `no-address`/`no-ns` deduplizierten
+  // gegen nichts.
+  'whois-status-redemptionperiod',
+  'whois-status-pendingrestore',
 ];
 
 export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {

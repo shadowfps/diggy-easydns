@@ -8,9 +8,21 @@
  * lassen oder den Prozess mit lang laufenden Requests belegen.
  *
  * Umsetzung als **Token Bucket** mit kontinuierlicher Auffüllung. Ein festes
- * Fenster hätte am Rand das Doppelte des Limits durchgelassen: 120 Requests in
- * den letzten Sekunden des alten Fensters, 120 in den ersten des neuen. Der
- * Bucket glättet das, weil er nie sprunghaft zurückgesetzt wird.
+ * Fenster ließ am Rand das Doppelte des Limits in SEKUNDEN durch: 120 Requests
+ * in den letzten Sekunden des alten Fensters, 120 in den ersten des neuen. Der
+ * Bucket kennt keinen Reset, er füllt gleichmäßig mit `max / windowMs` nach.
+ *
+ * Was er bewusst NICHT ist: ein harter Deckel von `max` pro `windowMs`. Der
+ * Bucket startet voll — nach Leerlauf sind also `max` Requests sofort möglich
+ * plus die über das Fenster nachwachsenden, über eine Fensterlänge gemessen
+ * knapp das Doppelte. Der Unterschied zum festen Fenster ist die Verteilung,
+ * nicht die Summe: verteilt über das Fenster statt gebündelt in Sekunden.
+ *
+ * Diese Grenze ist die in #40 abgewogene: bei den Kontingent-Endpoints (10/h)
+ * sind das rund 20 Calls pro Stunde, was PSI und VirusTotal verkraften — beide
+ * haben zusätzlich einen Concurrency-Deckel von 4. Ein harter Deckel bräuchte
+ * eine Zeitstempel-Liste pro IP (Sliding Window) und damit ein Vielfaches an
+ * Speicher; #40 hat sich bewusst gegen diesen Preis entschieden.
  *
  * Bewusst prozess-lokal (kein Redis): die App läuft als einzelner Container.
  * Bei horizontaler Skalierung müsste der Zähler geteilt werden — dann ist das
@@ -25,8 +37,8 @@ import { getClientIp } from '../services/contactSpamGuard.js';
  *
  * `tokens` ist absichtlich gebrochen: der Bucket füllt sich kontinuierlich
  * auf, nicht in Sprüngen. Genau das unterscheidet ihn vom vorherigen festen
- * Fenster, bei dem sich am Fensterrand das Doppelte des Limits senden ließ —
- * 120 Requests am Ende des alten Fensters, 120 am Anfang des neuen.
+ * Fenster, bei dem sich am Fensterrand das Doppelte des Limits in Sekunden
+ * senden ließ.
  */
 interface Bucket {
   tokens: number;
@@ -48,6 +60,20 @@ export interface RateLimitOptions {
 const MAX_TRACKED_IPS = 20_000;
 
 /**
+ * Verstrichene Zeit, nie negativ.
+ *
+ * `Date.now()` ist nicht monoton: eine rückwärts gestellte Systemuhr (größere
+ * NTP-Korrektur, manuelles Setzen) machte `now - lastRefill` negativ. Der
+ * Refill-Term hätte dem Bucket dann Tokens ABGEZOGEN, ihn unter null gedrückt
+ * und daraus eine überhöhte Sperrzeit gemeldet. `performance.now()` wäre
+ * monoton, verlangt aber einen zweiten Zeitbezug quer durch das Modul und die
+ * Tests; die Untergrenze löst dasselbe Problem an einer Stelle.
+ */
+function elapsedSince(lastRefill: number, now: number): number {
+  return Math.max(0, now - lastRefill);
+}
+
+/**
  * Erzeugt eine Express-Middleware mit eigenem, isoliertem Zähler.
  *
  * Jeder Aufruf von `rateLimit()` hat seinen eigenen Bucket-Store — damit
@@ -66,7 +92,7 @@ export function rateLimit(options: RateLimitOptions) {
     if (buckets.size <= MAX_TRACKED_IPS) return;
 
     for (const [ip, bucket] of buckets) {
-      const refilled = bucket.tokens + (now - bucket.lastRefill) * refillRate;
+      const refilled = bucket.tokens + elapsedSince(bucket.lastRefill, now) * refillRate;
       if (refilled >= options.max) buckets.delete(ip);
     }
 
@@ -86,7 +112,10 @@ export function rateLimit(options: RateLimitOptions) {
     const bucket = buckets.get(ip) ?? { tokens: options.max, lastRefill: now };
 
     // Kontinuierlich auffüllen, gedeckelt auf die Bucket-Größe.
-    bucket.tokens = Math.min(options.max, bucket.tokens + (now - bucket.lastRefill) * refillRate);
+    bucket.tokens = Math.min(
+      options.max,
+      bucket.tokens + elapsedSince(bucket.lastRefill, now) * refillRate
+    );
     bucket.lastRefill = now;
 
     const allowed = bucket.tokens >= 1;
@@ -98,10 +127,19 @@ export function rateLimit(options: RateLimitOptions) {
     buckets.delete(ip);
     buckets.set(ip, bucket);
 
-    /** Sekunden, bis wieder ein Token verfügbar ist. */
-    const secondsUntilNextToken = allowed
-      ? 0
-      : Math.max(1, Math.ceil((1 - bucket.tokens) / refillRate / 1000));
+    /**
+     * Sekunden, bis wieder ein Token verfügbar ist.
+     *
+     * Gerechnet gegen den Token-Stand NACH der Subtraktion, nicht gegen
+     * `allowed`: der letzte erlaubte Request lässt den Bucket unter 1 zurück,
+     * der unmittelbar folgende wird also blockiert. Mit `allowed ? 0 : …`
+     * meldete genau dieser Request `RateLimit-Remaining: 0` zusammen mit
+     * `RateLimit-Reset: 0` — "sofort wieder frei" bei anstehender Sperre.
+     */
+    const secondsUntilNextToken =
+      bucket.tokens >= 1
+        ? 0
+        : Math.max(1, Math.ceil((1 - bucket.tokens) / refillRate / 1000));
 
     res.setHeader('RateLimit-Limit', String(options.max));
     res.setHeader('RateLimit-Remaining', String(Math.floor(Math.max(0, bucket.tokens))));

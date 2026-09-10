@@ -88,6 +88,38 @@ describe('dnsFindings — Zusammenspiel mit WHOIS', () => {
     expect(calculateScore(all).score).toBe(71);
   });
 
+  /**
+   * Der Fall ohne `expiresAt`: einige Registries liefern das Feld nicht mit.
+   * Dann entsteht kein `domain-expired`, der Status-Code steht allein — und
+   * `no-address`/`no-ns` deduplizierten gegen nichts. Ergebnis waren drei
+   * Criticals für einen Lebenszyklus-Zustand, also genau die
+   * Doppelbestrafung, die #41 beseitigen sollte.
+   */
+  it('kostet bei Redemption Period ohne Ablaufdatum nur einmal Punkte', () => {
+    const dns = dnsFindings(noRecords, 'example.com', 'example.com');
+    const whois = whoisFindings({
+      registrar: 'Test',
+      nameServers: [],
+      status: ['redemptionPeriod'],
+      source: 'test',
+    });
+
+    const all = [...dns, ...whois];
+    expect(all.filter((f) => f.severity === 'critical')).toHaveLength(3);
+    expect(calculateScore(all).score).toBe(71);
+  });
+
+  it('behandelt pendingRestore genauso', () => {
+    const dns = dnsFindings(noRecords, 'example.com', 'example.com');
+    const whois = whoisFindings({
+      registrar: 'Test',
+      nameServers: [],
+      status: ['pendingRestore'],
+      source: 'test',
+    });
+    expect(calculateScore([...dns, ...whois]).score).toBe(71);
+  });
+
   it('zählt no-address voll, wenn die Domain nicht abgelaufen ist', () => {
     const dns = dnsFindings(noRecords, 'example.com', 'example.com');
     const whois = whoisFindings({

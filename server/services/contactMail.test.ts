@@ -50,6 +50,48 @@ describe('validateContactInput', () => {
     }
   });
 
+  /**
+   * Nur Zeichen auszuschließen reichte nicht: diese Formen bezeichnen keine
+   * Mailbox, wurden von nodemailer aber als Adresse akzeptiert. Reply-To war
+   * dann unbrauchbar und der Auto-Reply scheiterte erst am SMTP-Server, während
+   * der Nutzer Erfolg gemeldet bekam.
+   */
+  it('lehnt strukturell kaputte Adressen ab', () => {
+    for (const email of [
+      '.max@example.com',
+      'max.@example.com',
+      'max..mustermann@example.com',
+      'max@example..com',
+      'max@-example.com',
+      'max@example-.com',
+      'max@ex_ample.com',
+      'max@example.c',
+      'max@11.22.33.44',
+    ]) {
+      expect(() => validateContactInput(input({ email })), email).toThrow(ContactValidationError);
+    }
+  });
+
+  it('lässt gültige Adressen durch, auch mit Umlaut und Subdomain', () => {
+    for (const email of [
+      'max.mustermann@example.com',
+      'max+filter@example.com',
+      'max_mustermann@sub.example.co.uk',
+      'max-mustermann@my-host.example.com',
+      'müller@example.de',
+    ]) {
+      expect(validateContactInput(input({ email })).email, email).toBe(email);
+    }
+  });
+
+  /** 254 ist eine Oktett-Grenze, `String.length` zählt UTF-16-Codeeinheiten. */
+  it('rechnet die Längengrenze in Oktetts', () => {
+    const localPart = 'ä'.repeat(130); // 260 Oktetts in UTF-8, 130 in .length
+    expect(() => validateContactInput(input({ email: `${localPart}@example.com` }))).toThrow(
+      ContactValidationError
+    );
+  });
+
   it('erzwingt Mindest- und Maximallänge der Nachricht', () => {
     expect(() => validateContactInput(input({ message: 'kurz' }))).toThrow(ContactValidationError);
     expect(() => validateContactInput(input({ message: 'x'.repeat(5001) }))).toThrow(

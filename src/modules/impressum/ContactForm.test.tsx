@@ -13,7 +13,11 @@ import { ContactForm } from './ContactForm';
  * bleibt.
  */
 
-vi.mock('@/lib/api', () => ({
+// Nur die beiden Requests ersetzen: `ApiError` muss die ECHTE Klasse bleiben,
+// sonst schlägt das `instanceof` im Formular ins Leere und der Fehler-Code
+// käme nie an.
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
   fetchContactChallenge: vi.fn(),
   sendContactMessage: vi.fn(),
 }));
@@ -21,6 +25,7 @@ vi.mock('@/lib/api', () => ({
 const api = await import('@/lib/api');
 const fetchContactChallenge = vi.mocked(api.fetchContactChallenge);
 const sendContactMessage = vi.mocked(api.sendContactMessage);
+const { ApiError } = api;
 
 /** Token sofort absendebereit — die Wartezeit ist hier nicht das Thema. */
 function readyChallenge(token = 'token-1') {
@@ -109,6 +114,78 @@ describe('ContactForm — Absenden', () => {
     expect(sendContactMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ token: 'token-2' })
     );
+  });
+
+  /**
+   * Der Server prüft die Felder VOR der Token-Entwertung. Ein Tippfehler ließ
+   * den Token also gültig, das Formular lud trotzdem einen neuen nach: ein
+   * Challenge-Slot verbraucht, die Wartezeit neu gestartet — und wenn
+   * /api/contact/challenge dabei ins Rate-Limit lief, stand "Bitte lade die
+   * Seite neu" da, obwohl der ursprüngliche Token noch benutzbar war.
+   */
+  it('behält den Token bei einem Validierungsfehler des Servers', async () => {
+    sendContactMessage.mockRejectedValueOnce(
+      new ApiError({
+        error: 'contact_invalid_input',
+        message: 'Bitte eine gültige E-Mail-Adresse angeben.',
+      })
+    );
+
+    render(<ContactForm />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /senden/ })).toBeEnabled());
+    await fillForm();
+    await submit();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/gültige E-Mail/);
+    // Kein Nachladen: nur der Aufruf vom Mount.
+    expect(fetchContactChallenge).toHaveBeenCalledTimes(1);
+
+    // Und der alte Token trägt den zweiten Versuch.
+    sendContactMessage.mockResolvedValueOnce({ sent: true });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Nachricht senden/ })).toBeEnabled()
+    );
+    await submit();
+    expect(sendContactMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ token: 'token-1' })
+    );
+  });
+
+  it('lädt bei einem verbrauchten Token weiterhin nach', async () => {
+    fetchContactChallenge
+      .mockResolvedValueOnce(readyChallenge('token-1'))
+      .mockResolvedValueOnce(readyChallenge('token-2'));
+    // Das Rate-Limit greift erst NACH der Token-Entwertung — hier muss ein
+    // frischer Token her.
+    sendContactMessage.mockRejectedValueOnce(
+      new ApiError({ error: 'contact_rate_limited', message: 'Zu viele Anfragen.' })
+    );
+
+    render(<ContactForm />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /senden/ })).toBeEnabled());
+    await fillForm();
+    await submit();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Zu viele/);
+    await waitFor(() => expect(fetchContactChallenge).toHaveBeenCalledTimes(2));
+  });
+
+  /**
+   * Die Server-Grenze gilt getrimmt, das native `minLength` zählt roh: neun
+   * Zeichen plus Leerzeichen kamen durch die Browser-Prüfung und wurden erst
+   * serverseitig abgelehnt.
+   */
+  it('lehnt eine getrimmt zu kurze Nachricht ohne Request ab', async () => {
+    render(<ContactForm />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /senden/ })).toBeEnabled());
+
+    await userEvent.type(screen.getByLabelText(/Name/), 'Testerin');
+    await userEvent.type(screen.getByLabelText(/E-Mail/), 'test@example.com');
+    await userEvent.type(screen.getByLabelText(/Nachricht/), 'neun zeic ');
+    await submit();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/mindestens 10 Zeichen/);
+    expect(sendContactMessage).not.toHaveBeenCalled();
   });
 
   it('lädt auch nach Erfolg einen frischen Token nach', async () => {

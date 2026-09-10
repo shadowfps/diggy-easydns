@@ -48,9 +48,26 @@ export class ContactValidationError extends Error {
  *
  * Ausgeschlossen sind daher alle Zeichen mit Bedeutung in der
  * Adress-Grammatik nach RFC 5322.
+ *
+ * Die Struktur wird zusätzlich geprüft, nicht nur der Zeichenvorrat. Nur
+ * Zeichen auszuschließen ließ Adressen durch, die keine Mailbox bezeichnen:
+ * `.a@example.com`, `a..b@example.com`, `a@example..com`, `a@-example.com`,
+ * `a@ex_ample.com`. Nodemailer akzeptiert die als Adresse, der Versand an den
+ * Betreiber bekommt dann ein unbrauchbares Reply-To, und der Auto-Reply
+ * scheitert später am SMTP-Server — gemeldet wird dem Nutzer trotzdem Erfolg.
+ *
+ * Die Zeichenklassen bleiben absichtlich negiert statt auf ASCII begrenzt:
+ * `müller@example.de` soll durchkommen.
+ *
+ * Aufbau:
+ *   Local-Part  Atome aus erlaubten Zeichen, durch EINZELNE Punkte getrennt,
+ *               kein Punkt am Anfang oder Ende
+ *   Domain      mindestens ein Label plus TLD, Bindestriche nur INNEN,
+ *               kein Unterstrich, TLD ab zwei Zeichen und nicht rein
+ *               numerisch (sonst wäre `a@11.22.33.44` eine gültige Adresse)
  */
 const EMAIL_PATTERN =
-  /^[^\s@,;<>"\\()[\]:]+@[^\s@,;<>"\\()[\]:]+\.[^\s@,;<>"\\()[\]:]{2,}$/;
+  /^[^\s@,;<>"\\()[\]:.]+(?:\.[^\s@,;<>"\\()[\]:.]+)*@(?:[^\s@,;<>"\\()[\]:._-]+(?:-+[^\s@,;<>"\\()[\]:._-]+)*\.)+(?!\d+$)[^\s@,;<>"\\()[\]:._-]{2,}$/;
 const MAX_NAME_LENGTH = 120;
 const MAX_MESSAGE_LENGTH = 5000;
 // Steuerzeichen aufzuspüren IST hier der Zweck (Header-Injection, kaputte
@@ -145,7 +162,10 @@ export function validateContactInput(input: ContactMessageInput): ContactMessage
     throw new ContactValidationError('Bitte einen gültigen Namen angeben.');
   }
 
-  if (!email || !EMAIL_PATTERN.test(email) || email.length > 254) {
+  // Die 254 sind eine Oktett-Grenze (RFC 5321), `String.length` zählt aber
+  // UTF-16-Codeeinheiten: bei einer Adresse mit Umlauten oder IDN-Domain hätte
+  // die Prüfung mehr durchgelassen, als in den Header passt.
+  if (!email || !EMAIL_PATTERN.test(email) || Buffer.byteLength(email, 'utf8') > 254) {
     throw new ContactValidationError('Bitte eine gültige E-Mail-Adresse angeben.');
   }
 
