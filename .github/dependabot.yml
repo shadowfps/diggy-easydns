@@ -10,6 +10,16 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
+      # vite und sein React-Plugin MÜSSEN zusammen wandern, auch als Major.
+      # Sie hängen über peerDependencies aneinander, und zwar in beide
+      # Richtungen: plugin-react 4 verlangt `vite <=7`, plugin-react 6
+      # verlangt `vite ^8`. Einzeln gehoben scheitert deshalb jeder von beiden
+      # schon an `npm ci` (ERESOLVE) — so entstanden die roten PRs #47 und
+      # #48, die sich gegenseitig blockierten. Diese Gruppe steht VOR
+      # patch-and-minor, weil Dependabot die erste passende nimmt.
+      vite:
+        patterns: ['vite', '@vitejs/*']
+
       # Patch- und Minor-Updates gebündelt: einzeln sind das zu viele PRs, und
       # sie werden ohnehin zusammen gemergt.
       patch-and-minor:
