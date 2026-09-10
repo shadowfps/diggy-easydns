@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { AlertCircle, Loader2, Server } from 'lucide-react';
 import { IpDetailsRows } from '@/components/ip/IpAddressLink';
 import { formatIpOwnerLabel, useIpDetails } from '@/components/ip/useIpDetails';
