@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Mail, Check, X, AlertTriangle, FileSignature, Send } from 'lucide-react';
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
