@@ -43,11 +43,40 @@ describe('isValidDomain', () => {
     expect(isValidDomain(`${'a'.repeat(250)}.com`)).toBe(false);
   });
 
-  it('läuft auch bei vielen Labels schnell (kein Backtracking-Blowup)', () => {
-    const pathological = `${'a.'.repeat(120)}!`;
-    const start = Date.now();
-    isValidDomain(pathological);
-    expect(Date.now() - start).toBeLessThan(200);
+  /**
+   * Die Regex enthält ein `(\.[a-z0-9-]{1,63})*` gefolgt von `\.[a-z]{2,63}` —
+   * eine Konstruktion, bei der sich ein Engine-abhängiges Backtracking-Problem
+   * einschleichen kann.
+   *
+   * Der vorherige Test prüfte nur, ob ein einzelner Aufruf unter 200 ms bleibt,
+   * und ignorierte das Ergebnis. Das war zu unscharf: katastrophales
+   * Backtracking wäre deutlich langsamer, moderates wäre durchgerutscht.
+   * Deshalb mehrere Eingabeformen, engere Grenze, und das Ergebnis wird
+   * mitgeprüft.
+   */
+  it('bleibt bei pathologischen Eingaben schnell und antwortet korrekt', () => {
+    const cases: [string, boolean][] = [
+      // Lange Label-Kette mit ungültigem Abschluss — der Worst Case für die
+      // Alternation zwischen Stern-Gruppe und finalem Label.
+      [`${'a.'.repeat(120)}!`, false],
+      [`${'a.'.repeat(120)}`, false],
+      [`${'ab-'.repeat(20)}x.com`, true],
+      // Viele Labels, gültig: darf nicht an der Längenprüfung scheitern.
+      [`${'a.'.repeat(60)}com`, true],
+      // Fast-Treffer, der die Engine bis zum Ende laufen lässt.
+      [`${'a.'.repeat(100)}c0m1`, false],
+      ['-'.repeat(200), false],
+      [`${'.'.repeat(200)}com`, false],
+    ];
+
+    for (const [input, expected] of cases) {
+      const start = performance.now();
+      const result = isValidDomain(input);
+      const elapsed = performance.now() - start;
+
+      expect(result, `Ergebnis für ${input.slice(0, 30)}…`).toBe(expected);
+      expect(elapsed, `Laufzeit für ${input.slice(0, 30)}…`).toBeLessThan(20);
+    }
   });
 });
 

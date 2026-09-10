@@ -111,13 +111,29 @@ npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
 npm run verify      # alle drei, so wie die CI es fährt
 ```
 
-Die Tests decken bewusst die reine Logik ab, die der Nutzer als „Diggy sagt"
-liest: Domain-Validierung und Apex-Auflösung, SPF-Lookup-Zählung nach
-RFC 7208 §4.6.4, DoH-TXT-Zusammenbau, IP-Klassifizierung des SSRF-Guards,
-Cache-Verhalten und die Token-Prüfung des Kontaktformulars.
+Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
 
-Jeder Push auf `main` läuft zuerst durch den `verify`-Job; erst danach werden
-Image-Build und Deploy angestoßen.
+- **server** (`node`) — die reine Logik, die der Nutzer als „Diggy sagt" liest:
+  Domain-Validierung und Apex-Auflösung, SPF-Lookup-Zählung nach
+  RFC 7208 §4.6.4, DoH-TXT-Zusammenbau, IP-Klassifizierung des SSRF-Guards,
+  Cache-Verhalten, Score-Aggregation und die Token-Prüfung des
+  Kontaktformulars. Dazu ein Integrationstest gegen eine echte Express-App,
+  der prüft, dass das Rate-Limit hinter einem Reverse-Proxy nicht per
+  `X-Forwarded-For` umgehbar ist.
+- **client** (`jsdom`) — Routing samt Zurück-Button, Tab-Semantik und
+  Tastatur-Bedienung, die Zustandsübergänge des Kontaktformulars, Error
+  Boundaries, Focus-Trap und das Verhalten bei `prefers-reduced-motion`.
+
+Geschrieben wurden die Frontend-Tests entlang der Pfade, auf denen schon
+einmal ein Defekt saß — nicht nach Abdeckungsquote. `src/test/setup.ts`
+dokumentiert, welche Browser-APIs jsdom fehlen und warum sie dort ergänzt
+werden.
+
+Jeder Push auf `main` und jeder Pull Request läuft durch den `verify`-Job;
+Image-Build und Deploy folgen nur auf `main`. Ein zweiter, **nicht
+blockierender** `audit`-Job hält den Zustand der Abhängigkeiten sichtbar, ohne
+dass ein neu veröffentlichter Advisory einen bis dahin grünen Build rot macht —
+die eigentliche Arbeit macht Dependabot (`.github/dependabot.yml`).
 
 ## Container & Deployment
 
@@ -136,7 +152,16 @@ Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
 ghcr.io/shadowfps/diggy-easydns:latest
 ```
 
-Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die `${…}`-Platzhalter von `compose.mittwald.yml` interpoliert. Dafür müssen im Repository unter **Settings → Secrets and variables → Actions** folgende **Repository-Secrets** hinterlegt sein:
+Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert.
+Das Image wird dabei **per Digest** referenziert (`DIGGY_IMAGE`), nicht per
+`:latest`.
+
+Das ist keine Kosmetik: `mw stack deploy` vergleicht die Compose-*Definition*.
+Mit einem festen `:latest` änderte sich die nicht, der Deploy meldete
+`No services were restarted` — und der Container lief weiter mit dem alten
+Image. Grüner Deploy, alter Code. Der Digest ändert sich bei jedem Build und
+erzwingt den Restart; außerdem ist ein Rollback damit einfach ein Deploy mit
+dem vorherigen Digest. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die `${…}`-Platzhalter von `compose.mittwald.yml` interpoliert. Dafür müssen im Repository unter **Settings → Secrets and variables → Actions** folgende **Repository-Secrets** hinterlegt sein:
 
 - `MITTWALD_API_TOKEN` — gültiges mStudio-API-Token
 - SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`
@@ -155,10 +180,36 @@ Für manuelles Deployment zuerst prüfen, ob der Ziel-Stack weitere Services ent
 
 ```bash
 mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
+# DIGGY_IMAGE muss gesetzt sein, sonst fällt die Compose auf :latest zurück
+# und der Rollout bleibt aus. Digest oder Versions-Tag verwenden:
+export DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.3.0
+
 mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file .env
 ```
 
 Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Platzhalter in `compose.mittwald.yml` (im CI übernehmen das die GitHub-Secrets). Die Runtime-Secrets gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
+
+## Sicherheit
+
+Was der Server tut, damit ein öffentlich erreichbares Lookup-Tool nicht selbst
+zum Werkzeug wird:
+
+| Schutz | Wo |
+|---|---|
+| **SSRF-Guard** — jedes nutzergewählte Ziel wird gegen eine Blockliste nicht-öffentlicher IP-Bereiche geprüft (IPv4 + IPv6 inkl. Transitions-Präfixe) und die Verbindung per `lookup`-Option auf die geprüften Adressen gepinnt. Ohne Pinning bliebe zwischen Prüfung und Connect ein DNS-Rebinding-Fenster. Redirects werden selbst verfolgt, jeder Hop neu geprüft. | `server/lib/safeTarget.ts` |
+| **Rate-Limits** — isolierte Zähler je Limiter, dazu ein Concurrency-Deckel für die langlaufenden Checks. `/api/health` liegt bewusst davor. | `server/lib/rateLimit.ts` |
+| **Security-Header** — CSP ohne Fremd-Hosts, HSTS, `nosniff`, `strict-origin-when-cross-origin`, `frame-ancestors 'none'`. Der SHA-256 des Inline-Theme-Scripts wird beim Start aus dem gebauten HTML abgeleitet, damit `script-src 'self'` bleiben kann. | `server/index.ts` |
+| **CSRF** — Origin-Prüfung gegen `PUBLIC_ORIGIN` für den schreibenden Endpoint, `Sec-Fetch-Site`-Riegel für die Endpoints mit Fremd-API-Kontingent. | `server/index.ts` |
+| **Anti-Spam** — Honeypot, signiertes Timing-Token mit Nonce und Einmalverwendung, IP-Limits, Duplikat-Erkennung, Inhaltsfilter, ein Auto-Reply pro Empfänger und Tag. | `server/services/contactSpamGuard.ts` |
+| **Graceful Shutdown** — Health auf 503, Drain-Fenster, dann `server.close()`. Request-Timeouts gegen Slowloris. | `server/index.ts` |
+
+Zwei Konfigurationswerte sind in Produktion Pflicht: `CONTACT_FORM_SECRET`
+(mindestens 32 Zeichen) und `CONTACT_TO`. Fehlt eines, startet der Server
+bewusst nicht, statt mit unsicherem Fallback zu laufen.
+
+`TRUST_PROXY` nur setzen, wenn tatsächlich ein Reverse-Proxy davor liegt —
+sonst kann sich jeder per `X-Forwarded-For` einen frischen Rate-Limit-Zähler
+holen.
 
 ## Recht & Compliance
 
@@ -193,18 +244,25 @@ technisch korrekt, aber **nicht juristisch geprüft**.
 
 ```
 diggy/
+├── docs/
+│   └── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
 ├── shared/
-│   └── types/              # Gemeinsame TypeScript-Typen (Frontend + Backend)
+│   ├── scoring.ts          # Health-Score — geteilt, damit Server und Client
+│   │                       # garantiert dasselbe rechnen
+│   └── types/              # Gemeinsame TypeScript-Typen
 ├── src/
-│   ├── components/         # Wiederverwendbare UI-Bausteine
+│   ├── components/         # Wiederverwendbare UI-Bausteine, Error Boundaries
 │   ├── modules/            # Feature-Module (Lookup, History, Availability, …)
-│   ├── lib/                # API-Client, History, Utilities
-│   ├── hooks/
+│   ├── lib/                # API-Client, History, Routing-Helfer, Utilities
+│   ├── hooks/              # Theme, progressiver Lookup, Reduced-Motion, Focus-Trap
 │   └── types/              # Re-Exports
 └── server/
-    ├── index.ts            # Express-App & API-Routen
+    ├── index.ts            # Express-App, Middleware-Kette & API-Routen
+    ├── lib/                # Cache, Rate-Limiting, SSRF-Guard
     └── services/           # DNS, SSL, Mail-Audit, Kontakt, …
 ```
+
+Tests liegen neben dem geprüften Code (`*.test.ts`).
 
 ## API (Auszug)
 
@@ -236,8 +294,11 @@ diggy/
 - [x] Permalinks & JSON-Export
 - [x] Lookup-History (Browser-lokal)
 - [x] Impressum & Kontaktformular (SMTP, Auto-Reply, Anti-Spam)
+- [x] Response-Caching im Backend (TTL pro Check, In-Flight-Dedup)
+- [x] Datenschutzhinweise & lokal gehostete Schriften
+- [x] Härtung: SSRF-Guard mit IP-Pinning, Rate-Limits, CSP/HSTS, CSRF-Riegel
+- [x] Tests, ESLint, Typecheck und ein verify-Gate in der CI
 - [ ] DNSSEC-Chain-Validierung (vertieft)
-- [ ] Response-Caching im Backend
 - [ ] Watch/Monitor-Feature (Domain-Änderungen per E-Mail)
 
 ## Mitmachen

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isInspectableIp } from './IpAddressLink';
+import { isInspectableIp } from './isInspectableIp';
 
 /**
  * isInspectableIp steuert in App.tsx, ob eine Eingabe als IP-Lookup oder als

@@ -34,6 +34,20 @@ export interface Finding {
     snippet?: string;
   };
   category: 'dns' | 'mail' | 'security' | 'ssl' | 'dnssec';
+  /**
+   * IDs von Findings, die dieses hier verursachen.
+   *
+   * Ist eines davon im Report vorhanden, beschreibt dieses Finding nur eine
+   * Folge und geht NICHT zusätzlich in den Score ein — angezeigt wird es
+   * weiterhin, denn für Nutzer ist die Folge oft die relevantere Aussage.
+   *
+   * Nötig, weil Findings in verschiedenen Endpoints entstehen und ihre
+   * Erzeuger sich gegenseitig nicht sehen: `no-address` kommt aus
+   * `/api/lookup`, `domain-expired` aus `/api/lookup/whois`. Eine abgelaufene
+   * Domain löst nicht mehr auf — beide Findings sind wahr, aber es ist eine
+   * Ursache, und drei Criticals dafür machen den Score unlesbar.
+   */
+  causedBy?: string[];
 }
 
 export interface HealthScore {

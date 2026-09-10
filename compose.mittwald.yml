@@ -1,6 +1,10 @@
 services:
   diggy:
-    image: ghcr.io/shadowfps/diggy-easydns:latest
+    # Per Digest aus dem CI-Build, nicht per `:latest` — siehe Kommentar im
+    # Deploy-Schritt des Workflows. Für einen manuellen Deploy den Digest oder
+    # ein Versions-Tag in DIGGY_IMAGE setzen, z. B.
+    # DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.3.0
+    image: ${DIGGY_IMAGE:-ghcr.io/shadowfps/diggy-easydns:latest}
     restart: unless-stopped
     ports:
       - "3001:3001/tcp"

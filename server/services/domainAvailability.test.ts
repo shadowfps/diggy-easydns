@@ -5,6 +5,7 @@ import {
   isValidDomainLabel,
   parseDomainQuery,
 } from './domainAvailability.js';
+import type { DomainAvailabilityStatus } from '../types.js';
 
 describe('isValidDomainLabel', () => {
   it('akzeptiert gültige Labels', () => {
@@ -78,9 +79,18 @@ describe('buildDomainCandidates', () => {
 });
 
 describe('availabilityStatusLabel', () => {
-  it('übersetzt alle Status', () => {
+  /**
+   * Prüft Vollständigkeit, nicht nur die Mapping-Einträge: kommt ein neuer
+   * Status in den Union-Typ, fällt hier auf, wenn er keine eigene Beschriftung
+   * hat und stillschweigend als "Unklar" durchgeht.
+   */
+  it('hat für jeden Status eine eigene, nicht-leere Beschriftung', () => {
+    const statuses: DomainAvailabilityStatus[] = ['available', 'taken', 'unknown'];
+    const labels = statuses.map(availabilityStatusLabel);
+
+    expect(labels.every((label) => label.trim().length > 0)).toBe(true);
+    expect(new Set(labels).size).toBe(statuses.length);
     expect(availabilityStatusLabel('available')).toBe('Verfügbar');
     expect(availabilityStatusLabel('taken')).toBe('Vergeben');
-    expect(availabilityStatusLabel('unknown')).toBe('Unklar');
   });
 });

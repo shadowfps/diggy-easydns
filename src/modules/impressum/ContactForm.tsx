@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Loader2, Send } from 'lucide-react';
-import { fetchContactChallenge, sendContactMessage } from '@/lib/api';
+import { ApiError, fetchContactChallenge, sendContactMessage } from '@/lib/api';
+
+/**
+ * Fehler, bei denen der Challenge-Token NICHT verbraucht ist.
+ *
+ * Der Server prüft in dieser Reihenfolge: Honeypot, Feldvalidierung, dann
+ * Token-Entwertung (`server/index.ts`). Ein Validierungsfehler lässt den Token
+ * also gültig — vorher lud das Formular trotzdem einen neuen nach. Das kostete
+ * einen Challenge-Slot, startete die 4-Sekunden-Wartezeit neu und konnte das
+ * Formular ganz blockieren: läuft `/api/contact/challenge` ins Rate-Limit,
+ * stand "Bitte lade die Seite neu" da, obwohl der ursprüngliche Token noch
+ * benutzbar war. Genau die Falle, die serverseitig schon einmal behoben wurde.
+ *
+ * `contact_not_configured` steht mit dabei, weil der Request dann gar nicht
+ * bis zur Validierung kommt.
+ */
+const TOKEN_SURVIVING_ERRORS = new Set(['contact_invalid_input', 'contact_not_configured']);
 
 interface ContactFormProps {
   /**
@@ -41,8 +57,14 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
    */
   const loadChallenge = useCallback(async () => {
     const challenge = await fetchContactChallenge();
+    const issuedAt = Date.now();
     setChallengeToken(challenge.token);
-    setReadyAt(Date.now() + challenge.minDelayMs);
+    setReadyAt(issuedAt + challenge.minDelayMs);
+    // `now` mitziehen, sonst rechnet der Countdown gegen einen veralteten
+    // Zeitstempel: nach einem Nachladen stand am Button für bis zu einen
+    // Intervall-Tick "Gleich bereit (1 s)", obwohl gar keine Wartezeit mehr
+    // besteht.
+    setNow(issuedAt);
   }, []);
 
   const waitSeconds = readyAt ? Math.max(0, Math.ceil((readyAt - now) / 1000)) : 0;
@@ -84,6 +106,13 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
     event.preventDefault();
     if (loading || !challengeToken) return;
 
+    // Vorherige Rückmeldung räumen, BEVOR ein Zweig eine neue setzt: der Alert
+    // wird nur gerendert, wenn `success` nicht steht (`error && !success`).
+    // Ein früher return mit gesetztem Fehler wäre hinter einem stehen
+    // gebliebenen "Danke, gesendet" sonst unsichtbar geblieben.
+    setError(null);
+    setSuccess(false);
+
     if (readyAt && Date.now() < readyAt) {
       // Sollte durch den deaktivierten Button nicht mehr auftreten — bleibt
       // als Absicherung für Enter im Textfeld o. Ä.
@@ -92,11 +121,19 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
       return;
     }
 
+    // Die Server-Grenze gilt getrimmt, das native `minLength` zählt roh: neun
+    // Zeichen plus ein Leerzeichen kamen durch die Browser-Prüfung und wurden
+    // erst serverseitig abgelehnt. Hier dieselbe Regel, damit die Meldung ohne
+    // Round-Trip erscheint.
+    if (message.trim().length < MIN_MESSAGE_LENGTH) {
+      setError(`Die Nachricht sollte mindestens ${MIN_MESSAGE_LENGTH} Zeichen lang sein.`);
+      return;
+    }
+
     setLoading(true);
-    setError(null);
-    setSuccess(false);
 
     let sent = false;
+    let tokenStillValid = false;
     try {
       await sendContactMessage({ name, email, message, website, token: challengeToken });
       sent = true;
@@ -107,6 +144,15 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
       setWebsite('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nachricht konnte nicht gesendet werden.');
+      tokenStillValid = err instanceof ApiError && TOKEN_SURVIVING_ERRORS.has(err.code);
+    }
+
+    if (tokenStillValid) {
+      // Nichts nachladen: der Token ist unverbraucht, die Wartezeit ist
+      // abgelaufen, und der Nutzer soll nach dem Korrigieren des Feldes direkt
+      // erneut senden können.
+      setLoading(false);
+      return;
     }
 
     // Token-Nachladen bewusst AUSSERHALB des Sende-try:

@@ -2,7 +2,8 @@ import { motion } from 'framer-motion';
 import { useState, useMemo } from 'react';
 import type { DnsRecord, RecordType } from '@/types/dns';
 import { cn } from '@/lib/cn';
-import { IpAddressLink, IpOwnerLabel, isInspectableIp } from '@/components/ip/IpAddressLink';
+import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
+import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface RecordsListProps {

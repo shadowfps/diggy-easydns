@@ -48,6 +48,49 @@ describe('calculateScore', () => {
     expect(calculateScore(mixed).score).toBe(100 - 25 - 8 - 6);
   });
 
+  /**
+   * Findings entstehen in verschiedenen Endpoints und sehen sich gegenseitig
+   * nicht. Eine abgelaufene Domain löst nicht mehr auf — `no-address` aus
+   * /api/lookup und `domain-expired` aus /api/lookup/whois sind beide wahr,
+   * beschreiben aber eine Ursache. Ohne Dedup waren das 50 Punkte für ein
+   * Problem.
+   */
+  it('zieht ein Folge-Finding nicht zusätzlich ab, wenn seine Ursache vorliegt', () => {
+    const consequence: Finding = {
+      ...finding('critical', 'no-address'),
+      causedBy: ['domain-expired'],
+    };
+    const cause = finding('critical', 'domain-expired');
+
+    expect(calculateScore([cause, consequence]).score).toBe(75);
+    // Die Liste bleibt vollständig — nur der Score ändert sich.
+    expect(calculateScore([cause, consequence]).counts.critical).toBe(2);
+  });
+
+  it('zählt ein Folge-Finding normal, wenn die Ursache NICHT vorliegt', () => {
+    const standalone: Finding = {
+      ...finding('critical', 'no-address'),
+      causedBy: ['domain-expired'],
+    };
+    expect(calculateScore([standalone]).score).toBe(75);
+  });
+
+  it('prüft alle genannten Ursachen, nicht nur die erste', () => {
+    const consequence: Finding = {
+      ...finding('critical', 'no-address'),
+      causedBy: ['domain-expired', 'whois-status-clienthold'],
+    };
+    const hold = finding('critical', 'whois-status-clienthold');
+    expect(calculateScore([hold, consequence]).score).toBe(75);
+  });
+
+  it('deduplizert auch info-Findings über causedBy', () => {
+    const consequence: Finding = { ...finding('info', 'folge'), causedBy: ['ursache'] };
+    const cause = finding('info', 'ursache');
+    // Nur die Ursache zählt: 2 Punkte, nicht 4.
+    expect(calculateScore([cause, consequence]).score).toBe(98);
+  });
+
   it('zählt die Severities mit', () => {
     const result = calculateScore([finding('critical'), finding('warning'), finding('info', 'i2')]);
     expect(result.counts).toEqual({ success: 0, info: 1, warning: 1, critical: 1 });

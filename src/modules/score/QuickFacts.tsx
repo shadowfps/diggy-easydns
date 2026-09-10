@@ -12,7 +12,8 @@ import type {
 import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { IpAddressLink, isInspectableIp } from '@/components/ip/IpAddressLink';
+import { IpAddressLink } from '@/components/ip/IpAddressLink';
+import { isInspectableIp } from '@/components/ip/isInspectableIp';
 
 /* ─── Tech-Stack SVG logos ───────────────────────────────────────────────── */
 

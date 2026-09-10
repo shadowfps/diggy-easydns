@@ -18,7 +18,7 @@ import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
-import { isInspectableIp } from '@/components/ip/IpAddressLink';
+import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
 import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';

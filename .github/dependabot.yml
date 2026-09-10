@@ -1,0 +1,30 @@
+version: 2
+
+# Nach dem Audit eingeführt: dort hatten sich 2 kritische und 5 hohe CVEs
+# angesammelt, weil niemand hingesehen hat. Dependabot hält das sichtbar.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch- und Minor-Updates gebündelt: einzeln sind das zu viele PRs, und
+      # sie werden ohnehin zusammen gemergt.
+      patch-and-minor:
+        patterns: ['*']
+        update-types: [minor, patch]
+    # Majors bleiben absichtlich UNGRUPPIERT: sie fallen dadurch als einzelne
+    # PRs an und bekommen die Aufmerksamkeit, die sie brauchen. Der
+    # vite-8-Versuch aus #32 ist das Beispiel — er wechselt den Bundler auf
+    # Rolldown und bricht den Build. Kein `ignore`-Schlüssel, weil Dependabot
+    # dort mindestens einen Eintrag verlangt.
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

@@ -3,7 +3,9 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -13,5 +15,13 @@
     "outDir": "./dist-server",
     "rootDir": "."
   },
-  "include": ["server/**/*.ts", "shared/**/*.ts"]
+  "include": [
+    "server/**/*.ts",
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "server/test/**",
+    "src/test/**"
+  ]
 }
