@@ -36,11 +36,11 @@
     "gsap": "^3.15.0",
     "helmet": "^8.3.0",
     "lucide-react": "^0.460.0",
-    "nodemailer": "^10.0.1",
+    "nodemailer": "^10.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.5.4",
-    "tldts": "^7.4.11"
+    "tldts": "^7.4.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -55,7 +55,7 @@
     "@types/react-dom": "^18.3.1",
     "@types/supertest": "^7.2.1",
     "@vitejs/plugin-react": "^6.1.1",
-    "autoprefixer": "^10.5.5",
+    "autoprefixer": "^10.5.6",
     "concurrently": "^10.0.5",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^5.2.0",
