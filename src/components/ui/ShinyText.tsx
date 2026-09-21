@@ -2,8 +2,8 @@
  * ShinyText — Lichtschein-Effekt der quer durch den Text wandert.
  *
  * Original-Quelle: https://reactbits.dev/text-animations/shiny-text
- * Lokal eingecheckt. Nutzt framer-motion (statt motion/react) — wir haben
- * Framer Motion 11.x, da liegt die API auf 'framer-motion'.
+ * Lokal eingecheckt. Importiert aus 'motion/react' — seit Motion 13 ist das
+ * der gepflegte Paketname, 'framer-motion' gilt als abgelöst.
  */
 
 import {
@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { motion, useAnimationFrame, useMotionValue, useTransform } from 'framer-motion';
+import { motion, useAnimationFrame, useMotionValue, useTransform } from 'motion/react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import './ShinyText.css';
 

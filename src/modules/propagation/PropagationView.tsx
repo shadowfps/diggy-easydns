@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import type { RecordType, ResolverResult } from '@/types/dns';

@@ -17,8 +17,8 @@ export default defineConfig({
          * Vendor-Code in eigene, langlebig cachebare Chunks.
          *
          * Ändert die Gesamtgröße kaum, aber Folgebesuche und Deploys laden nur
-         * den App-Chunk neu statt der kompletten 570 kB. React und
-         * framer-motion ändern sich selten, der App-Code bei jedem Push.
+         * den App-Chunk neu statt der kompletten 570 kB. React und Motion
+         * ändern sich selten, der App-Code bei jedem Push.
          *
          * Funktionsform, nicht Objektform: Vite 8 bündelt mit rolldown, und
          * rolldown nimmt für `manualChunks` ausschließlich eine Funktion
@@ -30,7 +30,17 @@ export default defineConfig({
          */
         manualChunks(id: string) {
           if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
-          if (/node_modules\/framer-motion\//.test(id)) return 'motion';
+          // Vier Pakete statt einem, und `framer-motion` gehört ausdrücklich
+          // dazu: `motion` ist nur ein Wrapper, der von `framer-motion`
+          // abhängt und es re-exportiert — dort liegt die Implementierung.
+          // `motion-dom` und `motion-utils` bilden den Kern. Fehlt eines,
+          // landen dessen Module im App-Chunk, und der ist genau der, der
+          // bei jedem Push neu geladen wird (#33). Nachgemessen: ohne
+          // `framer-motion` in dieser Liste wanderten 79 Module und 10,8 kB
+          // dorthin.
+          if (/node_modules\/(motion|framer-motion|motion-dom|motion-utils)\//.test(id)) {
+            return 'motion';
+          }
           if (/node_modules\/lucide-react\//.test(id)) return 'icons';
           return undefined;
         },

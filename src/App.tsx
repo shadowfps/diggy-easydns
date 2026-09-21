@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Header } from '@/components/layout/Header';
 import { SearchBar } from '@/modules/search/SearchBar';
 import { ScoreCard } from '@/modules/score/ScoreCard';
