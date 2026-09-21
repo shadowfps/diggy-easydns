@@ -20,12 +20,7 @@ import {
 import type { IpDetails } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
-import {
-  formatIpOwnerLabel,
-  getCachedIpDetails,
-  loadIpDetails,
-  useIpDetails,
-} from './useIpDetails';
+import { formatIpOwnerLabel, useIpDetails } from './useIpDetails';
 
 interface IpAddressLinkProps {
   ip: string;
@@ -125,47 +120,20 @@ function IpDetailsOverlay({
   /** Feuert, wenn die Exit-Animation durch ist — dann darf das Portal weg. */
   onExited: () => void;
 }) {
-  const [details, setDetails] = useState<IpDetails | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * Derselbe Hook wie im IpOwnerLabel.
+   *
+   * Hier stand eine handkopierte Fassung davon: Cache-Treffer, Fetch,
+   * stale-Guard — dieselben dreißig Zeilen und dieselbe setState-Kaskade im
+   * Effect. Der Hook deckt das seit dem Umbau vollständig ab; sein `enabled`
+   * ist genau das `open` von hier, und weil sein Ergebnis an die IP gebunden
+   * ist, entfällt auch das frühere `setDetails(null)` beim Wechsel.
+   */
+  const { details, loading, error } = useIpDetails(ip, open);
   const [copied, setCopied] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useFocusTrap(dialogRef, open);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const cached = getCachedIpDetails(ip);
-    if (cached) {
-      setDetails(cached);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    let stale = false;
-    setLoading(true);
-    setError(null);
-    setDetails(null);
-
-    loadIpDetails(ip)
-      .then((result) => {
-        if (stale) return;
-        setDetails(result);
-      })
-      .catch((err) => {
-        if (stale) return;
-        setError(err instanceof Error ? err.message : 'IP-Details konnten nicht geladen werden.');
-      })
-      .finally(() => {
-        if (!stale) setLoading(false);
-      });
-
-    return () => {
-      stale = true;
-    };
-  }, [ip, open]);
 
   useEffect(() => {
     if (!open) return;

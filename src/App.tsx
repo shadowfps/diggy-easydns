@@ -74,9 +74,8 @@ import {
 } from '@/lib/lookupPath';
 import {
   clearLookupHistory,
-  readLookupHistory,
   saveLookupToHistory,
-  type LookupHistoryEntry,
+  useLookupHistory,
 } from '@/lib/lookupHistory';
 import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
@@ -86,9 +85,7 @@ export default function App() {
   const [view, setView] = useState<AppView>('lookup');
   const lookup = useProgressiveLookup();
   const [ipQuery, setIpQuery] = useState<string | null>(null);
-  const [historyEntries, setHistoryEntries] = useState<LookupHistoryEntry[]>(() =>
-    readLookupHistory()
-  );
+  const historyEntries = useLookupHistory();
   const [pageSpeed, setPageSpeed] = useState<PageSpeedReport | null>(null);
   const [pageSpeedLoading, setPageSpeedLoading] = useState(false);
   const [pageSpeedError, setPageSpeedError] = useState<string | null>(null);
@@ -186,7 +183,7 @@ export default function App() {
   // Alle Sektionen fertig → vollständigen Report in die History schreiben.
   useEffect(() => {
     if (lookup.allSettled && lookup.report) {
-      setHistoryEntries(saveLookupToHistory(lookup.report));
+      saveLookupToHistory(lookup.report);
     }
   }, [lookup.allSettled, lookup.report]);
 
@@ -236,7 +233,6 @@ export default function App() {
       // nach Home/Zurück die alte Domain im Feld stehen.
       setSearchValue('');
       setActiveTab('records');
-      if (staticView === 'history') setHistoryEntries(readLookupHistory());
       return;
     }
 
@@ -256,8 +252,18 @@ export default function App() {
     setSearchValue('');
   };
 
-  // Ref bei jedem Render auf die frische Closure zeigen lassen.
-  applyPathRef.current = applyPath;
+  /*
+   * Ref nach jedem Render auf die frische Closure zeigen lassen.
+   *
+   * Stand vorher direkt im Render-Körper. react-hooks/refs beanstandet das:
+   * während des Renders darf eine Ref weder gelesen noch geschrieben werden,
+   * sonst hängt ihr Inhalt davon ab, ob React den Render am Ende behält.
+   * Der Effect ohne Dependency-Array läuft nach jedem Commit — früh genug,
+   * denn der popstate-Listener greift die Funktion erst beim Event ab.
+   */
+  useEffect(() => {
+    applyPathRef.current = applyPath;
+  });
 
   /** Navigiert per pushState und wendet den Pfad direkt an. */
   const navigate = (pathname: string) => {
@@ -276,7 +282,7 @@ export default function App() {
   const handleDatenschutz = () => navigate('/datenschutz');
 
   const handleClearHistory = () => {
-    setHistoryEntries(clearLookupHistory());
+    clearLookupHistory();
   };
 
   const handleUseDomainInSearch = (domain: string) => {

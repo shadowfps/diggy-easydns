@@ -17,7 +17,7 @@ import type { IpDetails } from '@/types/dns';
 const detailsCache = new Map<string, IpDetails>();
 const pendingRequests = new Map<string, Promise<IpDetails>>();
 
-export async function loadIpDetails(ip: string): Promise<IpDetails> {
+async function loadIpDetails(ip: string): Promise<IpDetails> {
   const cached = detailsCache.get(ip);
   if (cached) return cached;
 
@@ -37,51 +37,56 @@ export async function loadIpDetails(ip: string): Promise<IpDetails> {
   return request;
 }
 
-/**
- * Lesezugriff auf den Modul-Cache.
- *
- * Bewusst als Funktion statt die Map zu exportieren: der Overlay braucht nur
- * "ist schon da?", nicht die Möglichkeit, den Cache von außen zu verändern.
- */
-export function getCachedIpDetails(ip: string): IpDetails | undefined {
-  return detailsCache.get(ip);
-}
-
 export function formatIpOwnerLabel(details: IpDetails): string | null {
   return details.organization ?? details.isp ?? details.asnName ?? details.asn ?? null;
 }
 
 export function useIpDetails(ip: string, enabled = true) {
-  const [details, setDetails] = useState<IpDetails | null>(() => detailsCache.get(ip) ?? null);
-  const [loading, setLoading] = useState(enabled && !detailsCache.has(ip));
-  const [error, setError] = useState<string | null>(null);
+  /**
+   * Ergebnis der letzten Anfrage — immer zusammen mit der IP, zu der es gehört.
+   *
+   * Die IP steht mit im State, damit ein Wechsel nicht für einen Render noch
+   * das Ergebnis der vorherigen zeigt. Vorher übernahm das ein `setDetails`
+   * im Effect, also ein Render zu spät.
+   */
+  const [result, setResult] = useState<{
+    ip: string;
+    details: IpDetails | null;
+    error: string | null;
+  } | null>(null);
+
+  /*
+   * Den Modul-Cache während des Renders lesen statt im Effect.
+   *
+   * Für einen Treffer standen hier vorher drei synchrone setState im Effect:
+   * ein erster Render mit loading=true, dann ein zweiter mit Daten, die längst
+   * dalagen. Genau diese Kaskade meint react-hooks/set-state-in-effect.
+   * Abgeleitet steht derselbe Wert schon im ersten Render.
+   */
+  const cached = detailsCache.get(ip) ?? null;
+  const fresh = result?.ip === ip ? result : null;
+
+  const details = cached ?? fresh?.details ?? null;
+  const error = details ? null : (fresh?.error ?? null);
+  const loading = enabled && !details && !error;
 
   useEffect(() => {
-    if (!enabled) return;
-
-    const cached = detailsCache.get(ip);
-    if (cached) {
-      setDetails(cached);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    // Cache-Treffer brauchen keinen Request — und kein setState.
+    if (!enabled || detailsCache.has(ip)) return;
 
     let stale = false;
-    setLoading(true);
-    setError(null);
 
     loadIpDetails(ip)
-      .then((result) => {
-        if (stale) return;
-        setDetails(result);
+      .then((loaded) => {
+        if (!stale) setResult({ ip, details: loaded, error: null });
       })
       .catch((err) => {
         if (stale) return;
-        setError(err instanceof Error ? err.message : 'IP-Details konnten nicht geladen werden.');
-      })
-      .finally(() => {
-        if (!stale) setLoading(false);
+        setResult({
+          ip,
+          details: null,
+          error: err instanceof Error ? err.message : 'IP-Details konnten nicht geladen werden.',
+        });
       });
 
     return () => {
