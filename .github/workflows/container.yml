@@ -58,6 +58,15 @@ jobs:
       - name: Test
         run: npm test
 
+      # Der Client-Build lief bisher nur im Docker-Build, also erst NACH dem
+      # Merge. Ein Fehler, den tsc nicht sieht (etwa in der Chunk-Konfiguration
+      # von vite.config.ts), fiel damit erst auf main auf.
+      - name: Build
+        run: npm run build
+
+      - name: Bundle-Budget
+        run: npm run size
+
   # Bewusst NICHT blockierend und bewusst getrennt von verify.
   #
   # Ein neu veröffentlichter Advisory würde einen bis dahin grünen Build rot
