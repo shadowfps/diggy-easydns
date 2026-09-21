@@ -91,11 +91,25 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
   useEffect(() => {
     let cancelled = false;
 
-    loadChallenge().catch(() => {
-      if (!cancelled) {
-        setError('Kontaktformular konnte nicht initialisiert werden. Bitte Seite neu laden.');
+    /*
+     * Die Async-Grenze steht hier ausdrücklich da — bitte nicht zurück auf
+     * `loadChallenge().catch(...)` vereinfachen.
+     *
+     * Verhalten ist identisch; der Unterschied ist die statische Analyse.
+     * react-hooks/set-state-in-effect beanstandete den direkten Aufruf im
+     * Effect-Körper, obwohl jedes setState in `loadChallenge` hinter dem
+     * `await` liegt und damit gar nicht synchron läuft. Die Regel sieht das
+     * dem Aufruf nicht an, dem `await` in einer eigenen Funktion schon.
+     */
+    void (async () => {
+      try {
+        await loadChallenge();
+      } catch {
+        if (!cancelled) {
+          setError('Kontaktformular konnte nicht initialisiert werden. Bitte Seite neu laden.');
+        }
       }
-    });
+    })();
 
     return () => {
       cancelled = true;

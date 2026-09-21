@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import type { LookupReport, RecordType } from '@/types/dns';
 
 export interface LookupHistoryEntry {
@@ -19,7 +20,46 @@ export interface LookupHistoryEntry {
 const HISTORY_KEY = 'diggy-lookup-history';
 const MAX_HISTORY_ITEMS = 10;
 
-export function readLookupHistory(): LookupHistoryEntry[] {
+/*
+ * Abonnierbarer Snapshot der History.
+ *
+ * App.tsx hielt den Inhalt vorher in einem useState und zog ihn an vier
+ * Stellen von Hand nach: beim Mount, nach jedem fertigen Lookup, beim Wechsel
+ * auf /history und beim Leeren. Die Stelle nach dem Lookup war ein synchrones
+ * setState im Effect — ein zusätzlicher Render nur, um den Storage zu
+ * spiegeln, und genau das, was react-hooks/set-state-in-effect beanstandet.
+ *
+ * localStorage ist die Quelle, React zeigt sie nur an: der Fall für
+ * useSyncExternalStore. Dafür muss der Snapshot referenzstabil sein —
+ * readLookupHistory() liefert bei jedem Aufruf ein frisches Array und würde
+ * sonst endlos neu rendern. Also einmal halten und beim Schreiben ersetzen.
+ */
+const EMPTY_HISTORY: LookupHistoryEntry[] = [];
+let snapshot: LookupHistoryEntry[] | null = null;
+const listeners = new Set<() => void>();
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getSnapshot(): LookupHistoryEntry[] {
+  snapshot ??= readLookupHistory();
+  return snapshot;
+}
+
+/** Die History als Render-Quelle — aktualisiert sich bei jedem Schreibvorgang. */
+export function useLookupHistory(): LookupHistoryEntry[] {
+  return useSyncExternalStore(subscribe, getSnapshot, () => EMPTY_HISTORY);
+}
+
+function readLookupHistory(): LookupHistoryEntry[] {
   if (typeof window === 'undefined') return [];
 
   try {
@@ -33,7 +73,7 @@ export function readLookupHistory(): LookupHistoryEntry[] {
   }
 }
 
-export function saveLookupToHistory(report: LookupReport): LookupHistoryEntry[] {
+export function saveLookupToHistory(report: LookupReport): void {
   const entry = toHistoryEntry(report);
   const previous = readLookupHistory();
   const next = [
@@ -42,14 +82,14 @@ export function saveLookupToHistory(report: LookupReport): LookupHistoryEntry[] 
   ].slice(0, MAX_HISTORY_ITEMS);
 
   writeHistory(next);
-  return next;
 }
 
-export function clearLookupHistory(): LookupHistoryEntry[] {
+export function clearLookupHistory(): void {
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(HISTORY_KEY);
   }
-  return [];
+  snapshot = EMPTY_HISTORY;
+  notify();
 }
 
 function toHistoryEntry(report: LookupReport): LookupHistoryEntry {
@@ -86,6 +126,13 @@ function uniqueRecordValues(
 }
 
 function writeHistory(entries: LookupHistoryEntry[]): void {
+  // Snapshot direkt mitziehen: `entries` ist bereits gefiltert und gekürzt,
+  // ein Neu-Lesen aus dem Storage brächte dasselbe Ergebnis. Steht vor dem
+  // Schreiben, damit der Zustand auch dann stimmt, wenn localStorage in
+  // eingeschränkten Kontexten gar nicht verfügbar ist.
+  snapshot = entries;
+  notify();
+
   if (typeof window === 'undefined') return;
 
   try {

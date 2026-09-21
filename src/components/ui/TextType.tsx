@@ -11,7 +11,6 @@ import {
   type ElementType,
   type HTMLAttributes,
   type ReactNode,
-  createElement,
   useCallback,
   useEffect,
   useMemo,
@@ -128,20 +127,11 @@ const TextType = ({
   // Type/Delete-Schleife
   useEffect(() => {
     if (!isVisible) return;
-    // Bewegung reduzieren: erster Satz statisch, keine Tipp-/Löschschleife.
-    // WCAG 2.2.2 — die Animation lief bisher dauerhaft und ließ sich nicht
-    // anhalten. MotionConfig greift hier nicht, das sind setTimeout-Ketten.
-    if (reducedMotion) {
-      const first = textArray[0] ?? '';
-      setDisplayedText(first);
-      // Index MIT setzen: sonst steht displayedText auf dem vollen Satz,
-      // currentCharIndex aber auf 0 — schaltet der Nutzer die Präferenz zur
-      // Laufzeit wieder aus, tippt die Schleife den Satz an den vorhandenen
-      // Text an und verdoppelt ihn.
-      setCurrentCharIndex(first.length);
-      setIsDeleting(false);
-      return;
-    }
+    // Bewegung reduzieren: keine Tipp-/Löschschleife. WCAG 2.2.2 — die
+    // Animation lief bisher dauerhaft und ließ sich nicht anhalten.
+    // MotionConfig greift hier nicht, das sind setTimeout-Ketten. Was
+    // stattdessen angezeigt wird, steht unten bei `visibleText`.
+    if (reducedMotion) return;
 
     let timeout: ReturnType<typeof setTimeout>;
 
@@ -212,31 +202,53 @@ const TextType = ({
     reducedMotion,
   ]);
 
+  /*
+   * Bei reduzierter Bewegung steht der erste Satz statisch da.
+   *
+   * Vorher schrieb der Effect dafür `displayedText` und `currentCharIndex`
+   * per setState — drei synchrone Aufrufe im Effect-Körper
+   * (react-hooks/set-state-in-effect). Abgeleitet braucht es sie nicht: der
+   * Tipp-State bleibt unberührt und damit in sich stimmig. Der Kommentar zur
+   * Index-Synchronisation ist deshalb entfallen — die Verdopplung, gegen die
+   * er sich richtete, kann so gar nicht mehr entstehen.
+   *
+   * Eine Verhaltensänderung bleibt: schaltet jemand die Präferenz zur
+   * Laufzeit ab, tippt die Schleife den ersten Satz neu, statt hinter dem
+   * fertigen Satz weiterzulaufen.
+   */
+  const visibleText = reducedMotion ? (textArray[0] ?? '') : displayedText;
+
   const shouldHideCursor =
     hideCursorWhileTyping &&
+    // Ohne Tipp-Schleife tippt nichts, was den Cursor verstecken müsste —
+    // sonst bliebe er bei reduzierter Bewegung dauerhaft ausgeblendet.
+    !reducedMotion &&
     (currentCharIndex < textArray[currentTextIndex].length || isDeleting);
 
-  return createElement(
-    Component,
-    {
-      ref: containerRef,
-      className: `text-type ${className}`,
-      ...props,
-    },
-    <span key="content" className="text-type__content" style={{ color: getCurrentTextColor() }}>
-      {displayedText}
-    </span>,
-    showCursor && (
-      <span
-        key="cursor"
-        ref={cursorRef}
-        className={`text-type__cursor ${cursorClassName} ${
-          shouldHideCursor ? 'text-type__cursor--hidden' : ''
-        }`}
-      >
-        {cursorCharacter}
+  /*
+   * Als JSX statt createElement.
+   *
+   * Die Ref lag vorher im Props-Objekt, das an createElement übergeben wurde
+   * — ein Funktionsaufruf, der sie im Render entgegennimmt und damit lesen
+   * könnte (react-hooks/refs). In JSX übergibt React sie selbst, erst beim
+   * Commit. Die `key`s entfallen mit der Kinder-Liste.
+   */
+  return (
+    <Component ref={containerRef} className={`text-type ${className}`} {...props}>
+      <span className="text-type__content" style={{ color: getCurrentTextColor() }}>
+        {visibleText}
       </span>
-    )
+      {showCursor && (
+        <span
+          ref={cursorRef}
+          className={`text-type__cursor ${cursorClassName} ${
+            shouldHideCursor ? 'text-type__cursor--hidden' : ''
+          }`}
+        >
+          {cursorCharacter}
+        </span>
+      )}
+    </Component>
   );
 };
 

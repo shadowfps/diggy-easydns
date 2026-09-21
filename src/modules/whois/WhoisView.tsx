@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Building2,
@@ -40,6 +41,18 @@ const STATUS_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad'
 };
 
 export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
+  /**
+   * Bezugszeitpunkt einmal beim Mount festhalten.
+   *
+   * `Date.now()` stand vorher direkt in den beiden Rechnungen weiter unten und
+   * lief damit bei jedem Render neu. Die Werte hingen also daran, wann die
+   * Komponente zufÃ¤llig neu rendert — genau das beanstandet react-hooks/purity.
+   * Beide Angaben sind auf Tage gerundet, ein fester Zeitpunkt pro Mount reicht.
+   *
+   * Steht bewusst VOR dem frÃ¼hen Return: Hooks mÃ¼ssen in jedem Render laufen.
+   */
+  const [now] = useState(() => Date.now());
+
   if (!whois) {
     return (
       <div className="surface rounded-xl p-12 text-center">
@@ -53,10 +66,10 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
   }
 
   const expiresInDays = whois.expiresAt
-    ? Math.floor((new Date(whois.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    ? Math.floor((new Date(whois.expiresAt).getTime() - now) / (1000 * 60 * 60 * 24))
     : undefined;
   const ageDays = whois.createdAt
-    ? Math.floor((Date.now() - new Date(whois.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+    ? Math.floor((now - new Date(whois.createdAt).getTime()) / (1000 * 60 * 60 * 24))
     : undefined;
 
   return (

@@ -51,7 +51,18 @@ const SplitText: React.FC<SplitTextProps> = ({
   const animationCompletedRef = useRef(false);
   const reducedMotion = useReducedMotion();
   const onCompleteRef = useRef(onLetterAnimationComplete);
-  const [fontsLoaded, setFontsLoaded] = useState(false);
+  /*
+   * Font-Status schon im Initializer lesen.
+   *
+   * Vorher stand im Effect ein synchrones `setFontsLoaded(true)` für den Fall,
+   * dass die Schrift beim Mount längst geladen ist — das kostete einen zweiten
+   * Render und ist genau das, was react-hooks/set-state-in-effect meint. Den
+   * externen Zustand einmalig im Initializer abzufragen liefert dasselbe
+   * Ergebnis in einem Render.
+   */
+  const [fontsLoaded, setFontsLoaded] = useState(
+    () => typeof document !== 'undefined' && document.fonts?.status === 'loaded'
+  );
 
   // Callback-Ref aktuell halten ohne den useGSAP-Hook neu auszulösen
   useEffect(() => {
@@ -61,13 +72,17 @@ const SplitText: React.FC<SplitTextProps> = ({
   // Erst splitten wenn die Schrift geladen ist — sonst verschiebt sich der Split
   // beim Font-Swap und einzelne Chars springen.
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    if (document.fonts.status === 'loaded') {
-      setFontsLoaded(true);
-    } else {
-      document.fonts.ready.then(() => setFontsLoaded(true));
-    }
-  }, []);
+    if (fontsLoaded || typeof document === 'undefined' || !document.fonts) return;
+    // Der Guard fehlte vorher: lädt die Schrift erst nach dem Unmount fertig,
+    // lief das setState ins Leere.
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (!cancelled) setFontsLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fontsLoaded]);
 
   useGSAP(
     () => {
