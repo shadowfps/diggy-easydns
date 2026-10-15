@@ -40,8 +40,8 @@ Laufzeit-Abhängigkeiten enthalten keine ML- oder LLM-Bibliothek — nachprüfba
 über `package.json`:
 
 ```
-@fontsource/*, @gsap/react, clsx, cors, dotenv, express, framer-motion,
-gsap, helmet, lucide-react, nodemailer, react, react-dom, tailwind-merge, tldts
+@fontsource/*, @gsap/react, clsx, cors, dotenv, express, gsap, helmet,
+lucide-react, motion, nodemailer, react, react-dom, tailwind-merge, tldts
 ```
 
 Die App bewirbt sich auch nicht als KI-Anwendung; in den UI-Texten kommt keine
