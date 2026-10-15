@@ -36,7 +36,7 @@
     "gsap": "^3.15.0",
     "helmet": "^8.3.0",
     "lucide-react": "^0.460.0",
-    "motion": "^13.2.0",
+    "motion": "^14.1.0",
     "nodemailer": "^10.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
