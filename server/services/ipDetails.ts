@@ -60,7 +60,7 @@ const IPWHO_ENDPOINT = 'https://ipwhois.app/json';
 const RDAP_ENDPOINT = 'https://rdap.org/ip';
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
-export function isValidIpAddress(ip: string): boolean {
+function isValidIpAddress(ip: string): boolean {
   return isIP(ip) !== 0;
 }
 

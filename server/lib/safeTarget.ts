@@ -455,7 +455,7 @@ export async function safeGet(
  * `maxBytes × timeoutMs` strecken — gemessen 80 s bei einem 3-s-Timeout.
  * Deshalb zusätzlich ein absoluter Timer, der die Verbindung zerstört.
  */
-export function httpGetWithoutGuard(
+function httpGetWithoutGuard(
   url: URL,
   target: ResolvedTarget,
   timeoutMs: number,
