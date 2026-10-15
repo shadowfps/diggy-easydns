@@ -250,3 +250,51 @@ describe('Suche und History-Einträge', () => {
     expect(api.lookupRecords).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * #64: Für einen DNS-Eintrag wie `crsend._domainkey.kksn.de` laufen nur die
+ * DNS-Checks. SSL, Tech-Stack und Propagation bräuchten einen Host, den es
+ * dort nicht gibt.
+ */
+describe('DNS-Einträge mit Unterstrich', () => {
+  const dkim = 'crsend._domainkey.kksn.de';
+
+  beforeEach(() => {
+    vi.mocked(api.lookupRecords).mockResolvedValue({
+      domain: dkim,
+      timestamp: '2026-10-15T10:00:00.000Z',
+      records: [{ type: 'TXT', name: dkim, value: 'v=DKIM1; k=rsa; p=MIIB', ttl: 300 }],
+      findings: [],
+    });
+    setPath(`/lookup/${dkim}`);
+  });
+
+  it('zeigt den TXT-Record und fragt nur die DNS-Checks ab', async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText(/v=DKIM1/)).toBeInTheDocument());
+    for (const check of [api.lookupDnssec, api.lookupMail, api.lookupWhois]) {
+      expect(check).toHaveBeenCalledWith(dkim);
+    }
+    for (const check of [api.lookupSsl, api.lookupTechStack, api.lookupPropagation]) {
+      expect(check).not.toHaveBeenCalled();
+    }
+  });
+
+  // Die übersprungenen Sektionen zählen als erledigt — sonst bliebe der
+  // Score für immer beim Skeleton.
+  it('zeigt den Score, obwohl drei Sektionen übersprungen sind', async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Health Score')).toBeInTheDocument());
+  });
+
+  it('blendet die Tabs aus, die einen Host bräuchten', async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Records/ })).toBeInTheDocument());
+    for (const name of [/Propagation/, /Speed/, /Virus Scan/]) {
+      expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole('tab', { name: /Security/ })).toBeInTheDocument();
+  });
+});

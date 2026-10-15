@@ -9,7 +9,7 @@ import type {
   SslInfo,
   TechCategory,
 } from '@/types/dns';
-import type { SectionSlice } from '@/hooks/useProgressiveLookup';
+import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
@@ -345,39 +345,42 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
     );
 
   // A/NS/MX kommen aus den Records und stehen sofort. SSL/DNSSEC/DMARC laden
-  // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts.
+  // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts. Nur
+  // solange sie wirklich laden: bei einem Fehler oder einer übersprungenen
+  // Sektion (DNS-Eintrag ohne Host) blieb sonst das Skeleton für immer stehen.
+  const placeholder = (label: string, status: LoadStatus): QuickFactItem | null =>
+    status === 'loading'
+      ? { label, loading: true }
+      : status !== 'done'
+        ? { label, value: '—', muted: true }
+        : null;
+
   const sslInfo = ssl.data;
   const sslItem: QuickFactItem =
-    ssl.status !== 'done'
-      ? { label: 'SSL', loading: true }
-      : {
-          label: 'SSL',
-          value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
-          ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
-          bad: !sslInfo?.valid || (sslInfo?.daysUntilExpiry ?? 999) < 14,
-        };
+    placeholder('SSL', ssl.status) ?? {
+      label: 'SSL',
+      value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
+      ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
+      bad: !sslInfo?.valid || (sslInfo?.daysUntilExpiry ?? 999) < 14,
+    };
 
   const dnssecInfo = dnssec.data;
   const dnssecItem: QuickFactItem =
-    dnssec.status !== 'done'
-      ? { label: 'DNSSEC', loading: true }
-      : {
-          label: 'DNSSEC',
-          value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
-          ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
-          bad: !dnssecInfo?.enabled,
-        };
+    placeholder('DNSSEC', dnssec.status) ?? {
+      label: 'DNSSEC',
+      value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
+      ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
+      bad: !dnssecInfo?.enabled,
+    };
 
   const dmarcPresent = mail.data?.dmarc.present;
   const dmarcItem: QuickFactItem =
-    mail.status !== 'done'
-      ? { label: 'DMARC', loading: true }
-      : {
-          label: 'DMARC',
-          value: dmarcPresent ? 'gesetzt' : 'fehlt',
-          ok: Boolean(dmarcPresent),
-          bad: !dmarcPresent,
-        };
+    placeholder('DMARC', mail.status) ?? {
+      label: 'DMARC',
+      value: dmarcPresent ? 'gesetzt' : 'fehlt',
+      ok: Boolean(dmarcPresent),
+      bad: !dmarcPresent,
+    };
 
   const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
@@ -388,7 +391,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
     dmarcItem,
   ];
 
-  const techLoading = techStack.status !== 'done';
+  const techLoading = techStack.status === 'loading';
   const sortedTech = sortTech(techStack.data ?? []);
 
   return (

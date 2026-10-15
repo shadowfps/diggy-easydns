@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lookupStandardRecords, isValidDomain, normalizeDomain, getApexDomain, lookupSpfRecord } from './services/dnsLookup.js';
+import { lookupStandardRecords, isValidDomain, isValidDnsName, normalizeDomain, getApexDomain, lookupSpfRecord } from './services/dnsLookup.js';
 import {
   dnsFindings,
   sslFindings,
@@ -344,10 +344,6 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api', apiLimiter);
 
 /**
- * Validiert & normalisiert den `domain`-Query-Param. Sendet bei ungültiger
- * Eingabe selbst eine 400 und gibt null zurück — der Aufrufer bricht dann ab.
- */
-/**
  * Kürzt die Nutzereingabe für die Fehlermeldung.
  *
  * Der Rohwert kommt ungekürzt aus dem Query-String und wurde vor der
@@ -359,17 +355,36 @@ function forMessage(rawInput: string): string {
   return rawInput.length > 80 ? `${rawInput.slice(0, 80)}…` : rawInput;
 }
 
-function resolveDomainParam(req: Request, res: Response): string | null {
+/**
+ * Validiert & normalisiert den `domain`-Query-Param. Sendet bei ungültiger
+ * Eingabe selbst eine 400 und gibt null zurück — der Aufrufer bricht dann ab.
+ *
+ * `target: 'dns'` lässt auch Namen mit Unterstrich zu (`_dmarc.…`,
+ * `s1._domainkey.…`) — für Checks, die nur DNS abfragen. Alles, was den Namen
+ * als Host anspricht (TLS, HTTP), bleibt bei `'host'` und damit bei den
+ * Annahmen, auf denen safeTarget.ts aufbaut.
+ */
+function resolveDomainParam(
+  req: Request,
+  res: Response,
+  target: 'dns' | 'host' = 'host'
+): string | null {
   const rawInput = String(req.query.domain ?? '');
   const domain = normalizeDomain(rawInput);
-  if (!isValidDomain(domain)) {
+  if (target === 'dns' ? isValidDnsName(domain) : isValidDomain(domain)) return domain;
+
+  if (isValidDnsName(domain)) {
+    res.status(400).json({
+      error: 'not_a_hostname',
+      message: `"${forMessage(rawInput)}" ist ein DNS-Eintrag, kein Host — dieser Check braucht einen Webserver.`,
+    });
+  } else {
     res.status(400).json({
       error: 'invalid_domain',
       message: `"${forMessage(rawInput)}" sieht nicht nach einer gültigen Domain aus.`,
     });
-    return null;
   }
-  return domain;
+  return null;
 }
 
 /** Einheitliche Fehlerantwort für die einzelnen Sub-Check-Endpoints. */
@@ -409,16 +424,9 @@ app.get('/api/ip-details', async (req: Request, res: Response) => {
 });
 
 app.get('/api/pagespeed', rejectCrossSite, pageSpeedLimiter, pageSpeedConcurrency, async (req: Request, res: Response) => {
-  const rawInput = String(req.query.domain ?? '');
-  const domain = normalizeDomain(rawInput);
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
   const strategy = req.query.strategy === 'desktop' ? 'desktop' : 'mobile';
-
-  if (!isValidDomain(domain)) {
-    return res.status(400).json({
-      error: 'invalid_domain',
-      message: `"${forMessage(rawInput)}" sieht nicht nach einer gültigen Domain aus.`,
-    });
-  }
 
   try {
     // strategy gehört in den Key — mobile und desktop sind verschiedene Runs.
@@ -438,15 +446,8 @@ app.get('/api/pagespeed', rejectCrossSite, pageSpeedLimiter, pageSpeedConcurrenc
 });
 
 app.get('/api/virusscan', rejectCrossSite, virusScanLimiter, virusScanConcurrency, async (req: Request, res: Response) => {
-  const rawInput = String(req.query.domain ?? '');
-  const domain = normalizeDomain(rawInput);
-
-  if (!isValidDomain(domain)) {
-    return res.status(400).json({
-      error: 'invalid_domain',
-      message: `"${forMessage(rawInput)}" sieht nicht nach einer gültigen Domain aus.`,
-    });
-  }
+  const domain = resolveDomainParam(req, res);
+  if (!domain) return;
 
   try {
     const result = await cached(`virusscan:${domain}`, VIRUSSCAN_TTL_MS, () =>
@@ -602,7 +603,7 @@ app.get('/api/domain-check', availabilityLimiter, async (req: Request, res: Resp
  * werden vom Client im Hintergrund nachgeladen.
  */
 app.get('/api/lookup', async (req: Request, res: Response) => {
-  const domain = resolveDomainParam(req, res);
+  const domain = resolveDomainParam(req, res, 'dns');
   if (!domain) return;
 
   try {
@@ -642,7 +643,7 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
 /* ─── Sekundäre Sub-Checks — je ein Endpoint, parallel nachgeladen ─────── */
 
 app.get('/api/lookup/propagation', async (req: Request, res: Response) => {
-  const domain = resolveDomainParam(req, res);
+  const domain = resolveDomainParam(req, res, 'dns');
   if (!domain) return;
   try {
     const propagation = await cached(`propagation:${domain}`, LOOKUP_TTL_MS, () =>
@@ -655,7 +656,7 @@ app.get('/api/lookup/propagation', async (req: Request, res: Response) => {
 });
 
 app.get('/api/lookup/dnssec', async (req: Request, res: Response) => {
-  const domain = resolveDomainParam(req, res);
+  const domain = resolveDomainParam(req, res, 'dns');
   if (!domain) return;
   const apexDomain = getApexDomain(domain);
   try {
@@ -680,7 +681,7 @@ app.get('/api/lookup/ssl', async (req: Request, res: Response) => {
 });
 
 app.get('/api/lookup/mail', async (req: Request, res: Response) => {
-  const domain = resolveDomainParam(req, res);
+  const domain = resolveDomainParam(req, res, 'dns');
   if (!domain) return;
   const apexDomain = getApexDomain(domain);
   try {
@@ -697,7 +698,7 @@ app.get('/api/lookup/mail', async (req: Request, res: Response) => {
 });
 
 app.get('/api/lookup/whois', async (req: Request, res: Response) => {
-  const domain = resolveDomainParam(req, res);
+  const domain = resolveDomainParam(req, res, 'dns');
   if (!domain) return;
   const apexDomain = getApexDomain(domain);
   try {

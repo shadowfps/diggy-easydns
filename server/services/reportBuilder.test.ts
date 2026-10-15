@@ -136,6 +136,33 @@ describe('dnsFindings — Zusammenspiel mit WHOIS', () => {
   });
 });
 
+/**
+ * #64: Unter `crsend._domainkey.kksn.de` liegt nur ein TXT-Record. Als Host
+ * bewertet, kamen dafür ein Critical ("löst zu keiner IP auf") und ein
+ * IPv6-Hinweis — für einen Namen, der nie eine Adresse haben soll.
+ */
+describe('dnsFindings — DNS-Einträge mit Unterstrich', () => {
+  const dkim = 'crsend._domainkey.kksn.de';
+  const txt: DnsRecord[] = [{ type: 'TXT', name: dkim, value: 'v=DKIM1; k=rsa; p=MIIB', ttl: 300 }];
+
+  it('meldet keine fehlenden Adressen, wenn der Eintrag existiert', () => {
+    expect(dnsFindings(txt, dkim, 'kksn.de')).toEqual([]);
+  });
+
+  it('meldet es kritisch, wenn unter dem Namen nichts liegt', () => {
+    const findings = dnsFindings([], dkim, 'kksn.de');
+    expect(findings.map((f) => f.id)).toEqual(['no-records']);
+    expect(findings[0].severity).toBe('critical');
+    // Läuft die Domain ab, verschwindet auch der Eintrag — dann ist das die
+    // Folge, nicht eine zweite Ursache.
+    expect(findings[0].causedBy).toContain('domain-expired');
+  });
+
+  it('bewertet Hostnamen weiter wie bisher', () => {
+    expect(dnsFindings([], 'www.kksn.de', 'kksn.de').map((f) => f.id)).toContain('no-address');
+  });
+});
+
 describe('whoisFindings', () => {
   it('erzeugt kein Finding, wenn RDAP nichts liefert', () => {
     // Dass eine TLD kein RDAP anbietet, ist keine Schwäche der Domain und
