@@ -143,7 +143,7 @@ export function DatenschutzView({ onOpenImpressum }: DatenschutzViewProps) {
             angeforderten Abrufs) und erfolgt ausschließlich auf deine Eingabe hin.
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[34rem] border-collapse text-left text-sm">
+            <table className="w-full min-w-136 border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-ink-200 dark:border-ink-800">
                   <Th>Dienst</Th>

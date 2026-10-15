@@ -88,7 +88,8 @@ export async function lookupPageSpeed(
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(
         `PageSpeed Timeout nach ${effectiveMs / 1000}s. Schwere oder mobile Ansicht kann länger dauern — ` +
-          `in der .env z. B. PAGESPEED_TIMEOUT_MS=90000 setzen oder Desktop-Strategie testen.`
+          `in der .env z. B. PAGESPEED_TIMEOUT_MS=90000 setzen oder Desktop-Strategie testen.`,
+        { cause: error }
       );
     }
     throw error;

@@ -125,7 +125,7 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
                   {expiresInDays !== undefined && (
                     <span
                       className={cn(
-                        'text-xs font-medium px-1.5 py-0.5 rounded',
+                        'text-xs font-medium px-1.5 py-0.5 rounded-sm',
                         expiresInDays < 0
                           ? 'bg-red-500/10 text-red-600 dark:text-red-400'
                           : expiresInDays < 30
@@ -176,7 +176,7 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
                   <button
                     type="button"
                     onClick={() => onUseDomain(ns)}
-                    className="min-w-0 truncate rounded-md text-left font-mono text-xs text-ink-900/80 transition-colors hover:text-ink-950 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/80 dark:hover:text-white dark:focus-visible:outline-ink-50"
+                    className="min-w-0 truncate rounded-md text-left font-mono text-xs text-ink-900/80 transition-colors hover:text-ink-950 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/80 dark:hover:text-white dark:focus-visible:outline-ink-50"
                     title={`${ns} in die Suche übernehmen`}
                   >
                     {ns}
@@ -270,7 +270,7 @@ function Row({
       <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 w-20 shrink-0 font-medium pt-0.5">
         {label}
       </span>
-      <span className="flex-1 text-ink-900/80 dark:text-ink-50/80 break-words">{value}</span>
+      <span className="flex-1 text-ink-900/80 dark:text-ink-50/80 wrap-break-word">{value}</span>
     </div>
   );
 }

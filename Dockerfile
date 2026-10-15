@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY index.html diggy-icon.svg postcss.config.js tailwind.config.js tsconfig.json tsconfig.node.json tsconfig.server.json vite.config.ts ./
+COPY index.html diggy-icon.svg tsconfig.json tsconfig.node.json tsconfig.server.json vite.config.ts ./
 COPY src ./src
 COPY server ./server
 COPY shared ./shared

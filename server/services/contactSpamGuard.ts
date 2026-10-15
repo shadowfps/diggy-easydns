@@ -195,7 +195,7 @@ function incrementRateBucket(
   bucket.dayCount += 1;
 }
 
-export function assertChallengeRequestAllowed(req: Request): void {
+function assertChallengeRequestAllowed(req: Request): void {
   try {
     incrementRateBucket(challengeRateByIp, getClientIp(req), MAX_CHALLENGES_PER_HOUR, MAX_CHALLENGES_PER_HOUR * 4);
   } catch {

@@ -84,7 +84,7 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
        */
       className={cn(
         'flex gap-1 overflow-x-auto border-b border-ink-100 dark:border-ink-900/80',
-        '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+        'scrollbar-none [&::-webkit-scrollbar]:hidden'
       )}
     >
       {tabs.map((tab) => {
@@ -108,7 +108,7 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
             onClick={() => onChange(tab.id)}
             className={cn(
               'relative shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors',
-              'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink-900 dark:focus-visible:outline-ink-50',
+              'focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink-900 dark:focus-visible:outline-ink-50',
               selected
                 ? 'text-ink-900 dark:text-ink-50'
                 : 'text-ink-900/50 dark:text-ink-50/50 hover:text-ink-900/80 dark:hover:text-ink-50/80'

@@ -30,7 +30,7 @@ export function AppErrorFallback({ error }: { error: Error }) {
             Zur Startseite
           </a>
         </div>
-        <p className="mt-5 break-words font-mono text-[11px] text-ink-900/35 dark:text-ink-50/35">
+        <p className="mt-5 wrap-break-word font-mono text-[11px] text-ink-900/35 dark:text-ink-50/35">
           {error.message}
         </p>
       </div>

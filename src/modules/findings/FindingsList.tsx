@@ -84,7 +84,7 @@ function FindingCard({ finding, delay }: { finding: Finding; delay: number }) {
           <div className="flex items-center gap-2 mb-1.5">
             <span
               className={cn(
-                'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+                'text-[10px] font-medium px-1.5 py-0.5 rounded-sm border',
                 cfg.classes
               )}
             >

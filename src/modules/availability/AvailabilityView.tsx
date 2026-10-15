@@ -64,7 +64,7 @@ export function AvailabilityView() {
               placeholder="meinprojekt oder meinprojekt.de"
               autoComplete="off"
               spellCheck={false}
-              className="h-14 flex-1 rounded-xl border border-ink-200 bg-white px-4 font-mono text-base text-ink-900 placeholder:text-ink-900/35 focus:border-ink-900/40 focus:outline-none focus:ring-2 focus:ring-ink-900/10 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50 dark:placeholder:text-ink-50/35 dark:focus:border-ink-50/40 dark:focus:ring-ink-50/10"
+              className="h-14 flex-1 rounded-xl border border-ink-200 bg-white px-4 font-mono text-base text-ink-900 placeholder:text-ink-900/35 focus:border-ink-900/40 focus:outline-hidden focus:ring-2 focus:ring-ink-900/10 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50 dark:placeholder:text-ink-50/35 dark:focus:border-ink-50/40 dark:focus:ring-ink-50/10"
             />
             <button
               type="submit"

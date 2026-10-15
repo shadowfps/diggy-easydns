@@ -65,7 +65,7 @@ export function Header({ onHome, onHistory, onAvailability, onAbout }: HeaderPro
           <button
             type="button"
             onClick={handleHome}
-            className="font-brand font-bold text-xl tracking-tight text-ink-950 dark:text-ink-50 lowercase transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink-900 dark:focus-visible:outline-ink-50"
+            className="font-brand font-bold text-xl tracking-tight text-ink-950 dark:text-ink-50 lowercase transition-opacity hover:opacity-70 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink-900 dark:focus-visible:outline-ink-50"
             aria-label="Zur Startseite"
           >
             diggy
@@ -199,7 +199,7 @@ function ThemeButton({
       className={cn(
         'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg transition-all text-xs font-medium',
         active
-          ? 'bg-white dark:bg-ink-900 shadow-sm text-ink-900 dark:text-ink-50'
+          ? 'bg-white dark:bg-ink-900 shadow-xs text-ink-900 dark:text-ink-50'
           : 'text-ink-900/50 dark:text-ink-50/50 hover:text-ink-900/80 dark:hover:text-ink-50/80'
       )}
     >

@@ -1,60 +1,12 @@
 import type {
-  DetectedTech,
   DnsRecord,
   DnssecInfo,
   Finding,
-  LookupReport,
   MailSecurity,
   ResolverResult,
   SslInfo,
   WhoisInfo,
 } from '../types.js';
-import { calculateScore } from '../../shared/scoring.js';
-
-interface BuildReportInput {
-  domain: string;
-  apexDomain: string;
-  records: DnsRecord[];
-  propagation: ResolverResult[];
-  dnssec: DnssecInfo;
-  mail: MailSecurity;
-  ssl: SslInfo | null;
-  whois: WhoisInfo | null;
-  techStack: DetectedTech[];
-}
-
-/**
- * Baut aus allen Sub-Modul-Ergebnissen den finalen LookupReport.
- *
- * Jedes Modul (DNS, Propagation, DNSSEC, SSL, Mail, WHOIS) trägt seinen Teil
- * zur Findings-Liste bei. Der Health-Score ist eine reine Aggregation.
- */
-export function buildReport(input: BuildReportInput): LookupReport {
-  const findings: Finding[] = [
-    ...dnsFindings(input.records, input.domain, input.apexDomain),
-    ...mailFindings(input.mail, input.apexDomain),
-    ...dnssecFindings(input.dnssec),
-    ...sslFindings(input.ssl),
-    ...propagationFindings(input.propagation),
-    ...whoisFindings(input.whois),
-  ];
-
-  const healthScore = calculateScore(findings);
-
-  return {
-    domain: input.domain,
-    timestamp: new Date().toISOString(),
-    records: input.records,
-    propagation: input.propagation,
-    ssl: input.ssl ?? undefined,
-    dnssec: input.dnssec,
-    mail: input.mail,
-    whois: input.whois ?? undefined,
-    findings,
-    healthScore,
-    techStack: input.techStack,
-  };
-}
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 

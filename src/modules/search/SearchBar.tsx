@@ -68,7 +68,7 @@ export function SearchBar({
           placeholder="Jetzt deine Anfrage starten"
           autoComplete="off"
           spellCheck={false}
-          className="w-full h-14 pl-11 pr-32 rounded-xl bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 font-mono text-base placeholder:text-ink-900/30 dark:placeholder:text-ink-50/30 focus:outline-none focus:ring-2 focus:ring-ink-900/20 dark:focus:ring-ink-50/25 focus:border-ink-900/60 dark:focus:border-ink-50/60 transition-all"
+          className="w-full h-14 pl-11 pr-32 rounded-xl bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 font-mono text-base placeholder:text-ink-900/30 dark:placeholder:text-ink-50/30 focus:outline-hidden focus:ring-2 focus:ring-ink-900/20 dark:focus:ring-ink-50/25 focus:border-ink-900/60 dark:focus:border-ink-50/60 transition-all"
         />
         <button
           type="submit"

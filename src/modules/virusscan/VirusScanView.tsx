@@ -24,8 +24,8 @@ interface VirusScanViewProps {
 export function VirusScanView({ data, loading, error, onRun }: VirusScanViewProps) {
   return (
     <div className="surface relative overflow-hidden rounded-2xl p-6 md:p-8">
-      <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-ink-900/20 to-transparent dark:via-white/20" />
-      <div className="pointer-events-none absolute left-1/2 top-0 h-28 w-72 -translate-x-1/2 rounded-full bg-ink-900/[0.035] blur-3xl dark:bg-white/[0.05]" />
+      <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-ink-900/20 to-transparent dark:via-white/20" />
+      <div className="pointer-events-none absolute left-1/2 top-0 h-28 w-72 -translate-x-1/2 rounded-full bg-ink-900/[0.035] blur-3xl dark:bg-white/5" />
 
       <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-900/60 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50/60">
@@ -260,7 +260,7 @@ function StatCard({
   tone: 'good' | 'warn' | 'bad' | 'neutral';
 }) {
   return (
-    <div className="rounded-xl border border-ink-100 bg-white/70 p-4 text-center shadow-sm dark:border-ink-900/80 dark:bg-ink-950/35">
+    <div className="rounded-xl border border-ink-100 bg-white/70 p-4 text-center shadow-xs dark:border-ink-900/80 dark:bg-ink-950/35">
       <p className="mb-1 text-xs text-ink-900/50 dark:text-ink-50/50">{label}</p>
       <p
         className={cn(
@@ -297,7 +297,7 @@ function ScanLoader() {
 
   return (
     <div className="mx-auto mt-8 max-w-xl" aria-busy="true" aria-live="polite">
-      <div className="rounded-2xl border border-ink-200 bg-white/70 p-6 text-center shadow-sm dark:border-ink-800 dark:bg-ink-950/35">
+      <div className="rounded-2xl border border-ink-200 bg-white/70 p-6 text-center shadow-xs dark:border-ink-800 dark:bg-ink-950/35">
         <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900">
           <Loader2 className="h-5 w-5 animate-spin text-ink-900 dark:text-ink-50" />
         </div>
@@ -317,7 +317,7 @@ function ScanLoader() {
           {[0, 1, 2, 3, 4].map((i) => (
             <span
               key={i}
-              className="h-1.5 rounded-full bg-ink-200 dark:bg-ink-800 [animation:scanBar_1.2s_ease-in-out_infinite]"
+              className="h-1.5 rounded-full bg-ink-200 dark:bg-ink-800 animate-[scanBar_1.2s_ease-in-out_infinite]"
               style={{ animationDelay: `${i * 140}ms` }}
             />
           ))}
@@ -341,7 +341,7 @@ function IdlePanel() {
 
 function IdleTile({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-ink-100 bg-white text-xs font-medium text-ink-900/60 shadow-sm dark:border-ink-800 dark:bg-ink-900 dark:text-ink-50/60">
+    <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-ink-100 bg-white text-xs font-medium text-ink-900/60 shadow-xs dark:border-ink-800 dark:bg-ink-900 dark:text-ink-50/60">
       <span className="text-ink-900 dark:text-ink-50">{icon}</span>
       <span>{label}</span>
     </div>
