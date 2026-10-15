@@ -39,7 +39,9 @@ const DIST = path.join(ROOT, 'dist');
  */
 const BUDGETS_KB = {
   'react.js': 68, // 63,36
-  'motion.js': 48, // 44,43
+  // Motion 14.2 (15.10.2026): +3,3 kB für hardwarebeschleunigte x/y/scale —
+  // genau die Transforms, die hier an über 60 Stellen animiert werden.
+  'motion.js': 51, // 47,67
   'index.js': 48, // 43,73
   'icons.js': 9, // 7,78
   // Tailwind 4 (15.10.2026): +2,3 kB für `@property`-Deklarationen, ihren
@@ -49,8 +51,8 @@ const BUDGETS_KB = {
 };
 
 /** Obergrenze für die Summe. Fängt auch einen neuen, ungebudgetierten Chunk. */
-// Angehoben mit Tailwind 4 und tailwind-merge 3 (+2,3 kB CSS, +1,9 kB JS).
-const CRITICAL_PATH_BUDGET_KB = 180; // 171,68
+// Angehoben mit Tailwind 4, tailwind-merge 3 und Motion 14.2 (siehe oben).
+const CRITICAL_PATH_BUDGET_KB = 183; // 175,01
 
 /**
  * Aus `react-BAgBMDim.js` wird `react.js` — der Hash wechselt bei jedem Build.
