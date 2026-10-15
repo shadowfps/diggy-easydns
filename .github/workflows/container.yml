@@ -64,6 +64,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Startet den gebauten Server wie im Container. Die Tests laufen ohne
+      # dist/, Teile des Routings entstehen aber erst mit dem Build — der
+      # Express-5-PR (#70) war grün und wäre in Produktion nicht gestartet.
+      - name: Smoke-Test
+        run: npm run smoke
+
       - name: Bundle-Budget
         run: npm run size
 
