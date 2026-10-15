@@ -1,7 +1,9 @@
 import { motion } from 'motion/react';
-import { AlertCircle, Loader2, Server } from 'lucide-react';
+import { AlertCircle, Loader2, Network, Server } from 'lucide-react';
 import { IpDetailsRows } from '@/components/ip/IpAddressLink';
 import { formatIpOwnerLabel, useIpDetails } from '@/components/ip/useIpDetails';
+import { CardHeader } from '@/components/ui/CardHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface IpResultViewProps {
   ip: string;
@@ -24,59 +26,62 @@ export function IpResultView({ ip }: IpResultViewProps) {
       transition={{ duration: 0.24 }}
       className="mx-auto mt-6 w-full max-w-2xl md:mt-8"
     >
-      <div className="mb-5 text-center">
-        <span className="font-mono text-base text-ink-900/60 dark:text-ink-50/60">{ip}</span>
+      {/* Kopf wie beim DNS-Report: Überzeile, dann die Adresse selbst. */}
+      <div className="min-w-0">
+        <p className="eyebrow">IP-Lookup</p>
+        <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
+          {ip}
+        </h1>
       </div>
 
-      {/* PTR-Highlight */}
-      <div className="surface mb-4 rounded-xl p-5">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-ink-900/45 dark:text-ink-50/45">
-          <Server className="h-4 w-4" />
-          <span>PTR / Reverse DNS</span>
+      <div className="mt-6 flex flex-col gap-4">
+        {/* PTR-Highlight */}
+        <div className="card">
+          <CardHeader icon={<Server className="size-4" />} title="PTR / Reverse DNS" />
+          <div className="mt-4">
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-fg-muted">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Reverse-DNS wird ermittelt…</span>
+              </div>
+            ) : ptrHosts.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {ptrHosts.map((host) => (
+                  <span key={host} className="break-all font-mono text-lg font-semibold text-fg">
+                    {host}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-fg-subtle">Für diese IP ist kein PTR-Record konfiguriert.</p>
+            )}
+            {owner && !loading && <p className="mt-2 text-sm text-fg-muted">{owner}</p>}
+          </div>
         </div>
-        {loading ? (
-          <div className="mt-3 flex items-center gap-2 text-sm text-ink-900/60 dark:text-ink-50/60">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Reverse-DNS wird ermittelt…</span>
+
+        {/* Details */}
+        {loading && (
+          <div className="card flex items-center gap-2 text-sm text-fg-muted">
+            <Loader2 className="size-4 animate-spin" />
+            <span>IP-Details werden geladen…</span>
           </div>
-        ) : ptrHosts.length > 0 ? (
-          <div className="mt-2 flex flex-col gap-1">
-            {ptrHosts.map((host) => (
-              <span key={host} className="break-all font-mono text-lg font-semibold text-ink-900 dark:text-white">
-                {host}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-2 text-sm italic text-ink-900/45 dark:text-ink-50/45">
-            Für diese IP ist kein PTR-Record konfiguriert.
-          </p>
         )}
-        {owner && !loading && (
-          <p className="mt-2 text-sm text-ink-900/55 dark:text-ink-50/55">{owner}</p>
+
+        {error && !loading && (
+          <EmptyState tone="danger" icon={<AlertCircle className="size-5" />}>
+            {error}
+          </EmptyState>
+        )}
+
+        {details && !loading && !error && (
+          <div className="card">
+            <CardHeader icon={<Network className="size-4" />} title="IP-, Netzwerk- und Geolocation-Details" />
+            <div className="mt-4">
+              <IpDetailsRows details={details} />
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Details */}
-      {loading && (
-        <div className="surface flex items-center gap-2 rounded-xl px-4 py-5 text-sm text-ink-900/60 dark:text-ink-50/60">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>IP-Details werden geladen…</span>
-        </div>
-      )}
-
-      {error && !loading && (
-        <div className="flex items-start gap-2 rounded-xl bg-red-500/10 px-4 py-4 text-sm text-red-600 dark:text-red-400">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {details && !loading && !error && (
-        <div className="surface rounded-xl p-5">
-          <IpDetailsRows details={details} />
-        </div>
-      )}
     </motion.div>
   );
 }

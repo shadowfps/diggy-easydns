@@ -83,7 +83,7 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
        * anklicken, weil sie nur auf Anforderung laden.
        */
       className={cn(
-        'flex gap-1 overflow-x-auto border-b border-ink-100 dark:border-ink-900/80',
+        'flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1 shadow-card',
         'scrollbar-none [&::-webkit-scrollbar]:hidden'
       )}
     >
@@ -107,28 +107,31 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             className={cn(
-              'relative shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors',
-              'focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink-900 dark:focus-visible:outline-ink-50',
-              selected
-                ? 'text-ink-900 dark:text-ink-50'
-                : 'text-ink-900/50 dark:text-ink-50/50 hover:text-ink-900/80 dark:hover:text-ink-50/80'
+              'relative h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-colors',
+              selected ? 'text-on-accent' : 'text-fg-muted hover:text-fg'
             )}
           >
-            <span className="flex items-center gap-1.5">
+            {/* Die Pille gleitet zum aktiven Tab — liegt hinter dem Text. */}
+            {selected && (
+              <motion.span
+                layoutId="active-tab"
+                className="absolute inset-0 rounded-full bg-accent"
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              />
+            )}
+            <span className="relative flex items-center gap-1.5">
               {tab.label}
               {tab.count !== undefined && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-ink-100 dark:bg-ink-900 text-ink-900/60 dark:text-ink-50/60 tabular-nums">
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 text-[11px] font-semibold leading-[18px] tabular-nums',
+                    selected ? 'bg-on-accent/15 text-on-accent' : 'bg-surface-muted text-fg-muted'
+                  )}
+                >
                   {tab.count}
                 </span>
               )}
             </span>
-            {selected && (
-              <motion.div
-                layoutId="active-tab"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-ink-950 dark:bg-ink-50"
-                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              />
-            )}
           </button>
         );
       })}

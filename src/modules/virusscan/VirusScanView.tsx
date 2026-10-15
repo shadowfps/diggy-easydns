@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { VirusScanReport } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { CardHeader } from '@/components/ui/CardHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle2,
   Loader2,
@@ -10,6 +13,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldX,
+  Tag,
   ThumbsDown,
   ThumbsUp,
 } from 'lucide-react';
@@ -23,158 +27,152 @@ interface VirusScanViewProps {
 
 export function VirusScanView({ data, loading, error, onRun }: VirusScanViewProps) {
   return (
-    <div className="surface relative overflow-hidden rounded-2xl p-6 md:p-8">
-      <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-ink-900/20 to-transparent dark:via-white/20" />
-      <div className="pointer-events-none absolute left-1/2 top-0 h-28 w-72 -translate-x-1/2 rounded-full bg-ink-900/[0.035] blur-3xl dark:bg-white/5" />
+    <div className="flex flex-col gap-4">
+      {/* Scan-Block: Titel, Start — darunter Leerlauf, Ladeanzeige oder das
+          Urteil mit den Kennzahlen. Details (Engines, Kategorien) folgen als
+          eigene Karten. */}
+      <div className="card py-10 sm:py-12">
+        <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
+          <p className="eyebrow">Security Scan</p>
+          <h3 className="mt-1.5 text-2xl font-semibold tracking-tight text-fg">VirusTotal Scan</h3>
+          <p className="mt-1.5 max-w-md text-sm text-fg-muted">
+            Prüft die Domain gegen 80+ Sicherheits-Engines auf Malware, Phishing und Blacklists.
+          </p>
 
-      <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-900/60 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50/60">
-          <Shield className="h-3.5 w-3.5" />
-          Security Scan
+          <button
+            type="button"
+            onClick={onRun}
+            disabled={loading}
+            className="btn btn-primary btn-lg mt-6 min-w-40"
+          >
+            <Play className="size-4 fill-current" />
+            <span>{loading ? 'Scanning…' : 'Scan starten'}</span>
+          </button>
+
+          {data && (
+            <span className="badge mt-5">
+              <CheckCircle2 className="size-3" />
+              Scan abgeschlossen
+            </span>
+          )}
         </div>
-        <h3 className="text-2xl font-semibold tracking-tight md:text-3xl">VirusTotal Scan</h3>
-        <p className="mt-2 max-w-md text-sm text-ink-900/55 dark:text-ink-50/55">
-          Prüft die Domain gegen 80+ Sicherheits-Engines auf Malware, Phishing und Blacklists.
-        </p>
 
-        <button
-          onClick={onRun}
-          disabled={loading}
-          className="mt-6 group inline-flex h-12 min-w-40 items-center justify-center gap-2 rounded-full bg-ink-950 px-5 text-sm font-semibold text-white shadow-lg shadow-black/10 transition-all hover:-translate-y-0.5 hover:bg-ink-800 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-55 dark:bg-ink-50 dark:text-ink-950 dark:shadow-white/5 dark:hover:bg-ink-200"
-        >
-          <Play className="h-4 w-4 fill-current transition-transform group-hover:translate-x-0.5" />
-          <span>{loading ? 'Scanning…' : 'Scan starten'}</span>
-        </button>
+        {!data && !loading && !error && <IdlePanel />}
+
+        {loading && <ScanLoader />}
+
+        {data && <ScanSummary data={data} />}
       </div>
 
-      {!data && !loading && !error && <IdlePanel />}
-
-      {loading && <ScanLoader />}
-
       {error && (
-        <div className="mx-auto mt-8 max-w-2xl rounded-xl bg-red-500/10 p-4 text-center text-sm text-red-700 dark:text-red-300">
+        <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
           {error}
-        </div>
+        </EmptyState>
       )}
 
-      {data && <ScanResult data={data} />}
+      {data && <ScanDetails data={data} />}
     </div>
   );
 }
 
-function ScanResult({ data }: { data: VirusScanReport }) {
+/** Urteil und Kennzahlen — steht im Scan-Block direkt unter dem Start. */
+function ScanSummary({ data }: { data: VirusScanReport }) {
   const total = data.stats.malicious + data.stats.suspicious + data.stats.harmless + data.stats.undetected;
   const flagged = data.stats.malicious + data.stats.suspicious;
-  const flaggedVendors = data.vendors.filter(
-    (v) => v.category === 'malicious' || v.category === 'suspicious'
-  );
-  const harmlessVendors = data.vendors.filter((v) => v.category === 'harmless');
 
   return (
-    <div className="relative mx-auto mt-8 max-w-4xl space-y-4">
-      <div className="flex items-center justify-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
-        <CheckCircle2 className="h-4 w-4" />
-        <span className="font-medium">Scan abgeschlossen</span>
+    <div className="mx-auto mt-8 max-w-4xl">
+      <Verdict data={data} total={total} flagged={flagged} />
+
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatPanel label="Malicious" value={data.stats.malicious} tone="bad" />
+        <StatPanel label="Suspicious" value={data.stats.suspicious} tone="warn" />
+        <StatPanel label="Harmless" value={data.stats.harmless} tone="good" />
+        <StatPanel label="Undetected" value={data.stats.undetected} tone="neutral" />
       </div>
 
-      {/* Verdict Card */}
-      <VerdictCard data={data} total={total} flagged={flagged} />
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Malicious" value={data.stats.malicious} tone="bad" />
-        <StatCard label="Suspicious" value={data.stats.suspicious} tone="warn" />
-        <StatCard label="Harmless" value={data.stats.harmless} tone="good" />
-        <StatCard label="Undetected" value={data.stats.undetected} tone="neutral" />
-      </div>
-
-      {/* Reputation + Votes */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-ink-100 bg-white/70 p-4 dark:border-ink-900/80 dark:bg-ink-950/35">
-          <p className="mb-1 text-xs uppercase tracking-[0.14em] text-ink-900/45 dark:text-ink-50/45">
-            Reputation Score
-          </p>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="panel">
+          <p className="text-xs text-fg-subtle">Reputation Score</p>
           <p
             className={cn(
-              'text-2xl font-semibold tabular-nums',
-              data.reputation < 0
-                ? 'text-red-600 dark:text-red-400'
-                : data.reputation > 0
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-ink-900 dark:text-ink-50'
+              'mt-1 text-2xl font-semibold tabular-nums tracking-tight',
+              data.reputation < 0 ? 'text-danger' : data.reputation > 0 ? 'text-success' : 'text-fg'
             )}
           >
             {data.reputation > 0 ? `+${data.reputation}` : data.reputation}
           </p>
-          <p className="mt-0.5 text-xs text-ink-900/40 dark:text-ink-50/40">
-            Community-Bewertung (negativ = schlechter Ruf)
-          </p>
+          <p className="mt-1 text-xs text-fg-subtle">Community-Bewertung (negativ = schlechter Ruf)</p>
         </div>
 
-        <div className="rounded-xl border border-ink-100 bg-white/70 p-4 dark:border-ink-900/80 dark:bg-ink-950/35">
-          <p className="mb-2 text-xs uppercase tracking-[0.14em] text-ink-900/45 dark:text-ink-50/45">
-            Community Votes
-          </p>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-              <ThumbsUp className="h-4 w-4" />
-              <span className="text-lg font-semibold tabular-nums">{data.totalVotes.harmless}</span>
+        <div className="panel">
+          <p className="text-xs text-fg-subtle">Community Votes</p>
+          <div className="mt-1 flex items-center gap-5">
+            <div className="flex items-center gap-1.5">
+              <ThumbsUp className="size-4 text-success" />
+              <span className="text-2xl font-semibold tabular-nums tracking-tight text-fg">
+                {data.totalVotes.harmless}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-              <ThumbsDown className="h-4 w-4" />
-              <span className="text-lg font-semibold tabular-nums">{data.totalVotes.malicious}</span>
+            <div className="flex items-center gap-1.5">
+              <ThumbsDown className="size-4 text-danger" />
+              <span className="text-2xl font-semibold tabular-nums tracking-tight text-fg">
+                {data.totalVotes.malicious}
+              </span>
             </div>
           </div>
-          <p className="mt-1 text-xs text-ink-900/40 dark:text-ink-50/40">
+          <p className="mt-1 text-xs text-fg-subtle">
             Letzte Analyse: {new Date(data.lastAnalysisDate).toLocaleDateString('de-DE')}
           </p>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Flagged Vendors */}
+/** Angeschlagene Engines, Kategorien, Entwarnung — je eine eigene Karte. */
+function ScanDetails({ data }: { data: VirusScanReport }) {
+  const flaggedVendors = data.vendors.filter(
+    (v) => v.category === 'malicious' || v.category === 'suspicious'
+  );
+  const harmlessVendors = data.vendors.filter((v) => v.category === 'harmless');
+  // Rot nur, wenn wirklich eine Engine „malicious“ meldet — reine
+  // Verdachtsfälle sind eine Warnung.
+  const anyMalicious = flaggedVendors.some((v) => v.category === 'malicious');
+
+  return (
+    <>
       {flaggedVendors.length > 0 && (
-        <div className="rounded-xl border border-red-200 bg-red-50/60 p-4 dark:border-red-900/40 dark:bg-red-950/20">
-          <div className="mb-3 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
-              {flaggedVendors.length} Engine{flaggedVendors.length !== 1 ? 's' : ''} haben angeschlagen
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+        <div className="card-flush divide-y divide-line-subtle">
+          <CardHeader
+            className="px-5 py-4 sm:px-6"
+            tone={anyMalicious ? 'danger' : 'warning'}
+            icon={anyMalicious ? <AlertCircle className="size-4" /> : <AlertTriangle className="size-4" />}
+            title={
+              <>
+                {flaggedVendors.length} Engine{flaggedVendors.length !== 1 ? 's' : ''} haben angeschlagen
+              </>
+            }
+          />
+          <ul className="divide-y divide-line-subtle">
             {flaggedVendors.map((v) => (
-              <div
-                key={v.name}
-                className="flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-ink-950/50"
-              >
-                <span className="text-xs font-medium text-ink-900 dark:text-ink-50">{v.name}</span>
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                    v.category === 'malicious'
-                      ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                      : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                  )}
-                >
+              <li key={v.name} className="flex items-center justify-between gap-3 px-5 py-3 sm:px-6">
+                <span className="min-w-0 truncate text-sm text-fg">{v.name}</span>
+                <span className={cn('badge', v.category === 'malicious' ? 'badge-danger' : 'badge-warning')}>
                   {v.result}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 
-      {/* Categories */}
       {Object.keys(data.categories).length > 0 && (
-        <div className="rounded-xl border border-ink-100 bg-white/60 p-4 dark:border-ink-900/80 dark:bg-ink-950/30">
-          <p className="mb-3 text-xs uppercase tracking-[0.14em] text-ink-900/45 dark:text-ink-50/45">
-            Kategorisierung durch Sicherheits-Engines
-          </p>
-          <div className="flex flex-wrap gap-2">
+        <div className="card">
+          <CardHeader icon={<Tag className="size-4" />} title="Kategorisierung durch Sicherheits-Engines" />
+          <div className="mt-4 flex flex-wrap gap-2">
             {[...new Set(Object.values(data.categories))].map((cat) => (
-              <span
-                key={cat}
-                className="rounded-full border border-ink-200 bg-ink-50 px-2.5 py-1 text-xs font-medium text-ink-700 dark:border-ink-800 dark:bg-ink-900 dark:text-ink-300"
-              >
+              <span key={cat} className="badge">
                 {cat}
               </span>
             ))}
@@ -182,22 +180,45 @@ function ScanResult({ data }: { data: VirusScanReport }) {
         </div>
       )}
 
-      {/* Clean vendors summary */}
       {flaggedVendors.length === 0 && harmlessVendors.length > 0 && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-              {harmlessVendors.length} Engines haben die Domain als unbedenklich eingestuft.
-            </p>
-          </div>
+        <div className="card flex items-center gap-3">
+          <span className="icon-tile icon-tile-success">
+            <ShieldCheck className="size-4" />
+          </span>
+          <p className="text-sm text-fg">
+            {harmlessVendors.length} Engines haben die Domain als unbedenklich eingestuft.
+          </p>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function VerdictCard({
+const VERDICT = {
+  clean: {
+    icon: ShieldCheck,
+    label: 'Sauber',
+    sub: 'Keine Bedrohungen erkannt',
+    tile: 'icon-tile-success',
+    text: 'text-success',
+  },
+  suspicious: {
+    icon: ShieldAlert,
+    label: 'Verdächtig',
+    sub: 'Einige Engines haben Bedenken',
+    tile: 'icon-tile-warning',
+    text: 'text-warning',
+  },
+  malicious: {
+    icon: ShieldX,
+    label: 'Schädlich',
+    sub: 'Domain als Bedrohung eingestuft',
+    tile: 'icon-tile-danger',
+    text: 'text-danger',
+  },
+} as const;
+
+function Verdict({
   data,
   total,
   flagged,
@@ -206,69 +227,52 @@ function VerdictCard({
   total: number;
   flagged: number;
 }) {
-  const config = {
-    clean: {
-      icon: <ShieldCheck className="h-8 w-8" />,
-      label: 'Sauber',
-      sub: 'Keine Bedrohungen erkannt',
-      bg: 'bg-emerald-50/80 dark:bg-emerald-950/30',
-      border: 'border-emerald-200 dark:border-emerald-900/50',
-      text: 'text-emerald-700 dark:text-emerald-300',
-    },
-    suspicious: {
-      icon: <ShieldAlert className="h-8 w-8" />,
-      label: 'Verdächtig',
-      sub: 'Einige Engines haben Bedenken',
-      bg: 'bg-amber-50/80 dark:bg-amber-950/30',
-      border: 'border-amber-200 dark:border-amber-900/50',
-      text: 'text-amber-700 dark:text-amber-300',
-    },
-    malicious: {
-      icon: <ShieldX className="h-8 w-8" />,
-      label: 'Schädlich',
-      sub: 'Domain als Bedrohung eingestuft',
-      bg: 'bg-red-50/80 dark:bg-red-950/30',
-      border: 'border-red-200 dark:border-red-900/50',
-      text: 'text-red-700 dark:text-red-300',
-    },
-  }[data.verdict];
+  const config = VERDICT[data.verdict];
+  const Icon = config.icon;
 
+  // Das Urteil trägt seinen Status dreifach: Wort, Schild-Form, Farbe.
   return (
-    <div className={cn('rounded-2xl border p-6 text-center', config.bg, config.border)}>
-      <div className={cn('mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl border', config.border, 'bg-white/70 dark:bg-black/20', config.text)}>
-        {config.icon}
-      </div>
-      <p className={cn('text-2xl font-bold', config.text)}>{config.label}</p>
-      <p className="mt-1 text-sm text-ink-900/60 dark:text-ink-50/60">{config.sub}</p>
-      <p className="mt-3 text-sm font-medium text-ink-900/80 dark:text-ink-50/80">
-        <span className={cn('font-bold', config.text)}>{flagged}</span>
+    <div className="flex flex-col items-center text-center">
+      <span className={cn('icon-tile size-12', config.tile)}>
+        <Icon className="size-6" />
+      </span>
+      <p className={cn('mt-3 text-2xl font-semibold tracking-tight', config.text)}>{config.label}</p>
+      <p className="mt-1 text-sm text-fg-muted">{config.sub}</p>
+      <p className="mt-3 text-sm text-fg-muted">
+        <span className="font-semibold text-fg">{flagged}</span>
         {' '}von{' '}
-        <span className="font-bold">{total}</span>
+        <span className="font-semibold text-fg">{total}</span>
         {' '}Engines haben angeschlagen
       </p>
     </div>
   );
 }
 
-function StatCard({
+const STAT_TONE = {
+  good: 'text-success',
+  warn: 'text-warning',
+  bad: 'text-danger',
+  neutral: 'text-fg',
+} as const;
+
+function StatPanel({
   label,
   value,
   tone,
 }: {
   label: string;
   value: number;
-  tone: 'good' | 'warn' | 'bad' | 'neutral';
+  tone: keyof typeof STAT_TONE;
 }) {
   return (
-    <div className="rounded-xl border border-ink-100 bg-white/70 p-4 text-center shadow-xs dark:border-ink-900/80 dark:bg-ink-950/35">
-      <p className="mb-1 text-xs text-ink-900/50 dark:text-ink-50/50">{label}</p>
+    <div className="panel">
+      <p className="text-xs text-fg-subtle">{label}</p>
+      {/* Farbe nur, wenn es etwas zu melden gibt — eine rote Null hieße
+          „Gefahr“, wo keine ist. Die Kategorie steht im Label. */}
       <p
         className={cn(
-          'text-2xl font-semibold tabular-nums',
-          tone === 'good' && 'text-emerald-600 dark:text-emerald-400',
-          tone === 'warn' && 'text-amber-600 dark:text-amber-400',
-          tone === 'bad' && 'text-red-600 dark:text-red-400',
-          tone === 'neutral' && 'text-ink-900/70 dark:text-ink-50/70'
+          'mt-1 text-2xl font-semibold tabular-nums tracking-tight',
+          value > 0 ? STAT_TONE[tone] : 'text-fg'
         )}
       >
         {value}
@@ -296,28 +300,22 @@ function ScanLoader() {
   }, []);
 
   return (
-    <div className="mx-auto mt-8 max-w-xl" aria-busy="true" aria-live="polite">
-      <div className="rounded-2xl border border-ink-200 bg-white/70 p-6 text-center shadow-xs dark:border-ink-800 dark:bg-ink-950/35">
-        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900">
-          <Loader2 className="h-5 w-5 animate-spin text-ink-900 dark:text-ink-50" />
+    <div className="mx-auto mt-8 max-w-md" aria-busy="true" aria-live="polite">
+      <div className="panel px-6 py-6 text-center">
+        <Loader2 className="mx-auto size-5 animate-spin text-fg" />
+        <div className="eyebrow mt-4">Scan läuft</div>
+        <div
+          key={stage}
+          className="mt-1.5 text-sm text-fg"
+          style={{ animation: 'fadeInUp 0.4s ease-out' }}
+        >
+          {SCAN_STAGES[stage]}
         </div>
-        <div className="mb-5">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-900/45 dark:text-ink-50/45">
-            Scan läuft
-          </div>
-          <div
-            key={stage}
-            className="text-sm font-medium text-ink-900 dark:text-ink-50"
-            style={{ animation: 'fadeInUp 0.4s ease-out' }}
-          >
-            {SCAN_STAGES[stage]}
-          </div>
-        </div>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="mt-5 grid grid-cols-5 gap-2">
           {[0, 1, 2, 3, 4].map((i) => (
             <span
               key={i}
-              className="h-1.5 rounded-full bg-ink-200 dark:bg-ink-800 animate-[scanBar_1.2s_ease-in-out_infinite]"
+              className="h-1.5 animate-[scanBar_1.2s_ease-in-out_infinite] rounded-full bg-fg/20"
               style={{ animationDelay: `${i * 140}ms` }}
             />
           ))}
@@ -329,20 +327,18 @@ function ScanLoader() {
 
 function IdlePanel() {
   return (
-    <div className="relative mx-auto mt-8 flex min-h-52 max-w-2xl items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white/45 p-8 dark:border-ink-800 dark:bg-ink-950/25">
-      <div className="grid w-full max-w-xs grid-cols-3 gap-3">
-        <IdleTile icon={<ShieldCheck className="h-4 w-4" />} label="Malware" />
-        <IdleTile icon={<Shield className="h-4 w-4" />} label="Phishing" />
-        <IdleTile icon={<ShieldAlert className="h-4 w-4" />} label="Blacklist" />
-      </div>
+    <div className="mx-auto mt-8 grid max-w-sm grid-cols-3 gap-3">
+      <IdleTile icon={<ShieldCheck className="size-4" />} label="Malware" />
+      <IdleTile icon={<Shield className="size-4" />} label="Phishing" />
+      <IdleTile icon={<ShieldAlert className="size-4" />} label="Blacklist" />
     </div>
   );
 }
 
 function IdleTile({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-ink-100 bg-white text-xs font-medium text-ink-900/60 shadow-xs dark:border-ink-800 dark:bg-ink-900 dark:text-ink-50/60">
-      <span className="text-ink-900 dark:text-ink-50">{icon}</span>
+    <div className="panel flex flex-col items-center gap-2 py-5 text-xs text-fg-muted">
+      <span className="text-fg-subtle">{icon}</span>
       <span>{label}</span>
     </div>
   );

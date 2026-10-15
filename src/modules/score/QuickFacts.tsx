@@ -43,10 +43,10 @@ function TechIcon({ tech }: TechIconProps) {
   return (
     <div
       title={label}
-      className="w-8 h-8 flex items-center justify-center rounded-lg border border-ink-100 dark:border-ink-900/80 bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700 transition-colors cursor-default"
+      className="icon-tile cursor-default"
     >
       {svg ?? (
-        <span className="text-[10px] font-semibold text-ink-900/50 dark:text-ink-50/50 leading-none">
+        <span className="text-[10px] font-semibold leading-none">
           {tech.name.slice(0, 2).toUpperCase()}
         </span>
       )}
@@ -325,7 +325,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const nsRecord = records.find((r) => r.type === 'NS');
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
-      <IpAddressLink ip={aRecord.value} className="text-ink-900/80 dark:text-ink-50/80" />
+      <IpAddressLink ip={aRecord.value} className="text-fg" />
     ) : (
       aRecord?.value ?? '—'
     );
@@ -335,7 +335,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       <button
         type="button"
         onClick={() => onUseDomain(nsRecord.value)}
-        className="min-w-0 truncate rounded-md text-left font-mono text-xs text-ink-900/80 transition-colors hover:text-ink-950 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/80 dark:hover:text-white dark:focus-visible:outline-ink-50"
+        className="min-w-0 truncate rounded-full text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
         title={`${nsRecord.value} in die Suche übernehmen`}
       >
         {nsRecord.value}
@@ -399,47 +399,43 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.15 }}
-      className="surface rounded-2xl p-6"
+      className="card"
     >
-      <div className="text-sm text-ink-900/60 dark:text-ink-50/60 mb-4">
-        Schnellübersicht
-      </div>
+      <h2 className="card-title">Schnellübersicht</h2>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3.5 text-sm">
         {items.map((item) => (
-          <div key={item.label} className="flex items-center gap-3 min-w-0">
-            <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 w-14 shrink-0 font-medium">
-              {item.label}
-            </span>
-            {item.loading ? (
-              <Skeleton className="h-3.5 w-16" />
-            ) : (
-              <span
-                className={cn(
-                  'truncate',
-                  item.mono && 'font-mono text-xs',
-                  item.muted && 'text-ink-900/30 dark:text-ink-50/30',
-                  item.ok && 'text-emerald-600 dark:text-emerald-400 flex items-center gap-1',
-                  item.bad && 'text-red-600 dark:text-red-400 flex items-center gap-1'
-                )}
-              >
-                {item.ok && <Check className="w-3.5 h-3.5 shrink-0" />}
-                {item.bad && <X className="w-3.5 h-3.5 shrink-0" />}
-                {item.value}
-              </span>
-            )}
+          <div key={item.label} className="flex min-w-0 items-center gap-3">
+            <dt className="w-14 shrink-0 text-xs text-fg-subtle">{item.label}</dt>
+            <dd className="min-w-0">
+              {item.loading ? (
+                <Skeleton className="h-3.5 w-16" />
+              ) : (
+                <span
+                  className={cn(
+                    'flex min-w-0 items-center gap-1 truncate',
+                    item.mono && 'font-mono text-[13px]',
+                    item.muted ? 'text-fg-subtle' : 'text-fg',
+                    item.ok && 'font-medium text-success',
+                    item.bad && 'font-medium text-danger'
+                  )}
+                >
+                  {item.ok && <Check className="size-3.5 shrink-0" />}
+                  {item.bad && <X className="size-3.5 shrink-0" />}
+                  {item.value}
+                </span>
+              )}
+            </dd>
           </div>
         ))}
-      </div>
+      </dl>
 
       {(techLoading || sortedTech.length > 0) && (
-        <div className="mt-4 pt-4 border-t border-ink-100 dark:border-ink-900/60">
-          <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 font-medium">
-            Tech-Stack
-          </span>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-5 border-t border-line-subtle pt-5">
+          <h3 className="text-xs text-fg-subtle">Tech-Stack</h3>
+          <div className="mt-2.5 flex flex-wrap gap-2">
             {techLoading
-              ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-8 rounded-lg" />)
+              ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="size-9 rounded-panel" />)
               : sortedTech.map((tech) => <TechIcon key={tech.name} tech={tech} />)}
           </div>
         </div>

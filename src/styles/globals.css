@@ -78,6 +78,32 @@
   --color-ink-800: #27272a;
   --color-ink-900: #18181b;
   --color-ink-950: #09090b;
+
+  /*
+   * Semantische Farben — die eigentliche Palette der Oberfläche (Regeln in
+   * docs/DESIGN.md). Sie zeigen auf Variablen, die :root und .dark unten
+   * umschalten: `text-fg-muted` statt `text-ink-900/60 dark:text-ink-50/60`.
+   */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--line);
+  --color-line-subtle: var(--line-subtle);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  /* Drei Radien, sonst keine: Karte, verschachtelte Fläche, Pille (rounded-full). */
+  --radius-card: 1.25rem;
+  --radius-panel: 0.75rem;
+
+  --shadow-card: var(--elevation-card);
+  --shadow-overlay: var(--elevation-overlay);
 }
 
 /*
@@ -105,8 +131,28 @@
 }
 
 @layer base {
+  /*
+   * Kontrast: fg-muted und fg-subtle erreichen auf `surface` mindestens 4,5:1
+   * (WCAG AA für Fließtext), die Statusfarben ebenso — deshalb im Light-Mode
+   * die dunkleren Stufen (emerald-700, amber-700, red-600).
+   */
   :root {
     color-scheme: light;
+    --canvas: #fafafa;
+    --surface: #ffffff;
+    --surface-muted: #f4f4f5;
+    --line: rgb(9 9 11 / 0.09);
+    --line-subtle: rgb(9 9 11 / 0.06);
+    --fg: #09090b;
+    --fg-muted: #52525b;
+    --fg-subtle: #71717a;
+    --accent: #09090b;
+    --on-accent: #ffffff;
+    --success: #047857;
+    --warning: #b45309;
+    --danger: #dc2626;
+    --elevation-card: 0 1px 2px rgb(9 9 11 / 0.04), 0 4px 12px -4px rgb(9 9 11 / 0.05);
+    --elevation-overlay: 0 2px 6px rgb(9 9 11 / 0.06), 0 16px 40px -12px rgb(9 9 11 / 0.2);
     /* Hintergrund-Decor — dezenter im Light-Mode */
     --bg-grid: rgba(0, 0, 0, 0.035);
     --bg-glow-strong: rgba(0, 0, 0, 0.035);
@@ -116,6 +162,22 @@
 
   .dark {
     color-scheme: dark;
+    --canvas: #09090b;
+    --surface: #121215;
+    --surface-muted: #1c1c21;
+    --line: rgb(255 255 255 / 0.08);
+    --line-subtle: rgb(255 255 255 / 0.05);
+    --fg: #fafafa;
+    --fg-muted: #a1a1aa;
+    --fg-subtle: #8a8a93;
+    --accent: #fafafa;
+    --on-accent: #09090b;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    /* Schatten tragen auf Schwarz nicht — die Kante macht die Ebene sichtbar. */
+    --elevation-card: inset 0 1px 0 rgb(255 255 255 / 0.03);
+    --elevation-overlay: 0 16px 48px -12px rgb(0 0 0 / 0.7);
     /* Hintergrund-Decor — kräftiger im Dark-Mode (mehr Sichtbarkeit auf Schwarz) */
     --bg-grid: rgba(255, 255, 255, 0.035);
     --bg-glow-strong: rgba(255, 255, 255, 0.045);
@@ -147,7 +209,7 @@
   }
 
   body {
-    @apply bg-ink-50 text-ink-900 dark:bg-ink-950 dark:text-ink-50;
+    @apply bg-canvas text-fg;
     font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: 'cv11', 'ss01';
     /* Subtile Grain-Texture direkt im Body-Background, damit sie nicht
@@ -186,19 +248,142 @@
       radial-gradient(ellipse 80% 35% at 50% 110%, var(--bg-glow-soft), transparent 75%);
   }
 
+  /* Ein Fokusring für alles Bedienbare — Komponenten setzen keinen eigenen. */
+  :where(a, button, summary, [role='tab'], [tabindex]:not([tabindex='-1'])):focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
+  }
+
   ::selection {
     @apply bg-ink-900/15 text-ink-950 dark:bg-ink-50/20 dark:text-ink-50;
   }
 }
 
+/*
+ * Die Bausteine der Oberfläche. Regeln und Anwendung: docs/DESIGN.md.
+ *
+ * `components` liegt unter `utilities` — eine Utility am Element gewinnt also
+ * immer (`card p-0`, `btn btn-primary w-full`). Farben kommen ausschließlich
+ * aus den semantischen Tokens, deshalb braucht hier nichts ein `dark:`.
+ */
 @layer components {
-  .surface {
-    @apply bg-white dark:bg-ink-900 border border-ink-100 dark:border-ink-900/80;
+  /* ── Flächen ─────────────────────────────────────────────────────────── */
+
+  /* Eigenständiger Inhaltsblock. Innenabstand 20 px, ab sm 24 px. */
+  .card {
+    @apply rounded-card border border-line bg-surface p-5 shadow-card sm:p-6;
+  }
+
+  /* Karte ohne Innenabstand — für Listen mit Trennlinien bis zum Rand. */
+  .card-flush {
+    @apply overflow-hidden rounded-card border border-line bg-surface shadow-card;
+  }
+
+  /* Fläche IN einer Karte: Codeblöcke, Kennzahlen, Hinweise. Nie mit Rahmen. */
+  .panel {
+    @apply rounded-panel bg-surface-muted p-4;
+  }
+
+  /* Schwebende Ebene: Menüs, Dialoge. */
+  .overlay {
+    @apply rounded-card border border-line bg-surface shadow-overlay;
+  }
+
+  /* ── Typografie ──────────────────────────────────────────────────────── */
+
+  .page-title {
+    @apply text-3xl font-semibold tracking-tight text-fg sm:text-4xl;
+  }
+
+  /* Kleine Überzeile in Versalien: Kategorie, Abschnitt, Feldgruppe. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle;
+  }
+
+  .card-title {
+    @apply flex items-center gap-2 text-sm font-semibold text-fg;
+  }
+
+  .card-subtitle {
+    @apply mt-1 text-sm text-fg-muted;
+  }
+
+  .link {
+    @apply font-medium text-fg underline decoration-fg/25 underline-offset-4 transition-colors hover:decoration-fg;
+  }
+
+  /* ── Bedienelemente ──────────────────────────────────────────────────── */
+
+  /* Buttons sind immer Pillen. Größe über btn-sm/btn-lg, Form über btn-icon. */
+  .btn {
+    @apply inline-flex h-10 shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-[background-color,border-color,color,opacity,scale] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45;
+  }
+  .btn-primary {
+    @apply bg-accent text-on-accent hover:bg-accent/85;
+  }
+  .btn-secondary {
+    @apply border border-line bg-surface text-fg shadow-xs hover:bg-surface-muted;
+  }
+  .btn-ghost {
+    @apply text-fg-muted hover:bg-surface-muted hover:text-fg;
+  }
+  .btn-sm {
+    @apply h-8 gap-1.5 px-3 text-xs;
+  }
+  .btn-lg {
+    @apply h-12 px-6 text-[15px];
+  }
+  /* Quadratisch zur jeweiligen Höhe — nur Icon, braucht ein aria-label. */
+  .btn-icon {
+    @apply aspect-square px-0;
+  }
+
+  /* Umschaltbare Auswahl (Filter, Typ, Strategie). Aktiv per aria-pressed. */
+  .chip {
+    @apply inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface-muted px-3 text-xs font-medium text-fg-muted transition-colors hover:text-fg;
+  }
+  .chip[aria-pressed='true'] {
+    @apply bg-accent text-on-accent hover:text-on-accent;
+  }
+
+  /* Statusanzeige, nicht klickbar. Ohne Ton-Klasse neutral. */
+  .badge {
+    @apply inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold leading-4 text-fg-muted;
+  }
+  .badge-success {
+    @apply bg-success/12 text-success;
+  }
+  .badge-warning {
+    @apply bg-warning/14 text-warning;
+  }
+  .badge-danger {
+    @apply bg-danger/12 text-danger;
+  }
+
+  /* Icon in einer getönten Kachel — Kartenkopf, Leerzustand, Finding. */
+  .icon-tile {
+    @apply inline-flex size-9 shrink-0 items-center justify-center rounded-panel bg-surface-muted text-fg-muted;
+  }
+  .icon-tile-success {
+    @apply bg-success/12 text-success;
+  }
+  .icon-tile-warning {
+    @apply bg-warning/14 text-warning;
+  }
+  .icon-tile-danger {
+    @apply bg-danger/12 text-danger;
+  }
+
+  .input {
+    @apply h-11 w-full rounded-panel border border-line bg-surface px-4 text-sm text-fg transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-fg/30 focus:outline-hidden focus:ring-4 focus:ring-fg/6;
+  }
+  textarea.input {
+    @apply h-auto py-3 leading-relaxed;
   }
 
   /* Animated dots loader for Diggy */
   .dig-dots span {
-    @apply inline-block w-1.5 h-1.5 rounded-full bg-ink-50 dark:bg-ink-950;
+    @apply inline-block w-1.5 h-1.5 rounded-full bg-on-accent;
     animation: pulse-soft 1.4s ease-in-out infinite;
   }
   .dig-dots span:nth-child(2) { animation-delay: 0.2s; }

@@ -251,6 +251,17 @@ describe('Suche und History-Einträge', () => {
   });
 });
 
+describe('Report', () => {
+  it('springt aus der Score-Karte zu den Findings', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    const button = await screen.findByRole('button', { name: /Alle Findings/ });
+    await userEvent.click(button);
+    expect(screen.getByRole('tab', { name: /Findings/ })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
 /**
  * #64: Für einen DNS-Eintrag wie `crsend._domainkey.kksn.de` laufen nur die
  * DNS-Checks. SSL, Tech-Stack und Propagation bräuchten einen Host, den es

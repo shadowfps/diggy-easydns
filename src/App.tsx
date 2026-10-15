@@ -20,6 +20,7 @@ import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
 import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';
 import {
@@ -29,7 +30,7 @@ import {
   WhoisSkeleton,
   ListSkeleton,
 } from '@/components/ui/Skeleton';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, Download, Link2, Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 
 /*
@@ -275,6 +276,13 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Aus der Score-Karte: Tab wechseln und die Tab-Leiste in Sicht holen — auf
+  // dem Handy liegt sie sonst unter der Schnellübersicht außer Sicht.
+  const handleShowFindings = () => {
+    setActiveTab('findings');
+    document.getElementById('tab-findings')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+
   const handleHome = () => navigate('/');
   const handleHistory = () => navigate('/history');
   const handleAbout = () => navigate('/about');
@@ -420,7 +428,7 @@ export default function App() {
               >
                 <Suspense
                   fallback={
-                    <span className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase text-ink-950 dark:text-ink-50">
+                    <span className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase text-fg">
                       diggy
                     </span>
                   }
@@ -463,14 +471,14 @@ export default function App() {
               <div className="mb-10 max-w-md mx-auto">
                 <Suspense
                   fallback={
-                    <p className="text-base text-ink-900/60 dark:text-ink-50/60">
+                    <p className="text-base text-fg-muted">
                       DNS, SSL, Mail-Security und Propagation auf einen Blick.
                     </p>
                   }
                 >
                   <TextType
                     as="p"
-                    className="text-base text-ink-900/60 dark:text-ink-50/60"
+                    className="text-base text-fg-muted"
                     text={[
                       'DNS, SSL, Mail-Security und Propagation auf einen Blick.',
                       'Ohne Fachchinesisch, mit Empfehlungen.',
@@ -480,7 +488,7 @@ export default function App() {
                     pauseDuration={2200}
                     deletingSpeed={25}
                     cursorCharacter="▍"
-                    cursorClassName="text-ink-900 dark:text-ink-50"
+                    cursorClassName="text-fg"
                     cursorBlinkDuration={0.6}
                     initialDelay={500}
                   />
@@ -518,8 +526,8 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="mx-auto mt-10 max-w-2xl text-center"
             >
-              <Loader2 className="w-6 h-6 mx-auto animate-spin text-ink-900 dark:text-ink-50" />
-              <p className="mt-3 text-sm text-ink-900/60 dark:text-ink-50/60">
+              <Loader2 className="mx-auto size-6 animate-spin text-fg" />
+              <p className="mt-3 text-sm text-fg-muted">
                 Records werden geholt…
               </p>
             </motion.div>
@@ -531,8 +539,8 @@ export default function App() {
 
         {/* Error */}
         {view === 'lookup' && recordsErrored && (
-          <div className="mx-auto mt-8 max-w-2xl rounded-xl bg-red-500/10 p-4 text-center text-sm text-red-600 dark:text-red-400">
-            {lookup.recordsError}
+          <div className="mx-auto mt-10 max-w-2xl">
+            <SectionError message={lookup.recordsError ?? undefined} />
           </div>
         )}
 
@@ -545,15 +553,42 @@ export default function App() {
             transition={{ duration: 0.24 }}
             className="mx-auto mt-6 w-full max-w-[110rem] md:mt-8"
           >
-              <div className="text-center mb-5">
-                <span className="font-mono text-base text-ink-900/60 dark:text-ink-50/60">
-                  {report.domain}
-                </span>
+              {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann.
+                  Export und Permalink standen vorher unter allen Tabs am
+                  Seitenende — wer sie suchte, musste erst durchscrollen. */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                  <p className="eyebrow">DNS-Report</p>
+                  <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
+                    {report.domain}
+                  </h1>
+                  <p className="mt-1.5 text-sm text-fg-muted">
+                    Geprüft am {formatCheckedAt(report.timestamp)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <ActionButton onClick={handleExportJson}>
+                    <Download className="size-3.5" />
+                    Export JSON
+                  </ActionButton>
+                  <ActionButton onClick={handleCopyPermalink}>
+                    {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
+                    {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
+                  </ActionButton>
+                </div>
               </div>
 
               {/* Score + Quick Facts */}
-              <div className="grid md:grid-cols-2 gap-4 mb-8">
-                {lookup.allSettled ? <ScoreCard score={lookup.healthScore} /> : <ScoreCardSkeleton />}
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                {lookup.allSettled ? (
+                  <ScoreCard
+                    score={lookup.healthScore}
+                    findings={lookup.findings}
+                    onShowFindings={handleShowFindings}
+                  />
+                ) : (
+                  <ScoreCardSkeleton />
+                )}
                 <QuickFacts
                   records={report.records}
                   ssl={ssl}
@@ -565,49 +600,51 @@ export default function App() {
               </div>
 
               {/* Tabs */}
-              <Tabs
-                active={activeTab}
-                onChange={setActiveTab}
-                tabs={[
-                  { id: 'records', label: 'Records', count: report.records.length },
-                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten
-                  // Propagation (vergleicht A/AAAA), Speed und Virus Scan
-                  // (brauchen eine Website) nichts zu zeigen.
-                  ...(dnsOnly
-                    ? []
-                    : [
-                        {
-                          id: 'propagation' as const,
-                          label: 'Propagation',
-                          count: propagation.data?.length || undefined,
-                        },
-                      ]),
-                  { id: 'security', label: 'Security' },
-                  { id: 'mail', label: 'Mail', count: mailCount },
-                  {
-                    id: 'findings',
-                    label: 'Findings',
-                    count: lookup.allSettled ? lookup.findings.length : undefined,
-                  },
-                  {
-                    id: 'whois',
-                    label: 'WHOIS',
-                    count: whois.status === 'done' && whois.data ? 1 : undefined,
-                  },
-                  ...(dnsOnly
-                    ? []
-                    : [
-                        { id: 'speed' as const, label: 'Speed', count: pageSpeed ? 1 : undefined },
-                        {
-                          id: 'virusscan' as const,
-                          label: 'Virus Scan',
-                          count: virusScan
-                            ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
-                            : undefined,
-                        },
-                      ]),
-                ]}
-              />
+              <div className="mt-8">
+                <Tabs
+                  active={activeTab}
+                  onChange={setActiveTab}
+                  tabs={[
+                    { id: 'records', label: 'Records', count: report.records.length },
+                    // Bei DNS-Einträgen wie `_dmarc.example.com` hätten
+                    // Propagation (vergleicht A/AAAA), Speed und Virus Scan
+                    // (brauchen eine Website) nichts zu zeigen.
+                    ...(dnsOnly
+                      ? []
+                      : [
+                          {
+                            id: 'propagation' as const,
+                            label: 'Propagation',
+                            count: propagation.data?.length || undefined,
+                          },
+                        ]),
+                    { id: 'security', label: 'Security' },
+                    { id: 'mail', label: 'Mail', count: mailCount },
+                    {
+                      id: 'findings',
+                      label: 'Findings',
+                      count: lookup.allSettled ? lookup.findings.length : undefined,
+                    },
+                    {
+                      id: 'whois',
+                      label: 'WHOIS',
+                      count: whois.status === 'done' && whois.data ? 1 : undefined,
+                    },
+                    ...(dnsOnly
+                      ? []
+                      : [
+                          { id: 'speed' as const, label: 'Speed', count: pageSpeed ? 1 : undefined },
+                          {
+                            id: 'virusscan' as const,
+                            label: 'Virus Scan',
+                            count: virusScan
+                              ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
+                              : undefined,
+                          },
+                        ]),
+                  ]}
+                />
+              </div>
 
               {/* Zweite, feinere Boundary: reißt ein Sektions-Renderer ab,
                   bleiben Score, QuickFacts und die anderen Tabs nutzbar.
@@ -721,42 +758,31 @@ export default function App() {
               </div>
               </ErrorBoundary>
 
-              {/* Footer-Actions */}
-              <div className="mt-12 flex justify-end gap-2">
-                <ActionButton onClick={handleExportJson}>Export JSON</ActionButton>
-                <ActionButton onClick={handleCopyPermalink}>
-                  {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
-                </ActionButton>
-                {/* "Watch 🔔" war hier ein Button ohne Handler — sah aus wie
-                    die anderen, tat aber nichts. Das Feature steht in der
-                    Roadmap als offen; bis dahin ist kein Button ehrlicher als
-                    ein wirkungsloser. */}
-              </div>
           </motion.div>
         )}
       </main>
 
-      <footer className="border-t border-ink-100 px-6 py-8 dark:border-ink-900 md:px-8">
-        <div className="flex flex-col gap-3 text-xs text-ink-900/40 dark:text-ink-50/40 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="mt-16 border-t border-line-subtle px-4 py-8 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 text-xs text-fg-subtle sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>diggy · DNS made friendly</span>
-            <span className="hidden text-ink-900/20 dark:text-ink-50/20 sm:inline" aria-hidden>
+            <span className="hidden text-line sm:inline" aria-hidden>
               ·
             </span>
             <button
               type="button"
               onClick={handleImpressum}
-              className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
+              className="transition-colors hover:text-fg"
             >
               Impressum
             </button>
-            <span className="hidden text-ink-900/20 dark:text-ink-50/20 sm:inline" aria-hidden>
+            <span className="hidden text-line sm:inline" aria-hidden>
               ·
             </span>
             <button
               type="button"
               onClick={handleDatenschutz}
-              className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
+              className="transition-colors hover:text-fg"
             >
               Datenschutz
             </button>
@@ -769,19 +795,14 @@ export default function App() {
 }
 
 function Placeholder({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="surface rounded-xl p-12 text-center">
-      <h3 className="text-base font-medium mb-1">{title}</h3>
-      <p className="text-sm text-ink-900/50 dark:text-ink-50/50">{subtitle}</p>
-    </div>
-  );
+  return <EmptyState title={title}>{subtitle}</EmptyState>;
 }
 
 function SectionError({ message }: { message?: string }) {
   return (
-    <div className="surface rounded-xl p-8 text-center text-sm text-red-600 dark:text-red-400">
+    <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
       {message ?? 'Dieser Check ist fehlgeschlagen.'}
-    </div>
+    </EmptyState>
   );
 }
 
@@ -800,11 +821,15 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="px-3.5 py-2 text-xs font-medium rounded-lg border border-ink-100 dark:border-ink-900/80 hover:bg-ink-100/60 dark:hover:bg-ink-900 transition-colors"
+      className="btn btn-secondary btn-sm"
     >
       {children}
     </button>
   );
+}
+
+function formatCheckedAt(timestamp: string): string {
+  return new Date(timestamp).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function getLookupUrl(domain: string): string {

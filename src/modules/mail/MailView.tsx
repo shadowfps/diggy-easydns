@@ -1,7 +1,9 @@
+import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Check, X, AlertTriangle, FileSignature, Send } from 'lucide-react';
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 
 interface MailViewProps {
   mail: MailSecurity;
@@ -9,43 +11,60 @@ interface MailViewProps {
 
 export function MailView({ mail }: MailViewProps) {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <SpfCard spf={mail.spf} />
-      <DmarcCard dmarc={mail.dmarc} />
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <SpfCard spf={mail.spf} hasMx={mail.hasMx} />
+      <DmarcCard dmarc={mail.dmarc} hasMx={mail.hasMx} />
       <DkimCard dkim={mail.dkim} />
       <MtaStsCard mtaSts={mail.mtaSts} />
     </div>
   );
 }
 
+/*
+ * Die Töne der Kartenköpfe folgen den Mail-Findings (reportBuilder): ein
+ * fehlender SPF-/DMARC-Record ist mit MX eine Warnung, ohne MX nur ein
+ * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis.
+ */
+
 /* ─── SPF ─────────────────────────────────────────────────────────────── */
 
-function SpfCard({ spf }: { spf: MailSecurity['spf'] }) {
+function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
+  const tone: Tone = !spf.present
+    ? hasMx
+      ? 'warning'
+      : 'neutral'
+    : !spf.valid
+    ? 'danger'
+    : spf.issues.length > 0
+    ? 'warning'
+    : 'success';
+
   return (
     <Card
-      icon={<Send className="w-4 h-4" />}
+      icon={<Send className="size-4" />}
       title="SPF"
       subtitle="Wer darf in deinem Namen senden?"
+      tone={tone}
       delay={0}
     >
       {!spf.present ? (
-        <EmptyState text="Kein SPF-Record gefunden" tone="warn" />
+        <StatusLine text="Kein SPF-Record gefunden" tone={hasMx ? 'warning' : 'neutral'} />
       ) : (
         <div className="space-y-3">
           <CodeBlock>{spf.record}</CodeBlock>
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Stat label="Lookups" value={`${spf.lookupCount ?? 0} / 10`} />
             <Stat
               label="Status"
               value={spf.valid ? 'gültig' : 'problematisch'}
-              tone={spf.valid ? 'ok' : 'bad'}
+              tone={spf.valid ? 'success' : 'danger'}
             />
           </div>
           {spf.issues.length > 0 && (
-            <ul className="text-xs space-y-1 mt-2">
+            <ul className="space-y-1.5">
               {spf.issues.map((issue, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-red-600 dark:text-red-400">
-                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                <li key={i} className="flex items-start gap-2 text-sm text-fg-muted">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
                   <span>{issue}</span>
                 </li>
               ))}
@@ -59,31 +78,43 @@ function SpfCard({ spf }: { spf: MailSecurity['spf'] }) {
 
 /* ─── DMARC ──────────────────────────────────────────────────────────── */
 
-function DmarcCard({ dmarc }: { dmarc: MailSecurity['dmarc'] }) {
-  const policyTone =
+function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: boolean }) {
+  const policyTone: Tone =
     dmarc.policy === 'reject'
-      ? 'ok'
+      ? 'success'
       : dmarc.policy === 'quarantine'
-      ? 'ok'
+      ? 'success'
       : dmarc.policy === 'none'
-      ? 'warn'
-      : 'muted';
+      ? 'warning'
+      : 'neutral';
+
+  const tone: Tone = !dmarc.present
+    ? hasMx
+      ? 'warning'
+      : 'neutral'
+    : dmarc.policy === 'none'
+    ? 'warning'
+    : 'success';
 
   return (
     <Card
-      icon={<Mail className="w-4 h-4" />}
+      icon={<Mail className="size-4" />}
       title="DMARC"
       subtitle="Was passiert mit Spoofing-Versuchen?"
+      tone={tone}
       delay={0.05}
     >
       {!dmarc.present ? (
-        <EmptyState text="Kein DMARC-Record auf _dmarc.<domain>" tone="warn" />
+        <StatusLine
+          text="Kein DMARC-Record auf _dmarc.<domain>"
+          tone={hasMx ? 'warning' : 'neutral'}
+        />
       ) : (
         <div className="space-y-3">
           <CodeBlock>{dmarc.record}</CodeBlock>
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Stat label="Policy" value={dmarc.policy ?? '—'} tone={policyTone} />
-            {dmarc.rua && <Stat label="Reports" value="rua gesetzt" tone="ok" />}
+            {dmarc.rua && <Stat label="Reports" value="rua gesetzt" tone="success" />}
           </div>
         </div>
       )}
@@ -94,25 +125,28 @@ function DmarcCard({ dmarc }: { dmarc: MailSecurity['dmarc'] }) {
 /* ─── DKIM ───────────────────────────────────────────────────────────── */
 
 function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
+  const found = dkim.selectors.length > 0;
+
   return (
     <Card
-      icon={<FileSignature className="w-4 h-4" />}
+      icon={<FileSignature className="size-4" />}
       title="DKIM"
       subtitle="Welche Selectors signieren ausgehende Mails?"
+      tone={found ? 'success' : 'neutral'}
       delay={0.1}
     >
-      {dkim.selectors.length === 0 ? (
-        <EmptyState
+      {!found ? (
+        <StatusLine
           text="Keine gängigen DKIM-Selectors gefunden (default, google, selector1, k1, …)"
-          tone="info"
+          tone="neutral"
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {dkim.selectors.map((s) => (
             <div key={s.selector} className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span className="font-mono text-xs text-ink-900/80 dark:text-ink-50/80">
+                <Check className="size-3.5 shrink-0 text-success" />
+                <span className="font-mono text-[13px] text-fg">
                   {s.selector}._domainkey
                 </span>
               </div>
@@ -132,26 +166,27 @@ function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
 function MtaStsCard({ mtaSts }: { mtaSts: MailSecurity['mtaSts'] }) {
   return (
     <Card
-      icon={<Mail className="w-4 h-4" />}
+      icon={<Mail className="size-4" />}
       title="MTA-STS"
       subtitle="Erzwingt TLS für eingehende Mail"
+      tone={mtaSts.present ? 'success' : 'neutral'}
       delay={0.15}
     >
       <div className="flex items-center gap-2 text-sm">
         {mtaSts.present ? (
           <>
-            <Check className="w-4 h-4 text-emerald-500" />
-            <span className="text-emerald-600 dark:text-emerald-400">aktiviert</span>
+            <Check className="size-4 shrink-0 text-success" />
+            <span className="font-medium text-success">aktiviert</span>
           </>
         ) : (
           <>
-            <X className="w-4 h-4 text-ink-900/40 dark:text-ink-50/40" />
-            <span className="text-ink-900/60 dark:text-ink-50/60">nicht eingerichtet</span>
+            <X className="size-4 shrink-0 text-fg-subtle" />
+            <span className="text-fg-muted">nicht eingerichtet</span>
           </>
         )}
       </div>
       {!mtaSts.present && (
-        <p className="mt-3 text-xs text-ink-900/50 dark:text-ink-50/50 leading-relaxed">
+        <p className="mt-3 text-sm leading-relaxed text-fg-muted">
           MTA-STS verhindert Downgrade-Angriffe, bei denen sich Angreifer zwischen Sender und
           Empfänger setzen und TLS abschalten.
         </p>
@@ -166,37 +201,35 @@ function Card({
   icon,
   title,
   subtitle,
+  tone,
   delay,
   children,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   subtitle: string;
+  tone: Tone;
   delay: number;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay }}
-      className="surface rounded-xl p-5"
+      className="card"
     >
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-ink-900/60 dark:text-ink-50/60">{icon}</span>
-        <span className="text-sm font-medium">{title}</span>
-      </div>
-      <p className="text-xs text-ink-900/50 dark:text-ink-50/50 mb-4">{subtitle}</p>
-      {children}
+      <CardHeader icon={icon} title={title} subtitle={subtitle} tone={tone} />
+      <div className="mt-4">{children}</div>
     </motion.div>
   );
 }
 
-function CodeBlock({ children, truncate }: { children: React.ReactNode; truncate?: boolean }) {
+function CodeBlock({ children, truncate }: { children: ReactNode; truncate?: boolean }) {
   return (
     <pre
       className={cn(
-        'text-[11px] font-mono bg-ink-100 dark:bg-ink-950 border border-ink-100 dark:border-ink-900/80 rounded-lg p-3 overflow-x-auto text-ink-900/80 dark:text-ink-50/80',
+        'panel overflow-x-auto py-3 font-mono text-xs text-fg',
         truncate && 'whitespace-nowrap text-ellipsis overflow-hidden'
       )}
     >
@@ -205,46 +238,49 @@ function CodeBlock({ children, truncate }: { children: React.ReactNode; truncate
   );
 }
 
-function EmptyState({ text, tone }: { text: string; tone: 'warn' | 'info' }) {
+/**
+ * Statuszeile in der Karte, wenn ein Record fehlt. Kein `EmptyState`: der ist
+ * selbst eine Karte und gehört an die Stelle eines ganzen Abschnitts.
+ */
+function StatusLine({ text, tone }: { text: string; tone: 'warning' | 'neutral' }) {
   return (
     <div
       className={cn(
         'flex items-start gap-2 text-sm',
-        tone === 'warn' && 'text-red-600 dark:text-red-400',
-        tone === 'info' && 'text-ink-900/60 dark:text-ink-50/60'
+        tone === 'warning' ? 'font-medium text-warning' : 'text-fg-muted'
       )}
     >
-      {tone === 'warn' ? (
-        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+      {tone === 'warning' ? (
+        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
       ) : (
-        <X className="w-4 h-4 mt-0.5 shrink-0" />
+        <X className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
       )}
       <span>{text}</span>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone = 'muted',
-}: {
-  label: string;
-  value: string;
-  tone?: 'ok' | 'bad' | 'warn' | 'muted';
-}) {
+const STAT_ICON: Record<Tone, ReactNode> = {
+  neutral: null,
+  success: <Check className="size-3.5 shrink-0" />,
+  warning: <AlertTriangle className="size-3.5 shrink-0" />,
+  danger: <X className="size-3.5 shrink-0" />,
+};
+
+const STAT_TEXT: Record<Tone, string> = {
+  neutral: 'text-fg',
+  success: 'font-medium text-success',
+  warning: 'font-medium text-warning',
+  danger: 'font-medium text-danger',
+};
+
+/** Label/Wert-Paar; Statuswerte tragen neben der Farbe ein Icon. */
+function Stat({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: Tone }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-ink-900/40 dark:text-ink-50/40 uppercase tracking-wider">{label}</span>
-      <span
-        className={cn(
-          'font-medium',
-          tone === 'ok' && 'text-emerald-600 dark:text-emerald-400',
-          tone === 'bad' && 'text-red-600 dark:text-red-400',
-          tone === 'warn' && 'text-red-600 dark:text-red-400',
-          tone === 'muted' && 'text-ink-900/70 dark:text-ink-50/70'
-        )}
-      >
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-fg-subtle">{label}</span>
+      <span className={cn('flex items-center gap-1 text-sm', STAT_TEXT[tone])}>
+        {STAT_ICON[tone]}
         {value}
       </span>
     </div>

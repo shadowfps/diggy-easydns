@@ -57,8 +57,8 @@ export function SearchBar({
       className="w-full max-w-2xl mx-auto"
     >
       <form onSubmit={handleSubmit} className="relative">
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-900/40 dark:text-ink-50/40">
-          <Search className="w-4 h-4" />
+        <div className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-fg-subtle">
+          <Search className="size-[18px]" />
         </div>
         <input
           ref={inputRef}
@@ -68,12 +68,12 @@ export function SearchBar({
           placeholder="Jetzt deine Anfrage starten"
           autoComplete="off"
           spellCheck={false}
-          className="w-full h-14 pl-11 pr-32 rounded-xl bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 font-mono text-base placeholder:text-ink-900/30 dark:placeholder:text-ink-50/30 focus:outline-hidden focus:ring-2 focus:ring-ink-900/20 dark:focus:ring-ink-50/25 focus:border-ink-900/60 dark:focus:border-ink-50/60 transition-all"
+          className="h-14 w-full rounded-full border border-line bg-surface pl-12 pr-16 font-mono text-base text-fg shadow-card transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-fg/30 focus:outline-hidden focus:ring-4 focus:ring-fg/6"
         />
         <button
           type="submit"
           disabled={loading || !value.trim()}
-          className="absolute right-2 top-2 h-10 px-4 rounded-lg bg-ink-950 hover:bg-ink-800 dark:bg-ink-50 dark:hover:bg-ink-200 disabled:opacity-50 disabled:cursor-not-allowed text-white dark:text-ink-950 font-medium text-sm transition-colors flex items-center justify-center"
+          className="btn btn-primary btn-icon absolute right-2 top-2"
           aria-label="Suchen"
         >
           {loading ? (
@@ -81,28 +81,26 @@ export function SearchBar({
               <span /> <span /> <span />
             </span>
           ) : (
-            <Search className="w-4 h-4" />
+            <Search className="size-4" />
           )}
         </button>
       </form>
 
-      <div className="mt-3 flex items-center gap-2 text-xs text-ink-900/50 dark:text-ink-50/40 justify-center">
-        <span>Try:</span>
-        {EXAMPLES.map((ex, i) => (
-          <span key={ex} className="flex items-center gap-2">
-            {i > 0 && <span className="opacity-40">·</span>}
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => {
-                onValueChange(ex);
-                onSearch(ex);
-              }}
-              className="text-ink-900 dark:text-ink-50 hover:underline transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline"
-            >
-              {ex}
-            </button>
-          </span>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <span className="text-xs text-fg-subtle">Beispiele</span>
+        {EXAMPLES.map((ex) => (
+          <button
+            key={ex}
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              onValueChange(ex);
+              onSearch(ex);
+            }}
+            className="chip font-mono disabled:opacity-45"
+          >
+            {ex}
+          </button>
         ))}
       </div>
     </motion.div>
