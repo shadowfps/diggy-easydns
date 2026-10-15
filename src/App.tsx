@@ -62,6 +62,7 @@ const VirusScanView = lazy(() =>
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { isDnsOnlyName } from '@/lib/dnsName';
 import {
   buildDocumentTitle,
   formatExportTimestamp,
@@ -364,6 +365,7 @@ export default function App() {
         (mailData.mtaSts.present ? 1 : 0) || undefined
     : undefined;
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
+  const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -568,11 +570,18 @@ export default function App() {
                 onChange={setActiveTab}
                 tabs={[
                   { id: 'records', label: 'Records', count: report.records.length },
-                  {
-                    id: 'propagation',
-                    label: 'Propagation',
-                    count: propagation.data?.length || undefined,
-                  },
+                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten
+                  // Propagation (vergleicht A/AAAA), Speed und Virus Scan
+                  // (brauchen eine Website) nichts zu zeigen.
+                  ...(dnsOnly
+                    ? []
+                    : [
+                        {
+                          id: 'propagation' as const,
+                          label: 'Propagation',
+                          count: propagation.data?.length || undefined,
+                        },
+                      ]),
                   { id: 'security', label: 'Security' },
                   { id: 'mail', label: 'Mail', count: mailCount },
                   {
@@ -585,14 +594,18 @@ export default function App() {
                     label: 'WHOIS',
                     count: whois.status === 'done' && whois.data ? 1 : undefined,
                   },
-                  { id: 'speed', label: 'Speed', count: pageSpeed ? 1 : undefined },
-                  {
-                    id: 'virusscan',
-                    label: 'Virus Scan',
-                    count: virusScan
-                      ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
-                      : undefined,
-                  },
+                  ...(dnsOnly
+                    ? []
+                    : [
+                        { id: 'speed' as const, label: 'Speed', count: pageSpeed ? 1 : undefined },
+                        {
+                          id: 'virusscan' as const,
+                          label: 'Virus Scan',
+                          count: virusScan
+                            ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
+                            : undefined,
+                        },
+                      ]),
                 ]}
               />
 
@@ -659,6 +672,7 @@ export default function App() {
                       ) : (
                         <SecurityView
                           ssl={ssl.data ?? undefined}
+                          sslApplicable={!dnsOnly}
                           dnssec={dnssec.data ?? NO_DNSSEC}
                         />
                       ))}

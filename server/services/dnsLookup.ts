@@ -2,6 +2,7 @@ import { promises as dnsPromises } from 'node:dns';
 import { domainToASCII } from 'node:url';
 import { getDomain } from 'tldts';
 import type { DnsRecord, RecordType } from '../types.js';
+import { isDnsOnlyName } from '../../shared/dnsName.js';
 
 /**
  * Konfigurierter Resolver — nutzt Cloudflare als Default,
@@ -196,20 +197,30 @@ async function lookupCname(domain: string): Promise<DnsRecord[]> {
 }
 
 /**
- * Validiert eine Domain. Erlaubt sind:
+ * Validiert einen DNS-Namen. Erlaubt sind:
  * - Subdomains (mehrere Punkte)
  * - Internationalisierte Domains (Punycode/IDN)
  * - TLDs ab 2 Zeichen
+ * - Unterstriche in Labels — `_dmarc.example.com`, `s1._domainkey.example.com`
+ *   (siehe isDnsOnlyName)
  *
  * Nicht erlaubt:
  * - URLs mit Protokoll/Pfad
  * - IP-Adressen
- * - Underscores im Hostnamen-Bereich
  */
-export function isValidDomain(input: string): boolean {
+export function isValidDnsName(input: string): boolean {
   if (!input || input.length > 253) return false;
   // Punycode-fähig, aber keine Protokolle/Pfade/Ports
-  return /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))*\.[a-z]{2,63}$/i.test(input);
+  return /^(?!-)[a-z0-9_-]{1,63}(?<!-)(\.(?!-)[a-z0-9_-]{1,63}(?<!-))*\.[a-z]{2,63}$/i.test(input);
+}
+
+/**
+ * Validiert einen Hostnamen: ein DNS-Name ohne Unterstrich. Gilt für alle
+ * Checks, die den Namen als Host ansprechen (TLS, HTTP) — und damit auch für
+ * die Annahmen in safeTarget.ts.
+ */
+export function isValidDomain(input: string): boolean {
+  return isValidDnsName(input) && !isDnsOnlyName(input);
 }
 
 /**

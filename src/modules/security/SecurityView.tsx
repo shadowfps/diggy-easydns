@@ -5,13 +5,15 @@ import { cn } from '@/lib/cn';
 
 interface SecurityViewProps {
   ssl?: SslInfo;
+  /** false bei DNS-Einträgen wie `_dmarc.…` — dort gibt es keinen Host für TLS. */
+  sslApplicable?: boolean;
   dnssec: DnssecInfo;
 }
 
-export function SecurityView({ ssl, dnssec }: SecurityViewProps) {
+export function SecurityView({ ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <SslCard ssl={ssl} />
+      <SslCard ssl={ssl} applicable={sslApplicable} />
       <DnssecCard dnssec={dnssec} />
     </div>
   );
@@ -19,7 +21,24 @@ export function SecurityView({ ssl, dnssec }: SecurityViewProps) {
 
 /* ─── SSL ─────────────────────────────────────────────────────────────── */
 
-function SslCard({ ssl }: { ssl?: SslInfo }) {
+function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
+  if (!applicable) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="surface rounded-xl p-5"
+      >
+        <CardHeader icon={<Lock className="w-4 h-4" />} title="SSL / TLS" />
+        <p className="mt-4 text-sm text-ink-900/60 dark:text-ink-50/60">
+          Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts —
+          unter ihnen läuft kein Webserver mit Zertifikat.
+        </p>
+      </motion.div>
+    );
+  }
+
   if (!ssl) {
     return (
       <motion.div

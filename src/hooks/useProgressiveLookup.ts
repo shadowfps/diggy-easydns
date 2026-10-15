@@ -10,6 +10,7 @@ import {
   type LookupCore,
 } from '@/lib/api';
 import { calculateScore } from '@/lib/scoring';
+import { isDnsOnlyName } from '@/lib/dnsName';
 import type {
   DetectedTech,
   DnsRecord,
@@ -25,7 +26,8 @@ import type {
 
 /* ─── Öffentliche Typen ────────────────────────────────────────────────── */
 
-export type LoadStatus = 'idle' | 'loading' | 'done' | 'error';
+/** `skipped`: für diesen Namen nicht anwendbar, wird gar nicht erst geladen. */
+export type LoadStatus = 'idle' | 'loading' | 'done' | 'error' | 'skipped';
 
 export interface SectionSlice<T> {
   status: LoadStatus;
@@ -45,6 +47,14 @@ export interface TypedSections {
 }
 
 const SECTION_KEYS: SectionKey[] = ['propagation', 'dnssec', 'ssl', 'mail', 'whois', 'techStack'];
+
+/**
+ * Was bei einem DNS-Eintrag wie `s1._domainkey.example.com` wegfällt (siehe
+ * isDnsOnlyName): SSL und Tech-Stack bräuchten einen Webserver, die
+ * Propagation vergleicht A/AAAA-Records. DNSSEC, Mail und WHOIS laufen auf
+ * der Apex-Domain und bleiben.
+ */
+const HOST_SECTIONS: SectionKey[] = ['propagation', 'ssl', 'techStack'];
 
 const DEFAULT_MAIL: MailSecurity = {
   spf: { present: false, valid: false, issues: [] },
@@ -70,9 +80,12 @@ interface State {
   sectionFindings: Partial<Record<SectionKey, Finding[]>>;
 }
 
-function makeSections(status: LoadStatus): Record<SectionKey, SectionSlice<unknown>> {
+function makeSections(
+  status: LoadStatus,
+  skipped: readonly SectionKey[] = []
+): Record<SectionKey, SectionSlice<unknown>> {
   return SECTION_KEYS.reduce((acc, key) => {
-    acc[key] = { status, data: undefined };
+    acc[key] = { status: skipped.includes(key) ? 'skipped' : status, data: undefined };
     return acc;
   }, {} as Record<SectionKey, SectionSlice<unknown>>);
 }
@@ -91,7 +104,7 @@ const INITIAL: State = {
 
 type Action =
   | { type: 'reset' }
-  | { type: 'start'; seq: number; domain: string }
+  | { type: 'start'; seq: number; domain: string; skipped: readonly SectionKey[] }
   | { type: 'recordsDone'; seq: number; core: LookupCore }
   | { type: 'recordsError'; seq: number; message: string }
   | { type: 'sectionDone'; seq: number; key: SectionKey; data: unknown; findings: Finding[] }
@@ -107,7 +120,7 @@ function reducer(state: State, action: Action): State {
         seq: action.seq,
         domain: action.domain,
         recordsStatus: 'loading',
-        sections: makeSections('loading'),
+        sections: makeSections('loading', action.skipped),
       };
     case 'recordsDone':
       if (action.seq !== state.seq) return state;
@@ -157,7 +170,7 @@ export interface ProgressiveLookup {
   sections: TypedSections;
   findings: Finding[];
   healthScore: HealthScore;
-  /** true, sobald Records + alle Sektionen fertig (done oder error) sind. */
+  /** true, sobald Records + alle Sektionen fertig (done, error oder skipped) sind. */
   allSettled: boolean;
   /** Progressiv befüllter Report — für History/Export, sobald Records da sind. */
   report: LookupReport | null;
@@ -174,7 +187,8 @@ export function useProgressiveLookup(): ProgressiveLookup {
     const domain = rawDomain.trim().toLowerCase();
     if (!domain) return;
     const seq = ++seqRef.current;
-    dispatch({ type: 'start', seq, domain });
+    const skipped = isDnsOnlyName(domain) ? HOST_SECTIONS : [];
+    dispatch({ type: 'start', seq, domain, skipped });
 
     lookupRecords(domain)
       .then((core) => {
@@ -184,12 +198,15 @@ export function useProgressiveLookup(): ProgressiveLookup {
         // Server-normalisierte Domain (IDN → Punycode) für die Sektionen nutzen.
         const target = core.domain;
 
+        // `request` als Funktion: übersprungene Sektionen sollen gar keinen
+        // Request auslösen, nicht nur ihr Ergebnis verwerfen.
         const fire = <R,>(
           key: SectionKey,
-          request: Promise<R>,
+          request: () => Promise<R>,
           pick: (r: R) => { data: unknown; findings: Finding[] }
         ) => {
-          request
+          if (skipped.includes(key)) return;
+          request()
             .then((r) => {
               if (seq !== seqRef.current) return;
               const { data, findings } = pick(r);
@@ -202,15 +219,15 @@ export function useProgressiveLookup(): ProgressiveLookup {
         };
 
         // Alle Sektionen PARALLEL — jede rendert, sobald sie fertig ist.
-        fire('propagation', lookupPropagation(target), (r) => ({
+        fire('propagation', () => lookupPropagation(target), (r) => ({
           data: r.propagation,
           findings: r.findings,
         }));
-        fire('dnssec', lookupDnssec(target), (r) => ({ data: r.dnssec, findings: r.findings }));
-        fire('ssl', lookupSsl(target), (r) => ({ data: r.ssl, findings: r.findings }));
-        fire('mail', lookupMail(target), (r) => ({ data: r.mail, findings: r.findings }));
-        fire('whois', lookupWhois(target), (r) => ({ data: r.whois, findings: r.findings }));
-        fire('techStack', lookupTechStack(target), (r) => ({ data: r.techStack, findings: [] }));
+        fire('dnssec', () => lookupDnssec(target), (r) => ({ data: r.dnssec, findings: r.findings }));
+        fire('ssl', () => lookupSsl(target), (r) => ({ data: r.ssl, findings: r.findings }));
+        fire('mail', () => lookupMail(target), (r) => ({ data: r.mail, findings: r.findings }));
+        fire('whois', () => lookupWhois(target), (r) => ({ data: r.whois, findings: r.findings }));
+        fire('techStack', () => lookupTechStack(target), (r) => ({ data: r.techStack, findings: [] }));
       })
       .catch((e) => {
         if (seq !== seqRef.current) return;
@@ -237,7 +254,7 @@ export function useProgressiveLookup(): ProgressiveLookup {
     if (state.recordsStatus !== 'done') return false;
     return SECTION_KEYS.every((k) => {
       const s = state.sections[k].status;
-      return s === 'done' || s === 'error';
+      return s === 'done' || s === 'error' || s === 'skipped';
     });
   }, [state.recordsStatus, state.sections]);
 

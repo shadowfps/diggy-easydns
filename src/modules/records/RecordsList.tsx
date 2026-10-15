@@ -73,7 +73,13 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
                 ) : record.type === 'NS' && onUseDomain ? (
                   <NameserverButton value={record.value} onClick={() => onUseDomain(record.value)} />
                 ) : (
-                  <span className="truncate">{record.value}</span>
+                  // TXT ganz zeigen statt abschneiden: DKIM-Schlüssel, SPF und
+                  // Verifizierungs-Tokens will man lesen und kopieren können.
+                  // `wrap-anywhere` bricht lange Base64-Ketten, bevorzugt aber
+                  // Leerzeichen — anders als `break-all` (#64).
+                  <span className={record.type === 'TXT' ? 'wrap-anywhere' : 'truncate'}>
+                    {record.value}
+                  </span>
                 )}
               </span>
               <span className="text-[11px] text-ink-900/40 dark:text-ink-50/40 font-mono tabular-nums">

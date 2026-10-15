@@ -7,6 +7,7 @@ import type {
   SslInfo,
   WhoisInfo,
 } from '../types.js';
+import { isDnsOnlyName } from '../../shared/dnsName.js';
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
@@ -36,6 +37,23 @@ const DOMAIN_LIFECYCLE_CAUSES = [
 
 export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {
   const findings: Finding[] = [];
+
+  // `s1._domainkey.example.com` ist kein Host — fehlende A/AAAA-Records sind
+  // dort der Normalfall, kein Befund. Wer so einen Namen nachschlägt, will
+  // wissen, ob der Eintrag existiert.
+  if (isDnsOnlyName(domain)) {
+    if (records.length === 0) {
+      findings.push({
+        id: 'no-records',
+        severity: 'critical',
+        title: 'Kein Eintrag unter diesem Namen',
+        description: `Unter ${domain} liegt kein DNS-Record. Steht dort ein DKIM-Schlüssel, eine DMARC-Policy oder ein Challenge-Token, ist er nicht (mehr) veröffentlicht — oder der Name ist vertippt.`,
+        category: 'dns',
+        causedBy: DOMAIN_LIFECYCLE_CAUSES,
+      });
+    }
+    return findings;
+  }
   const types = new Set(records.map((r) => r.type));
   const isApex = domain === apexDomain;
   const hostLabel = domain;
