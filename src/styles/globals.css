@@ -19,7 +19,16 @@
 @import '@fontsource/goldman/latin-400.css' layer(base);
 @import '@fontsource/goldman/latin-700.css' layer(base);
 
-@import 'tailwindcss';
+/*
+ * Wo Tailwind nach Klassen sucht — wie `content` in der alten v3-Config.
+ * Ohne `source(none)` durchsucht v4 das ganze Repo: lokal fand es dann in
+ * .github/workflows `contents: read` und erzeugte `.contents`, im
+ * Docker-Build (nur src/server/shared) nicht. Lokales CSS und Produktion
+ * unterschieden sich, und das Bundle-Budget maß das falsche.
+ */
+@import 'tailwindcss' source(none);
+@source '../../index.html';
+@source '../';
 
 /* `darkMode: 'class'` aus v3: Dark Mode hängt an `.dark` auf <html>. */
 @custom-variant dark (&:is(.dark *));

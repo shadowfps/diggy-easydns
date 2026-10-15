@@ -44,13 +44,13 @@ const BUDGETS_KB = {
   'icons.js': 9, // 7,78
   // Tailwind 4 (15.10.2026): +2,3 kB für `@property`-Deklarationen, ihren
   // Fallback-Block und die modernere Preflight. Lässt sich nicht abschalten.
-  'index.css': 11, // 10,28
+  'index.css': 11, // 10,20
   'rolldown-runtime.js': 1, // 0,39
 };
 
 /** Obergrenze für die Summe. Fängt auch einen neuen, ungebudgetierten Chunk. */
 // Angehoben mit Tailwind 4 und tailwind-merge 3 (+2,3 kB CSS, +1,9 kB JS).
-const CRITICAL_PATH_BUDGET_KB = 180; // 171,76
+const CRITICAL_PATH_BUDGET_KB = 180; // 171,68
 
 /**
  * Aus `react-BAgBMDim.js` wird `react.js` — der Hash wechselt bei jedem Build.
