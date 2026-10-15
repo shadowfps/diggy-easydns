@@ -225,7 +225,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           ref={statusRef}
           role="status"
           tabIndex={-1}
-          className="mb-4 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 outline-none dark:text-emerald-300"
+          className="mb-4 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 outline-hidden dark:text-emerald-300"
         >
           Danke! Deine Nachricht wurde gesendet.
         </div>
@@ -236,7 +236,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           ref={statusRef}
           role="alert"
           tabIndex={-1}
-          className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 outline-none dark:text-red-400"
+          className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 outline-hidden dark:text-red-400"
         >
           {error}
         </div>
@@ -283,7 +283,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
             maxLength={MAX_MESSAGE_LENGTH}
             rows={6}
             aria-describedby="contact-message-counter"
-            className={`${inputClassName} min-h-[9rem] resize-y`}
+            className={`${inputClassName} min-h-36 resize-y`}
             placeholder="Worum geht es?"
           />
           {/*
@@ -374,7 +374,7 @@ const MIN_MESSAGE_LENGTH = 10;
 const MAX_MESSAGE_LENGTH = 5000;
 
 const inputClassName =
-  'w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 placeholder:text-ink-900/35 focus:border-ink-900/40 focus:outline-none focus:ring-2 focus:ring-ink-900/10 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50 dark:placeholder:text-ink-50/35 dark:focus:border-ink-50/40 dark:focus:ring-ink-50/10';
+  'w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 placeholder:text-ink-900/35 focus:border-ink-900/40 focus:outline-hidden focus:ring-2 focus:ring-ink-900/10 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50 dark:placeholder:text-ink-50/35 dark:focus:border-ink-50/40 dark:focus:ring-ink-50/10';
 
 const honeypotClassName =
-  'pointer-events-none absolute -left-[9999px] h-0 w-0 overflow-hidden opacity-0';
+  'pointer-events-none absolute left-[-9999px] h-0 w-0 overflow-hidden opacity-0';

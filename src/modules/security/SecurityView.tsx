@@ -99,7 +99,7 @@ function SslCard({ ssl }: { ssl?: SslInfo }) {
             {ssl.sans.slice(0, 12).map((san) => (
               <span
                 key={san}
-                className="font-mono text-[11px] px-2 py-0.5 rounded bg-ink-100 dark:bg-ink-900 text-ink-900/70 dark:text-ink-50/70"
+                className="font-mono text-[11px] px-2 py-0.5 rounded-sm bg-ink-100 dark:bg-ink-900 text-ink-900/70 dark:text-ink-50/70"
               >
                 {san}
               </span>
@@ -225,7 +225,7 @@ function Row({
       </span>
       <span
         className={cn(
-          'flex-1 text-ink-900/80 dark:text-ink-50/80 break-words',
+          'flex-1 text-ink-900/80 dark:text-ink-50/80 wrap-break-word',
           mono && 'font-mono text-xs'
         )}
       >

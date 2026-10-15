@@ -42,7 +42,7 @@ export function SectionCardsSkeleton({ count = 2 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="surface rounded-xl p-5">
           <div className="mb-4 flex items-center gap-2">
-            <Skeleton className="h-4 w-4 rounded" />
+            <Skeleton className="h-4 w-4 rounded-sm" />
             <Skeleton className="h-4 w-28" />
           </div>
           <div className="space-y-3">
@@ -81,7 +81,7 @@ export function WhoisSkeleton() {
     <div className="grid gap-4 md:grid-cols-2">
       <div className="surface rounded-xl p-5 md:col-span-2">
         <div className="mb-4 flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="h-4 w-4 rounded-sm" />
           <Skeleton className="h-4 w-28" />
         </div>
         <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">

@@ -36,8 +36,8 @@ export function PageSpeedView({
 }: PageSpeedViewProps) {
   return (
     <div className="surface relative overflow-hidden rounded-2xl p-6 md:p-8">
-      <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-ink-900/20 to-transparent dark:via-white/20" />
-      <div className="pointer-events-none absolute left-1/2 top-0 h-28 w-72 -translate-x-1/2 rounded-full bg-ink-900/[0.035] blur-3xl dark:bg-white/[0.05]" />
+      <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-ink-900/20 to-transparent dark:via-white/20" />
+      <div className="pointer-events-none absolute left-1/2 top-0 h-28 w-72 -translate-x-1/2 rounded-full bg-ink-900/[0.035] blur-3xl dark:bg-white/5" />
 
       <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-900/60 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50/60">
@@ -174,7 +174,7 @@ function StrategyButton({
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition-colors',
         active
-          ? 'bg-ink-950 text-white shadow-sm dark:bg-ink-50 dark:text-ink-950'
+          ? 'bg-ink-950 text-white shadow-xs dark:bg-ink-50 dark:text-ink-950'
           : 'text-ink-900/70 hover:bg-white/70 dark:text-ink-50/70 dark:hover:bg-ink-800/70'
       )}
     >
@@ -195,7 +195,7 @@ const LOADING_STAGES = [
 function IdleSpeedPanel() {
   return (
     <div className="relative mx-auto mt-8 flex min-h-64 max-w-2xl items-center justify-center rounded-2xl border border-dashed border-ink-200 bg-white/45 p-8 dark:border-ink-800 dark:bg-ink-950/25">
-      <div className="absolute inset-x-8 top-8 h-px bg-gradient-to-r from-transparent via-ink-900/15 to-transparent dark:via-white/15" />
+      <div className="absolute inset-x-8 top-8 h-px bg-linear-to-r from-transparent via-ink-900/15 to-transparent dark:via-white/15" />
       <div className="grid w-full max-w-md grid-cols-3 gap-3">
         <SignalTile icon={<Gauge className="h-4 w-4" />} label="Score" />
         <SignalTile icon={<Waypoints className="h-4 w-4" />} label="Vitals" />
@@ -207,7 +207,7 @@ function IdleSpeedPanel() {
 
 function SignalTile({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-ink-100 bg-white text-xs font-medium text-ink-900/60 shadow-sm dark:border-ink-800 dark:bg-ink-900 dark:text-ink-50/60">
+    <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-ink-100 bg-white text-xs font-medium text-ink-900/60 shadow-xs dark:border-ink-800 dark:bg-ink-900 dark:text-ink-50/60">
       <span className="text-ink-900 dark:text-ink-50">{icon}</span>
       <span>{label}</span>
     </div>
@@ -226,7 +226,7 @@ function PageSpeedLoader() {
 
   return (
     <div className="mx-auto mt-8 max-w-xl" aria-busy="true" aria-live="polite">
-      <div className="rounded-2xl border border-ink-200 bg-white/70 p-6 text-center shadow-sm dark:border-ink-800 dark:bg-ink-950/35">
+      <div className="rounded-2xl border border-ink-200 bg-white/70 p-6 text-center shadow-xs dark:border-ink-800 dark:bg-ink-950/35">
         <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900">
           <Loader2 className="h-5 w-5 animate-spin text-ink-900 dark:text-ink-50" />
         </div>
@@ -248,7 +248,7 @@ function PageSpeedLoader() {
           {[0, 1, 2, 3, 4].map((index) => (
             <span
               key={index}
-              className="h-1.5 rounded-full bg-ink-200 dark:bg-ink-800 [animation:scanBar_1.2s_ease-in-out_infinite]"
+              className="h-1.5 rounded-full bg-ink-200 dark:bg-ink-800 animate-[scanBar_1.2s_ease-in-out_infinite]"
               style={{ animationDelay: `${index * 140}ms` }}
             />
           ))}
@@ -270,7 +270,7 @@ function MetricCard({
   tone: 'good' | 'warn' | 'bad' | 'neutral';
 }) {
   return (
-    <div className="rounded-xl border border-ink-100 bg-white/70 p-4 text-center shadow-sm dark:border-ink-900/80 dark:bg-ink-950/35">
+    <div className="rounded-xl border border-ink-100 bg-white/70 p-4 text-center shadow-xs dark:border-ink-900/80 dark:bg-ink-950/35">
       <div className="mb-2 flex items-center justify-center gap-2 text-xs text-ink-900/55 dark:text-ink-50/55">
         {icon}
         {label}

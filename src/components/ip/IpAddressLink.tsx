@@ -78,7 +78,7 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
         onClick={handleOpen}
         className={cn(
           'group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md text-left font-mono text-xs transition-colors',
-          'hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:hover:text-white dark:focus-visible:outline-ink-50',
+          'hover:text-ink-950 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:hover:text-white dark:focus-visible:outline-ink-50',
           className
         )}
         aria-label={`Details zu ${ip} anzeigen`}
@@ -167,7 +167,7 @@ function IpDetailsOverlay({
     <AnimatePresence onExitComplete={onExited}>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/45 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/45 p-4 backdrop-blur-xs"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -198,7 +198,7 @@ function IpDetailsOverlay({
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="rounded-md p-1 text-ink-900/45 transition-colors hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/45 dark:hover:text-white dark:focus-visible:outline-ink-50"
+                    className="rounded-md p-1 text-ink-900/45 transition-colors hover:text-ink-950 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/45 dark:hover:text-white dark:focus-visible:outline-ink-50"
                     aria-label={copied ? 'IP kopiert' : 'IP kopieren'}
                     title={copied ? 'IP kopiert' : 'IP kopieren'}
                   >
@@ -212,7 +212,7 @@ function IpDetailsOverlay({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full bg-ink-100 p-2 text-ink-900/65 transition-colors hover:text-ink-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:bg-white/10 dark:text-ink-50/75 dark:hover:text-white dark:focus-visible:outline-ink-50"
+                className="rounded-full bg-ink-100 p-2 text-ink-900/65 transition-colors hover:text-ink-900 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:bg-white/10 dark:text-ink-50/75 dark:hover:text-white dark:focus-visible:outline-ink-50"
                 aria-label="Details schließen"
                 title="Schließen"
               >
@@ -221,7 +221,7 @@ function IpDetailsOverlay({
             </div>
 
             {loading && (
-              <div className="flex items-center gap-2 rounded-lg bg-ink-100 px-4 py-5 text-sm text-ink-900/60 dark:bg-white/[0.04] dark:text-ink-50/60">
+              <div className="flex items-center gap-2 rounded-lg bg-ink-100 px-4 py-5 text-sm text-ink-900/60 dark:bg-white/4 dark:text-ink-50/60">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>IP-Details werden geladen...</span>
               </div>
@@ -320,7 +320,7 @@ function DetailRow({
   mono?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(104px,0.42fr)_1fr] items-start gap-3 rounded-lg bg-ink-100 px-4 py-3 text-sm dark:bg-white/[0.04]">
+    <div className="grid grid-cols-[minmax(104px,0.42fr)_1fr] items-start gap-3 rounded-lg bg-ink-100 px-4 py-3 text-sm dark:bg-white/4">
       <div className="flex min-w-0 items-center gap-2 text-ink-900/60 dark:text-ink-50/60">
         <span className="shrink-0 text-ink-900/45 dark:text-ink-50/45">{icon}</span>
         <span className="truncate">{label}</span>
@@ -331,7 +331,7 @@ function DetailRow({
           mono && 'font-mono text-xs'
         )}
       >
-        <span className="break-words">{value}</span>
+        <span className="wrap-break-word">{value}</span>
       </div>
     </div>
   );
