@@ -56,7 +56,7 @@ export async function scanVirusTotal(domain: string): Promise<VirusScanReport> {
     return normalize(domain, payload);
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('VirusTotal Timeout — bitte erneut versuchen.');
+      throw new Error('VirusTotal Timeout — bitte erneut versuchen.', { cause: error });
     }
     throw error;
   } finally {

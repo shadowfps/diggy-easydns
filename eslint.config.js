@@ -1,4 +1,5 @@
 // @ts-check
+import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -6,7 +7,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 
 /**
- * ESLint 9 Flat Config.
+ * ESLint Flat Config.
  *
  * `npm run lint` war vorher ein Skript ohne Konfiguration und schlug fehl.
  * Besonders wertvoll hier: die react-hooks-Regeln. Der Code hat mehrere
@@ -15,7 +16,7 @@ import globals from 'globals';
  * `eslint-disable-next-line react-hooks/exhaustive-deps`-Marker, deren Regel
  * bisher gar nicht lief.
  */
-export default tseslint.config(
+export default defineConfig(
   {
     ignores: ['dist/**', 'dist-server/**', 'node_modules/**', '*.tsbuildinfo'],
   },
