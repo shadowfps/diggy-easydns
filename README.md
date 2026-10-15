@@ -5,7 +5,7 @@
 Diggy ist ein webbasiertes DNS-Audit-Tool. Domain eingeben, fertig: Records, Mail-Security, SSL-Status, Propagation, WHOIS und PageSpeed-Score landen übersichtlich auf einem Screen — mit Health-Score und konkreten Empfehlungen.
 
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss&logoColor=white)
 
