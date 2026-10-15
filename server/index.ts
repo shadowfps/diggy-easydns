@@ -725,7 +725,9 @@ app.get('/api/lookup/techstack', techStackConcurrency, async (req: Request, res:
 
 if (existsSync(distIndex)) {
   app.use(express.static(distDir));
-  app.get('*', (req: Request, res: Response, next) => {
+  // Express 5 (path-to-regexp 8) braucht für den Wildcard einen Namen; die
+  // geschweiften Klammern machen ihn optional, damit auch `/` passt.
+  app.get('/{*splat}', (req: Request, res: Response, next) => {
     if (req.path.startsWith('/api/')) return next();
     return res.sendFile(distIndex);
   });
@@ -736,7 +738,11 @@ if (isContactMailConfigured()) {
   assertContactSecretConfigured();
 }
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, (error?: Error) => {
+  // Express 5 ruft den Callback auch bei einem Startfehler auf. Den meldet
+  // der 'error'-Handler unten — hier nur verhindern, dass vorher "läuft"
+  // im Log steht.
+  if (error) return;
   console.log(`🐾 Diggy läuft auf http://localhost:${PORT}`);
 });
 
