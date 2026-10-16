@@ -65,11 +65,12 @@ export const SECTION_KEYS: readonly SectionKey[] = [
 
 /**
  * Was bei einem DNS-Eintrag wie `s1._domainkey.example.com` wegfällt (siehe
- * isDnsOnlyName): SSL und Tech-Stack bräuchten einen Webserver, die
- * Propagation vergleicht A/AAAA-Records. DNSSEC, Mail und WHOIS laufen auf
- * der Apex-Domain und bleiben.
+ * isDnsOnlyName): SSL und Tech-Stack bräuchten einen Webserver. Die
+ * Propagation bleibt — sie vergleicht dort TXT und CNAME, damit man nach
+ * einem DKIM-Wechsel sieht, ob der neue Schlüssel überall angekommen ist.
+ * DNSSEC, Mail und WHOIS laufen auf der Apex-Domain und bleiben ebenfalls.
  */
-const HOST_SECTIONS: SectionKey[] = ['propagation', 'ssl', 'techStack'];
+const HOST_SECTIONS: SectionKey[] = ['ssl', 'techStack'];
 
 const DEFAULT_MAIL: MailSecurity = {
   spf: { present: false, valid: false, issues: [] },

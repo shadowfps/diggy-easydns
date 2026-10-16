@@ -15,6 +15,8 @@ import type {
   Finding,
   LookupFailure,
   MailSecurity,
+  RecordType,
+  ResolverResult,
   SslInfo,
   WhoisInfo,
 } from '../types.js';
@@ -179,6 +181,137 @@ describe('dnsFindings — DNS-Einträge mit Unterstrich', () => {
   });
 });
 
+describe('propagationFindings', () => {
+  const resolverResult = (
+    id: string,
+    records: [RecordType, string][],
+    error?: string
+  ): ResolverResult => ({
+    resolver: { id, name: id, ip: '0.0.0.0', country: 'X', flag: '', provider: id },
+    records: records.map(([type, value]) => ({ type, name: 'x', value, ttl: 300 })),
+    responseTimeMs: 10,
+    ...(error ? { error } : {}),
+  });
+  const ids = (findings: { id: string }[]) => findings.map((f) => f.id);
+
+  describe('Hosts (A/AAAA)', () => {
+    const types: RecordType[] = ['A', 'AAAA'];
+
+    it('meldet gleiche A-Records als konsistent', () => {
+      const results = ['cloudflare', 'google', 'adguard'].map((id) =>
+        resolverResult(id, [['A', '192.0.2.1'], ['AAAA', '2001:db8::1']])
+      );
+      const findings = propagationFindings(results, types);
+      expect(ids(findings)).toEqual(['propagation-consistent']);
+      expect(findings[0].description).toBe('Alle 3 Resolver liefern dasselbe Ergebnis.');
+    });
+
+    it('meldet verschiedene A-Records wie bisher mit GeoDNS als möglicher Ursache', () => {
+      const findings = propagationFindings(
+        [resolverResult('cloudflare', [['A', '192.0.2.1']]), resolverResult('google', [['A', '192.0.2.2']])],
+        types
+      );
+      expect(ids(findings)).toEqual(['propagation-mismatch']);
+      expect(findings[0].description).toContain('GeoDNS');
+    });
+
+    it('lässt Resolver ohne Antwort oder mit Fehler außen vor', () => {
+      const findings = propagationFindings(
+        [
+          resolverResult('cloudflare', [['A', '192.0.2.1']]),
+          resolverResult('google', []),
+          resolverResult('dns-sb', [], 'Timeout'),
+        ],
+        types
+      );
+      // Nur ein Resolver mit Antwort — nichts zu vergleichen.
+      expect(findings).toEqual([]);
+    });
+  });
+
+  /**
+   * #82: Bei `s1._domainkey.example.com` gibt es keine Adressen. Verglichen
+   * wird der TXT-Record — nach einem DKIM-Wechsel genau die Frage, ob der neue
+   * Schlüssel überall angekommen ist.
+   */
+  describe('DNS-Einträge (TXT/CNAME)', () => {
+    const types: RecordType[] = ['TXT', 'CNAME'];
+    const key = 'v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAneu';
+
+    it('meldet gleiche TXT-Records als konsistent — auch gestückelt und in anderer Reihenfolge', () => {
+      const findings = propagationFindings(
+        [
+          resolverResult('cloudflare', [['TXT', `"${key.slice(0, 30)}" "${key.slice(30)}"`], ['TXT', 'token']]),
+          resolverResult('google', [['TXT', 'token'], ['TXT', key]]),
+          resolverResult('adguard', [['TXT', key], ['TXT', '"token"']]),
+        ],
+        types
+      );
+      expect(ids(findings)).toEqual(['propagation-consistent']);
+      expect(findings[0].description).toBe('Alle 3 Resolver liefern denselben TXT-Record.');
+    });
+
+    it('meldet einen abweichenden TXT-Record ohne GeoDNS als Erklärung', () => {
+      const findings = propagationFindings(
+        [
+          resolverResult('cloudflare', [['TXT', key]]),
+          resolverResult('google', [['TXT', 'v=DKIM1; k=rsa; p=ALT']]),
+          resolverResult('adguard', [['TXT', key]]),
+        ],
+        types
+      );
+      expect(ids(findings)).toEqual(['propagation-mismatch']);
+      expect(findings[0].severity).toBe('warning');
+      expect(findings[0].description).toContain('1 von 3 Resolvern');
+      expect(findings[0].description).toContain('TXT-Record');
+      expect(findings[0].description).not.toContain('GeoDNS');
+    });
+
+    /**
+     * Direkt nach einem DKIM-Wechsel hat oft erst EIN Resolver den neuen
+     * Schlüssel. Die Mehrheit sagt nicht, wer den alten Stand hat — der Befund
+     * darf den abweichenden Resolver deshalb nicht „veraltet“ nennen.
+     */
+    it('sagt nicht, welche Seite den alten Stand hat', () => {
+      const findings = propagationFindings(
+        [
+          resolverResult('cloudflare', [['TXT', 'v=DKIM1; k=rsa; p=NEU']]),
+          resolverResult('google', [['TXT', key]]),
+          resolverResult('adguard', [['TXT', key]]),
+        ],
+        types
+      );
+      expect(findings[0].description).toContain('noch nicht überall angekommen');
+      expect(findings[0].description).not.toMatch(/dort noch nicht/);
+    });
+
+    it('zählt einen Resolver, der den neuen Eintrag noch nicht kennt, als Abweichung', () => {
+      const findings = propagationFindings(
+        [resolverResult('cloudflare', [['TXT', key]]), resolverResult('google', []), resolverResult('adguard', [['TXT', key]])],
+        types
+      );
+      expect(ids(findings)).toEqual(['propagation-mismatch']);
+    });
+
+    it('vergleicht den CNAME, wenn unter dem Namen kein TXT liegt', () => {
+      const findings = propagationFindings(
+        [
+          resolverResult('cloudflare', [['CNAME', 'sel1.provider.net']]),
+          resolverResult('google', [['CNAME', 'SEL1.provider.net.']]),
+        ],
+        types
+      );
+      expect(ids(findings)).toEqual(['propagation-consistent']);
+      expect(findings[0].description).toContain('CNAME-Record');
+    });
+
+    it('meldet nichts, wenn kein Resolver einen Eintrag liefert', () => {
+      // Das sagt schon `no-records` aus dnsFindings — kritisch statt doppelt.
+      expect(propagationFindings([resolverResult('cloudflare', []), resolverResult('google', [])], types)).toEqual([]);
+    });
+  });
+});
+
 describe('whoisFindings', () => {
   it('erzeugt kein Finding, wenn RDAP nichts liefert', () => {
     // Dass eine TLD kein RDAP anbietet, ist keine Schwäche der Domain und
@@ -286,7 +419,7 @@ describe('Score einer normalen Domain bleibt wie vor #101', () => {
   } = {}) {
     const findings = [
       ...dnsFindings(over.records ?? records, D, D),
-      ...propagationFindings([]),
+      ...propagationFindings([], ['A']),
       ...dnssecFindings(over.dnssec ?? dnssecOff),
       ...sslFindings(
         over.ssl === undefined ? ssl({ daysUntilExpiry: 60 }) : over.ssl,

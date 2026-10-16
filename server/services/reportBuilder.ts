@@ -4,11 +4,17 @@ import type {
   Finding,
   LookupFailure,
   MailSecurity,
+  RecordType,
   ResolverResult,
   SslInfo,
   WhoisInfo,
 } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
+import {
+  comparePropagation,
+  countsMissingAnswers,
+  primaryPropagationType,
+} from '../../shared/propagation.js';
 import { lookupFailureLabel } from '../../shared/lookupFailure.js';
 import { dmarcPct, noMailProtection } from '../../shared/nullMx.js';
 import { bimiDmarcGap } from '../../shared/bimiTlsRpt.js';
@@ -827,31 +833,39 @@ export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): 
 
 /* ─── Propagation ────────────────────────────────────────────────────── */
 
-export function propagationFindings(results: ResolverResult[]): Finding[] {
-  if (results.length === 0) return [];
+/**
+ * Befund zur Propagation.
+ *
+ * `types` sind die abgefragten Typen, wichtigster zuerst (siehe
+ * `propagationTypes`). Verglichen wird der erste, für den überhaupt ein
+ * Resolver antwortet: bei Hosts A, bei DNS-Einträgen wie
+ * `s1._domainkey.example.com` TXT.
+ */
+export function propagationFindings(results: ResolverResult[], types: RecordType[]): Finding[] {
+  const type = primaryPropagationType(results, types);
+  if (!type) return [];
 
-  // Wir vergleichen die Sets der A-Records. Sortiert + gejoint = stabiler Key.
-  const aValuesByResolver = results
-    .map((r) => ({
-      id: r.resolver.id,
-      key: r.records
-        .filter((rec) => rec.type === 'A')
-        .map((rec) => rec.value)
-        .sort()
-        .join(','),
-      hasError: !!r.error,
-    }))
-    .filter((r) => !r.hasError && r.key.length > 0);
+  const { answers, compared, deviating } = comparePropagation(results, type);
+  if (compared < 2) return [];
 
-  if (aValuesByResolver.length < 2) return [];
+  // Bei DNS-Einträgen kommen GeoDNS und Anycast als Erklärung nicht in Frage:
+  // ein DKIM-Schlüssel ist überall derselbe. Abweichung heißt dort, dass eine
+  // Änderung noch nicht überall angekommen ist. Welche Seite den alten Stand
+  // hat, sagt die Mehrheit nicht: Direkt nach dem Wechsel kann gerade der
+  // eine abweichende Resolver schon den neuen Schlüssel liefern.
+  const entry = countsMissingAnswers(type);
 
-  const uniqueKeys = new Set(aValuesByResolver.map((r) => r.key));
-  if (uniqueKeys.size > 1) {
+  if (deviating > 0) {
+    const distinct = new Set(
+      answers.filter((a) => a.status === 'match' || a.status === 'mismatch').map((a) => a.key)
+    ).size;
     return [{
       id: 'propagation-mismatch',
       severity: 'warning',
       title: 'Propagation-Abweichung erkannt',
-      description: `${aValuesByResolver.length} Resolver liefern ${uniqueKeys.size} verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.`,
+      description: entry
+        ? `${deviating} von ${compared} Resolvern weichen beim ${type}-Record von der Mehrheit ab — eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).`
+        : `${compared} Resolver liefern ${distinct} verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.`,
       category: 'dns',
     }];
   }
@@ -860,7 +874,9 @@ export function propagationFindings(results: ResolverResult[]): Finding[] {
     id: 'propagation-consistent',
     severity: 'success',
     title: 'Konsistente Propagation',
-    description: `Alle ${aValuesByResolver.length} Resolver liefern dasselbe Ergebnis.`,
+    description: entry
+      ? `Alle ${compared} Resolver liefern denselben ${type}-Record.`
+      : `Alle ${compared} Resolver liefern dasselbe Ergebnis.`,
     category: 'dns',
   }];
 }
