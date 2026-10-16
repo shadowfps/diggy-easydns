@@ -8,12 +8,13 @@ interface HeaderProps {
   onHome?: () => void;
   onHistory?: () => void;
   onAvailability?: () => void;
+  onCompare?: () => void;
   onAbout?: () => void;
   /** Kompakte Suche — auf Report-Seiten steht sie hier statt über dem Report. */
   search?: ReactNode;
 }
 
-export function Header({ onHome, onHistory, onAvailability, onAbout, search }: HeaderProps) {
+export function Header({ onHome, onHistory, onAvailability, onCompare, onAbout, search }: HeaderProps) {
   const { theme, toggle } = useTheme();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -58,6 +59,11 @@ export function Header({ onHome, onHistory, onAvailability, onAbout, search }: H
   const handleAvailability = () => {
     setOpen(false);
     onAvailability?.();
+  };
+
+  const handleCompare = () => {
+    setOpen(false);
+    onCompare?.();
   };
 
   return (
@@ -140,6 +146,7 @@ export function Header({ onHome, onHistory, onAvailability, onAbout, search }: H
                   className="overlay absolute right-0 top-full mt-2 w-72 origin-top-right p-2"
                 >
                   <MenuItem onClick={handleHistory} label="History" />
+                  <MenuItem onClick={handleCompare} label="Vergleichen" />
                   <MenuItem onClick={handleAvailability} label="Available Check" />
                   <MenuItem onClick={handleAbout} label="About" />
 
@@ -182,7 +189,7 @@ function MenuItem({ label, onClick }: { label: string; onClick?: () => void }) {
       className="group flex w-full items-center justify-between rounded-panel px-3 py-2.5 text-left text-sm font-medium text-fg transition-colors hover:bg-surface-muted"
     >
       {label}
-      <ArrowUpRight className="size-3.5 text-fg-subtle transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-fg" />
+      <ArrowUpRight className="size-3.5 text-fg-subtle transition-all group-hover:text-fg motion-safe:group-hover:-translate-y-0.5 motion-safe:group-hover:translate-x-0.5" />
     </button>
   );
 }

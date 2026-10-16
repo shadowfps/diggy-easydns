@@ -8,6 +8,8 @@ RUN npm ci
 
 COPY index.html diggy-icon.svg tsconfig.json tsconfig.node.json tsconfig.server.json vite.config.ts ./
 COPY src ./src
+# Statische Dateien ohne Hash im Namen, z. B. das Vorschaubild für Permalinks.
+COPY public ./public
 COPY server ./server
 COPY shared ./shared
 RUN npm run build
