@@ -1,10 +1,12 @@
 import { motion } from 'motion/react';
 import { useState, useMemo } from 'react';
+import { MailX } from 'lucide-react';
 import type { DnsRecord, RecordType } from '@/types/dns';
 import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { InfoButton } from '@/components/ui/InfoButton';
-import { explainRecordType } from '@/lib/explanations';
+import { NULL_MX_EXPLANATION, explainRecordType } from '@/lib/explanations';
+import { isNullMx } from '@/lib/nullMx';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 import { useI18n } from '@/i18n';
 
@@ -23,6 +25,11 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
     records.forEach((r) => counts.set(r.type, (counts.get(r.type) ?? 0) + 1));
     return Array.from(counts.entries());
   }, [records]);
+
+  // Null-MX nur, wenn er der einzige MX ist (Regel: shared/nullMx.ts) —
+  // steht ein echter daneben, stellen Absender dorthin zu. Deshalb über alle
+  // Records, nicht nur die gefilterten.
+  const nullMx = useMemo(() => isNullMx(records.filter((r) => r.type === 'MX')), [records]);
 
   const filtered = filter === 'ALL' ? records : records.filter((r) => r.type === filter);
 
@@ -89,6 +96,8 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
                   </>
                 ) : record.type === 'NS' && onUseDomain ? (
                   <NameserverButton value={record.value} onClick={() => onUseDomain(record.value)} />
+                ) : record.type === 'MX' ? (
+                  <MxTarget value={record.value} nullMx={nullMx} />
                 ) : (
                   // TXT ganz zeigen statt abschneiden: DKIM-Schlüssel, SPF und
                   // Verifizierungs-Tokens will man lesen und kopieren können.
@@ -126,6 +135,34 @@ function Ttl({ ttl }: { ttl: number | null }) {
   }
 
   return <span className="text-xs tabular-nums text-fg-subtle">{ttl}s</span>;
+}
+
+/**
+ * Ziel eines MX. Die Wurzel kommt vom Resolver als leerer Name, in der
+ * Zonendatei heißt sie „.“ — gezeigt wird sie wie im Vergleich als Punkt,
+ * sonst stünde vom Null-MX nur die Priorität da (#120). Nur die Anzeige:
+ * der Record selbst (und damit der JSON-Export) bleibt, wie er kam.
+ *
+ * Das Badge steht nur beim echten Null-MX. Ein leeres Ziel neben weiteren
+ * MX ist nach RFC 7505 ungültig; die Domain empfängt dann über die anderen.
+ */
+function MxTarget({ value, nullMx }: { value: string; nullMx: boolean }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <span className="truncate">{value || '.'}</span>
+      {nullMx && (
+        <span className="inline-flex items-center gap-1">
+          {/* `font-sans`: die Spalte ist Mono, das Badge ist Text. */}
+          <span className="badge font-sans">
+            <MailX className="size-3" aria-hidden />
+            {t('Null-MX — keine Mails')}
+          </span>
+          <InfoButton term={t('Null-MX')} explanation={NULL_MX_EXPLANATION} />
+        </span>
+      )}
+    </>
+  );
 }
 
 function NameserverButton({ value, onClick }: { value: string; onClick: () => void }) {

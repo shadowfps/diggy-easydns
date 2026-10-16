@@ -77,6 +77,17 @@ export const RECORD_EXPLANATIONS: Record<ExplainedRecordType, Explanation> = {
   },
 };
 
+/**
+ * Der Null-MX (RFC 7505, #120) — kein eigener Record-Typ, aber ein MX, der
+ * das Gegenteil eines Mailservers sagt. In der Records-Liste steht er als
+ * „0 .“, und das versteht ohne Erklärung niemand.
+ */
+export const NULL_MX_EXPLANATION: Explanation = {
+  title: 'Kein Mail-Empfang',
+  text:
+    'Priorität 0 und als Ziel nur ein Punkt, also kein Server: So sagt eine Domain allen Mailservern, dass sie keine E-Mails annimmt (RFC 7505). Mails an sie kommen sofort als unzustellbar zurück, nicht erst nach tagelangen Zustellversuchen.',
+};
+
 export const MAIL_EXPLANATIONS: Record<MailTerm, Explanation> = {
   SPF: {
     title: 'Erlaubte Absender',

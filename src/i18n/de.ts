@@ -108,6 +108,8 @@ export type DeText =
   | 'Snippet kopieren'
   | 'ohne Punktabzug'
   | 'TTL unbekannt'
+  | 'Null-MX'
+  | 'Null-MX — keine Mails'
 
   // ─── Security ────────────────────────────────────────────────────────
   | 'Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.'
@@ -361,6 +363,7 @@ export type DeText =
   | 'Verschlüsselung erzwingen'
   | 'Markenlogo im Postfach'
   | 'Berichte über Zustellprobleme'
+  | 'Kein Mail-Empfang'
   | 'Die IPv4-Adresse des Servers hinter diesem Namen – dorthin verbinden sich Browser und Apps. Die Sekunden rechts zeigen die TTL: Sie sagt, wie lange DNS-Server die Antwort zwischenspeichern dürfen, deshalb kommen Änderungen nicht sofort überall an.'
   | 'Wie der A-Record, nur mit einer IPv6-Adresse, dem neueren Adressformat. Fehlt er, ist die Domain nur über IPv4 erreichbar.'
   | 'Macht diesen Namen zum Alias eines anderen: Wer ihn abfragt, bekommt die Einträge des Ziels. Eigene weitere Einträge darf ein Name mit CNAME nicht haben – was sonst in der Liste steht, kommt vom Ziel.'
@@ -375,6 +378,7 @@ export type DeText =
   | 'Verlangt von anderen Mailservern, Mails an deine Domain nur verschlüsselt und an Server mit gültigem Zertifikat zuzustellen. Ohne einen solchen Schutz kann ein Angreifer unterwegs die Verschlüsselung abschalten und mitlesen.'
   | 'Hinterlegt ein Logo, das Postfächer neben deinen Mails zeigen können. Das klappt nur mit DMARC auf quarantine oder reject; Gmail und Apple Mail verlangen zusätzlich ein Markenzertifikat (VMC oder CMC).'
   | 'Nennt eine Adresse, an die andere Mailserver berichten, wenn die verschlüsselte Zustellung an deine Domain scheitert. So fällt auf, wenn etwa ein abgelaufenes Zertifikat oder MTA-STS Mails aufhält.'
+  | 'Priorität 0 und als Ziel nur ein Punkt, also kein Server: So sagt eine Domain allen Mailservern, dass sie keine E-Mails annimmt (RFC 7505). Mails an sie kommen sofort als unzustellbar zurück, nicht erst nach tagelangen Zustellversuchen.'
   | 'Was bedeutet {term}?'
 
   // ─── Seit dem letzten Check ──────────────────────────────────────────

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { DnsRecord } from '@/types/dns';
-import { RECORD_EXPLANATIONS } from '@/lib/explanations';
+import { NULL_MX_EXPLANATION, RECORD_EXPLANATIONS } from '@/lib/explanations';
 import { RecordsList } from './RecordsList';
 
 /**
@@ -81,5 +81,70 @@ describe('RecordsList — Erklärungen', () => {
     render(<RecordsList records={RECORDS} />);
     await user.click(screen.getByRole('button', { name: 'Was bedeutet MX?' }));
     expect(screen.getByText(RECORD_EXPLANATIONS.MX.text)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Null-MX (RFC 7505, #120): der Resolver liefert das Ziel als leeren Namen.
+ * Vorher stand in der Liste nur die Priorität „0“.
+ */
+
+const NULL_MX: DnsRecord = { type: 'MX', name: 'example.com', value: '', priority: 0, ttl: 3600 };
+const nullMxBadge = () => screen.queryByText('Null-MX — keine Mails');
+
+describe('RecordsList — Null-MX', () => {
+  it('zeigt den Null-MX als „0 .“ mit Badge', () => {
+    render(<RecordsList records={[NULL_MX]} />);
+    const mx = row('.');
+
+    expect(within(mx).getByText('0')).toBeInTheDocument();
+    expect(within(mx).getByText('Null-MX — keine Mails')).toBeInTheDocument();
+    expect(within(mx).getByText('3600s')).toBeInTheDocument();
+  });
+
+  it('erkennt auch die Zonendatei-Schreibweise „.“ — ohne doppelten Punkt', () => {
+    render(<RecordsList records={[{ ...NULL_MX, value: '.' }]} />);
+    expect(row('.')).toBeInTheDocument();
+    expect(screen.queryByText('..')).not.toBeInTheDocument();
+    expect(nullMxBadge()).toBeInTheDocument();
+  });
+
+  it('erklärt den Null-MX über das Erklärungsmodul', async () => {
+    const user = userEvent.setup();
+    render(<RecordsList records={[NULL_MX]} />);
+
+    expect(infoLabels()).toEqual(['Was bedeutet MX?', 'Was bedeutet Null-MX?']);
+    await user.click(screen.getByRole('button', { name: 'Was bedeutet Null-MX?' }));
+    expect(screen.getByText(NULL_MX_EXPLANATION.text)).toBeInTheDocument();
+  });
+
+  it('lässt einen normalen MX unverändert — ohne Punkt und Badge', () => {
+    render(<RecordsList records={RECORDS} />);
+
+    expect(within(row('mx1.example.com')).getByText('10')).toBeInTheDocument();
+    expect(screen.queryByText('.')).not.toBeInTheDocument();
+    expect(nullMxBadge()).not.toBeInTheDocument();
+  });
+
+  it('zeigt ein leeres Ziel neben weiteren MX als „.“, nennt es aber nicht Null-MX (RFC 7505: ungültig)', () => {
+    const mx1: DnsRecord = { type: 'MX', name: 'example.com', value: 'mx1.example.com', priority: 10, ttl: 3600 };
+    render(<RecordsList records={[NULL_MX, mx1]} />);
+
+    expect(within(row('.')).getByText('0')).toBeInTheDocument();
+    expect(within(row('mx1.example.com')).getByText('10')).toBeInTheDocument();
+    expect(nullMxBadge()).not.toBeInTheDocument();
+  });
+
+  it('zeigt bei einer Priorität ungleich 0 den Punkt, aber kein Badge', () => {
+    render(<RecordsList records={[{ ...NULL_MX, priority: 10 }]} />);
+    expect(within(row('.')).getByText('10')).toBeInTheDocument();
+    expect(nullMxBadge()).not.toBeInTheDocument();
+  });
+
+  it('behält das Badge, wenn der MX-Filter aktiv ist', async () => {
+    const user = userEvent.setup();
+    render(<RecordsList records={[NULL_MX, ...RECORDS.filter((r) => r.type !== 'MX')]} />);
+    await user.click(screen.getByRole('button', { name: /^MX/ }));
+    expect(nullMxBadge()).toBeInTheDocument();
   });
 });
