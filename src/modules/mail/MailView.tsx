@@ -1,8 +1,18 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Mail, Check, X, AlertTriangle, FileSignature, Send } from 'lucide-react';
+import {
+  Mail,
+  MailX,
+  Check,
+  X,
+  AlertTriangle,
+  CircleMinus,
+  FileSignature,
+  Send,
+} from 'lucide-react';
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 
 interface MailViewProps {
@@ -10,12 +20,16 @@ interface MailViewProps {
 }
 
 export function MailView({ mail }: MailViewProps) {
+  // Ein Null-MX ist ein MX-Record, aber kein Empfang — wie im reportBuilder.
+  const receivesMail = mail.hasMx && !mail.nullMx;
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <SpfCard spf={mail.spf} hasMx={mail.hasMx} />
-      <DmarcCard dmarc={mail.dmarc} hasMx={mail.hasMx} />
-      <DkimCard dkim={mail.dkim} />
-      <MtaStsCard mtaSts={mail.mtaSts} />
+      {mail.nullMx && <NoMailCard mail={mail} />}
+      <SpfCard spf={mail.spf} hasMx={receivesMail} />
+      <DmarcCard dmarc={mail.dmarc} hasMx={receivesMail} />
+      <DkimCard dkim={mail.dkim} noMail={mail.nullMx} />
+      <MtaStsCard mtaSts={mail.mtaSts} noMail={mail.nullMx} />
     </div>
   );
 }
@@ -23,8 +37,75 @@ export function MailView({ mail }: MailViewProps) {
 /*
  * Die Töne der Kartenköpfe folgen den Mail-Findings (reportBuilder): ein
  * fehlender SPF-/DMARC-Record ist mit MX eine Warnung, ohne MX nur ein
- * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis.
+ * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis — und bei einer
+ * Domain ohne Mail (Null-MX) gar nicht.
  */
+
+/* ─── Keine Mails (Null-MX) ──────────────────────────────────────────── */
+
+/**
+ * Steht über den vier Karten, weil es die Aussage ist, die alle anderen
+ * einordnet: Diese Domain will keine Mails. Darunter, ob SPF und DMARC das
+ * für den Versand absichern (Regel: shared/nullMx.ts).
+ */
+function NoMailCard({ mail }: { mail: MailSecurity }) {
+  const protection = noMailProtection(mail);
+
+  return (
+    <Card
+      icon={<MailX className="size-4" />}
+      title="Keine Mails (Null-MX)"
+      subtitle="Die Domain nimmt bewusst keine Mails an"
+      tone={protection.complete ? 'success' : 'neutral'}
+      delay={0}
+      className="md:col-span-2"
+    >
+      <p className="text-sm leading-relaxed text-fg-muted">
+        Der Null-MX <code className="font-mono text-[13px] text-fg">MX 0 .</code> (RFC 7505)
+        sagt jedem Absender: Hier kommt keine Mail an. DKIM und MTA-STS braucht die Domain
+        deshalb nicht.{' '}
+        {protection.complete
+          ? 'SPF und DMARC sorgen dafür, dass Empfänger Mails in ihrem Namen abweisen.'
+          : 'Damit Empfänger auch Mails in ihrem Namen abweisen, gehören SPF -all und DMARC p=reject dazu.'}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+        <Stat label="Null-MX" value="gesetzt" tone="success" />
+        <Stat
+          label="SPF"
+          value={noMailSpfLabel(mail.spf, protection.spfAllowsNoSender)}
+          tone={protection.spfAllowsNoSender ? 'success' : 'neutral'}
+        />
+        <Stat
+          label="DMARC"
+          value={noMailDmarcLabel(mail.dmarc, protection.dmarcReject)}
+          tone={protection.dmarcReject ? 'success' : 'neutral'}
+        />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Was am SPF fehlt, in einem Wort: Steht nur `all` drin, sagt dessen
+ * Qualifier alles (`~all`: Fälschungen nur verdächtig statt abgelehnt); jeder
+ * weitere Mechanismus erlaubt Absender.
+ */
+function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): string {
+  if (allowsNoSender) return '-all';
+  if (!spf.present || !spf.record) return 'fehlt';
+  const mechanisms = spfMechanisms(spf.record) ?? [];
+  return mechanisms.length === 1 && /^[+~?]?all$/.test(mechanisms[0])
+    ? mechanisms[0]
+    : 'erlaubt Absender';
+}
+
+/** `reject` gilt erst ohne `pct` unter 100 — sonst steht der Anteil dabei. */
+function noMailDmarcLabel(dmarc: MailSecurity['dmarc'], reject: boolean): string {
+  if (reject) return 'reject';
+  if (!dmarc.present || !dmarc.policy) return 'fehlt';
+  if (dmarc.policy === 'reject') return `reject, pct=${dmarcPct(dmarc.record)}`;
+  return dmarc.policy;
+}
 
 /* ─── SPF ─────────────────────────────────────────────────────────────── */
 
@@ -124,7 +205,7 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
 
 /* ─── DKIM ───────────────────────────────────────────────────────────── */
 
-function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
+function DkimCard({ dkim, noMail }: { dkim: MailSecurity['dkim']; noMail: boolean }) {
   const found = dkim.selectors.length > 0;
 
   return (
@@ -135,7 +216,12 @@ function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
       tone={found ? 'success' : 'neutral'}
       delay={0.1}
     >
-      {!found ? (
+      {!found && noMail ? (
+        <StatusLine
+          text="Nicht nötig: Eine Domain ohne Mails (Null-MX) hat nichts zu signieren."
+          tone="not-needed"
+        />
+      ) : !found ? (
         <StatusLine
           text="Keine gängigen DKIM-Selectors gefunden (default, google, selector1, k1, …)"
           tone="neutral"
@@ -163,7 +249,7 @@ function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
 
 /* ─── MTA-STS ────────────────────────────────────────────────────────── */
 
-function MtaStsCard({ mtaSts }: { mtaSts: MailSecurity['mtaSts'] }) {
+function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail: boolean }) {
   return (
     <Card
       icon={<Mail className="size-4" />}
@@ -178,6 +264,11 @@ function MtaStsCard({ mtaSts }: { mtaSts: MailSecurity['mtaSts'] }) {
             <Check className="size-4 shrink-0 text-success" />
             <span className="font-medium text-success">aktiviert</span>
           </>
+        ) : noMail ? (
+          <>
+            <CircleMinus className="size-4 shrink-0 text-fg-subtle" />
+            <span className="text-fg-muted">nicht nötig</span>
+          </>
         ) : (
           <>
             <X className="size-4 shrink-0 text-fg-subtle" />
@@ -187,8 +278,9 @@ function MtaStsCard({ mtaSts }: { mtaSts: MailSecurity['mtaSts'] }) {
       </div>
       {!mtaSts.present && (
         <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-          MTA-STS verhindert Downgrade-Angriffe, bei denen sich Angreifer zwischen Sender und
-          Empfänger setzen und TLS abschalten.
+          {noMail
+            ? 'MTA-STS schützt den Weg eingehender Mails. Diese Domain nimmt per Null-MX keine an — es gibt nichts zu schützen.'
+            : 'MTA-STS verhindert Downgrade-Angriffe, bei denen sich Angreifer zwischen Sender und Empfänger setzen und TLS abschalten.'}
         </p>
       )}
     </Card>
@@ -203,6 +295,7 @@ function Card({
   subtitle,
   tone,
   delay,
+  className,
   children,
 }: {
   icon: ReactNode;
@@ -210,6 +303,7 @@ function Card({
   subtitle: string;
   tone: Tone;
   delay: number;
+  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -217,7 +311,7 @@ function Card({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay }}
-      className="card"
+      className={cn('card', className)}
     >
       <CardHeader icon={icon} title={title} subtitle={subtitle} tone={tone} />
       <div className="mt-4">{children}</div>
@@ -241,8 +335,12 @@ function CodeBlock({ children, truncate }: { children: ReactNode; truncate?: boo
 /**
  * Statuszeile in der Karte, wenn ein Record fehlt. Kein `EmptyState`: der ist
  * selbst eine Karte und gehört an die Stelle eines ganzen Abschnitts.
+ *
+ * `not-needed`: Der Record fehlt, und das ist richtig so (Domain ohne Mail).
+ * Ein eigenes Icon statt des Kreuzes, weil das Kreuz „fehlt“ heißt; die Farbe
+ * kann den Unterschied nicht tragen, beide Zeilen sind neutral.
  */
-function StatusLine({ text, tone }: { text: string; tone: 'warning' | 'neutral' }) {
+function StatusLine({ text, tone }: { text: string; tone: 'warning' | 'neutral' | 'not-needed' }) {
   return (
     <div
       className={cn(
@@ -252,6 +350,8 @@ function StatusLine({ text, tone }: { text: string; tone: 'warning' | 'neutral' 
     >
       {tone === 'warning' ? (
         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+      ) : tone === 'not-needed' ? (
+        <CircleMinus className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
       ) : (
         <X className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
       )}

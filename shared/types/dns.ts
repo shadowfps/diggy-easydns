@@ -18,7 +18,17 @@ export interface DnsRecord {
   type: RecordType;
   name: string;
   value: string;
-  ttl: number;
+  /**
+   * Restlaufzeit in Sekunden, wie der Resolver sie meldet — `null`, wenn sie
+   * unbekannt ist (z. B. weil die TTL-Abfrage ausgefallen ist, #76).
+   *
+   * `null` statt eines optionalen Felds, weil `undefined` im JSON-Export
+   * (`JSON.stringify`) samt Schlüssel verschwindet; `"ttl": null` sagt dort
+   * ausdrücklich „unbekannt“. Und statt `0`, weil 0 eine gültige TTL ist
+   * („nicht cachen“) — als Platzhalter stand bei MX, NS und TXT deshalb
+   * immer eine falsche `0s` in der Liste.
+   */
+  ttl: number | null;
   priority?: number;
 }
 
@@ -115,8 +125,17 @@ export interface MailSecurity {
     selectors: { selector: string; present: boolean; record?: string }[];
   };
   mtaSts: { present: boolean };
-  /** Ob die Apex-Domain MX-Records hat (für Findings bei Subdomain-Lookups). */
+  /**
+   * Ob die Apex-Domain MX-Records hat (für Findings bei Subdomain-Lookups).
+   * Auch ein Null-MX zählt hier mit — ob die Domain Mail empfängt, sagt erst
+   * `hasMx && !nullMx`.
+   */
   hasMx: boolean;
+  /**
+   * Null-MX nach RFC 7505 (`MX 0 .`): die Domain nimmt bewusst keine Mail an.
+   * Regel und Rolle von SPF/DMARC: shared/nullMx.ts.
+   */
+  nullMx: boolean;
 }
 
 export interface WhoisInfo {

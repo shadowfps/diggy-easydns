@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -8,11 +8,13 @@ RUN npm ci
 
 COPY index.html diggy-icon.svg tsconfig.json tsconfig.node.json tsconfig.server.json vite.config.ts ./
 COPY src ./src
+# Statische Dateien ohne Hash im Namen, z. B. das Vorschaubild für Permalinks.
+COPY public ./public
 COPY server ./server
 COPY shared ./shared
 RUN npm run build
 
-FROM node:22-alpine AS runtime
+FROM node:24-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \

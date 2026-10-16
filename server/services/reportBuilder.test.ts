@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dnsFindings, sslFindings, whoisFindings } from './reportBuilder.js';
+import {
+  dnsFindings,
+  dnssecFindings,
+  mailFindings,
+  sslFindings,
+  whoisFindings,
+} from './reportBuilder.js';
+import { analyzeSpf } from './mailAudit.js';
 import { calculateScore } from '../../shared/scoring.js';
-import type { DnsRecord, SslInfo, WhoisInfo } from '../types.js';
+import type { DnsRecord, Finding, MailSecurity, SslInfo, WhoisInfo } from '../types.js';
 
 const ssl = (overrides: Partial<SslInfo> = {}): SslInfo => ({
   valid: true,
@@ -224,5 +231,222 @@ describe('whoisFindings', () => {
       whois({ expiresAt: new Date(Date.now() + 20 * 86_400_000).toISOString() })
     );
     expect(findings.map((f) => f.id)).toContain('domain-expiring-soon');
+  });
+});
+
+/* ─── Mail ────────────────────────────────────────────────────────────── */
+
+const spf = (record?: string): MailSecurity['spf'] =>
+  record
+    ? { present: true, record, lookupCount: 0, valid: true, issues: [] }
+    : { present: false, valid: false, issues: [] };
+
+const dmarc = (policy?: 'none' | 'quarantine' | 'reject'): MailSecurity['dmarc'] =>
+  policy ? { present: true, record: `v=DMARC1; p=${policy}`, policy } : { present: false };
+
+/** example.com, wie es tatsächlich konfiguriert ist: Null-MX, SPF -all, DMARC reject. */
+const mail = (overrides: Partial<MailSecurity> = {}): MailSecurity => ({
+  spf: spf('v=spf1 -all'),
+  dmarc: dmarc('reject'),
+  dkim: { selectors: [] },
+  mtaSts: { present: false },
+  hasMx: true,
+  nullMx: true,
+  ...overrides,
+});
+
+const summary = (findings: Finding[]) => findings.map((f) => `${f.severity} ${f.id}`);
+
+/**
+ * #77: example.com nimmt bewusst keine Mails an. diggy empfahl trotzdem DKIM
+ * und MTA-STS und zog dafür Punkte ab.
+ */
+describe('mailFindings — Domain ohne Mail (Null-MX)', () => {
+  it('meldet für example.com keine DKIM-/MTA-STS-Hinweise, sondern die saubere Markierung', () => {
+    const findings = mailFindings(mail(), 'example.com');
+    expect(summary(findings)).toEqual([
+      'success spf-ok',
+      'success dmarc-present',
+      'success null-mx',
+    ]);
+    expect(findings.find((f) => f.id === 'null-mx')?.title).toContain('sauber');
+    expect(calculateScore(findings).score).toBe(100);
+  });
+
+  /**
+   * Der ganze Report von example.com (Stand Oktober 2026): vorher drei
+   * info-Findings — no-caa, no-dkim-found, no-mta-sts — am Deckel von 6,
+   * also 94. Übrig bleibt no-caa.
+   */
+  it('hebt den Score einer example.com-artigen Konfiguration von 94 auf 98', () => {
+    const records: DnsRecord[] = [
+      { type: 'A', name: 'example.com', value: '93.184.215.14', ttl: 300 },
+      { type: 'AAAA', name: 'example.com', value: '2606:2800:21f:cb07:6820:80da:af6b:8b2c', ttl: 300 },
+      { type: 'MX', name: 'example.com', value: '', priority: 0, ttl: 0 },
+      { type: 'NS', name: 'example.com', value: 'a.iana-servers.net', ttl: 0 },
+      { type: 'TXT', name: 'example.com', value: 'v=spf1 -all', ttl: 0 },
+    ];
+    const all = [
+      ...dnsFindings(records, 'example.com', 'example.com'),
+      ...dnssecFindings({ enabled: true, valid: true, chainOfTrust: 'valid' }),
+      ...sslFindings(ssl()),
+      ...mailFindings(mail(), 'example.com'),
+    ];
+    expect(all.filter((f) => f.severity !== 'success').map((f) => f.id)).toEqual(['no-caa']);
+    expect(calculateScore(all).score).toBe(98);
+  });
+
+  it('meldet ohne SPF den Null-MX positiv und weist auf die Lücke hin — ohne doppelten Abzug', () => {
+    const findings = mailFindings(mail({ spf: spf(undefined) }), 'example.com');
+    expect(summary(findings)).toEqual([
+      'info no-spf',
+      'success dmarc-present',
+      'success null-mx',
+      'info null-mx-incomplete',
+    ]);
+
+    // Wie bei einer Domain ohne MX: Empfehlung, kein Mangel — und der
+    // Vorschlag ist das SPF für eine Domain ohne Mail, nicht `mx ~all`.
+    const noSpf = findings.find((f) => f.id === 'no-spf');
+    expect(noSpf?.fix?.snippet).toBe('example.com  TXT  "v=spf1 -all"');
+
+    const hint = findings.find((f) => f.id === 'null-mx-incomplete');
+    expect(hint?.description).toContain('v=spf1 -all');
+    expect(hint?.description).not.toContain('DMARC');
+    expect(hint?.causedBy).toContain('no-spf');
+    // Abgezogen wird nur no-spf (2), der Hinweis ist dessen Folge.
+    expect(calculateScore(findings).score).toBe(98);
+  });
+
+  /** ~all geht als spf-ok durch — für eine Domain ohne Mail reicht es nicht. */
+  it('weist auf SPF ~all hin, das sonst als OK durchginge', () => {
+    const findings = mailFindings(mail({ spf: spf('v=spf1 ~all') }), 'example.com');
+    expect(summary(findings)).toEqual([
+      'success spf-ok',
+      'success dmarc-present',
+      'success null-mx',
+      'info null-mx-incomplete',
+    ]);
+    expect(findings.find((f) => f.id === 'null-mx')?.title).not.toContain('sauber');
+    expect(findings.find((f) => f.id === 'null-mx-incomplete')?.fix?.snippet).toBe(
+      'example.com  TXT  "v=spf1 -all"'
+    );
+    expect(calculateScore(findings).score).toBe(98);
+  });
+
+  it('nennt eine zu schwache DMARC-Policy', () => {
+    const findings = mailFindings(mail({ dmarc: dmarc('quarantine') }), 'example.com');
+    const hint = findings.find((f) => f.id === 'null-mx-incomplete');
+    expect(hint?.description).toContain('p=reject (jetzt p=quarantine)');
+    expect(hint?.fix?.snippet).toBe('_dmarc.example.com  TXT  "v=DMARC1; p=reject"');
+  });
+
+  /** pct=0: Fälschungen landen nur in Quarantäne — kein „sauber markiert“. */
+  it('nennt DMARC p=reject, das nur für einen Teil der Mails gilt', () => {
+    const findings = mailFindings(
+      mail({ dmarc: { present: true, record: 'v=DMARC1; p=reject; pct=0', policy: 'reject' } }),
+      'example.com'
+    );
+    expect(findings.find((f) => f.id === 'null-mx')?.title).not.toContain('sauber');
+    const hint = findings.find((f) => f.id === 'null-mx-incomplete');
+    expect(hint?.description).toContain('p=reject für alle Mails (jetzt pct=0)');
+    expect(hint?.fix?.snippet).toBe('_dmarc.example.com  TXT  "v=DMARC1; p=reject"');
+    expect(calculateScore(findings).score).toBe(98);
+  });
+
+  it('zieht für DMARC p=none weiter die Warnung ab, aber nur einmal', () => {
+    const findings = mailFindings(mail({ dmarc: dmarc('none') }), 'example.com');
+    expect(summary(findings)).toContain('warning dmarc-policy-none');
+    expect(calculateScore(findings).score).toBe(92);
+  });
+
+  /** Kein Umweg über quarantine: Ohne echte Mails kann nichts verloren gehen. */
+  it('rät bei DMARC p=none direkt zu p=reject', () => {
+    const findings = mailFindings(mail({ dmarc: dmarc('none') }), 'example.com');
+    const policyNone = findings.find((f) => f.id === 'dmarc-policy-none');
+    expect(policyNone?.description).toContain('direkt auf p=reject');
+    expect(policyNone?.description).not.toContain('quarantine');
+  });
+
+  /** +all ist schon critical — dass SPF -all fehlt, kostet nicht noch einmal. */
+  it('zieht für ein problematisches SPF nicht doppelt ab', () => {
+    const findings = mailFindings(mail({ spf: analyzeSpf('v=spf1 +all') }), 'example.com');
+    expect(summary(findings)).toEqual([
+      expect.stringMatching(/^critical spf-issue-/),
+      'success dmarc-present',
+      'success null-mx',
+      'info null-mx-incomplete',
+    ]);
+    expect(calculateScore(findings).score).toBe(75);
+  });
+
+  /** rua an die eigene Domain liefe ins Leere — sie nimmt keine Mails an. */
+  it('schlägt ohne DMARC p=reject ohne Report-Adresse auf der Domain vor', () => {
+    const findings = mailFindings(mail({ dmarc: dmarc(undefined) }), 'example.com');
+    const noDmarc = findings.find((f) => f.id === 'no-dmarc');
+    expect(noDmarc?.severity).toBe('info');
+    expect(noDmarc?.fix?.snippet).toBe('_dmarc.example.com  TXT  "v=DMARC1; p=reject"');
+  });
+
+  it('zeigt gefundene DKIM-Selectors weiter an', () => {
+    const findings = mailFindings(
+      mail({ dkim: { selectors: [{ selector: 'default', present: true }] } }),
+      'example.com'
+    );
+    expect(summary(findings)).toContain('success dkim-present');
+  });
+});
+
+describe('mailFindings — Domains mit echtem MX unverändert', () => {
+  const real = (overrides: Partial<MailSecurity> = {}) => mail({ nullMx: false, ...overrides });
+
+  it('empfiehlt ohne alles weiter SPF, DMARC, DKIM und MTA-STS wie bisher', () => {
+    const findings = mailFindings(
+      real({ spf: spf(undefined), dmarc: dmarc(undefined) }),
+      'example.de'
+    );
+    expect(summary(findings)).toEqual([
+      'warning no-spf',
+      'warning no-dmarc',
+      'info no-dkim-found',
+      'info no-mta-sts',
+    ]);
+    expect(findings[0].fix?.snippet).toBe('example.de  TXT  "v=spf1 mx ~all"');
+    expect(findings[1].fix?.snippet).toBe(
+      '_dmarc.example.de  TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.de"'
+    );
+    expect(calculateScore(findings).score).toBe(100 - 8 - 8 - 4);
+  });
+
+  it('meldet ein vollständiges Setup wie bisher', () => {
+    const findings = mailFindings(
+      real({
+        spf: spf('v=spf1 include:_spf.google.com ~all'),
+        dkim: { selectors: [{ selector: 'google', present: true }] },
+        mtaSts: { present: true },
+      }),
+      'example.de'
+    );
+    expect(summary(findings)).toEqual([
+      'success spf-ok',
+      'success dmarc-present',
+      'success dkim-present',
+    ]);
+  });
+
+  it('rät bei DMARC p=none weiter zum Schritt über quarantine', () => {
+    const findings = mailFindings(real({ dmarc: dmarc('none') }), 'example.de');
+    expect(findings.find((f) => f.id === 'dmarc-policy-none')?.description).toContain(
+      'auf quarantine wechseln'
+    );
+  });
+
+  /**
+   * SPF -all allein macht eine Domain nicht mail-frei: ohne MX stellen
+   * Absender per A-Fallback an den Host zu.
+   */
+  it('markiert eine Domain ohne MX trotz SPF -all nicht als mail-frei', () => {
+    const findings = mailFindings(real({ hasMx: false }), 'example.de');
+    expect(summary(findings)).toEqual(['success spf-ok', 'success dmarc-present']);
   });
 });
