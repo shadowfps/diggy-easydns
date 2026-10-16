@@ -34,6 +34,7 @@ function reportFor(domain: string, score = 80): LookupReport {
       dkim: { selectors: [] },
       mtaSts: { present: false },
       hasMx: false,
+      nullMx: false,
     },
     findings: [],
     healthScore: {

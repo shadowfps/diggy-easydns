@@ -1,5 +1,75 @@
-import { describe, expect, it } from 'vitest';
-import { analyzeSpf, countSpfLookups } from './mailAudit.js';
+import { promises as dnsPromises } from 'node:dns';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { analyzeSpf, auditMail, countSpfLookups, summarizeMx } from './mailAudit.js';
+
+describe('auditMail: Mail-TXT-Tags', () => {
+  beforeEach(() => {
+    // Alle Lookups ersetzen: die Regression lässt sich ohne DNS oder Ports prüfen.
+    vi.spyOn(dnsPromises.Resolver.prototype, 'resolveTxt').mockResolvedValue([]);
+    vi.spyOn(dnsPromises.Resolver.prototype, 'resolveMx').mockResolvedValue([]);
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    ['v=DMARC1; sp=none; p=reject', 'reject'],
+    ['v=DMARC1; p=reject; sp=none', 'reject'],
+    ['v=DMARC1; p=REJECT', 'reject'],
+    [' v = DMARC1 ; P \t= QuArAnTiNe ; sp=none ', 'quarantine'],
+    ['v=DMARC1; p=none', 'none'],
+    ['v=DMARC1; sp=none', undefined],
+    ['v=DMARC1; p=invalid', undefined],
+    ['v=DMARC1; p=none; p=reject', 'none'],
+    ['v=DMARC1; p=; p=reject', undefined],
+  ])('liest die DMARC-Policy aus %s', async (record, policy) => {
+    vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) =>
+      name === '_dmarc.example.com' ? [[record]] : []
+    );
+    const mail = await auditMail('example.com');
+    expect(mail.dmarc).toEqual({ present: true, record, policy, rua: undefined });
+  });
+
+  it('erhält einen üblichen Record samt Report-Adresse', async () => {
+    const record = 'v=DMARC1; p=reject; rua=mailto:Reports@example.com';
+    vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) =>
+      name === '_dmarc.example.com' ? [[record]] : []
+    );
+    expect((await auditMail('example.com')).dmarc).toEqual({
+      present: true, record, policy: 'reject', rua: 'mailto:Reports@example.com',
+    });
+  });
+
+  it.each(['p=reject; v=DMARC1', 'v=DMARC2; p=reject', 'sp=none; p=reject'])(
+    'verwirft einen DMARC-Record ohne v=DMARC1 an erster Stelle: %s',
+    async (record) => {
+      vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) =>
+        name === '_dmarc.example.com' ? [[record]] : []
+      );
+      expect((await auditMail('example.com')).dmarc).toEqual({ present: false });
+    }
+  );
+
+  it.each([
+    ['v=DKIM1; sp=; p=AbC123==', true],
+    ['v=DKIM1; sp=AbC123==; p=', false],
+    ['v=DKIM1; p=; p=AbC123==', false],
+    ['v=DKIM1; p=AbC123==', true],
+    // v= und k= sind optional (RFC 6376 §3.6.1)
+    ['p=AbC123==', true],
+    ['k=rsa; p=AbC123==', true],
+    [' v = DKIM1 ; p=AbC123==', true],
+    ['k=rsa; p=', false],
+    ['v=DKIM2; p=AbC123==', false],
+    ['google-site-verification=AbC123', false],
+  ])('prüft beim DKIM-Schlüssel nur das vollständige p-Tag: %s', async (record, present) => {
+    vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) =>
+      name === 'default._domainkey.example.com' ? [[record]] : []
+    );
+    expect((await auditMail('example.com')).dkim.selectors).toEqual(
+      present ? [{ selector: 'default', present: true, record }] : []
+    );
+  });
+});
 
 /**
  * Der Lookup-Zähler entscheidet über ein critical-Finding mit -25 Score-
@@ -85,5 +155,29 @@ describe('analyzeSpf', () => {
     expect(result.issues).toEqual([]);
     expect(result.valid).toBe(true);
     expect(result.lookupCount).toBe(1);
+  });
+});
+
+/**
+ * #77: example.com veröffentlicht `MX 0 .` (RFC 7505). Node liefert das als
+ * `{ exchange: '', priority: 0 }` — ein MX-Record, der sagt, dass hier keine
+ * Mail ankommt.
+ */
+describe('summarizeMx', () => {
+  it('erkennt den Null-MX so, wie resolveMx ihn liefert', () => {
+    expect(summarizeMx([{ exchange: '', priority: 0 }])).toEqual({ hasMx: true, nullMx: true });
+  });
+
+  it('meldet echte MX unverändert als vorhanden', () => {
+    expect(
+      summarizeMx([
+        { exchange: 'mx1.example.com', priority: 10 },
+        { exchange: 'mx2.example.com', priority: 20 },
+      ])
+    ).toEqual({ hasMx: true, nullMx: false });
+  });
+
+  it('meldet fehlende MX als fehlend', () => {
+    expect(summarizeMx([])).toEqual({ hasMx: false, nullMx: false });
   });
 });

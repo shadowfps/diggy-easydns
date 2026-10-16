@@ -70,6 +70,7 @@ const DEFAULT_MAIL: MailSecurity = {
   dkim: { selectors: [] },
   mtaSts: { present: false },
   hasMx: false,
+  nullMx: false,
 };
 
 const DEFAULT_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
