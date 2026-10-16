@@ -537,13 +537,16 @@ export default function App() {
         </AnimatePresence>
 
         {/* Loading State — nur bis die Records da sind. Danach übernimmt der
-            Report mit Skeletons für die noch ladenden Sektionen. */}
+            Report mit Skeletons für die noch ladenden Sektionen. role="status",
+            damit der Text angesagt wird: bei „Bewegung reduzieren“ steht der
+            Spinner still und trägt den Ladezustand nicht mehr mit. */}
         <AnimatePresence>
           {view === 'lookup' && recordsLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              role="status"
               className="mx-auto mt-10 max-w-2xl text-center"
             >
               <Loader2 className="mx-auto size-6 animate-spin text-fg" />

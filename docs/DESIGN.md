@@ -148,7 +148,18 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
 
 - Einblenden: `opacity` und höchstens 8 px Versatz, 200–400 ms, `ease-out`.
 - Hover und Fokus: nur Farbe; Buttons geben beim Klick nach (`active:scale`).
-- `prefers-reduced-motion` wird respektiert (`MotionConfig` in `main.tsx`).
+- **„Bewegung reduzieren“ (`prefers-reduced-motion`) gilt für jede
+  Animation.** Dann bewegt sich nichts mehr: Spinner und Skeletons stehen
+  still, nichts verschiebt oder skaliert sich, Einblendungen blenden nur noch
+  ein.
+  - Framer Motion: `MotionConfig` in `main.tsx`. GSAP und eigene
+    rAF-Schleifen: `useReducedMotion`.
+  - CSS: eine Regel am Ende von `globals.css`. Eine neue Animation kommt als
+    Token in `@theme` (`--animate-…`) und in diese Regel; Versatz beim Hover
+    direkt mit `motion-safe:` schreiben. Nie per `style={{ animation }}` —
+    gegen einen Inline-Style kommt die Regel nicht an.
+- Ein Ladezustand hängt nie allein an der Bewegung: Text oder Icon dazu, und
+  der Text steht in `role="status"`, damit ihn auch ein Screenreader ansagt.
 
 ## Zugänglichkeit
 

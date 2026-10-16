@@ -250,17 +250,18 @@ function PageSpeedLoader() {
     return () => window.clearInterval(id);
   }, []);
 
+  // role="status": der Ladezustand wird angesagt, nicht nur gezeigt. Bei
+  // „Bewegung reduzieren“ stehen Spinner und Balken still (globals.css), dann
+  // tragen ihn Text und Ansage allein. Kein aria-busy: auf einer Live-Region
+  // heißt das laut ARIA „Ansagen zurückhalten, bis busy wieder false ist“ —
+  // hier wird es nie false, die Anzeige verschwindet einfach mit dem Ergebnis.
   return (
-    <div className="mx-auto mt-8 max-w-md" aria-busy="true" aria-live="polite">
+    <div className="mx-auto mt-8 max-w-md" role="status" aria-live="polite">
       <div className="panel px-6 py-6 text-center">
         <Loader2 className="mx-auto size-5 animate-spin text-fg" />
 
         <div className="eyebrow mt-4">Analyse läuft</div>
-        <div
-          key={stage}
-          className="mt-1.5 text-sm text-fg"
-          style={{ animation: 'fadeInUp 0.4s ease-out' }}
-        >
+        <div key={stage} className="mt-1.5 animate-fade-in-up text-sm text-fg">
           {LOADING_STAGES[stage]}
         </div>
 
@@ -268,7 +269,7 @@ function PageSpeedLoader() {
           {[0, 1, 2, 3, 4].map((index) => (
             <span
               key={index}
-              className="h-1.5 animate-[scanBar_1.2s_ease-in-out_infinite] rounded-full bg-fg/20"
+              className="h-1.5 animate-scan-bar rounded-full bg-fg/20"
               style={{ animationDelay: `${index * 140}ms` }}
             />
           ))}

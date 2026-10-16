@@ -40,7 +40,7 @@ export function IpResultView({ ip }: IpResultViewProps) {
           <CardHeader icon={<Server className="size-4" />} title="PTR / Reverse DNS" />
           <div className="mt-4">
             {loading ? (
-              <div className="flex items-center gap-2 text-sm text-fg-muted">
+              <div role="status" className="flex items-center gap-2 text-sm text-fg-muted">
                 <Loader2 className="size-4 animate-spin" />
                 <span>Reverse-DNS wird ermittelt…</span>
               </div>
@@ -61,7 +61,7 @@ export function IpResultView({ ip }: IpResultViewProps) {
 
         {/* Details */}
         {loading && (
-          <div className="card flex items-center gap-2 text-sm text-fg-muted">
+          <div role="status" className="card flex items-center gap-2 text-sm text-fg-muted">
             <Loader2 className="size-4 animate-spin" />
             <span>IP-Details werden geladen…</span>
           </div>

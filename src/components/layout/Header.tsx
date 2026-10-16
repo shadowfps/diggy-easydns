@@ -182,7 +182,7 @@ function MenuItem({ label, onClick }: { label: string; onClick?: () => void }) {
       className="group flex w-full items-center justify-between rounded-panel px-3 py-2.5 text-left text-sm font-medium text-fg transition-colors hover:bg-surface-muted"
     >
       {label}
-      <ArrowUpRight className="size-3.5 text-fg-subtle transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-fg" />
+      <ArrowUpRight className="size-3.5 text-fg-subtle transition-all group-hover:text-fg motion-safe:group-hover:-translate-y-0.5 motion-safe:group-hover:translate-x-0.5" />
     </button>
   );
 }
