@@ -1,4 +1,5 @@
 import type { PageSpeedReport, PageSpeedStrategy } from '../types.js';
+import { UpstreamTimeoutError } from '../lib/upstreamError.js';
 
 interface PsiMetric {
   percentile?: number;
@@ -86,7 +87,9 @@ export async function lookupPageSpeed(
     return normalizePsi(domain, strategy, payload);
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(
+      // Eigene Klasse, damit die Route den Timeout am Typ erkennt (504) und
+      // nicht am Wort „Timeout“ in der Meldung.
+      throw new UpstreamTimeoutError(
         `PageSpeed Timeout nach ${effectiveMs / 1000}s. Schwere oder mobile Ansicht kann länger dauern — ` +
           `in der .env z. B. PAGESPEED_TIMEOUT_MS=90000 setzen oder Desktop-Strategie testen.`,
         { cause: error }

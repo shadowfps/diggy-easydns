@@ -14,8 +14,10 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmdirSync, symlinkSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,9 +46,29 @@ function freePort() {
 const port = await freePort();
 const base = `http://127.0.0.1:${port}`;
 
-const server = spawn(process.execPath, [ENTRY], {
+/*
+ * Der Server startet über einen Symlink in einem Punkt-Ordner (#89). Ohne
+ * `root` prüft sendFile jedes Segment des absoluten Pfads auf Dotfiles; unter
+ * `.claude/worktrees/…` antworteten die SPA-Routen deshalb mit 404. Der
+ * CI-Checkout liegt ohne Punkt-Ordner, ein Rückfall fiele dort sonst nicht
+ * auf. `--preserve-symlinks-main` sorgt dafür, dass der Server den
+ * Symlink-Pfad sieht und nicht den aufgelösten.
+ */
+const linkDir = mkdtempSync(path.join(tmpdir(), 'diggy-smoke-'));
+const dotRoot = path.join(linkDir, '.punkt');
+symlinkSync(ROOT, dotRoot, 'dir');
+process.on('exit', () => {
+  unlinkSync(dotRoot);
+  rmdirSync(linkDir);
+});
+
+const entryViaDot = path.join(dotRoot, path.relative(ROOT, ENTRY));
+const server = spawn(process.execPath, ['--preserve-symlinks-main', entryViaDot], {
   cwd: ROOT,
-  env: { ...process.env, NODE_ENV: 'production', PORT: String(port) },
+  // PUBLIC_ORIGIN bewusst leer (dotenv überschreibt gesetzte Werte nicht):
+  // die Link-Vorschau bildet ihre absoluten URLs dann aus dem Request-Host,
+  // und die Erwartung unten hängt nicht an einer lokalen .env.
+  env: { ...process.env, NODE_ENV: 'production', PORT: String(port), PUBLIC_ORIGIN: '' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let output = '';
@@ -80,17 +102,62 @@ async function waitUntilUp() {
 
 await waitUntilUp();
 
-const stylesheet = readFileSync(INDEX, 'utf8').match(/href="\/(assets\/[^"]+\.css)"/)?.[1];
+const indexHtml = readFileSync(INDEX, 'utf8');
+const stylesheet = indexHtml.match(/href="\/(assets\/[^"]+\.css)"/)?.[1];
+
+/** Liest `content` eines Meta-Tags — `attr` ist `name` oder `property`. */
+function meta(body, attr, key) {
+  return body.match(new RegExp(`<meta ${attr}="${key}" content="([^"]*)" />`))?.[1];
+}
+
+/*
+ * Link-Vorschau (#81): Permalinks bekommen eigene Tags, alles andere das
+ * unveränderte index.html. Der Pfad mit Sonderzeichen ergibt keine gültige
+ * Domain — er muss die Standard-Tags bekommen und darf nirgends im HTML
+ * auftauchen, auch nicht escaped.
+ */
+const hostilePath = '/lookup/%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E';
+
+function hasPreviewTags(res, body) {
+  return (
+    res.status === 200 &&
+    res.headers.get('content-type')?.startsWith('text/html') &&
+    res.headers.get('cache-control') === 'no-cache' &&
+    body.includes('id="root"') &&
+    body.match(/<title>/g)?.length === 1 &&
+    body.includes('<title>example.com — diggy</title>') &&
+    meta(body, 'property', 'og:title') === 'example.com — diggy' &&
+    meta(body, 'property', 'og:description') ===
+      'DNS, Mail-Schutz, SSL und Propagation von example.com auf einen Blick.' &&
+    meta(body, 'property', 'og:url') === `${base}/lookup/example.com` &&
+    meta(body, 'property', 'og:image') === `${base}/og-image.png` &&
+    meta(body, 'property', 'og:type') === 'website' &&
+    meta(body, 'property', 'og:site_name') === 'diggy' &&
+    meta(body, 'name', 'twitter:card') === 'summary_large_image'
+  );
+}
 
 const checks = [
   ['/api/health', (res, body) => res.status === 200 && JSON.parse(body).status === 'ok'],
   // Die SPA-Routen gehen alle an index.html — das ist der Fallback, an dem
-  // Express 5 gescheitert wäre.
-  ['/', (res, body) => res.status === 200 && body.includes('id="root"')],
-  ['/lookup/example.com', (res, body) => res.status === 200 && body.includes('id="root"')],
+  // Express 5 gescheitert wäre. Außer Permalinks bekommen sie Byte für Byte
+  // das gebaute HTML, ungültige Permalinks eingeschlossen.
+  ['/', (res, body) => res.status === 200 && body === indexHtml],
+  ['/lookup/example.com', hasPreviewTags],
+  ['/lookup/Example.COM/', hasPreviewTags],
   // Zwei Pfadsegmente nach dem Präfix — der Wildcard muss auch die tragen.
-  ['/compare/example.com/github.com', (res, body) => res.status === 200 && body.includes('id="root"')],
-  ['/impressum', (res, body) => res.status === 200 && body.includes('id="root"')],
+  // Der Vergleich hat (noch) keine eigene Vorschau: das gebaute HTML.
+  ['/compare/example.com/github.com', (res, body) => res.status === 200 && body === indexHtml],
+  ['/impressum', (res, body) => res.status === 200 && body === indexHtml],
+  [
+    hostilePath,
+    (res, body) =>
+      res.status === 200 &&
+      body === indexHtml &&
+      !body.includes('og:') &&
+      !/alert\(1\)/.test(body),
+  ],
+  ['/og-image.png', (res) => res.status === 200 && res.headers.get('content-type') === 'image/png'],
   // Unbekannte API-Pfade dürfen NICHT im Fallback landen.
   ['/api/gibt-es-nicht', (res) => res.status === 404],
   [`/${stylesheet}`, (res) => res.status === 200 && res.headers.get('content-type')?.startsWith('text/css')],
@@ -112,6 +179,21 @@ const csp = (await fetch(`${base}/`)).headers.get('content-security-policy') ?? 
 const hasHash = /script-src[^;]*'sha256-/.test(csp);
 failed ||= !hasHash;
 console.log(`  ${hasHash ? '✓' : '✗'} ${'CSP mit Script-Hash'.padEnd(36)}`);
+
+// Die Vorschau-Tags verändern das HTML. Der Hash muss trotzdem auf das
+// Theme-Script passen, das diese Antwort tatsächlich enthält.
+const permalink = await fetch(`${base}/lookup/example.com`);
+const permalinkCsp = permalink.headers.get('content-security-policy') ?? '';
+const inlineScripts = [
+  ...(await permalink.text()).matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi),
+].map((match) => match[1]);
+const hashesMatch =
+  inlineScripts.length > 0 &&
+  inlineScripts.every((code) =>
+    permalinkCsp.includes(`'sha256-${createHash('sha256').update(code, 'utf8').digest('base64')}'`)
+  );
+failed ||= !hashesMatch;
+console.log(`  ${hashesMatch ? '✓' : '✗'} ${'CSP-Hash passt zum Permalink-HTML'.padEnd(36)}`);
 
 server.kill();
 await exited;
