@@ -4,6 +4,8 @@ import { Mail, Check, X, AlertTriangle, FileSignature, Send } from 'lucide-react
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { InfoButton } from '@/components/ui/InfoButton';
+import { MAIL_EXPLANATIONS, type MailTerm } from '@/lib/explanations';
 
 interface MailViewProps {
   mail: MailSecurity;
@@ -206,7 +208,8 @@ function Card({
   children,
 }: {
   icon: ReactNode;
-  title: string;
+  /** Zugleich der Schlüssel der Erklärung hinter dem „?“. */
+  title: MailTerm;
   subtitle: string;
   tone: Tone;
   delay: number;
@@ -219,7 +222,13 @@ function Card({
       transition={{ duration: 0.3, delay }}
       className="card"
     >
-      <CardHeader icon={icon} title={title} subtitle={subtitle} tone={tone} />
+      <CardHeader
+        icon={icon}
+        title={title}
+        info={<InfoButton term={title} explanation={MAIL_EXPLANATIONS[title]} />}
+        subtitle={subtitle}
+        tone={tone}
+      />
       <div className="mt-4">{children}</div>
     </motion.div>
   );

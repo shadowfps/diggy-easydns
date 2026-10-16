@@ -130,9 +130,15 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
 
 - `CardHeader` (`components/ui/CardHeader.tsx`) — Kopf jeder Inhaltskarte:
   Icon-Kachel, `card-title`, optional Untertitel, rechts ein Status. `tone`
-  färbt die Kachel nur, wenn die Karte eine Bewertung trägt.
+  färbt die Kachel nur, wenn die Karte eine Bewertung trägt; `info` setzt
+  ein „?“ neben den Titel.
 - `EmptyState` (`components/ui/EmptyState.tsx`) — Leer-, Start- und
   Fehlerzustand eines Abschnitts.
+- `InfoButton` (`components/ui/InfoButton.tsx`) — „?“ neben einem
+  Fachbegriff, klappt eine Erklärung als `overlay` auf. Kein Hover-Tooltip:
+  Klick, Tippen, Enter oder Leertaste öffnen, Escape und Klick daneben
+  schließen. Die Texte stehen in `lib/explanations.ts`, nicht in den
+  Komponenten. Sparsam einsetzen — einmal je Begriff, nicht an jeder Zeile.
 
 - **Aktiv heißt `accent`.** Aktiver Tab, aktiver Chip, aktive Option eines
   Umschalters: dunkle Pille im Hellen, helle im Dunkeln.
