@@ -19,6 +19,7 @@ import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { CheckOverview } from '@/modules/home/CheckOverview';
+import { usePreviousCheck } from '@/modules/changes/usePreviousCheck';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -30,6 +31,7 @@ import {
   PropagationSkeleton,
   WhoisSkeleton,
   ListSkeleton,
+  SinceLastCheckSkeleton,
 } from '@/components/ui/Skeleton';
 import { AlertTriangle, Check, Download, Link2, Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
@@ -60,6 +62,15 @@ const PageSpeedView = lazy(() =>
 );
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
+);
+
+/*
+ * „Seit dem letzten Check“ erscheint nur bei einem erneuten Check derselben
+ * Domain und erst nach dem Report — Vergleichslogik und Texte (rund 3 kB
+ * gzip) müssen den ersten Report nicht aufhalten.
+ */
+const SinceLastCheck = lazy(() =>
+  import('@/modules/changes/SinceLastCheck').then((m) => ({ default: m.SinceLastCheck }))
 );
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
@@ -111,6 +122,8 @@ export default function App() {
   const [autoFocusSearch] = useState(() => window.location.pathname === '/');
 
   const report = lookup.report;
+  // Muss vor dem Speichern unten gelesen werden — siehe usePreviousCheck.
+  const previousCheck = usePreviousCheck(report);
   const records = lookup.records;
   const recordsLoading = lookup.recordsStatus === 'loading';
   const recordsErrored = lookup.recordsStatus === 'error';
@@ -184,11 +197,12 @@ export default function App() {
   }, [lookup.recordsStatus, lookup.domain]);
 
   // Alle Sektionen fertig → vollständigen Report in die History schreiben.
+  // Fehlgeschlagene Sektionen mit, damit der nächste Vergleich sie auslässt.
   useEffect(() => {
     if (lookup.allSettled && lookup.report) {
-      saveLookupToHistory(lookup.report);
+      saveLookupToHistory(lookup.report, lookup.failed);
     }
-  }, [lookup.allSettled, lookup.report]);
+  }, [lookup.allSettled, lookup.report, lookup.failed]);
 
   const handleRunVirusScan = async () => {
     if (!lookup.domain || virusScanLoading) return;
@@ -626,6 +640,21 @@ export default function App() {
             </aside>
 
             <div className="mt-8 min-w-0 xl:mt-0">
+              {/* Über den Tabs statt in der Seitenspalte: die soll flach
+                  bleiben (docs/DESIGN.md), und hier ist Platz für die Liste.
+                  Beim ersten Lookup einer Domain gibt es nichts zu zeigen. */}
+              {previousCheck && (
+                <Suspense fallback={<SinceLastCheckSkeleton className="mb-6" />}>
+                  <SinceLastCheck
+                    previous={previousCheck}
+                    report={report}
+                    failed={lookup.failed}
+                    settled={lookup.allSettled}
+                    className="mb-6"
+                  />
+                </Suspense>
+              )}
+
               {/* Tabs */}
               <Tabs
                 active={activeTab}

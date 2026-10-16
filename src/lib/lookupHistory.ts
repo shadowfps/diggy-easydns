@@ -1,5 +1,22 @@
 import { useSyncExternalStore } from 'react';
-import type { LookupReport, RecordType } from '@/types/dns';
+import type { LookupReport, MailSecurity, RecordType } from '@/types/dns';
+import { SECTION_KEYS, type SectionKey } from '@/hooks/useProgressiveLookup';
+
+/**
+ * Record-Typen, deren Werte für „Seit dem letzten Check“ (#79) vollständig
+ * gespeichert werden. TXT bewusst nicht: DKIM-Schlüssel sind Kilobytes lang,
+ * und die History soll klein bleiben.
+ */
+export const TRACKED_RECORD_TYPES = ['A', 'AAAA', 'MX', 'NS'] as const;
+export type TrackedRecordType = (typeof TRACKED_RECORD_TYPES)[number];
+export type TrackedRecords = Partial<Record<TrackedRecordType, string[]>>;
+export type DmarcPolicy = NonNullable<MailSecurity['dmarc']['policy']>;
+
+/**
+ * Obergrenze je Typ. Wer sie erreicht, ist womöglich gekürzt — der Vergleich
+ * überspringt den Typ dann, statt abgeschnittene Werte als „entfallen“ zu melden.
+ */
+export const RECORD_VALUE_LIMIT = 20;
 
 export interface LookupHistoryEntry {
   domain: string;
@@ -7,14 +24,34 @@ export interface LookupHistoryEntry {
   score: number;
   verdict: string;
   recordCount: number;
+  /** Für die History-Ansicht: A und AAAA gemischt, auf 6 gekürzt. */
   ips: string[];
+  /** Für die History-Ansicht: auf 5 gekürzt. */
   mx: string[];
+  /** Für die History-Ansicht: auf 5 gekürzt. */
   nameservers: string[];
   sslValid: boolean;
   sslDaysUntilExpiry?: number;
   dnssecValid: boolean;
   dmarcPresent: boolean;
   findingsCount: number;
+
+  /*
+   * Ab #79, für den Vergleich mit dem letzten Check. Einträge von vorher
+   * haben diese Felder nicht — alles Lesende muss mit undefined rechnen.
+   */
+
+  /** Alle Werte je Typ, normalisiert. Ein fehlender Typ heißt: keine Records. */
+  records?: TrackedRecords;
+  /** Ablaufdatum des Zertifikats. sslDaysUntilExpiry hängt vom Prüftag ab und taugt nur ungefähr. */
+  sslValidTo?: string;
+  dmarcPolicy?: DmarcPolicy;
+  /**
+   * Sektionen, deren Abfrage fehlschlug. sslValid, dnssecValid und
+   * dmarcPresent sind dann nur Defaults (false) — ohne diese Liste meldete
+   * der nächste Vergleich nach einem Timeout „DMARC entfernt“.
+   */
+  failedChecks?: SectionKey[];
 }
 
 const HISTORY_KEY = 'diggy-lookup-history';
@@ -59,6 +96,15 @@ export function useLookupHistory(): LookupHistoryEntry[] {
   return useSyncExternalStore(subscribe, getSnapshot, () => EMPTY_HISTORY);
 }
 
+/** Der gespeicherte Eintrag einer Domain — Groß-/Kleinschreibung egal, wie beim Speichern. */
+export function findHistoryEntry(
+  entries: readonly LookupHistoryEntry[],
+  domain: string
+): LookupHistoryEntry | null {
+  const wanted = domain.toLowerCase();
+  return entries.find((entry) => entry.domain.toLowerCase() === wanted) ?? null;
+}
+
 function readLookupHistory(): LookupHistoryEntry[] {
   if (typeof window === 'undefined') return [];
 
@@ -67,14 +113,18 @@ function readLookupHistory(): LookupHistoryEntry[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isHistoryEntry).slice(0, MAX_HISTORY_ITEMS);
+    return parsed.filter(isHistoryEntry).map(withValidExtras).slice(0, MAX_HISTORY_ITEMS);
   } catch {
     return [];
   }
 }
 
-export function saveLookupToHistory(report: LookupReport): void {
-  const entry = toHistoryEntry(report);
+/** `failed`: Sektionen, deren Abfrage fehlschlug (siehe `failedChecks`). */
+export function saveLookupToHistory(
+  report: LookupReport,
+  failed: readonly SectionKey[] = []
+): void {
+  const entry = createHistoryEntry(report, failed);
   const previous = readLookupHistory();
   const next = [
     entry,
@@ -92,10 +142,20 @@ export function clearLookupHistory(): void {
   notify();
 }
 
-function toHistoryEntry(report: LookupReport): LookupHistoryEntry {
+/**
+ * Der History-Eintrag zu einem Report. Exportiert, damit der Vergleich mit
+ * dem letzten Check den laufenden Lookup in genau der Form sieht, in der er
+ * gleich gespeichert wird — zwei getrennte Umwandlungen liefen auseinander.
+ */
+export function createHistoryEntry(
+  report: LookupReport,
+  failed: readonly SectionKey[] = [],
+  lookedUpAt: string = new Date().toISOString()
+): LookupHistoryEntry {
+  const dmarc = report.mail.dmarc;
   return {
     domain: report.domain,
-    lookedUpAt: new Date().toISOString(),
+    lookedUpAt,
     score: report.healthScore.score,
     verdict: report.healthScore.verdict,
     recordCount: report.records.length,
@@ -105,9 +165,41 @@ function toHistoryEntry(report: LookupReport): LookupHistoryEntry {
     sslValid: Boolean(report.ssl?.valid),
     sslDaysUntilExpiry: report.ssl?.daysUntilExpiry,
     dnssecValid: report.dnssec.enabled && report.dnssec.valid,
-    dmarcPresent: report.mail.dmarc.present,
+    dmarcPresent: dmarc.present,
     findingsCount: report.findings.length,
+    records: trackedRecords(report),
+    // Felder mit undefined lässt JSON.stringify weg — sie kosten keinen Platz.
+    sslValidTo: report.ssl?.validTo || undefined,
+    dmarcPolicy: dmarc.present ? dmarc.policy : undefined,
+    failedChecks: failed.length > 0 ? [...failed] : undefined,
   };
+}
+
+/**
+ * Vergleichbare Form eines Record-Werts. Resolver liefern Namen mal mit,
+ * mal ohne Schlusspunkt und in wechselnder Schreibweise — das ist keine
+ * Änderung.
+ */
+export function normalizeRecordValue(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/, '');
+}
+
+function recordValue(record: LookupReport['records'][number]): string {
+  return record.priority === undefined ? record.value : `${record.priority} ${record.value}`;
+}
+
+function trackedRecords(report: LookupReport): TrackedRecords {
+  const result: TrackedRecords = {};
+  for (const type of TRACKED_RECORD_TYPES) {
+    const values = report.records
+      .filter((record) => record.type === type)
+      .map((record) => normalizeRecordValue(recordValue(record)));
+    const unique = Array.from(new Set(values)).slice(0, RECORD_VALUE_LIMIT);
+    // Leere Typen weglassen: spart Platz, und ein fehlender Typ heißt ohnehin
+    // „keine Records“ (siehe `records`).
+    if (unique.length > 0) result[type] = unique;
+  }
+  return result;
 }
 
 function uniqueRecordValues(
@@ -116,11 +208,7 @@ function uniqueRecordValues(
   limit: number
 ): string[] {
   const wanted = new Set(types);
-  const values = report.records
-    .filter((record) => wanted.has(record.type))
-    .map((record) =>
-      record.priority === undefined ? record.value : `${record.priority} ${record.value}`
-    );
+  const values = report.records.filter((record) => wanted.has(record.type)).map(recordValue);
 
   return Array.from(new Set(values)).slice(0, limit);
 }
@@ -153,4 +241,48 @@ function isHistoryEntry(value: unknown): value is LookupHistoryEntry {
     Array.isArray(entry.mx) &&
     Array.isArray(entry.nameservers)
   );
+}
+
+const DMARC_POLICIES: readonly string[] = ['none', 'quarantine', 'reject'] satisfies DmarcPolicy[];
+
+/**
+ * Prüft die Zusatzfelder aus #79 einzeln und lässt kaputte weg, statt den
+ * ganzen Eintrag zu verwerfen: ein beschädigtes Zusatzfeld soll nicht die
+ * History-Ansicht leeren, sondern nur den Vergleich für dieses Feld aussetzen.
+ */
+function withValidExtras(entry: LookupHistoryEntry): LookupHistoryEntry {
+  const { records, sslValidTo, dmarcPolicy, failedChecks, ...base } = entry;
+  const result: LookupHistoryEntry = base;
+
+  const cleanRecords = validRecords(records);
+  if (cleanRecords) result.records = cleanRecords;
+  if (typeof sslValidTo === 'string' && Number.isFinite(Date.parse(sslValidTo))) {
+    result.sslValidTo = sslValidTo;
+  }
+  if (typeof dmarcPolicy === 'string' && DMARC_POLICIES.includes(dmarcPolicy)) {
+    result.dmarcPolicy = dmarcPolicy;
+  }
+  if (Array.isArray(failedChecks)) {
+    result.failedChecks = failedChecks.filter((key): key is SectionKey =>
+      (SECTION_KEYS as readonly unknown[]).includes(key)
+    );
+  }
+  return result;
+}
+
+function validRecords(records: unknown): TrackedRecords | undefined {
+  if (!records || typeof records !== 'object' || Array.isArray(records)) return undefined;
+  const source = records as Record<string, unknown>;
+  const clean: TrackedRecords = {};
+  for (const type of TRACKED_RECORD_TYPES) {
+    const values = source[type];
+    if (values === undefined) continue;
+    // Ein kaputter Typ verwirft alle: fehlte nur er, meldete der Vergleich
+    // „alle Records dieses Typs entfallen“.
+    if (!Array.isArray(values) || !values.every((value) => typeof value === 'string')) {
+      return undefined;
+    }
+    clean[type] = values;
+  }
+  return clean;
 }

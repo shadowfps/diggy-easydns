@@ -90,6 +90,9 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
   mitläuft; rechts Tabs und Inhalt. Darunter gestapelt: Kopf, Score und
   Schnellübersicht nebeneinander, dann die Tabs. Die Seitenspalte bleibt
   flach genug für 1440×900 — Neues kommt in die Tabs, nicht in die Spalte.
+  Einzige Karte über den Tabs: „Seit dem letzten Check“, nur bei einem
+  erneuten Check und eingeklappt, damit sie vom Laden bis zum Ergebnis gleich
+  hoch bleibt.
 - **Textseiten**: `max-w-3xl`, Überzeile, `page-title`, optional Lead, dann
   Karten.
 
