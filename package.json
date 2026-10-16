@@ -13,13 +13,14 @@
     "build:client": "npm run typecheck && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
+    "i18n": "node scripts/check-i18n.mjs",
     "start": "node dist-server/server/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "test": "vitest run",
     "size": "node scripts/check-bundle-size.mjs",
     "smoke": "node scripts/smoke-server.mjs",
     "test:watch": "vitest",
-    "verify": "npm run lint && npm run typecheck && npm run test && npm run build && npm run smoke && npm run size"
+    "verify": "npm run lint && npm run i18n && npm run typecheck && npm run test && npm run build && npm run smoke && npm run size"
   },
   "dependencies": {
     "@fontsource/geist": "^5.3.0",

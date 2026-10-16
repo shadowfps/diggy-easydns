@@ -14,7 +14,7 @@ const excludeBuilds = ['dist/**', 'dist-server/**', 'node_modules/**'];
  *
  * - **server** prüft reine Logik (Parsing, Validierung, Scoring,
  *   IP-Klassifizierung) in `node`, dazu die Integrationstests gegen echtes
- *   Express und einen SMTP-Sink. Ein DOM wäre dort nur Ballast — jsdom
+ *   Express und einen SMTP-Sink — und die Prüfskripte unter scripts/. Ein DOM wäre dort nur Ballast — jsdom
  *   aufzusetzen kostet pro Datei mehr Zeit als die Tests brauchen.
  * - **client** braucht ein DOM und ein eigenes Setup für die Browser-APIs,
  *   die jsdom nicht mitbringt (siehe src/test/setup.ts).
@@ -35,7 +35,7 @@ export default defineConfig({
         test: {
           name: 'server',
           environment: 'node',
-          include: ['server/**/*.test.ts', 'shared/**/*.test.ts'],
+          include: ['server/**/*.test.ts', 'shared/**/*.test.ts', 'scripts/**/*.test.mjs'],
           exclude: excludeBuilds,
         },
       },

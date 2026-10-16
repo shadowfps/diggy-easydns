@@ -36,6 +36,7 @@ Diggy ist ein webbasiertes DNS-Audit-Tool. Domain eingeben, fertig: Records, Mai
 - **JSON-Export** — vollständigen Report als Datei herunterladen
 - **Kontaktformular** — auf der Impressum-Seite, mit SMTP-Versand und Auto-Reply
 - **Dark Mode** — systembasiert, manuell umschaltbar
+- **Deutsch & Englisch** — nach Browser-Sprache, im Menü umschaltbar (Impressum und Datenschutz bleiben deutsch)
 
 ## Stack
 
@@ -106,9 +107,10 @@ Die API ist IP-basiert begrenzt: 120 Requests/Minute allgemein, 10/Stunde je Fre
 
 ```bash
 npm run lint        # ESLint 9 (Flat Config, inkl. react-hooks)
+npm run i18n        # deutsche Texte, die nicht durchs Übersetzungsmodul laufen
 npm run typecheck   # tsc für Client und Server
 npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
-npm run verify      # alle drei, so wie die CI es fährt
+npm run verify      # alles zusammen, so wie die CI es fährt
 ```
 
 Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
@@ -245,16 +247,20 @@ technisch korrekt, aber **nicht juristisch geprüft**.
 ```
 diggy/
 ├── docs/
-│   └── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
+│   ├── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
+│   ├── DESIGN.md           # Designregeln
+│   └── I18N.md             # Übersetzung: Aufbau, neue Texte, Findings
 ├── shared/
 │   ├── scoring.ts          # Health-Score — geteilt, damit Server und Client
 │   │                       # garantiert dasselbe rechnen
+│   ├── textKeys.ts         # Kennungen der Findings und Fehlercodes (Übersetzung)
 │   └── types/              # Gemeinsame TypeScript-Typen
 ├── src/
 │   ├── components/         # Wiederverwendbare UI-Bausteine, Error Boundaries
 │   ├── modules/            # Feature-Module (Lookup, History, Availability, …)
 │   ├── lib/                # API-Client, History, Routing-Helfer, Utilities
 │   ├── hooks/              # Theme, progressiver Lookup, Reduced-Motion, Focus-Trap
+│   ├── i18n/               # Übersetzungsmodul, deutsche Quelle, englisches Wörterbuch
 │   └── types/              # Re-Exports
 └── server/
     ├── index.ts            # Express-App, Middleware-Kette & API-Routen
@@ -298,6 +304,7 @@ Tests liegen neben dem geprüften Code (`*.test.ts`).
 - [x] Datenschutzhinweise & lokal gehostete Schriften
 - [x] Härtung: SSRF-Guard mit IP-Pinning, Rate-Limits, CSP/HSTS, CSRF-Riegel
 - [x] Tests, ESLint, Typecheck und ein verify-Gate in der CI
+- [x] Englische Version (Übersetzungsmodul, Findings per Kennung)
 - [ ] DNSSEC-Chain-Validierung (vertieft)
 - [ ] Watch/Monitor-Feature (Domain-Änderungen per E-Mail)
 

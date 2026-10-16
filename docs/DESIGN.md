@@ -79,7 +79,7 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
 ## Seitenaufbau
 
 - **Header**: Wortmarke links, rechts GitHub und das Menü (History,
-  Available Check, About, Theme). Auf Seiten mit Ergebnis (Report,
+  Available Check, About, Theme, Sprache). Auf Seiten mit Ergebnis (Report,
   IP-Lookup) steht die Suche kompakt in der Mitte — ab `md` genau mittig
   über ein Raster mit gleich breiten Außenspalten. Sie bleibt beim Scrollen
   erreichbar, und der Inhalt beginnt oben.
@@ -143,6 +143,20 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
   in einer `card`.
 - Fehler in einem Abschnitt: wie ein Leerzustand mit `icon-tile-danger`. Die
   Seite drumherum bleibt bedienbar.
+
+## Texte
+
+- **Neue Texte nur über das Übersetzungsmodul** — `t('…')`, nie als String
+  im JSX oder in einem Attribut. Den Text in `src/i18n/de.ts` eintragen und
+  in `src/i18n/en.ts` übersetzen; `npm run i18n` findet vergessene Stellen.
+  Vorgehen und Regeln: `docs/I18N.md`.
+- Fachbegriffe, die in beiden Sprachen gleich heißen (Records, Health Score,
+  SPF), brauchen kein `t()`.
+- Englisch ist oft länger. Jede neue Oberfläche auch auf Englisch bei 390 px
+  ansehen: Buttons und Badges bleiben einzeilig, nichts läuft seitlich über.
+  Lieber den Text kürzen als `whitespace-nowrap` erzwingen.
+- Datum und Zahlen über `formatDate`/`formatNumber` — nie fest `de-DE`.
+- Rechtstexte bleiben deutsch und tragen `lang="de"`.
 
 ## Bewegung
 
