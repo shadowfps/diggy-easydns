@@ -511,6 +511,40 @@ describe('mailFindings — Domain ohne Mail (Null-MX)', () => {
     expect(noDmarc?.fix?.snippet).toBe('_dmarc.example.com  TXT  "v=DMARC1; p=reject"');
   });
 
+  /**
+   * Scheiterte die Abfrage (#101), ist offen, ob SPF oder DMARC fehlen — der
+   * Hinweis auf die Lücke darf sie dann nicht als fehlend nennen.
+   */
+  it('nennt eine nicht prüfbare SPF- oder DMARC-Abfrage nicht als Lücke', () => {
+    const spfFailed = mailFindings(
+      mail({ spf: { present: false, valid: false, issues: [], lookupFailed: 'timeout' } }),
+      'example.com'
+    );
+    expect(summary(spfFailed)).toEqual([
+      'info spf-unchecked',
+      'success dmarc-present',
+      'success null-mx',
+    ]);
+    expect(spfFailed.find((f) => f.id === 'null-mx')?.title).not.toContain('sauber');
+
+    const bothFailed = mailFindings(
+      mail({
+        spf: spf('v=spf1 ~all'),
+        dmarc: { present: false, lookupFailed: 'servfail' },
+      }),
+      'example.com'
+    );
+    expect(summary(bothFailed)).toEqual([
+      'success spf-ok',
+      'info dmarc-unchecked',
+      'success null-mx',
+      'info null-mx-incomplete',
+    ]);
+    const hint = bothFailed.find((f) => f.id === 'null-mx-incomplete');
+    expect(hint?.description).toContain('v=spf1 -all');
+    expect(hint?.description).not.toContain('DMARC');
+  });
+
   it('zeigt gefundene DKIM-Selectors weiter an', () => {
     const findings = mailFindings(
       mail({ dkim: { selectors: [{ selector: 'default', present: true }] } }),

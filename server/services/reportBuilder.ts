@@ -339,13 +339,15 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
 
   if (protection.complete) return [nullMxFinding];
 
+  // Scheiterte die SPF- oder DMARC-Abfrage, ist offen, ob dort etwas fehlt —
+  // das meldet schon spf-unchecked bzw. dmarc-unchecked (#101).
   const missing: string[] = [];
   const snippets: string[] = [];
-  if (!protection.spfAllowsNoSender) {
+  if (!protection.spfAllowsNoSender && !mail.spf.lookupFailed) {
     missing.push('ein SPF, das niemanden senden lässt (v=spf1 -all)');
     snippets.push(`${apexDomain}  TXT  "v=spf1 -all"`);
   }
-  if (!protection.dmarcReject) {
+  if (!protection.dmarcReject && !mail.dmarc.lookupFailed) {
     const policy = mail.dmarc.present ? mail.dmarc.policy : undefined;
     missing.push(
       policy === 'reject'
@@ -356,6 +358,7 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
     );
     snippets.push(`_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`);
   }
+  if (missing.length === 0) return [nullMxFinding];
 
   return [
     nullMxFinding,

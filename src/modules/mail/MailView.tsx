@@ -95,6 +95,7 @@ function NoMailCard({ mail }: { mail: MailSecurity }) {
  */
 function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): string {
   if (allowsNoSender) return '-all';
+  if (spf.lookupFailed) return 'nicht prüfbar';
   if (!spf.present || !spf.record) return 'fehlt';
   const mechanisms = spfMechanisms(spf.record) ?? [];
   return mechanisms.length === 1 && /^[+~?]?all$/.test(mechanisms[0])
@@ -105,6 +106,7 @@ function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): stri
 /** `reject` gilt erst ohne `pct` unter 100 — sonst steht der Anteil dabei. */
 function noMailDmarcLabel(dmarc: MailSecurity['dmarc'], reject: boolean): string {
   if (reject) return 'reject';
+  if (dmarc.lookupFailed) return 'nicht prüfbar';
   if (!dmarc.present || !dmarc.policy) return 'fehlt';
   if (dmarc.policy === 'reject') return `reject, pct=${dmarcPct(dmarc.record)}`;
   return dmarc.policy;
@@ -221,7 +223,8 @@ function DkimCard({ dkim, noMail }: { dkim: MailSecurity['dkim']; noMail: boolea
       tone={found ? 'success' : 'neutral'}
       delay={0.1}
       // Ein gefundener Selector reicht für „aktiv“, auch wenn andere scheiterten.
-      unchecked={!found && dkim.lookupFailed}
+      // Ohne Mail (Null-MX) ist DKIM nicht nötig — dann zählt keine Probe.
+      unchecked={!found && !noMail && dkim.lookupFailed}
     >
       {!found && noMail ? (
         <StatusLine
@@ -264,7 +267,7 @@ function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail
       subtitle="Erzwingt TLS für eingehende Mail"
       tone={mtaSts.present ? 'success' : 'neutral'}
       delay={0.15}
-      unchecked={mtaSts.lookupFailed}
+      unchecked={!noMail && mtaSts.lookupFailed}
     >
       <div className="flex items-center gap-2 text-sm">
         {mtaSts.present ? (
