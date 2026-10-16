@@ -125,8 +125,17 @@ export interface MailSecurity {
     selectors: { selector: string; present: boolean; record?: string }[];
   };
   mtaSts: { present: boolean };
-  /** Ob die Apex-Domain MX-Records hat (für Findings bei Subdomain-Lookups). */
+  /**
+   * Ob die Apex-Domain MX-Records hat (für Findings bei Subdomain-Lookups).
+   * Auch ein Null-MX zählt hier mit — ob die Domain Mail empfängt, sagt erst
+   * `hasMx && !nullMx`.
+   */
   hasMx: boolean;
+  /**
+   * Null-MX nach RFC 7505 (`MX 0 .`): die Domain nimmt bewusst keine Mail an.
+   * Regel und Rolle von SPF/DMARC: shared/nullMx.ts.
+   */
+  nullMx: boolean;
 }
 
 export interface WhoisInfo {
