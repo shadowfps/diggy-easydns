@@ -204,7 +204,9 @@ export function checkSource(fileName, code, catalog, used = new Set()) {
       if (text && looksGerman(text)) report(node, text, 'JSX-Text');
     } else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       const text = node.text;
-      if (catalog.has(text)) used.add(text);
+      // Nur Werte zählen als Verwendung: die Union `PhraseText` in
+      // shared/textKeys.ts zählt die Bausteine auf, benutzt sie aber nicht.
+      if (catalog.has(text) && !ts.isLiteralTypeNode(node.parent)) used.add(text);
       const parent = node.parent;
       if (looksGerman(text)) {
         if (ts.isJsxAttribute(parent)) {

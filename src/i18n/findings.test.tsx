@@ -18,6 +18,7 @@ import type {
 import { parseBimi, parseTlsRpt } from '@shared/bimiTlsRpt';
 import { dmarcFlawEffectPhrase, dmarcPolicyFlawLabelPhrase, type DmarcPolicyFlaw } from '@shared/dmarc';
 import { lookupFailurePhrase } from '@shared/lookupFailure';
+import { phrase } from '@shared/phrase';
 import {
   dnsFindings,
   dnssecFindings,
@@ -413,16 +414,29 @@ describe('Satzbausteine aus shared/', () => {
   });
 
   it('bleiben deutsch, wenn ein Baustein kein Englisch hat', () => {
+    // Ein Baustein, den nur ein neuerer Server kennt — der Typ lässt ihn nicht zu.
+    const unknown = { text: 'Neuer Grund' } as unknown as Phrase;
     const finding: Finding = {
       id: 'tls-rpt-invalid',
       severity: 'info',
       title: 'TLS-RPT-Record ungültig',
       description: 'Neuer Grund. Absender schicken dann keine Berichte (RFC 8460 §3).',
       category: 'mail',
-      params: { reason: { text: 'Neuer Grund' } },
+      params: { reason: unknown },
     };
     expect(findingText(finding).description).toBe(finding.description);
-    expect(phraseText({ text: 'Neuer Grund' })).toBe('Neuer Grund');
+    expect(phraseText(unknown)).toBe('Neuer Grund');
+  });
+
+  it('setzen Werte aus dem DNS wörtlich ein, auch mit Platzhalter darin', () => {
+    // `{fix}` im p= eines TXT-Records bleibt Text — obwohl das Finding einen
+    // Wert `fix` mitschickt, der sonst dort landen würde.
+    const [ignored] = mailFindings(mail({ spf: SPF_NONE, dmarc: dmarc('v=DMARC1; p={fix}') }), 'example.com').filter(
+      (f) => f.id === 'no-dmarc'
+    );
+    expect(ignored.title).toBe('DMARC wirkt nicht: p={fix} ist ungültig');
+    expect(findingText(ignored).title).toBe('DMARC has no effect: p={fix} is invalid');
+    expect(phraseText(phrase('{tag}={value} ist ungültig', { tag: 'p', value: '{tag}' }))).toBe('p={tag} is invalid');
   });
 });
 

@@ -8,9 +8,10 @@
  * schlägt `text` im Wörterbuch nach und setzt die Werte selbst ein.
  */
 
-import type { Phrase, TextParams } from './textKeys.js';
+import type { Phrase, PhraseText, TextParams } from './textKeys.js';
 
-export function phrase(text: string, params?: TextParams): Phrase {
+/** Nur Texte aus `PhraseText` — dort stehen sie, damit sie übersetzt werden. */
+export function phrase(text: PhraseText, params?: TextParams): Phrase {
   return params ? { text, params } : { text };
 }
 

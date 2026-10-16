@@ -3,10 +3,10 @@
  * (Server) und Karte (Client) dasselbe Wort benutzen.
  */
 
-import type { LookupFailure, MailSecurity, Phrase } from './types/dns.js';
+import type { LookupFailure, MailSecurity, Phrase, PhraseText } from './types/dns.js';
 import { phrase } from './phrase.js';
 
-const LABEL: Record<LookupFailure, string> = {
+const LABEL: Record<LookupFailure, PhraseText> = {
   timeout: 'Zeitüberschreitung',
   servfail: 'SERVFAIL',
   network: 'Netzwerkfehler',

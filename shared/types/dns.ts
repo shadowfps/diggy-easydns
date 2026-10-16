@@ -2,7 +2,7 @@
 
 import type { FindingKey, Phrase, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
 
-export type { ApiErrorCode, FindingKey, Phrase, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
+export type { ApiErrorCode, FindingKey, Phrase, PhraseText, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
 
 export type RecordType =
   | 'A'
