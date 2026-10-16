@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Check, X } from 'lucide-react';
+import { Check, CircleHelp, X } from 'lucide-react';
 import type {
   DetectedTech,
   DnsRecord,
@@ -309,6 +309,8 @@ interface QuickFactItem {
   muted?: boolean;
   ok?: boolean;
   bad?: boolean;
+  /** Check gescheitert (Sektion oder Abfrage): neutral, mit Fragezeichen (#101). */
+  unchecked?: boolean;
   loading?: boolean;
 }
 
@@ -359,16 +361,24 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts. Nur
   // solange sie wirklich laden: bei einem Fehler oder einer übersprungenen
   // Sektion (DNS-Eintrag ohne Host) blieb sonst das Skeleton für immer stehen.
-  const placeholder = (label: string, status: LoadStatus): QuickFactItem | null =>
+  // Ein Fehler ist „nicht prüfbar“ — ebenso eine fertige Sektion, deren
+  // Abfrage scheiterte (`failed`, #101). Übersprungen heißt „nicht anwendbar“ (—).
+  const placeholder = (
+    label: string,
+    status: LoadStatus,
+    failed?: unknown
+  ): QuickFactItem | null =>
     status === 'loading'
       ? { label, loading: true }
-      : status !== 'done'
-        ? { label, value: '—', muted: true }
-        : null;
+      : status === 'error' || (status === 'done' && failed)
+        ? { label, value: 'nicht prüfbar', unchecked: true }
+        : status !== 'done'
+          ? { label, value: '—', muted: true }
+          : null;
 
   const sslInfo = ssl.data;
   const sslItem: QuickFactItem =
-    placeholder('SSL', ssl.status) ?? {
+    placeholder('SSL', ssl.status, !sslInfo && ssl.lookupFailed) ?? {
       label: 'SSL',
       value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
       ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
@@ -377,7 +387,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
 
   const dnssecInfo = dnssec.data;
   const dnssecItem: QuickFactItem =
-    placeholder('DNSSEC', dnssec.status) ?? {
+    placeholder('DNSSEC', dnssec.status, !dnssecInfo?.enabled && dnssecInfo?.lookupFailed) ?? {
       label: 'DNSSEC',
       value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
       ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
@@ -389,7 +399,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // ohne Haken. Ignorieren ihn Empfänger, ist er so schlecht wie keiner.
   const { policy: dmarcPolicy, flaw: dmarcFlaw } = effectiveDmarcPolicy(mail.data?.dmarc);
   const dmarcItem: QuickFactItem =
-    placeholder('DMARC', mail.status) ??
+    placeholder('DMARC', mail.status, mail.data?.dmarc.lookupFailed) ??
     (dmarcPolicy === null
       ? { label: 'DMARC', value: dmarcFlaw ? 'unwirksam' : 'fehlt', bad: true }
       : dmarcFlaw
@@ -433,11 +443,15 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
                     item.mono && 'font-mono text-[13px]',
                     item.muted ? 'text-fg-subtle' : 'text-fg',
                     item.ok && 'font-medium text-success',
-                    item.bad && 'font-medium text-danger'
+                    item.bad && 'font-medium text-danger',
+                    item.unchecked && 'text-fg-muted'
                   )}
                 >
                   {item.ok && <Check className="size-3.5 shrink-0" />}
                   {item.bad && <X className="size-3.5 shrink-0" />}
+                  {item.unchecked && (
+                    <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+                  )}
                   {item.value}
                 </span>
               )}

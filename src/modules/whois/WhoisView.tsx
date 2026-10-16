@@ -5,8 +5,11 @@ import type { WhoisInfo } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { CalendarButton } from '@/components/calendar/CalendarButton';
 
 interface WhoisViewProps {
+  /** Domain des Reports — Ziel des Links in der Kalender-Erinnerung. */
+  domain: string;
   whois?: WhoisInfo;
   onUseDomain?: (domain: string) => void;
 }
@@ -40,7 +43,7 @@ const STATUS_BADGE: Record<'ok' | 'warn' | 'bad', string> = {
   bad: 'badge-danger',
 };
 
-export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
+export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
   /**
    * Bezugszeitpunkt einmal beim Mount festhalten.
    *
@@ -146,6 +149,23 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
             value={whois.updatedAt ? formatDate(whois.updatedAt) : '—'}
           />
         </dl>
+
+        {/* Nur mit bekanntem Ablauf, der noch bevorsteht — eine bereits
+            abgelaufene Domain braucht keine Erinnerung mehr, sondern Handeln. */}
+        {whois.expiresAt && expiresInDays !== undefined && expiresInDays >= 0 && (
+          <div className="mt-4">
+            <CalendarButton
+              reminder={{
+                kind: 'domain',
+                // Liefert der Server die abgefragte Domain nicht mit (älterer
+                // Stand), ist der Report-Name die beste verfügbare Angabe.
+                subject: whois.domain ?? domain,
+                expiresAt: whois.expiresAt,
+                reportDomain: domain,
+              }}
+            />
+          </div>
+        )}
       </motion.div>
 
       {/* Nameserver aus WHOIS */}

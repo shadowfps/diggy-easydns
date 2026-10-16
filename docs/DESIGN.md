@@ -90,6 +90,9 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
   mitläuft; rechts Tabs und Inhalt. Darunter gestapelt: Kopf, Score und
   Schnellübersicht nebeneinander, dann die Tabs. Die Seitenspalte bleibt
   flach genug für 1440×900 — Neues kommt in die Tabs, nicht in die Spalte.
+  Einzige Karte über den Tabs: „Seit dem letzten Check“, nur bei einem
+  erneuten Check und eingeklappt, damit sie vom Laden bis zum Ergebnis gleich
+  hoch bleibt.
 - **Textseiten**: `max-w-3xl`, Überzeile, `page-title`, optional Lead, dann
   Karten.
 
@@ -133,6 +136,8 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
   färbt die Kachel nur, wenn die Karte eine Bewertung trägt.
 - `EmptyState` (`components/ui/EmptyState.tsx`) — Leer-, Start- und
   Fehlerzustand eines Abschnitts.
+- `UncheckedBadge` / `UncheckedLine` (`components/ui/Unchecked.tsx`) —
+  „nicht prüfbar“ in einer Karte.
 
 - **Aktiv heißt `accent`.** Aktiver Tab, aktiver Chip, aktive Option eines
   Umschalters: dunkle Pille im Hellen, helle im Dunkeln.
@@ -143,12 +148,35 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
   in einer `card`.
 - Fehler in einem Abschnitt: wie ein Leerzustand mit `icon-tile-danger`. Die
   Seite drumherum bleibt bedienbar.
+- **„Nicht prüfbar“ ist kein „fehlt“.** Scheitert ein Check (Timeout,
+  SERVFAIL), sagt das nichts über die Domain: Karte und Schnellübersicht
+  zeigen neutral ein Fragezeichen mit „nicht prüfbar“, die Karte darunter den
+  Grund. Keine Statusfarbe, und das Finding dazu zieht keine Punkte ab. Dafür
+  sagt der Health Score, dass er unvollständig ist — sonst sähe ein Check, der
+  ins Leere lief, besser aus als einer mit Befund.
 
 ## Bewegung
 
 - Einblenden: `opacity` und höchstens 8 px Versatz, 200–400 ms, `ease-out`.
 - Hover und Fokus: nur Farbe; Buttons geben beim Klick nach (`active:scale`).
-- `prefers-reduced-motion` wird respektiert (`MotionConfig` in `main.tsx`).
+- **„Bewegung reduzieren“ (`prefers-reduced-motion`) gilt für jede
+  Animation.** Dann bewegt sich nichts mehr: Spinner und Skeletons stehen
+  still, nichts verschiebt oder skaliert sich, Einblendungen blenden nur noch
+  ein.
+  - Framer Motion: `MotionConfig` in `main.tsx` — gilt nur für
+    `motion`-Komponenten. Imperatives `animate()` auf einem MotionValue, GSAP,
+    eigene rAF-Schleifen und Scrollen per JS (`behavior: 'smooth'`):
+    `useReducedMotion`.
+  - CSS: eine Regel am Ende von `globals.css`. Eine neue Animation kommt als
+    Token in `@theme` (`--animate-…`) und in diese Regel; Versatz beim Hover
+    direkt mit `motion-safe:` schreiben. Nie per `style={{ animation }}` —
+    gegen einen Inline-Style kommt die Regel nicht an.
+- Ein Ladezustand hängt nie allein an der Bewegung: Text oder Icon dazu, und
+  der Text steht in `role="status"`, damit ihn auch ein Screenreader ansagt.
+  Ein Status je Ladevorgang, auch wenn mehrere Platzhalter auf ihn warten.
+  Wechselnder Text (Ladestufen) gehört nicht in die Region, sonst wird jeder
+  Wechsel angesagt: dann `LoadingAnnouncement` mit einem gleichbleibenden
+  Satz, die sichtbare Anzeige `aria-hidden`.
 
 ## Zugänglichkeit
 

@@ -2,12 +2,14 @@ import type {
   DnsRecord,
   DnssecInfo,
   Finding,
+  LookupFailure,
   MailSecurity,
   ResolverResult,
   SslInfo,
   WhoisInfo,
 } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
+import { lookupFailureLabel } from '../../shared/lookupFailure.js';
 import { dmarcPct, noMailProtection } from '../../shared/nullMx.js';
 import { bimiDmarcGap } from '../../shared/bimiTlsRpt.js';
 import {
@@ -18,6 +20,39 @@ import {
   effectiveDmarcPolicy,
   isDmarcPolicy,
 } from '../../shared/dmarc.js';
+
+/* ─── Gescheiterte Checks ─────────────────────────────────────────────── */
+
+const FAILURE_DETAIL: Record<LookupFailure, string> = {
+  timeout: 'Die Abfrage lief in eine Zeitüberschreitung.',
+  servfail:
+    'Der Resolver antwortete mit SERVFAIL — meist vorübergehend, manchmal ein Zeichen für gestörte Nameserver der Domain.',
+  network: 'Die Abfrage scheiterte an einem Netzwerkfehler.',
+};
+
+/**
+ * Hinweis „konnte nicht geprüft werden“ statt „fehlt“ (#101).
+ *
+ * Ein Timeout oder SERVFAIL sagt nichts über die Domain. Als „fehlt“
+ * gemeldet, zog er Punkte ab, und wer zweimal prüfte, bekam für dieselbe
+ * Domain zwei Scores. `unchecked` hält ihn aus dem Score (shared/scoring.ts).
+ */
+function uncheckedFinding(
+  id: string,
+  category: Finding['category'],
+  check: string,
+  reason: LookupFailure,
+  detail = FAILURE_DETAIL[reason]
+): Finding {
+  return {
+    id,
+    severity: 'info',
+    title: `${check} konnte nicht geprüft werden — ${lookupFailureLabel(reason)}`,
+    description: `${detail} Ohne Antwort gibt es keine Bewertung und keinen Punktabzug — später erneut prüfen.`,
+    category,
+    unchecked: true,
+  };
+}
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
@@ -144,7 +179,9 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   // Spoofing-Schutz (jemand kann ja in deinem Namen Mails versenden, auch
   // wenn du nicht empfängst).
 
-  if (!mail.spf.present) {
+  if (mail.spf.lookupFailed) {
+    findings.push(uncheckedFinding('spf-unchecked', 'mail', 'SPF', mail.spf.lookupFailed));
+  } else if (!mail.spf.present) {
     findings.push({
       id: 'no-spf',
       severity: receivesMail ? 'warning' : 'info',
@@ -181,9 +218,23 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     }
   }
 
-  findings.push(dmarcFinding(mail, apexDomain, receivesMail));
+  if (mail.dmarc.lookupFailed) {
+    findings.push(uncheckedFinding('dmarc-unchecked', 'mail', 'DMARC', mail.dmarc.lookupFailed));
+  } else {
+    findings.push(dmarcFinding(mail, apexDomain, receivesMail));
+  }
 
-  if (receivesMail && mail.dkim.selectors.length === 0) {
+  if (receivesMail && mail.dkim.selectors.length === 0 && mail.dkim.lookupFailed) {
+    findings.push(
+      uncheckedFinding(
+        'dkim-unchecked',
+        'mail',
+        'DKIM',
+        mail.dkim.lookupFailed,
+        `Nicht alle gängigen Selectors ließen sich abfragen. ${FAILURE_DETAIL[mail.dkim.lookupFailed]}`
+      )
+    );
+  } else if (receivesMail && mail.dkim.selectors.length === 0) {
     findings.push({
       id: 'no-dkim-found',
       severity: 'info',
@@ -201,7 +252,11 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     });
   }
 
-  if (receivesMail && !mail.mtaSts.present) {
+  if (receivesMail && mail.mtaSts.lookupFailed) {
+    findings.push(
+      uncheckedFinding('mta-sts-unchecked', 'mail', 'MTA-STS', mail.mtaSts.lookupFailed)
+    );
+  } else if (receivesMail && !mail.mtaSts.present) {
     findings.push({
       id: 'no-mta-sts',
       severity: 'info',
@@ -472,10 +527,13 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
 function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding[] {
   const bimi = mail.bimi;
   if (!bimi || bimi.lookupFailed) return [];
-  const dmarcGap = bimiDmarcGap(mail.dmarc);
+  // Ob BIMI wirkt, hängt an DMARC. Ist DMARC nicht prüfbar (#101), bleibt
+  // auch das offen — dann weder „erst DMARC verschärfen“ noch „wirkt“.
+  const dmarcUnknown = Boolean(mail.dmarc.lookupFailed);
+  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGap(mail.dmarc);
 
   if (!bimi.present) {
-    if (!receivesMail) return [];
+    if (!receivesMail || dmarcUnknown) return [];
     if (dmarcGap) {
       return [{
         id: 'bimi-needs-dmarc',
@@ -513,6 +571,8 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
       advisory: true,
     }];
   }
+
+  if (dmarcUnknown) return [];
 
   if (dmarcGap) {
     return [{
@@ -570,13 +630,15 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
 
   if (protection.complete) return [nullMxFinding];
 
+  // Scheiterte die SPF- oder DMARC-Abfrage, ist offen, ob dort etwas fehlt —
+  // das meldet schon spf-unchecked bzw. dmarc-unchecked (#101).
   const missing: string[] = [];
   const snippets: string[] = [];
-  if (!protection.spfAllowsNoSender) {
+  if (!protection.spfAllowsNoSender && !mail.spf.lookupFailed) {
     missing.push('ein SPF, das niemanden senden lässt (v=spf1 -all)');
     snippets.push(`${apexDomain}  TXT  "v=spf1 -all"`);
   }
-  if (!protection.dmarcReject) {
+  if (!protection.dmarcReject && !mail.dmarc.lookupFailed) {
     // Wirksame Policy wie in noMailProtection: ohne gültiges p= kein reject,
     // und „jetzt p=none“ stimmte nicht für einen Record ohne p= (#107).
     const { policy, flaw } = effectiveDmarcPolicy(mail.dmarc);
@@ -591,6 +653,7 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
     );
     snippets.push(`_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`);
   }
+  if (missing.length === 0) return [nullMxFinding];
 
   return [
     nullMxFinding,
@@ -614,6 +677,23 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
 export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
+  if (!dnssec.enabled && dnssec.lookupFailed) {
+    const reason = dnssec.lookupFailed;
+    return [
+      uncheckedFinding(
+        'dnssec-unchecked',
+        'dnssec',
+        'DNSSEC',
+        reason,
+        // Eine unsignierte Zone landet nie hier (siehe checkDnssec): bei
+        // SERVFAIL ist die kaputte Signatur deshalb die naheliegende Ursache.
+        reason === 'servfail'
+          ? 'Der Resolver antwortete auf die DS- oder DNSKEY-Abfrage mit SERVFAIL. Das kann vorübergehend sein. Bleibt es dabei, steckt meist eine fehlerhafte DNSSEC-Signatur dahinter — dann scheitern validierende Resolver an der ganzen Domain.'
+          : `Die DS- oder DNSKEY-Abfrage blieb unbeantwortet. ${FAILURE_DETAIL[reason]}`
+      ),
+    ];
+  }
+
   if (!dnssec.enabled) {
     return [{
       id: 'dnssec-off',
@@ -660,7 +740,23 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
 
 /* ─── SSL ─────────────────────────────────────────────────────────────── */
 
-export function sslFindings(ssl: SslInfo | null): Finding[] {
+const SSL_FAILURE_DETAIL: Record<LookupFailure, string> = {
+  timeout:
+    'Port 443 hat den TLS-Handshake nicht rechtzeitig abgeschlossen — ein überlasteter Server oder eine Firewall, die den Port stumm verwirft.',
+  servfail: 'Die Adresse des Hosts ließ sich gerade nicht auflösen (SERVFAIL oder Resolver-Timeout).',
+  network: 'Der Host war über das Netz nicht erreichbar.',
+};
+
+/**
+ * `lookupFailed`: der Check kam zu keinem Ergebnis (siehe SslCheckResult in
+ * services/ssl.ts). Ohne ihn heißt `ssl: null` wie bisher „kein TLS“.
+ */
+export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): Finding[] {
+  if (!ssl && lookupFailed) {
+    const detail = SSL_FAILURE_DETAIL[lookupFailed];
+    return [uncheckedFinding('ssl-unchecked', 'ssl', 'SSL', lookupFailed, detail)];
+  }
+
   if (!ssl) {
     return [{
       id: 'no-ssl',

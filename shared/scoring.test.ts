@@ -100,6 +100,20 @@ describe('calculateScore', () => {
     expect(calculateScore([hint, finding('info', 'no-caa')]).score).toBe(98);
   });
 
+  /**
+   * „Konnte nicht geprüft werden“ (#101): ein Timeout beim Resolver sagt
+   * nichts über die Domain. Angezeigt und gezählt ja, abgezogen nein — auch
+   * nicht über den info-Deckel, sonst verdrängte es echte Hinweise nicht,
+   * zählte aber selbst mit.
+   */
+  it('zieht für „nicht prüfbar“ nichts ab, zählt es aber als info', () => {
+    const unchecked: Finding = { ...finding('info', 'ssl-unchecked'), unchecked: true };
+
+    expect(calculateScore([unchecked]).score).toBe(100);
+    expect(calculateScore([unchecked]).counts.info).toBe(1);
+    expect(calculateScore([unchecked, finding('info', 'no-caa')]).score).toBe(98);
+  });
+
   it('zählt die Severities mit', () => {
     const result = calculateScore([finding('critical'), finding('warning'), finding('info', 'i2')]);
     expect(result.counts).toEqual({ success: 0, info: 1, warning: 1, critical: 1 });
