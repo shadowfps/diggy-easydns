@@ -35,6 +35,33 @@ export const REPORT_TABS = [
  */
 export const FIXED_NOW = new Date('2026-10-16T08:30:00Z');
 
+/**
+ * Hält im Browser nur `Date` an (`new Date()`, `Date.now()`); Timer,
+ * requestAnimationFrame und performance.now() bleiben echt. Läuft als
+ * Init-Skript vor dem Code der Seite.
+ *
+ * Bewusst nicht `page.clock.setFixedTime`: Playwrights Uhr ersetzt dabei auch
+ * Timer und performance.now(), und ihr performance.now() läuft der
+ * Animations-Zeitleiste des Browsers um die Zeit voraus, die zwischen dem
+ * Aufruf und dem Laden der Seite vergeht (5 s gewartet → 5 s Versatz).
+ * Motion startet seine Animationen mit dieser Zeit — Ein- und Ausblenden
+ * begannen also erst um den Versatz verspätet. In der History (dritte Seite
+ * nach zwei Reports) und unter Last hing so „Records werden geholt…“ länger
+ * als jedes Timeout, in zwei von drei Docker-Läufen.
+ */
+function freezeDate(fixedNow: number): void {
+  const RealDate = Date;
+  function FixedDate(...args: unknown[]) {
+    // Ohne `new` liefert Date() den Zeitpunkt als Text.
+    if (!new.target) return new RealDate(fixedNow).toString();
+    return Reflect.construct(RealDate, args.length > 0 ? args : [fixedNow], new.target);
+  }
+  FixedDate.prototype = RealDate.prototype;
+  Object.setPrototypeOf(FixedDate, RealDate); // Date.parse, Date.UTC
+  FixedDate.now = () => fixedNow;
+  globalThis.Date = FixedDate as unknown as DateConstructor;
+}
+
 const DATA_DIR = path.join(import.meta.dirname, 'api-data');
 const readData = (file: string) => JSON.parse(readFileSync(path.join(DATA_DIR, file), 'utf8'));
 
@@ -67,8 +94,7 @@ export const test = base.extend<{ theme: Theme }>({
   colorScheme: async ({ theme }, use) => use(theme),
 
   page: async ({ page, theme }, use) => {
-    // Nur Date steht still, Timer und requestAnimationFrame laufen weiter.
-    await page.clock.setFixedTime(FIXED_NOW);
+    await page.addInitScript(freezeDate, FIXED_NOW.getTime());
     await page.addInitScript((value) => localStorage.setItem('diggy-theme', value), theme);
 
     /*

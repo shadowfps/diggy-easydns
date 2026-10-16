@@ -29,7 +29,9 @@ zweierlei:
   unbemerkt doch wieder Live-DNS.
 - **Feste Zeit, Zone und Sprache.** `Date` steht auf 16.10.2026 (WHOIS-Laufzeit,
   History), Zeitzone Europe/Berlin, Locale de-DE. „Geprüft am …“ kommt aus den
-  Testdaten.
+  Testdaten. Angehalten wird nur `Date`, per Init-Skript — nicht mit
+  `page.clock`: Playwrights Uhr verschiebt auch `performance.now()`, und damit
+  starteten die Animationen der Seite verspätet (Begründung in `e2e/test.ts`).
 - **Keine Animationen.** `reducedMotion: 'reduce'` hält Framer Motion, GSAP und
   den Typewriter an. Der Health Score zählt trotzdem per JavaScript hoch; der
   Test wartet, bis er auf dem Endwert steht.

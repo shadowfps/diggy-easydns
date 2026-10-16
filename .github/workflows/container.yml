@@ -91,10 +91,19 @@ jobs:
   e2e:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
+    # Nur lesen: der Job veröffentlicht nichts. Ohne diese Zeile erbte er
+    # `packages: write` vom Workflow — und `npm ci` im Container führt
+    # Install-Skripte fremder Pakete aus, mit dem ganzen Checkout im Zugriff.
+    permissions:
+      contents: read
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          # Das Token nicht in .git/config ablegen: der Checkout wird komplett
+          # in den Container gemountet, und danach braucht kein Schritt mehr Git.
+          persist-credentials: false
 
       # Nur für das Startskript; npm ci und Build laufen im Container.
       - name: Set up Node.js
@@ -116,6 +125,9 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 14
+          # Beim erneuten Ausführen des Jobs ersetzt der neue Report den alten,
+          # statt am bereits vorhandenen Namen zu scheitern.
+          overwrite: true
 
   # Bewusst NICHT blockierend und bewusst getrennt von verify.
   #
