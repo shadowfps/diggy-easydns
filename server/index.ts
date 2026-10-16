@@ -730,7 +730,9 @@ if (existsSync(distIndex)) {
   // geschweiften Klammern machen ihn optional, damit auch `/` passt.
   app.get('/{*splat}', (req: Request, res: Response, next) => {
     if (req.path.startsWith('/api/')) return next();
-    return res.sendFile(distIndex);
+    // Mit root prüft sendFile nur unterhalb von dist auf Dotfiles, damit
+    // übergeordnete Punkt-Ordner wie .claude keine SPA-Routen blockieren.
+    return res.sendFile('index.html', { root: distDir });
   });
 }
 
