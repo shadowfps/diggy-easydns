@@ -40,6 +40,12 @@ function domainResponse(url = 'https://rdap.verisign.com/com/v1/domain/example.c
   return response;
 }
 
+function notFound({ redirected }: { redirected: boolean }): Response {
+  const response = new Response(null, { status: 404 });
+  Object.defineProperty(response, 'redirected', { value: redirected });
+  return response;
+}
+
 function abortOnTimeout(_input: unknown, init?: RequestInit): Promise<Response> {
   return new Promise((_resolve, reject) => {
     init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
@@ -68,10 +74,16 @@ describe('WHOIS-RDAP', () => {
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  it.each([403, 404, 500, 501])('liefert bei HTTP %s null und loggt Status und URL', async (status) => {
+  it.each([403, 429, 500, 501])('liefert bei HTTP %s null und loggt Status und URL', async (status) => {
     fetchMock.mockResolvedValue(new Response(null, { status }));
     expect(await lookupWhois('example.com')).toBeNull();
     expect(console.warn).toHaveBeenCalledExactlyOnceWith(`[rdap] https://rdap.org/domain/example.com: HTTP ${status}`);
+  });
+
+  it('liefert bei HTTP 404 null ohne Warnung, weil das ein erwarteter Pfad ist', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 404 }));
+    expect(await lookupWhois('example.com')).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   it('liefert bei Timeout null und unterscheidet ihn von HTTP-Fehlern', async () => {
@@ -97,9 +109,10 @@ describe('WHOIS-RDAP', () => {
   });
 
   it('fragt DENIC weiterhin parallel ab und verwendet auch dort die Header', async () => {
+    // rdap.org kennt .de nicht und antwortet mit 404 — das darf nicht warnen.
     fetchMock.mockImplementation(async (input) => String(input).includes('rdap.denic.de')
       ? domainResponse('https://rdap.denic.de/domain/example.de')
-      : new Response(null, { status: 403 }));
+      : new Response(null, { status: 404 }));
 
     expect(await lookupWhois('example.de')).toMatchObject({ source: 'rdap.denic.de' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -107,6 +120,7 @@ describe('WHOIS-RDAP', () => {
       headers: expectedHeaders,
       redirect: 'follow',
     }));
+    expect(console.warn).not.toHaveBeenCalled();
   });
 });
 
@@ -124,10 +138,24 @@ describe('Domain-Verfügbarkeit über RDAP', () => {
     expect(console.warn).not.toHaveBeenCalled();
   });
 
-  it('behandelt 404 weiterhin als freie Domain ohne Warnung', async () => {
-    fetchMock.mockImplementation(async () => new Response(null, { status: 404 }));
+  it('behandelt 404 der Registry weiterhin als freie Domain ohne Warnung', async () => {
+    // Über rdap.org kommt der 404 der Registry erst nach einer Weiterleitung.
+    fetchMock.mockImplementation(async () => notFound({ redirected: true }));
     const report = await checkDomainsAvailability('example');
     expect(report.results.every((result) => result.status === 'available')).toBe(true);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('meldet TLDs ohne RDAP-Dienst bei rdap.org als unklar statt frei', async () => {
+    // rdap.org antwortet für .io direkt mit 404 („No RDAP service is available“).
+    fetchMock.mockImplementation(async () => notFound({ redirected: false }));
+    const report = await checkDomainsAvailability('example');
+    const byDomain = Object.fromEntries(report.results.map((result) => [result.domain, result.status]));
+    expect(byDomain).toMatchObject({
+      'example.io': 'unknown',
+      'example.com': 'available',
+      'example.de': 'available',
+    });
     expect(console.warn).not.toHaveBeenCalled();
   });
 

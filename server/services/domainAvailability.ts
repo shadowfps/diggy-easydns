@@ -127,7 +127,10 @@ async function checkSingleDomain(domain: string, timeoutMs = 6000): Promise<Doma
     });
 
     if (res.status === 404) {
-      return { domain, status: 'available', source };
+      // rdap.org leitet nur weiter; ein 404 ohne Weiterleitung heißt „kein
+      // RDAP-Dienst für diese TLD“ (z. B. .io), nicht „Domain frei“.
+      const noRdapService = source === 'rdap.org' && !res.redirected;
+      return { domain, status: noRdapService ? 'unknown' : 'available', source };
     }
 
     if (res.ok) {

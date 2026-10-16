@@ -126,8 +126,10 @@ async function tryEndpoint(
     });
 
     if (!res.ok) {
-      // 404 = Domain unbekannt im RDAP, 501 = TLD unterstützt kein RDAP
-      warnRdapError(url, new Error(`HTTP ${res.status}`));
+      // 404 = Domain unbekannt im RDAP oder rdap.org kennt für die TLD keinen
+      // Dienst (z. B. .de, .io). Beides ist erwartbar und kein Betriebsfehler,
+      // also keine Warnung; 501 = TLD unterstützt kein RDAP.
+      if (res.status !== 404) warnRdapError(url, new Error(`HTTP ${res.status}`));
       return null;
     }
 
