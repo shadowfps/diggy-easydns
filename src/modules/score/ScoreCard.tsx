@@ -1,19 +1,27 @@
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { AlertCircle, AlertTriangle, ArrowRight, Check, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Check, CircleHelp, Info } from 'lucide-react';
 import type { Finding, HealthScore } from '@/types/dns';
+import type { SectionKey } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { verdictFor } from '@/lib/scoring';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { findingText, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
 
 interface ScoreCardProps {
   score: HealthScore;
   findings: Finding[];
+  /** Sektionen, deren Abfrage ganz ausfiel — ihre Findings fehlen im Score. */
+  failed?: readonly SectionKey[];
   onShowFindings: () => void;
 }
 
 const PRIORITY: Finding['severity'][] = ['critical', 'warning', 'info'];
+
+function mostSevere(findings: Finding[]): Finding | undefined {
+  return PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
+}
 
 const TOP_TONE = {
   critical: { icon: AlertCircle, tile: 'icon-tile-danger' },
@@ -28,22 +36,42 @@ function scoreTone(s: number) {
   return { bar: 'bg-danger', text: 'text-danger', badge: 'badge-danger' };
 }
 
-export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
+export function ScoreCard({ score, findings, failed = [], onShowFindings }: ScoreCardProps) {
   const { t } = useI18n();
+  const reducedMotion = useReducedMotion();
   const tone = scoreTone(score.score);
-  const top = PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
+  // „Nicht prüfbar“ zieht nichts ab (#101). Ohne diesen Hinweis sähe ein
+  // Score, dem ganze Checks fehlen, aus wie ein vollständiger — und wer
+  // Abfragen ins Leere laufen lässt, käme so zu einem besseren. Der
+  // Tech-Stack liefert keine Findings; fällt er aus, fehlt dem Score nichts.
+  const unchecked =
+    findings.filter((f) => f.unchecked).length + failed.filter((key) => key !== 'techStack').length;
+  // Reine Empfehlungen (`advisory`, etwa BIMI) erst, wenn sonst nichts offen ist.
+  const top = mostSevere(findings.filter((f) => !f.advisory)) ?? mostSevere(findings);
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
+    // `MotionConfig reducedMotion="user"` (main.tsx) erfasst nur
+    // motion-Komponenten, nicht dieses imperative animate() auf einem
+    // MotionValue: die Zahl zählte trotz „Bewegung reduzieren“ hoch (#103).
+    // Bei reduzierter Bewegung startet deshalb gar kein Zähler. Schaltet
+    // jemand die Präferenz mitten im Hochzählen ein, stoppt ihn das Cleanup.
+    if (reducedMotion) return;
+
     const controls = animate(count, score.score, { duration: 1.2, ease: 'easeOut' });
     const unsub = rounded.on('change', (v) => setDisplayValue(v));
     return () => {
       controls.stop();
       unsub();
     };
-  }, [score.score, count, rounded]);
+  }, [score.score, count, rounded, reducedMotion]);
+
+  // Direkt aus dem Score, statt displayValue im Effect nachzuziehen: das käme
+  // erst nach dem ersten Render, der dann kurz 0 bzw. bei einem neuen Lookup
+  // den alten Score zeigte.
+  const shownValue = reducedMotion ? score.score : displayValue;
 
   return (
     <motion.div
@@ -60,18 +88,29 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
       <div className="mt-4">
         <div className="flex items-baseline gap-1.5">
           <span className={cn('text-6xl font-semibold tabular-nums tracking-tight', tone.text)}>
-            {displayValue}
+            {shownValue}
           </span>
           <span className="text-base text-fg-subtle">/ 100</span>
         </div>
 
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface-muted">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${score.score}%` }}
-            transition={{ duration: 1.2, ease: 'easeOut' }}
-            className={cn('h-full rounded-full', tone.bar)}
-          />
+          {/* Bei reduzierter Bewegung ein schlichtes div mit fester Breite.
+              MotionConfig schaltet die Breitenanimation zwar auf „sofort“, der
+              motion.div rendert aber trotzdem erst `initial` (0) und springt
+              einen Frame später — ebenso bei einem neuen Score. */}
+          {reducedMotion ? (
+            <div
+              style={{ width: `${score.score}%` }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          ) : (
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${score.score}%` }}
+              transition={{ duration: 1.2, ease: 'easeOut' }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
@@ -80,6 +119,14 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
           <Stat label="Warnungen" count={score.counts.warning} dot="bg-warning" />
           <Stat label="kritisch" count={score.counts.critical} dot="bg-danger" />
         </div>
+
+        {unchecked > 0 && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted">
+            <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+            <span className="font-medium text-fg">Unvollständig:</span>
+            {unchecked} {unchecked > 1 ? 'Checks' : 'Check'} nicht prüfbar
+          </p>
+        )}
       </div>
 
       {/* Der nächste Schritt: der schwerste offene Punkt, ein Klick zu allen.
@@ -89,7 +136,7 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
           <TopFinding finding={top} />
           <button type="button" onClick={onShowFindings} className="btn btn-ghost btn-sm -mr-2 group">
             {t('Alle Findings')}
-            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight className="size-3.5 transition-transform motion-safe:group-hover:translate-x-0.5" />
           </button>
         </div>
       </div>

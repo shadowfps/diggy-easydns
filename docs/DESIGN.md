@@ -79,7 +79,7 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
 ## Seitenaufbau
 
 - **Header**: Wortmarke links, rechts GitHub und das Menü (History,
-  Available Check, About, Theme, Sprache). Auf Seiten mit Ergebnis (Report,
+  Vergleichen, Available Check, About, Theme, Sprache). Auf Seiten mit Ergebnis (Report,
   IP-Lookup) steht die Suche kompakt in der Mitte — ab `md` genau mittig
   über ein Raster mit gleich breiten Außenspalten. Sie bleibt beim Scrollen
   erreichbar, und der Inhalt beginnt oben.
@@ -90,6 +90,19 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
   mitläuft; rechts Tabs und Inhalt. Darunter gestapelt: Kopf, Score und
   Schnellübersicht nebeneinander, dann die Tabs. Die Seitenspalte bleibt
   flach genug für 1440×900 — Neues kommt in die Tabs, nicht in die Spalte.
+  Einzige Karte über den Tabs: „Seit dem letzten Check“, nur bei einem
+  erneuten Check und eingeklappt, damit sie vom Laden bis zum Ergebnis gleich
+  hoch bleibt.
+  Die Aktionen im Kopf (JSON, Link kopieren, Vergleichen) stehen in einer
+  Zeile, auch bei 390 px: Beschriftungen kurz, die Langfassung im Tooltip.
+- **Vergleich** (`/compare/<a>/<b>`): `max-w-6xl`, Seitenkopf wie eine
+  Textseite, darunter die beiden Eingabefelder, dann je Domain eine Karte mit
+  Score (ab `md` nebeneinander) und eine Karte je Bereich. In den Karten ab
+  `md` drei Spalten — Bezeichnung, Domain A, Domain B —, darunter steht jede
+  Zeile untereinander. Abweichungen tragen `badge-warning` mit Wort
+  („Unterschied“, „nur hier“): beim Vergleich ist die Abweichung das, was man
+  ansehen muss. „nur hier“ steht nur, wo sich die Werte einer Zeile teilweise
+  decken — teilen sie nichts, sagt das „Unterschied“ der Zeile genug.
 - **Textseiten**: `max-w-3xl`, Überzeile, `page-title`, optional Lead, dann
   Karten.
 
@@ -130,9 +143,17 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
 
 - `CardHeader` (`components/ui/CardHeader.tsx`) — Kopf jeder Inhaltskarte:
   Icon-Kachel, `card-title`, optional Untertitel, rechts ein Status. `tone`
-  färbt die Kachel nur, wenn die Karte eine Bewertung trägt.
+  färbt die Kachel nur, wenn die Karte eine Bewertung trägt; `info` setzt
+  ein „?“ neben den Titel.
 - `EmptyState` (`components/ui/EmptyState.tsx`) — Leer-, Start- und
   Fehlerzustand eines Abschnitts.
+- `InfoButton` (`components/ui/InfoButton.tsx`) — „?“ neben einem
+  Fachbegriff, klappt eine Erklärung als `overlay` auf. Kein Hover-Tooltip:
+  Klick, Tippen, Enter oder Leertaste öffnen, Escape und Klick daneben
+  schließen. Die Texte stehen in `lib/explanations.ts`, nicht in den
+  Komponenten. Sparsam einsetzen — einmal je Begriff, nicht an jeder Zeile.
+- `UncheckedBadge` / `UncheckedLine` (`components/ui/Unchecked.tsx`) —
+  „nicht prüfbar“ in einer Karte.
 
 - **Aktiv heißt `accent`.** Aktiver Tab, aktiver Chip, aktive Option eines
   Umschalters: dunkle Pille im Hellen, helle im Dunkeln.
@@ -143,6 +164,12 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
   in einer `card`.
 - Fehler in einem Abschnitt: wie ein Leerzustand mit `icon-tile-danger`. Die
   Seite drumherum bleibt bedienbar.
+- **„Nicht prüfbar“ ist kein „fehlt“.** Scheitert ein Check (Timeout,
+  SERVFAIL), sagt das nichts über die Domain: Karte und Schnellübersicht
+  zeigen neutral ein Fragezeichen mit „nicht prüfbar“, die Karte darunter den
+  Grund. Keine Statusfarbe, und das Finding dazu zieht keine Punkte ab. Dafür
+  sagt der Health Score, dass er unvollständig ist — sonst sähe ein Check, der
+  ins Leere lief, besser aus als einer mit Befund.
 
 ## Texte
 
@@ -162,7 +189,24 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
 
 - Einblenden: `opacity` und höchstens 8 px Versatz, 200–400 ms, `ease-out`.
 - Hover und Fokus: nur Farbe; Buttons geben beim Klick nach (`active:scale`).
-- `prefers-reduced-motion` wird respektiert (`MotionConfig` in `main.tsx`).
+- **„Bewegung reduzieren“ (`prefers-reduced-motion`) gilt für jede
+  Animation.** Dann bewegt sich nichts mehr: Spinner und Skeletons stehen
+  still, nichts verschiebt oder skaliert sich, Einblendungen blenden nur noch
+  ein.
+  - Framer Motion: `MotionConfig` in `main.tsx` — gilt nur für
+    `motion`-Komponenten. Imperatives `animate()` auf einem MotionValue, GSAP,
+    eigene rAF-Schleifen und Scrollen per JS (`behavior: 'smooth'`):
+    `useReducedMotion`.
+  - CSS: eine Regel am Ende von `globals.css`. Eine neue Animation kommt als
+    Token in `@theme` (`--animate-…`) und in diese Regel; Versatz beim Hover
+    direkt mit `motion-safe:` schreiben. Nie per `style={{ animation }}` —
+    gegen einen Inline-Style kommt die Regel nicht an.
+- Ein Ladezustand hängt nie allein an der Bewegung: Text oder Icon dazu, und
+  der Text steht in `role="status"`, damit ihn auch ein Screenreader ansagt.
+  Ein Status je Ladevorgang, auch wenn mehrere Platzhalter auf ihn warten.
+  Wechselnder Text (Ladestufen) gehört nicht in die Region, sonst wird jeder
+  Wechsel angesagt: dann `LoadingAnnouncement` mit einem gleichbleibenden
+  Satz, die sichtbare Anzeige `aria-hidden`.
 
 ## Zugänglichkeit
 

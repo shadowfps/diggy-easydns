@@ -81,6 +81,10 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
           <span className={cn('badge', cfg.badge)}>{t(cfg.label)}</span>
           <span className="text-xs text-fg-subtle">
             {CATEGORY_LABEL[finding.category] ?? finding.category}
+            {/* Ein „Hinweis“ kostet sonst Punkte — hier sieht man, warum der
+                Score trotzdem bleibt. In derselben Zeile wie die Kategorie,
+                damit der Zusatz auf schmalen Schirmen nicht allein umbricht. */}
+            {finding.advisory && ' · ohne Punktabzug'}
           </span>
         </div>
         <p className="mt-1 text-sm leading-relaxed text-fg-muted">{text.description}</p>

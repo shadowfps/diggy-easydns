@@ -14,11 +14,10 @@
  */
 
 /*
- * Eigener Chunk (#86): der Text ist der größte Block deutscher Prosa in der
- * App und wird nur auf /datenschutz gebraucht, lag aber im kritischen Pfad
- * (als eigener Chunk 3,9 kB gzip) — Platz, den die Übersetzung braucht.
- * Überschrift und Hinweis bleiben in DatenschutzView, damit die Seite sofort
- * einen Titel hat.
+ * Eigene Datei (#86): der Rechtstext bleibt deutsch und ist als Ganzes vom
+ * Prüfskript ausgenommen (`i18n-ignore-file`), der Rahmen in DatenschutzView
+ * läuft durch `t()`. Aus dem kritischen Pfad holt ihn App.tsx: die ganze
+ * Seite ist ein eigener Chunk.
  */
 
 /** Wird im Footer und im Text als Datumsangabe genutzt. */

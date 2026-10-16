@@ -9,7 +9,7 @@ import type { DeKey } from '@/i18n/de';
  * tragen. Keine dieser Funktionen greift auf `window` zu.
  */
 
-export type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum' | 'datenschutz';
+export type AppView = 'lookup' | 'history' | 'availability' | 'about' | 'impressum' | 'datenschutz' | 'compare';
 
 /** Pfad → View für die statischen Routen. Einzige Quelle für beide Richtungen. */
 export const STATIC_ROUTES: Record<string, AppView | undefined> = {
@@ -29,6 +29,8 @@ const VIEW_TITLES: Record<Exclude<AppView, 'lookup'>, DeKey> = {
   about: 'About',
   impressum: 'Impressum',
   datenschutz: 'Datenschutz',
+  // Mit Domains baut comparePath.ts den Titel; das hier ist der Rückfall.
+  compare: 'Vergleich',
 };
 
 export function buildDocumentTitle(

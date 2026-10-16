@@ -34,12 +34,25 @@ const inflight = new Map<string, Promise<unknown>>();
 const MAX_ENTRIES = 4_000;
 
 /**
+ * TTL für einen gemeldeten Ausfall (#101). Gar nicht zu cachen hieße: ein
+ * Host, der dauerhaft schweigt, kostet jeden Aufruf den vollen Timeout, und
+ * jeder Reload eines geteilten Permalinks stößt den Check erneut an. Eine
+ * Minute wie sonst hieße: wer nach „nicht prüfbar“ erneut prüft, bekommt
+ * dieselbe Meldung. Fünf Sekunden fangen Bursts ab — wer bewusst neu prüft,
+ * kommt meist danach.
+ */
+export const FAILED_TTL_MS = 5_000;
+
+/**
  * Gibt den gecachten Wert zurück, oder ruft `produce()` auf, cached das
  * Ergebnis für `ttlMs` und gibt es zurück.
  *
  * Zwei Eigenschaften, die nicht offensichtlich sind:
  *
  *  - **Fehler werden NICHT gecacht.** Der nächste Aufruf versucht es erneut.
+ *    Ein Ausfall, den der Check selbst meldet (`failed`, etwa „nicht prüfbar“
+ *    nach einem Timeout), wirft dagegen nicht — er bleibt nur `FAILED_TTL_MS`
+ *    im Cache statt der vollen TTL (#101).
  *  - **Parallele Aufrufe auf denselben Key teilen sich eine Produktion.**
  *    Ohne das führten fünf gleichzeitige Requests fünf komplette Lookups aus —
  *    was im Normalbetrieb regelmäßig passiert, weil das Frontend sechs
@@ -49,7 +62,11 @@ const MAX_ENTRIES = 4_000;
 export async function cached<T>(
   key: string,
   ttlMs: number,
-  produce: () => Promise<T>
+  produce: () => Promise<T>,
+  options: {
+    /** Ob der Wert ein gemeldeter Ausfall ist — der wird nur kurz gecacht. */
+    failed?: (value: T) => boolean;
+  } = {}
 ): Promise<T> {
   const hit = store.get(key);
   if (hit && hit.expiresAt > Date.now()) {
@@ -63,7 +80,7 @@ export async function cached<T>(
 
   const pending = produce()
     .then((value) => {
-      remember(key, ttlMs, value);
+      remember(key, options.failed?.(value) ? Math.min(ttlMs, FAILED_TTL_MS) : ttlMs, value);
       return value;
     })
     .finally(() => {

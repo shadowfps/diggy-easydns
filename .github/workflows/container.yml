@@ -43,7 +43,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -78,6 +78,62 @@ jobs:
       - name: Bundle-Budget
         run: npm run size
 
+  # Browser-Tests (docs/E2E.md): seitliches Überlaufen aller wichtigen Ansichten
+  # hell/dunkel bei 390 und 1440 px, dazu ein Pixelvergleich weniger
+  # Referenzbilder. Die API ist dabei durch feste Testdaten ersetzt.
+  #
+  # Läuft NEBEN verify, publish hängt weiter nur an verify. Gaten soll der Job
+  # den PR (als Pflicht-Check neben verify in der Branch-Protection) — dort
+  # sollen optische Brüche auffallen. Auf main dagegen soll ein Hotfix nicht
+  # an einem Referenzbild hängen, das etwa nach einem Playwright-Update neu
+  # erzeugt werden muss. Parallel ist außerdem schneller als hintereinander.
+  #
+  # ARM-Runner und Docker-Image statt `playwright install` auf ubuntu-latest:
+  # Die Referenzbilder entstehen lokal mit demselben `npm run e2e:docker` —
+  # gleiches Image (Schriften, Chromium-Build) und gleiche Architektur wie
+  # hier, also identische Pixel. Auf x86 rendert Chromium Kanten minimal
+  # anders, und amd64-Emulation lässt Chromium in Docker Desktop abstürzen.
+  e2e:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    # Nur lesen: der Job veröffentlicht nichts. Ohne diese Zeile erbte er
+    # `packages: write` vom Workflow — und `npm ci` im Container führt
+    # Install-Skripte fremder Pakete aus, mit dem ganzen Checkout im Zugriff.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          # Das Token nicht in .git/config ablegen: der Checkout wird komplett
+          # in den Container gemountet, und danach braucht kein Schritt mehr Git.
+          persist-credentials: false
+
+      # Nur für das Startskript; npm ci und Build laufen im Container.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: E2E-Tests im Playwright-Image
+        run: npm run e2e:docker
+
+      # HTML-Report mit erwartetem Bild, Ist-Bild und Diff je Abweichung, dazu
+      # die Screenshots fehlgeschlagener Überlauf-Tests.
+      - name: Report und Diff-Bilder hochladen
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          # Beim erneuten Ausführen des Jobs ersetzt der neue Report den alten,
+          # statt am bereits vorhandenen Namen zu scheitern.
+          overwrite: true
+
   # Bewusst NICHT blockierend und bewusst getrennt von verify.
   #
   # Ein neu veröffentlichter Advisory würde einen bis dahin grünen Build rot
@@ -96,7 +152,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies

@@ -5,12 +5,14 @@ import type {
   DomainCheckReport,
   Finding,
   IpDetails,
-  TextParams,
+  LookupFailure,
   MailSecurity,
   PageSpeedReport,
   PageSpeedStrategy,
+  RecordType,
   ResolverResult,
   SslInfo,
+  TextParams,
   VirusScanReport,
   WhoisInfo,
 } from '@/types/dns';
@@ -78,11 +80,15 @@ export interface LookupCore {
   timestamp: string;
   records: DnsRecord[];
   findings: Finding[];
+  /** Nur gesetzt, wenn einzelne Typen scheiterten (siehe LookupReport). */
+  failedRecordTypes?: RecordType[];
 }
 
 export interface SslSection {
   ssl: SslInfo | null;
   findings: Finding[];
+  /** Nur wenn der Check scheiterte: `ssl: null` heißt dann „unbekannt“, nicht „kein TLS“. */
+  lookupFailed?: LookupFailure;
 }
 export interface DnssecSection {
   dnssec: DnssecInfo;

@@ -16,3 +16,7 @@ dist-server/
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+
+# Playwright (npm run e2e) — Ergebnisse und HTML-Report entstehen bei jedem Lauf.
+test-results/
+playwright-report/

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Check, X } from 'lucide-react';
+import { Check, CircleHelp, X } from 'lucide-react';
 import type {
   DetectedTech,
   DnsRecord,
@@ -11,6 +11,8 @@ import type {
 } from '@/types/dns';
 import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { isNullMx } from '@/lib/nullMx';
+import { dmarcPolicyFlawLabel, effectiveDmarcPolicy } from '@/lib/dmarc';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
@@ -308,6 +310,8 @@ interface QuickFactItem {
   muted?: boolean;
   ok?: boolean;
   bad?: boolean;
+  /** Check gescheitert (Sektion oder Abfrage): neutral, mit Fragezeichen (#101). */
+  unchecked?: boolean;
   loading?: boolean;
 }
 
@@ -323,8 +327,17 @@ interface QuickFactsProps {
 export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain }: QuickFactsProps) {
   const { t } = useI18n();
   const aRecord = records.find((r) => r.type === 'A');
-  const mxRecord = records.find((r) => r.type === 'MX');
+  const mxRecords = records.filter((r) => r.type === 'MX');
+  const mxRecord = mxRecords[0];
   const nsRecord = records.find((r) => r.type === 'NS');
+
+  // Ein Null-MX (`MX 0 .`) hat ein leeres Ziel — als Wert gezeigt, stand hier
+  // ein leeres Feld. Er ist eine Aussage, kein fehlender Eintrag. Erkannt an
+  // den Records des gefragten Namens, die sofort da sind; der Mail-Check
+  // läuft auf der Apex-Domain und kommt später.
+  const mxItem: QuickFactItem = isNullMx(mxRecords)
+    ? { label: 'MX', value: 'keine Mails (Null-MX)' }
+    : { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord };
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
       <IpAddressLink ip={aRecord.value} className="text-fg" />
@@ -350,16 +363,24 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts. Nur
   // solange sie wirklich laden: bei einem Fehler oder einer übersprungenen
   // Sektion (DNS-Eintrag ohne Host) blieb sonst das Skeleton für immer stehen.
-  const placeholder = (label: string, status: LoadStatus): QuickFactItem | null =>
+  // Ein Fehler ist „nicht prüfbar“ — ebenso eine fertige Sektion, deren
+  // Abfrage scheiterte (`failed`, #101). Übersprungen heißt „nicht anwendbar“ (—).
+  const placeholder = (
+    label: string,
+    status: LoadStatus,
+    failed?: unknown
+  ): QuickFactItem | null =>
     status === 'loading'
       ? { label, loading: true }
-      : status !== 'done'
-        ? { label, value: '—', muted: true }
-        : null;
+      : status === 'error' || (status === 'done' && failed)
+        ? { label, value: 'nicht prüfbar', unchecked: true }
+        : status !== 'done'
+          ? { label, value: '—', muted: true }
+          : null;
 
   const sslInfo = ssl.data;
   const sslItem: QuickFactItem =
-    placeholder('SSL', ssl.status) ?? {
+    placeholder('SSL', ssl.status, !sslInfo && ssl.lookupFailed) ?? {
       label: 'SSL',
       value: sslInfo ? t('{count} Tage', { count: sslInfo.daysUntilExpiry }) : t('kein Cert'),
       ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
@@ -368,26 +389,29 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
 
   const dnssecInfo = dnssec.data;
   const dnssecItem: QuickFactItem =
-    placeholder('DNSSEC', dnssec.status) ?? {
+    placeholder('DNSSEC', dnssec.status, !dnssecInfo?.enabled && dnssecInfo?.lookupFailed) ?? {
       label: 'DNSSEC',
       value: dnssecInfo?.enabled && dnssecInfo?.valid ? t('aktiv') : t('inaktiv'),
       ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
       bad: !dnssecInfo?.enabled,
     };
 
-  const dmarcPresent = mail.data?.dmarc.present;
+  // Ein Record, der nicht wie geschrieben gilt, ist nicht „gesetzt“
+  // (shared/dmarc.ts). Wirkt er dank rua= wie p=none, steht der Mangel da —
+  // ohne Haken. Ignorieren ihn Empfänger, ist er so schlecht wie keiner.
+  const { policy: dmarcPolicy, flaw: dmarcFlaw } = effectiveDmarcPolicy(mail.data?.dmarc);
   const dmarcItem: QuickFactItem =
-    placeholder('DMARC', mail.status) ?? {
-      label: 'DMARC',
-      value: dmarcPresent ? t('gesetzt') : t('fehlt'),
-      ok: Boolean(dmarcPresent),
-      bad: !dmarcPresent,
-    };
+    placeholder('DMARC', mail.status, mail.data?.dmarc.lookupFailed) ??
+    (dmarcPolicy === null
+      ? { label: 'DMARC', value: dmarcFlaw ? 'unwirksam' : t('fehlt'), bad: true }
+      : dmarcFlaw
+        ? { label: 'DMARC', value: dmarcPolicyFlawLabel(dmarcFlaw) }
+        : { label: 'DMARC', value: t('gesetzt'), ok: true });
 
   const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
     { label: 'NS', value: nsValue, mono: true },
-    { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord },
+    mxItem,
     sslItem,
     dnssecItem,
     dmarcItem,
@@ -421,11 +445,15 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
                     item.mono && 'font-mono text-[13px]',
                     item.muted ? 'text-fg-subtle' : 'text-fg',
                     item.ok && 'font-medium text-success',
-                    item.bad && 'font-medium text-danger'
+                    item.bad && 'font-medium text-danger',
+                    item.unchecked && 'text-fg-muted'
                   )}
                 >
                   {item.ok && <Check className="size-3.5 shrink-0" />}
                   {item.bad && <X className="size-3.5 shrink-0" />}
+                  {item.unchecked && (
+                    <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+                  )}
                   {item.value}
                 </span>
               )}

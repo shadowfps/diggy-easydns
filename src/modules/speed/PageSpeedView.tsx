@@ -5,6 +5,7 @@ import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
+import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
 import {
   AlertCircle,
   AlertTriangle,
@@ -253,17 +254,20 @@ function PageSpeedLoader() {
     return () => window.clearInterval(id);
   }, []);
 
+  // Der Ladezustand wird angesagt, nicht nur gezeigt: bei „Bewegung
+  // reduzieren“ stehen Spinner und Balken still (globals.css). Angesagt wird
+  // genau einmal über LoadingAnnouncement; die sichtbare Anzeige ist
+  // aria-hidden, sonst käme jeder Stufenwechsel als neue Ansage. Kein
+  // aria-busy: auf einer Live-Region heißt das „Ansagen zurückhalten, bis busy
+  // wieder false ist“ — das wurde es nie, die Anzeige verschwand einfach.
   return (
-    <div className="mx-auto mt-8 max-w-md" aria-busy="true" aria-live="polite">
-      <div className="panel px-6 py-6 text-center">
+    <div className="mx-auto mt-8 max-w-md">
+      <LoadingAnnouncement>PageSpeed-Analyse läuft…</LoadingAnnouncement>
+      <div className="panel px-6 py-6 text-center" aria-hidden="true">
         <Loader2 className="mx-auto size-5 animate-spin text-fg" />
 
         <div className="eyebrow mt-4">{t('Analyse läuft')}</div>
-        <div
-          key={stage}
-          className="mt-1.5 text-sm text-fg"
-          style={{ animation: 'fadeInUp 0.4s ease-out' }}
-        >
+        <div key={stage} className="mt-1.5 animate-fade-in-up text-sm text-fg">
           {t(LOADING_STAGES[stage])}
         </div>
 
@@ -271,7 +275,7 @@ function PageSpeedLoader() {
           {[0, 1, 2, 3, 4].map((index) => (
             <span
               key={index}
-              className="h-1.5 animate-[scanBar_1.2s_ease-in-out_infinite] rounded-full bg-fg/20"
+              className="h-1.5 animate-scan-bar rounded-full bg-fg/20"
               style={{ animationDelay: `${index * 140}ms` }}
             />
           ))}

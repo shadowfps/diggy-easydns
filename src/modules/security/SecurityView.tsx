@@ -1,23 +1,57 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Lock, ShieldCheck, ShieldAlert, ShieldOff } from 'lucide-react';
+import { Lock, ShieldCheck, ShieldAlert, ShieldOff, ShieldQuestion } from 'lucide-react';
 import type { DnssecInfo, SslInfo } from '@/types/dns';
+import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 import { useI18n } from '@/i18n';
+import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
+import { CalendarButton } from '@/components/calendar/CalendarButton';
 
 interface SecurityViewProps {
-  ssl?: SslInfo;
+  /** Geprüfter Host — Betreff und Report-Link der Kalender-Erinnerung. */
+  domain: string;
+  ssl: SectionSlice<SslInfo | null>;
   /** false bei DNS-Einträgen wie `_dmarc.…` — dort gibt es keinen Host für TLS. */
   sslApplicable?: boolean;
-  dnssec: DnssecInfo;
+  dnssec: SectionSlice<DnssecInfo>;
 }
 
-export function SecurityView({ ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
+const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+
+/*
+ * „nicht prüfbar“ (#101): eine ausgefallene Sektion genauso wie ein Timeout
+ * im Check — vorher stand dort „Kein TLS“ bzw. „nicht aktiviert“. `unchecked`
+ * ist die Zeile, warum; ohne sie hat der Check ein Ergebnis.
+ */
+export function SecurityView({ domain, ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
+  const dnssecInfo = dnssec.data ?? NO_DNSSEC;
+
+  const sslUnchecked = (ssl.status === 'error' || ssl.lookupFailed) && (
+    <UncheckedLine name="SSL" reason={ssl.lookupFailed} />
+  );
+
+  // Ein gefundener Schlüssel ist ein Ergebnis, auch wenn die zweite Abfrage
+  // scheiterte.
+  const dnssecFailed = !dnssecInfo.enabled && dnssecInfo.lookupFailed;
+  const dnssecUnchecked = (dnssec.status === 'error' || dnssecFailed) && (
+    <UncheckedLine name="DNSSEC" reason={dnssecFailed}>
+      {/* Validierende Resolver weisen eine kaputte Signatur mit SERVFAIL ab. */}
+      {dnssecFailed === 'servfail' &&
+        'Bleibt es bei SERVFAIL, steckt meist eine fehlerhafte Signatur dahinter.'}
+    </UncheckedLine>
+  );
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <SslCard ssl={ssl} applicable={sslApplicable} />
-      <DnssecCard dnssec={dnssec} />
+      <SslCard
+        domain={domain}
+        ssl={ssl.data ?? undefined}
+        applicable={sslApplicable}
+        unchecked={sslUnchecked}
+      />
+      <DnssecCard dnssec={dnssecInfo} unchecked={dnssecUnchecked} />
     </div>
   );
 }
@@ -31,7 +65,17 @@ function sslTone(ssl: SslInfo): Tone {
   return 'success';
 }
 
-function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
+function SslCard({
+  domain,
+  ssl,
+  applicable,
+  unchecked,
+}: {
+  domain: string;
+  ssl?: SslInfo;
+  applicable: boolean;
+  unchecked?: ReactNode;
+}) {
   const { t, formatDate } = useI18n();
   if (!applicable) {
     return (
@@ -51,6 +95,7 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
 
   if (!ssl) {
     // Der zugehörige Befund (no-ssl) ist eine Warnung, kein kritischer Fehler.
+    // Scheiterte nur der Check, ist nichts bewertet: neutral, „nicht prüfbar“.
     return (
       <motion.div
         initial={{ opacity: 0, y: 6 }}
@@ -58,11 +103,20 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
         transition={{ duration: 0.3 }}
         className="card"
       >
-        <CardHeader icon={<Lock className="size-4" />} title="SSL / TLS" tone="warning" />
-        <div className="mt-4 flex items-center gap-2 text-sm font-medium text-warning">
-          <ShieldOff className="size-4 shrink-0" />
-          <span>{t('Kein TLS auf Port 443 erreichbar')}</span>
-        </div>
+        <CardHeader
+          icon={<Lock className="size-4" />}
+          title="SSL / TLS"
+          tone={unchecked ? 'neutral' : 'warning'}
+          aside={unchecked && <UncheckedBadge />}
+        />
+        {unchecked ? (
+          <div className="mt-4">{unchecked}</div>
+        ) : (
+          <div className="mt-4 flex items-center gap-2 text-sm font-medium text-warning">
+            <ShieldOff className="size-4 shrink-0" />
+            <span>{t('Kein TLS auf Port 443 erreichbar')}</span>
+          </div>
+        )}
       </motion.div>
     );
   }
@@ -119,6 +173,20 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
         <Row label={t('Protokoll')} value={`${ssl.tlsVersion} · ${ssl.signatureAlgorithm}`} />
       </dl>
 
+      {/* Für ein abgelaufenes Zertifikat gibt es nichts mehr vorzumerken. */}
+      {ssl.daysUntilExpiry >= 0 && (
+        <div className="mt-4">
+          <CalendarButton
+            reminder={{
+              kind: 'certificate',
+              subject: domain,
+              expiresAt: ssl.validTo,
+              reportDomain: domain,
+            }}
+          />
+        </div>
+      )}
+
       {ssl.sans.length > 0 && (
         <div className="mt-5 border-t border-line-subtle pt-5">
           <div className="text-xs text-fg-subtle">SANs ({ssl.sans.length})</div>
@@ -142,7 +210,7 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
-function DnssecCard({ dnssec }: { dnssec: DnssecInfo }) {
+function DnssecCard({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: ReactNode }) {
   const { t } = useI18n();
   let icon = <ShieldOff className="size-4" />;
   let tone: Tone = 'neutral';
@@ -154,7 +222,12 @@ function DnssecCard({ dnssec }: { dnssec: DnssecInfo }) {
     </p>
   );
 
-  if (dnssec.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
+  if (unchecked) {
+    icon = <ShieldQuestion className="size-4" />;
+    statusText = 'unbekannt';
+    badge = <UncheckedBadge />;
+    body = <>{unchecked}</>;
+  } else if (dnssec.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
     icon = <ShieldCheck className="size-4" />;
     tone = 'success';
     statusText = t('aktiv & valide');

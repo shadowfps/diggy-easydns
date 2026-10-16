@@ -11,7 +11,71 @@
 
 import { connect } from 'node:tls';
 import { pinnedLookup, resolvePublicHost, UnresolvableTargetError } from '../lib/safeTarget.js';
-import type { SslInfo } from '../types.js';
+import type { LookupFailure, SslInfo } from '../types.js';
+
+/**
+ * Ergebnis des TLS-Checks. Früher `SslInfo | null` — `null` stand für „kein
+ * TLS“ und für „Handshake im Timeout“ zugleich, und beides wurde als
+ * Warnung „Kein TLS auf Port 443“ gemeldet (#101).
+ *
+ *  - `none`: es gibt dort kein TLS — keine Adresse, Port 443 zu, Handshake
+ *    abgelehnt, kein brauchbares Zertifikat.
+ *  - `failed`: wir wissen es nicht — Zeitüberschreitung, Netz oder Host nicht
+ *    erreichbar, DNS gerade gestört.
+ */
+export type SslCheckResult =
+  | { status: 'ok'; info: SslInfo }
+  | { status: 'none' }
+  | { status: 'failed'; reason: LookupFailure };
+
+/**
+ * Socket-Fehler, die nichts über den Server sagen, sondern nur, dass wir ihn
+ * nicht erreicht haben. ENETUNREACH kommt etwa, wenn eine Domain nur AAAA hat
+ * und unser Server kein IPv6 spricht.
+ *
+ * Alles andere — ECONNREFUSED (Port zu), ECONNRESET und die OpenSSL-Fehler
+ * (Handshake abgelehnt, kein TLS auf dem Port) — ist eine Antwort des Servers.
+ * ECONNRESET meldet Node auch, wenn der Server die Verbindung vor dem
+ * Handshake schließt: ein RST oder FIN von dort, kein Schweigen.
+ */
+const NETWORK_ERRORS = new Set([
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ENETDOWN',
+  'EHOSTDOWN',
+  'EADDRNOTAVAIL',
+]);
+
+const NONE: SslCheckResult = { status: 'none' };
+
+/**
+ * Hat der Host mehrere Adressen, probiert Node sie nacheinander (Happy
+ * Eyeballs) und meldet am Ende einen AggregateError, dessen `code` nur der
+ * ERSTE Fehler ist. IPv6 unerreichbar, IPv4 abgelehnt hieße dann „Netzwerk“ —
+ * dabei hat eine Adresse geantwortet: Port 443 ist zu. Deshalb zählt jeder
+ * Einzelfehler; gescheitert ist der Check nur, wenn keine Adresse antwortete.
+ */
+function socketFailure(error: NodeJS.ErrnoException): SslCheckResult {
+  const codes =
+    error instanceof AggregateError
+      ? error.errors.map((inner) => (inner as NodeJS.ErrnoException | undefined)?.code)
+      : [error.code];
+  const unreached = (code?: string) =>
+    code === 'ETIMEDOUT' || (code !== undefined && NETWORK_ERRORS.has(code));
+
+  if (!codes.every(unreached)) return NONE;
+  return { status: 'failed', reason: codes.includes('ETIMEDOUT') ? 'timeout' : 'network' };
+}
+
+/**
+ * Ohne Adresse kein Zertifikat — es sei denn, die Auflösung scheiterte nur
+ * gerade: EAI_AGAIN liefert getaddrinfo bei SERVFAIL und Resolver-Timeouts,
+ * ENOTFOUND/ENODATA bei Namen ohne Adresse.
+ */
+function resolveFailure(error: UnresolvableTargetError): SslCheckResult {
+  const code = (error.cause as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'EAI_AGAIN' ? { status: 'failed', reason: 'servfail' } : NONE;
+}
 
 interface PeerCert {
   subject?: { CN?: string; O?: string };
@@ -27,10 +91,11 @@ interface PeerCert {
 }
 
 /**
- * Versucht das Zertifikat zu holen. Bei jedem Fehler
- * (Timeout, Cert-invalid, kein TLS) → null.
+ * Versucht das Zertifikat zu holen. Ein ungültiges Zertifikat ist ein
+ * Ergebnis (`valid: false`), kein Fehler; zur Unterscheidung von „kein TLS“
+ * und „nicht erreicht“ siehe SslCheckResult.
  */
-export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslInfo | null> {
+export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslCheckResult> {
   // SSRF-Guard: nicht gegen interne Adressen handshaken. Wirft
   // BlockedTargetError, wenn die Domain auf ein nicht-öffentliches Ziel zeigt.
   let target;
@@ -39,14 +104,15 @@ export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslInf
   } catch (error) {
     // Kein A/AAAA-Record (Mail-only-Domain, geparkte Domain, Public Suffix):
     // gültige Eingabe, es gibt dort nur kein Zertifikat. Der Aufrufer macht
-    // daraus das Finding "Kein TLS auf Port 443 erreichbar".
-    if (error instanceof UnresolvableTargetError) return null;
+    // daraus das Finding "Kein TLS auf Port 443 erreichbar" — außer die
+    // Auflösung scheiterte nur gerade.
+    if (error instanceof UnresolvableTargetError) return resolveFailure(error);
     throw error;
   }
 
-  return new Promise<SslInfo | null>((resolve) => {
+  return new Promise<SslCheckResult>((resolve) => {
     let resolved = false;
-    const safeResolve = (value: SslInfo | null) => {
+    const safeResolve = (value: SslCheckResult) => {
       if (resolved) return;
       resolved = true;
       try {
@@ -72,20 +138,25 @@ export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslInf
       ALPNProtocols: ['h2', 'http/1.1'],
     });
 
-    const timer = setTimeout(() => safeResolve(null), timeoutMs);
+    // Ein stumm verworfenes SYN (Firewall) sieht genauso aus wie ein
+    // überlasteter Server — beides ist „nicht erreicht“, nicht „kein TLS“.
+    const timer = setTimeout(
+      () => safeResolve({ status: 'failed', reason: 'timeout' }),
+      timeoutMs
+    );
 
     socket.once('secureConnect', () => {
       clearTimeout(timer);
 
       const cert = socket.getPeerCertificate(false) as PeerCert;
       if (!cert || Object.keys(cert).length === 0) {
-        return safeResolve(null);
+        return safeResolve(NONE);
       }
 
       const validFromDate = cert.valid_from ? new Date(cert.valid_from) : null;
       const validToDate = cert.valid_to ? new Date(cert.valid_to) : null;
       if (!validFromDate || !validToDate || isNaN(validToDate.getTime())) {
-        return safeResolve(null);
+        return safeResolve(NONE);
       }
 
       const sans = parseSans(cert.subjectaltname);
@@ -113,12 +184,12 @@ export async function checkSsl(domain: string, timeoutMs = 4000): Promise<SslInf
         isWildcard,
       };
 
-      safeResolve(info);
+      safeResolve({ status: 'ok', info });
     });
 
-    socket.once('error', () => {
+    socket.once('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
-      safeResolve(null);
+      safeResolve(socketFailure(error));
     });
   });
 }

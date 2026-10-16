@@ -1,0 +1,589 @@
+{
+  "lookup": {
+    "domain": "github.com",
+    "timestamp": "2026-10-16T14:09:07.619Z",
+    "records": [
+      {
+        "type": "A",
+        "name": "github.com",
+        "value": "140.82.121.4",
+        "ttl": 12
+      },
+      {
+        "type": "MX",
+        "name": "github.com",
+        "value": "github-com.mail.protection.outlook.com",
+        "priority": 0,
+        "ttl": 300
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "dns1.p08.nsone.net",
+        "ttl": 3464
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "dns2.p08.nsone.net",
+        "ttl": 3464
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "dns3.p08.nsone.net",
+        "ttl": 3464
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "dns4.p08.nsone.net",
+        "ttl": 3464
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "ns-1283.awsdns-32.org",
+        "ttl": 3464
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "ns-1707.awsdns-21.co.uk",
+        "ttl": 3464
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "ns-421.awsdns-52.com",
+        "ttl": 3464
+      },
+      {
+        "type": "NS",
+        "name": "github.com",
+        "value": "ns-520.awsdns-01.net",
+        "ttl": 3464
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "00Dd0000000hHE0=1TBKg000000TN2r",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "MS=6BF03E6AF5CB689E315FB6199603BABF2C88D805",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "MS=ms44452932",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "MS=ms58704441",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "TAILSCALE-xOzoDvFUzZr5YYVCQFuD",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "adobe-idp-site-verification=b92c9e999aef825edc36e0a3d847d2dbad5b2fc0e05c79ddd7a16139b48ecf4b",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "anthropic-domain-verification-4az7qn=if8YWuRRqwLycGJDooumzHtxm",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "apple-domain-verification=RyQhdzTl6Z6x8ZP4",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "atlassian-domain-verification=jjgw98AKv2aeoYFxiL/VFaoyPkn3undEssTRuMg6C/3Fp/iqhkV4HVV7WjYlVeF8",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "calendly-site-verification=at0DQARi7IZvJtXQAWhMqpmIzpvoBNF7aam5VKKxP",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "cursor-domain-verification-gtfwmt=1rfLOtiTngX5QSxD5HvNKTvm3",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "docusign=087098e3-3d46-47b7-9b4e-8a23028154cd",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "facebook-domain-verification=39xu4jzl7roi7x0n93ldkxjiaarx50",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "google-site-verification=82Le34Flgtd15ojYhHlGF_6g72muSjamlMVThBOJpks",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "google-site-verification=UTM-3akMgubp6tQtgEuAkYNYLyYAvpTnnSrDMWoDR3o",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "jamf-site-verification=XtaPNIYghF_e_xRDI8CjgQ",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "krisp-domain-verification=ZlyiK7XLhnaoUQb2hpak1PLY7dFkl1WE",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "loom-site-verification=f3787154f1154b7880e720a511ea664d",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "miro-verification=d2e174fdb00c71e0bcf58f8e58c3da2dd80dcfa9",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "openai-domain-verification=dv-3nh33eQwdkotMIAzLrIDVZo1",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "serval-domain-verification-ydryhj=qbkiEakpwEpTvHh5fIiCqtaue",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "shopify-verification-code=t1YPwcmvnxZyBycaCpk1MPyWoFs72o",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "stripe-verification=f88ef17321660a01bab1660454192e014defa29ba7b8de9633c69d6b4912217f",
+        "ttl": 205
+      },
+      {
+        "type": "TXT",
+        "name": "github.com",
+        "value": "v=spf1 ip4:192.30.252.0/22 include:spf.protection.outlook.com include:_netblocks.google.com include:_netblocks2.google.com include:mail.zendesk.com include:_spf.salesforce.com include:servers.mcsv.net include:mktomail.com include:sendgrid.net ip4:62.253.227.114 ip4:166.78.69.169 ip4:166.78.69.170 ip4:166.78.71.131 ~all",
+        "ttl": 205
+      },
+      {
+        "type": "CAA",
+        "name": "github.com",
+        "value": "0 issue \"digicert.com\"",
+        "ttl": 3600
+      },
+      {
+        "type": "CAA",
+        "name": "github.com",
+        "value": "0 issue \"globalsign.com\"",
+        "ttl": 3600
+      },
+      {
+        "type": "CAA",
+        "name": "github.com",
+        "value": "0 issue \"letsencrypt.org\"",
+        "ttl": 3600
+      },
+      {
+        "type": "CAA",
+        "name": "github.com",
+        "value": "0 issue \"sectigo.com\"",
+        "ttl": 3600
+      },
+      {
+        "type": "CAA",
+        "name": "github.com",
+        "value": "0 issuewild \"digicert.com\"",
+        "ttl": 3600
+      },
+      {
+        "type": "CAA",
+        "name": "github.com",
+        "value": "0 issuewild \"letsencrypt.org\"",
+        "ttl": 3600
+      },
+      {
+        "type": "CAA",
+        "name": "github.com",
+        "value": "0 issuewild \"sectigo.com\"",
+        "ttl": 3600
+      },
+      {
+        "type": "SOA",
+        "name": "github.com",
+        "value": "ns-1707.awsdns-21.co.uk awsdns-hostmaster.amazon.com 1 7200 900 1209600 86400",
+        "ttl": 1870
+      }
+    ],
+    "findings": [
+      {
+        "id": "no-ipv6",
+        "severity": "info",
+        "title": "Kein IPv6 (AAAA-Record)",
+        "description": "Domain ist nur über IPv4 erreichbar. IPv6 verbessert Erreichbarkeit für moderne Netzwerke.",
+        "category": "dns"
+      },
+      {
+        "id": "caa-present",
+        "severity": "success",
+        "title": "CAA-Record vorhanden",
+        "description": "Nur autorisierte Certificate Authorities dürfen für diese Domain Zertifikate ausstellen.",
+        "category": "security"
+      }
+    ]
+  },
+  "propagation": {
+    "propagation": [
+      {
+        "resolver": {
+          "id": "cloudflare",
+          "name": "Cloudflare",
+          "ip": "1.1.1.1",
+          "country": "Global",
+          "flag": "🌐",
+          "provider": "Cloudflare"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "20.250.119.67",
+            "ttl": 17
+          }
+        ],
+        "responseTimeMs": 20
+      },
+      {
+        "resolver": {
+          "id": "google",
+          "name": "Google",
+          "ip": "8.8.8.8",
+          "country": "US",
+          "flag": "🇺🇸",
+          "provider": "Google"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.3",
+            "ttl": 60
+          }
+        ],
+        "responseTimeMs": 24
+      },
+      {
+        "resolver": {
+          "id": "adguard",
+          "name": "AdGuard",
+          "ip": "94.140.14.14",
+          "country": "CY",
+          "flag": "🇨🇾",
+          "provider": "AdGuard"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "GitHuB.CoM",
+            "value": "140.82.121.4",
+            "ttl": 26
+          }
+        ],
+        "responseTimeMs": 39
+      },
+      {
+        "resolver": {
+          "id": "dns-sb",
+          "name": "DNS.SB",
+          "ip": "185.222.222.222",
+          "country": "HK",
+          "flag": "🇭🇰",
+          "provider": "DNS.SB"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.113.4",
+            "ttl": 41
+          }
+        ],
+        "responseTimeMs": 125
+      },
+      {
+        "resolver": {
+          "id": "nextdns",
+          "name": "NextDNS",
+          "ip": "45.90.28.0",
+          "country": "US",
+          "flag": "🇺🇸",
+          "provider": "NextDNS"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.4",
+            "ttl": 5
+          }
+        ],
+        "responseTimeMs": 18
+      }
+    ],
+    "findings": [
+      {
+        "id": "propagation-mismatch",
+        "severity": "warning",
+        "title": "Propagation-Abweichung erkannt",
+        "description": "5 Resolver liefern 4 verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.",
+        "category": "dns"
+      }
+    ]
+  },
+  "dnssec": {
+    "dnssec": {
+      "enabled": false,
+      "valid": false,
+      "chainOfTrust": "none"
+    },
+    "findings": [
+      {
+        "id": "dnssec-off",
+        "severity": "info",
+        "title": "DNSSEC nicht aktiviert",
+        "description": "Mit DNSSEC werden DNS-Antworten kryptografisch signiert. Schützt gegen DNS-Spoofing und Cache-Poisoning.",
+        "category": "dnssec"
+      }
+    ]
+  },
+  "ssl": {
+    "ssl": {
+      "valid": true,
+      "issuer": "Sectigo Public Server Authentication CA DV E36 (Sectigo Limited)",
+      "subject": "github.com",
+      "validFrom": "2026-09-01T00:00:00.000Z",
+      "validTo": "2026-11-29T23:59:59.000Z",
+      "daysUntilExpiry": 44,
+      "sans": [
+        "github.com",
+        "www.github.com"
+      ],
+      "tlsVersion": "TLSv1.3",
+      "signatureAlgorithm": "ECDSA prime256v1",
+      "isWildcard": false
+    },
+    "findings": [
+      {
+        "id": "ssl-ok",
+        "severity": "success",
+        "title": "SSL-Zertifikat gültig (noch 44 Tage)",
+        "description": "Ausgestellt von Sectigo Public Server Authentication CA DV E36 (Sectigo Limited) via TLSv1.3.",
+        "category": "ssl"
+      }
+    ]
+  },
+  "mail": {
+    "mail": {
+      "spf": {
+        "present": true,
+        "record": "v=spf1 ip4:192.30.252.0/22 include:spf.protection.outlook.com include:_netblocks.google.com include:_netblocks2.google.com include:mail.zendesk.com include:_spf.salesforce.com include:servers.mcsv.net include:mktomail.com include:sendgrid.net ip4:62.253.227.114 ip4:166.78.69.169 ip4:166.78.69.170 ip4:166.78.71.131 ~all",
+        "lookupCount": 8,
+        "valid": true,
+        "issues": []
+      },
+      "dmarc": {
+        "present": true,
+        "record": "v=DMARC1; p=quarantine; sp=reject; pct=100; rua=mailto:dmarc@github.com; ruf=mailto:dmarc@github.com; fo=1",
+        "policy": "quarantine",
+        "rua": "mailto:dmarc@github.com"
+      },
+      "dkim": {
+        "selectors": [
+          {
+            "selector": "google",
+            "present": true,
+            "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAj6T5sl/RwdSqGoYWaWaFbS2UAeyPrEmd0gogocmRfS441qwR8/0KB81Hw89P0l4YiFRrXYk7NVIGfyCRHAYYZUzCkGeOysI2EjgzLFhd/NEsbRzOEc/kWkK/RO6JFq/5lOn6M9AZw/ap9tds4JG9ApgNNdSpPxp9DmvpsOSgNMVflRxQFrk3kdS4RNAPKu/OPoA7dlR/A/pECryjRoYgENtDXzdnK70HgCekems6UDzxDj61cjyoKoXtEMF/QsaHEQ1Gjfv014rDJBsubk/kT5VqHkWHa/ia68Z5r228Ety/wFfQNjXTx/J7KGZ9GkZlKED659eiJcLnWcKDSiQlhwIDAQAB"
+          },
+          {
+            "selector": "selector1",
+            "present": true,
+            "record": "v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCxZC/z2cK+2s1f/ktzSDSeFzkfIHrjwtGFsfKMAYvKaXjPVNzKykpbXBkX5nB7dVUTFttda7aROr2iSrIseQ27Ui+4rUZVzgFanE8RaXhYM9n5wPKNv8GtLJk7JgcsYZ7ErgID4uW2sEYyV/dnRYw6rDzOaeRKkKELTUfJI5ebLQIDAQAB;"
+          },
+          {
+            "selector": "k1",
+            "present": true,
+            "record": "k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDbNrX2cY/GUKIFx2G/1I00ftdAj713WP9AQ1xir85i89sA2guU0ta4UX1Xzm06XIU6iBP41VwmPwBGRNofhBVR+e6WHUoNyIR4Bn84LVcfZE20rmDeXQblIupNWBqLXM1Q+VieI/eZu/7k9/vOkLSaQQdml4Cv8lb3PcnluMVIhQIDAQAB;"
+          },
+          {
+            "selector": "k2",
+            "present": true,
+            "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv2aC2KjGKLOwTweBY5A9RpjsxaBXR9r7OAU6U8/zn92ivImI75naUujWbItRI/QmL1jy5PWGqLwoUA0b90ObWaLDc+i9MtTNmGeWO009hr20fIxhGg6XBT2kjZ1DTThopSe1nAndsupmcBwlQ5Q6LJ+ZAxLcujnPIxM0ZBLmgpkv8u6RfY4eFP8OLvdAW3oSuB0DyLDigQX4Sj8wBO4YIdQH6AAmBeOsidsKAFNFUCpc3vCxtBDR12U+cBg724l3sBkMQ8evnz6idnqxq9QAVYh8k4kJ+RP+6cqTdy7LjIm8xY/bQNpQIpGUAuDo2DjLcCDun9DAI4Q/3z+Q0o9QuQIDAQAB;"
+          },
+          {
+            "selector": "k3",
+            "present": true,
+            "record": "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsYGiMSn7fsUqSvfSX40x9R1OlRtbNiCY80lHRIlcKx3XDIR7257aUx+q9CSIARdfTL6KCuLGNFx5g9TgVr6png4ajcieSQGtOehBgxnkDN8aAA5TX0FmFrcefJU0JoxLOF09EKgXxhSSHCk/ekVb0PXSboHXoZ9+EI404F1qhcwXXIgHXTaUthHTut2P6BBZhIXIgvDe/w49GchR7MRJqjNb7neEBbYHbgWuBTvvHCg7Gy6m6n9krYK+ROWq3dVvXy9plAGK3ygM+HtjIiMt7arRGMOF0WgDTz7YdN9BGpt6BvXxLnjiQcgS5T9n+cIyPZgiWzDMXNlaEEdKTEKxrwIDAQAB;"
+          },
+          {
+            "selector": "s1",
+            "present": true,
+            "record": "k=rsa; t=s; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyn3fMCVpb7ryIRKOGXhXVGYmsWUitNlSckqGHOwNFZgFadplOrD+Qzf1XQkP7MH/VB/97DsAAJGtEXW1Uq71Hjnfr/DuBN/YfjF/gU70qEFb7q1sdIiNtjFL2TkOpoW+X/bhhPNheW/fYwyFb6ZHFM6LTgXyuimWRHTOUP3VjZzhNVda79nt+2WZYbS4l8HdMgWpTNHjpVw5PtXESA9KBg/evSRk5fIaXIX5eRXW3baoV9yVzD8O29/IL/DiSk+yNvaO0EHL5c4yGuZJhGzvpiznb2IDVdemJK4Dqzdy5FTN/SGYZhAEr7MguG3Z314hMS2scgMsOMgB64uj/6+6UwIDAQAB"
+          },
+          {
+            "selector": "s2",
+            "present": true,
+            "record": "k=rsa; t=s; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnNt2/H6bKs99C6DAaokPp62KN9mKaD20D1PBakkObejkJvzM6Un/fKHPeI2/qXdvFFBPQE3mxMNoe+hwBVDgMgCuZEn8J6gZYI4amITure9/ny6+GaNVRoH2m6xAtWwKINkKxMayGiehkWlRVb7D23F0U8y+VDHKQFz1bnXA5jDpcDiMXy8i2lV5vEys+qt+1WGhDKCAwamT8c3xkZz8aXMJaXYCiN2HMgHDU81+mVCk4+u6mY+a98APVfFhsQ0KCq/mVZXaXTV06QrG9M5PtBHUFW7VtwXKp+AFrAut0KW1NnwaA5IGA5sc+n9dma7bSqdfGS+ixdSmJ69NwmYSHwIDAQAB"
+          },
+          {
+            "selector": "mailo",
+            "present": true,
+            "record": "k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDQPJBpMLQPx0UvC5HXIoVHgwfowk1OjOqnQNcVjbcpKTcCeOkXuTdT1U33weODlOlNTB+GIFWRpDGYZDdMvu2ffzpHTNMeRALvMhIrzNLpJbco+InXab5PzFnGdaBNVUKhv7zPlBkYKA3tNKwyRwCH8Wgja3q7Mg8rUIBklICYfQIDAQAB"
+          }
+        ]
+      },
+      "mtaSts": {
+        "present": false
+      },
+      "hasMx": true,
+      "nullMx": false,
+      "bimi": {
+        "present": false
+      },
+      "tlsRpt": {
+        "present": false
+      }
+    },
+    "findings": [
+      {
+        "id": "spf-ok",
+        "severity": "success",
+        "title": "SPF-Record vorhanden und plausibel",
+        "description": "8 DNS-Lookups, gültiger Abschluss.",
+        "category": "mail"
+      },
+      {
+        "id": "dmarc-present",
+        "severity": "success",
+        "title": "DMARC-Policy: quarantine",
+        "description": "DMARC-Record vorhanden — Mail-Spoofing-Schutz aktiv.",
+        "category": "mail"
+      },
+      {
+        "id": "dkim-present",
+        "severity": "success",
+        "title": "DKIM-Selectors aktiv: google, selector1, k1, k2, k3, s1, s2, mailo",
+        "description": "Ausgehende Mails werden signiert — Empfänger können die Authentizität prüfen.",
+        "category": "mail"
+      },
+      {
+        "id": "no-mta-sts",
+        "severity": "info",
+        "title": "Kein MTA-STS",
+        "description": "MTA-STS erzwingt TLS für eingehende Mail. Ohne MTA-STS können Angreifer einen Downgrade auf unverschlüsselten SMTP-Transport erzwingen.",
+        "category": "mail"
+      },
+      {
+        "id": "no-tls-rpt",
+        "severity": "info",
+        "title": "Kein TLS-RPT",
+        "description": "Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine Mailserver scheitert — etwa an einem abgelaufenen Zertifikat oder einem Downgrade-Angriff.",
+        "fix": {
+          "explanation": "Lege einen TXT-Record mit einer Adresse für die Berichte an. Mehrere Ziele kommagetrennt, auch https:-URLs sind möglich.",
+          "snippet": "_smtp._tls.github.com  TXT  \"v=TLSRPTv1; rua=mailto:tls-reports@github.com\""
+        },
+        "category": "mail",
+        "advisory": true
+      },
+      {
+        "id": "no-bimi",
+        "severity": "info",
+        "title": "Kein BIMI-Record",
+        "description": "Mit BIMI zeigen Postfächer dein Markenlogo neben deinen Mails. Deine DMARC-Policy erfüllt die Voraussetzung schon. Gmail und Apple Mail zeigen das Logo nur mit Markenzertifikat (VMC oder CMC).",
+        "fix": {
+          "explanation": "Das Logo als SVG (Profil SVG Tiny PS) per https veröffentlichen und den Record anlegen; ein Markenzertifikat kommt mit a=https://… dazu.",
+          "snippet": "default._bimi.github.com  TXT  \"v=BIMI1; l=https://github.com/bimi/logo.svg\""
+        },
+        "category": "mail",
+        "advisory": true
+      }
+    ]
+  },
+  "whois": {
+    "whois": {
+      "domain": "github.com",
+      "registrar": "MarkMonitor Inc.",
+      "createdAt": "2007-10-09T18:20:50Z",
+      "expiresAt": "2028-10-09T18:20:50Z",
+      "updatedAt": "2026-09-07T09:22:52Z",
+      "nameServers": [
+        "dns1.p08.nsone.net",
+        "dns2.p08.nsone.net",
+        "dns3.p08.nsone.net",
+        "dns4.p08.nsone.net",
+        "ns-1283.awsdns-32.org",
+        "ns-1707.awsdns-21.co.uk",
+        "ns-421.awsdns-52.com",
+        "ns-520.awsdns-01.net"
+      ],
+      "status": [
+        "client delete prohibited",
+        "client transfer prohibited",
+        "client update prohibited"
+      ],
+      "dnssecDelegated": false,
+      "source": "rdap.verisign.com"
+    },
+    "findings": []
+  },
+  "techstack": {
+    "techStack": [
+      {
+        "name": "Tailwind CSS",
+        "category": "css",
+        "confidence": "medium"
+      }
+    ]
+  }
+}

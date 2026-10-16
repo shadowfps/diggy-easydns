@@ -41,6 +41,27 @@ export function ScoreCardSkeleton() {
   );
 }
 
+/**
+ * Platzhalter für „Seit dem letzten Check“, solange deren Code nachlädt.
+ * Zeilenhöhen wie Titel (20 px) und Status (16 px) der eingeklappten Karte —
+ * sonst schöbe ihr Einblenden die Tabs darunter.
+ */
+export function SinceLastCheckSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn('card flex items-center gap-3', className)}>
+      <Skeleton className="hidden size-9 rounded-panel sm:block" />
+      <div className="min-w-0 flex-1">
+        <div className="flex h-5 items-center">
+          <Skeleton className="h-3.5 w-64 max-w-full" />
+        </div>
+        <div className="mt-0.5 flex h-4 items-center">
+          <Skeleton className="h-3 w-44 max-w-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** N Karten im 2-Spalten-Grid — für Security (2) und Mail (4). */
 export function SectionCardsSkeleton({ count = 2 }: { count?: number }) {
   return (
@@ -123,6 +144,30 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Platzhalter für Impressum und Datenschutz, solange ihr Chunk lädt (App.tsx).
+ *
+ * Mindestens bildschirmhoch: die Seiten sind es sowieso, und so liegt der
+ * Footer schon vorher unter dem Rand. Mit einem Platzhalter von vier Zeilen
+ * sprang er beim Eintreffen des Datenschutztexts aus dem Bild — gemessen auf
+ * „Fast 3G“, 390 px: CLS 0,26 beim direkten Aufruf, 0,36 beim Wechsel aus
+ * dem Footer.
+ */
+export function LegalPageSkeleton() {
+  return (
+    <div className="mx-auto min-h-screen w-full max-w-3xl" aria-hidden>
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="mt-3 h-9 w-56" />
+      <div className="card mt-8 space-y-3">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-5/6" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
     </div>
   );
 }
