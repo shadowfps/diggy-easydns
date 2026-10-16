@@ -16,6 +16,7 @@ import {
   whoisFindings,
 } from './services/reportBuilder.js';
 import { cached } from './lib/cache.js';
+import { createIndexRenderer, domainFromLookupPath, lookupPreview, previewOrigin } from './lib/linkPreview.js';
 import { BlockedTargetError } from './lib/safeTarget.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { queryAllResolvers } from './services/propagation.js';
@@ -56,6 +57,24 @@ const distDir = resolve(__dirname, '../../dist');
 const distIndex = resolve(distDir, 'index.html');
 
 /**
+ * Das gebaute index.html, EINMAL beim Start gelesen. Daraus kommen die
+ * CSP-Hashes und die Vorlage für die Link-Vorschau — beide aus demselben
+ * Stand, und kein Request muss die Datei erneut von der Platte holen.
+ */
+function readDistIndex(): string | null {
+  if (!existsSync(distIndex)) return null;
+
+  try {
+    return readFileSync(distIndex, 'utf8');
+  } catch (error) {
+    console.warn('[index] dist/index.html konnte nicht gelesen werden:', error);
+    return null;
+  }
+}
+
+const distIndexHtml = readDistIndex();
+
+/**
  * SHA-256-Hashes aller Inline-`<script>`-Blöcke im gebauten index.html.
  *
  * index.html enthält bewusst ein blockierendes Inline-Script, das das Theme
@@ -64,23 +83,23 @@ const distIndex = resolve(distDir, 'index.html');
  * nächsten Edit am HTML stillschweigend falsch. Stattdessen werden sie beim
  * Start aus der Datei abgeleitet: Script und CSP können nicht auseinanderlaufen.
  */
-function inlineScriptHashes(): string[] {
-  if (!existsSync(distIndex)) return [];
+function inlineScriptHashes(html: string | null): string[] {
+  if (!html) return [];
 
-  try {
-    const html = readFileSync(distIndex, 'utf8');
-    const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
-    return blocks
-      .map((match) => match[1])
-      .filter((code) => code.trim().length > 0)
-      .map((code) => `'sha256-${createHash('sha256').update(code, 'utf8').digest('base64')}'`);
-  } catch (error) {
-    console.warn('[csp] Inline-Script-Hashes konnten nicht gelesen werden:', error);
-    return [];
-  }
+  const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+  return blocks
+    .map((match) => match[1])
+    .filter((code) => code.trim().length > 0)
+    .map((code) => `'sha256-${createHash('sha256').update(code, 'utf8').digest('base64')}'`);
 }
 
-const scriptHashes = inlineScriptHashes();
+const scriptHashes = inlineScriptHashes(distIndexHtml);
+
+/**
+ * index.html mit domain-spezifischen Meta-Tags für `/lookup/<domain>` (#81).
+ * Lässt die Inline-Scripts unberührt — die Hashes oben gelten weiter.
+ */
+const renderLookupIndex = distIndexHtml ? createIndexRenderer(distIndexHtml) : null;
 
 /* ─── Sicherheits-Header (#9) ────────────────────────────────────────────── */
 
@@ -153,7 +172,8 @@ const corsOrigins = process.env.CORS_ORIGINS?.split(',')
  * Öffentliche Origin dieser Installation, z. B. `https://diggy.example`.
  *
  * Vertrauenswürdige Referenz für die CSRF-Prüfung, damit sich die Schranke
- * nicht aus Headern definiert, die der Aufrufer mitliefert.
+ * nicht aus Headern definiert, die der Aufrufer mitliefert. Außerdem Basis
+ * der absoluten URLs in der Link-Vorschau (siehe lib/linkPreview.ts).
  */
 const publicOrigin = process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, '');
 
@@ -730,6 +750,20 @@ if (existsSync(distIndex)) {
   // geschweiften Klammern machen ihn optional, damit auch `/` passt.
   app.get('/{*splat}', (req: Request, res: Response, next) => {
     if (req.path.startsWith('/api/')) return next();
+
+    // Permalinks bekommen eigene Meta-Tags für die Link-Vorschau (#81).
+    // Ungültige Domains und alle anderen Routen gehen unverändert an
+    // index.html.
+    const domain = renderLookupIndex ? domainFromLookupPath(req.path) : null;
+    if (renderLookupIndex && domain) {
+      // Wie bisher kein langes Caching: das HTML verweist auf die gehashten
+      // Assets des aktuellen Builds und muss nach einem Deploy sofort neu
+      // geladen werden. Die ETag setzt res.send selbst.
+      res.set('Cache-Control', 'no-cache');
+      res.type('html');
+      return res.send(renderLookupIndex(lookupPreview(domain, previewOrigin(req, publicOrigin))));
+    }
+
     // Mit root prüft sendFile nur unterhalb von dist auf Dotfiles, damit
     // übergeordnete Punkt-Ordner wie .claude keine SPA-Routen blockieren.
     return res.sendFile('index.html', { root: distDir });
