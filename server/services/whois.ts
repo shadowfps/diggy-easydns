@@ -8,11 +8,11 @@
  *   - Manche ccTLDs unterstützen RDAP nicht — dann gibt's null und die UI
  *     zeigt "nicht verfügbar".
  *
- * Wenn rdap.org nicht erreichbar ist, fallback auf rdap.iana.org. Das
- * deckt seltene Edge-Cases ab.
+ * Für .de fragen wir zusätzlich direkt bei DENIC an.
  */
 
 import type { WhoisInfo } from '../types.js';
+import { RDAP_HEADERS, warnRdapError } from '../lib/rdap.js';
 
 interface RdapEvent {
   eventAction?: string;
@@ -48,6 +48,8 @@ interface RdapResponse {
  * Bootstrap-Aggregator. rdap.org folgt der IANA-Service-Map und routet
  * automatisch zum richtigen Registry-RDAP — Standard für die meisten gTLDs
  * (.com, .net, .org, .io, .app, …) und viele ccTLDs.
+ * Ein eigener IANA-Bootstrap braucht Cache, Aktualisierung und Fehlerpfade;
+ * das bleibt außerhalb dieses gezielten User-Agent-Fixes.
  */
 const PRIMARY_ENDPOINT = 'https://rdap.org/domain';
 
@@ -112,21 +114,30 @@ async function tryEndpoint(
 ): Promise<WhoisInfo | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const url = `${baseUrl}/${encodeURIComponent(domain)}`;
 
   try {
-    const url = `${baseUrl}/${encodeURIComponent(domain)}`;
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { accept: 'application/rdap+json, application/json' },
+      headers: RDAP_HEADERS,
+      // Nur feste RDAP-Dienste als Einstieg; deren Registry-Redirects
+      // werden wie bisher von fetch verfolgt (kein safeTarget-Aufruf).
+      redirect: 'follow',
     });
 
     if (!res.ok) {
-      // 404 = Domain unbekannt im RDAP, 501 = TLD unterstützt kein RDAP
+      // 404 = Domain unbekannt im RDAP oder rdap.org kennt für die TLD keinen
+      // Dienst (z. B. .de, .io). Beides ist erwartbar und kein Betriebsfehler,
+      // also keine Warnung; 501 = TLD unterstützt kein RDAP.
+      if (res.status !== 404) warnRdapError(url, new Error(`HTTP ${res.status}`));
       return null;
     }
 
     const data = (await res.json()) as RdapResponse;
-    if (data.errorCode) return null;
+    if (data.errorCode) {
+      warnRdapError(url, new Error(`RDAP ${data.errorCode}`));
+      return null;
+    }
 
     const registrarEntity = data.entities?.find((e) => e.roles?.includes('registrar'));
     const registrar = extractFnFromVcard(registrarEntity?.vcardArray);
@@ -158,6 +169,9 @@ async function tryEndpoint(
       dnssecDelegated,
       source,
     };
+  } catch (error) {
+    warnRdapError(url, error, ctrl.signal);
+    return null;
   } finally {
     clearTimeout(timer);
   }
