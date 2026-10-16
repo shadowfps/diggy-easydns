@@ -139,7 +139,7 @@ describe('lookupStandardRecords — TTL-Zuordnung', () => {
   it('gibt jedem Typ die TTL seines RRsets', async () => {
     stubDoh(apexAnswers());
 
-    const records = await lookupStandardRecords('example.com');
+    const { records } = await lookupStandardRecords('example.com');
 
     expect(ttlsByType(records)).toEqual({
       A: [300], // weiter aus node:dns
@@ -183,7 +183,7 @@ describe('lookupStandardRecords — TTL-Zuordnung', () => {
       CAA: [...chain],
     });
 
-    const ttls = ttlsByType(await lookupStandardRecords('www.example.com'));
+    const ttls = ttlsByType((await lookupStandardRecords('www.example.com')).records);
 
     expect(ttls.CNAME).toEqual([3600]);
     expect(ttls.MX).toEqual([60, 60]);
@@ -200,7 +200,7 @@ describe('lookupStandardRecords — TTL-Zuordnung', () => {
       ],
     });
 
-    const ttls = ttlsByType(await lookupStandardRecords('example.com'));
+    const ttls = ttlsByType((await lookupStandardRecords('example.com')).records);
 
     expect(ttls.MX).toEqual([299, 299]);
   });
@@ -219,9 +219,11 @@ describe('lookupStandardRecords — TTL-Quelle fällt aus', () => {
   ])('%s: Records bleiben, TTL ist null statt 0', async (_label, respond) => {
     vi.stubGlobal('fetch', vi.fn(respond));
 
-    const records = await lookupStandardRecords('example.com');
+    const { records, failedTypes } = await lookupStandardRecords('example.com');
 
     expect(records.map((r) => r.type)).toEqual(EXPECTED_TYPES);
+    // Fehlt nur die TTL, ist kein Record-Typ gescheitert (#79).
+    expect(failedTypes).toEqual([]);
     expect(ttlsByType(records)).toEqual({
       A: [300],
       MX: [null, null],
@@ -248,7 +250,7 @@ describe('lookupStandardRecords — TTL-Quelle fällt aus', () => {
     );
 
     let records: DnsRecord[] | undefined;
-    void lookupStandardRecords('example.com').then((r) => (records = r));
+    void lookupStandardRecords('example.com').then((r) => (records = r.records));
 
     await vi.advanceTimersByTimeAsync(TTL_LOOKUP_TIMEOUT_MS - 1);
     expect(records).toBeUndefined();
