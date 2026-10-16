@@ -741,6 +741,27 @@ describe('mailFindings — BIMI und TLS-RPT', () => {
     expect(newIds(findings)).toEqual([]);
   });
 
+  /**
+   * Ob BIMI wirkt, hängt an DMARC. Ist DMARC nicht prüfbar (#101), darf der
+   * Hinweis weder „kein DMARC-Record“ behaupten noch „wirkt“.
+   */
+  it('sagt zu BIMI nichts über DMARC, wenn dessen Abfrage scheiterte', () => {
+    const dmarcFailed: MailSecurity['dmarc'] = { present: false, lookupFailed: 'timeout' };
+    expect(newIds(mailFindings(real({ dmarc: dmarcFailed }), 'example.de'))).toEqual([
+      'info no-tls-rpt',
+    ]);
+
+    const withRecord = mailFindings(
+      real({
+        dmarc: dmarcFailed,
+        bimi: { present: true, records: ['v=BIMI1; l=https://example.de/l.svg'], logoUrl: 'https://example.de/l.svg' },
+      }),
+      'example.de'
+    );
+    expect(newIds(withRecord)).toEqual(['info no-tls-rpt']);
+    expect(withRecord.map((f) => f.description).join(' ')).not.toContain('kein DMARC-Record');
+  });
+
   it('verweist bei vorhandenem MTA-STS auf die fehlenden Berichte', () => {
     const findings = mailFindings(real({ mtaSts: { present: true } }), 'example.de');
     expect(findings.find((f) => f.id === 'no-tls-rpt')?.description).toContain('Zu MTA-STS');

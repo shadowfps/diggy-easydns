@@ -377,10 +377,13 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
 function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding[] {
   const bimi = mail.bimi;
   if (!bimi || bimi.lookupFailed) return [];
-  const dmarcGap = bimiDmarcGap(mail.dmarc);
+  // Ob BIMI wirkt, hängt an DMARC. Ist DMARC nicht prüfbar (#101), bleibt
+  // auch das offen — dann weder „erst DMARC verschärfen“ noch „wirkt“.
+  const dmarcUnknown = Boolean(mail.dmarc.lookupFailed);
+  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGap(mail.dmarc);
 
   if (!bimi.present) {
-    if (!receivesMail) return [];
+    if (!receivesMail || dmarcUnknown) return [];
     if (dmarcGap) {
       return [{
         id: 'bimi-needs-dmarc',
@@ -418,6 +421,8 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
       advisory: true,
     }];
   }
+
+  if (dmarcUnknown) return [];
 
   if (dmarcGap) {
     return [{

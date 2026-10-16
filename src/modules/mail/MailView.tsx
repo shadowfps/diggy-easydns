@@ -323,7 +323,10 @@ function BimiCard({
   dmarc: MailSecurity['dmarc'];
   noMail: boolean;
 }) {
-  const dmarcGap = bimiDmarcGap(dmarc);
+  // Ob BIMI wirkt, hängt an DMARC — ist dessen Abfrage gescheitert (#101),
+  // bleibt das offen: „unbekannt“ statt „wirkt nicht“ oder „aktiv“.
+  const dmarcUnknown = Boolean(dmarc.lookupFailed);
+  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGap(dmarc);
   const status: PolicyStatus = !bimi.present
     ? noMail
       ? 'not-needed'
@@ -332,6 +335,8 @@ function BimiCard({
     ? 'declined'
     : bimi.invalid
     ? 'invalid'
+    : dmarcUnknown
+    ? 'unknown'
     : dmarcGap
     ? 'ineffective'
     : 'active';
@@ -356,7 +361,9 @@ function BimiCard({
         <div className="space-y-3">
           <StatusLine text="Kein BIMI-Record auf default._bimi.<domain>" tone="neutral" />
           <p className="text-sm leading-relaxed text-fg-muted">
-            {dmarcGap
+            {dmarcUnknown
+              ? 'Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails — vorausgesetzt, DMARC steht auf p=quarantine oder p=reject. Das ließ sich gerade nicht prüfen.'
+              : dmarcGap
               ? `BIMI setzt DMARC mit p=quarantine oder p=reject voraus, jetzt: ${dmarcGap}. Erst DMARC verschärfen, dann lohnt sich BIMI.`
               : 'Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails. Die DMARC-Voraussetzung ist erfüllt.'}
           </p>
@@ -380,6 +387,9 @@ function BimiCard({
                   tone={bimi.evidenceUrl ? 'success' : 'neutral'}
                 />
               </div>
+              {dmarcUnknown && (
+                <Issue text="Ob Postfächer das Logo zeigen, hängt an DMARC — dessen Abfrage ist gescheitert." />
+              )}
               {dmarcGap && (
                 <Issue
                   text={`Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject, jetzt: ${dmarcGap}.`}

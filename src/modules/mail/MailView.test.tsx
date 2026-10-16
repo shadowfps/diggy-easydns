@@ -268,6 +268,28 @@ describe('MailView — BIMI und TLS-RPT', () => {
     expect(screen.queryByText('fehlt')).not.toBeInTheDocument();
   });
 
+  /** Ob das Logo erscheint, hängt an DMARC — scheiterte dessen Abfrage, ist es offen. */
+  it('zeigt BIMI als „unbekannt“, wenn DMARC nicht prüfbar war', () => {
+    render(
+      <MailView
+        mail={{
+          ...withMx,
+          dmarc: { present: false, lookupFailed: 'timeout' },
+          bimi: {
+            present: true,
+            records: ['v=BIMI1; l=https://example.com/l.svg'],
+            logoUrl: 'https://example.com/l.svg',
+          },
+        }}
+      />
+    );
+    const bimi = card('BIMI');
+    expect(within(bimi).getByText('unbekannt')).toBeInTheDocument();
+    expect(within(bimi).getByText(/hängt an DMARC/)).toBeInTheDocument();
+    expect(within(bimi).queryByText('wirkt nicht')).not.toBeInTheDocument();
+    expect(within(bimi).queryByText(/kein DMARC-Record/)).not.toBeInTheDocument();
+  });
+
   it('bleibt bei einer Domain ohne Mail „nicht nötig“, auch wenn die Abfrage scheiterte', () => {
     render(
       <MailView
