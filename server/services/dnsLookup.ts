@@ -3,6 +3,7 @@ import { domainToASCII } from 'node:url';
 import { getDomain } from 'tldts';
 import type { DnsRecord, RecordType } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
+import { DOH_RESOLVERS, dohQuery } from './doh.js';
 
 /**
  * Konfigurierter Resolver — nutzt Cloudflare als Default,
@@ -10,6 +11,27 @@ import { isDnsOnlyName } from '../../shared/dnsName.js';
  */
 const resolver = new dnsPromises.Resolver({ timeout: 5000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
+
+/**
+ * Woher die TTL für MX, NS, TXT, CAA, SOA und CNAME kommt (#76).
+ *
+ * node:dns liefert sie nur für A/AAAA (`{ ttl: true }`); `resolveMx` & Co.
+ * geben reine Daten zurück. Die DoH-JSON-API nennt sie für jeden Typ. Wir
+ * fragen Cloudflare — denselben Anbieter wie der primäre Resolver oben —,
+ * damit die TTL zur selben Cache-Sicht gehört wie die Daten.
+ *
+ * Die Records selbst kommen weiter aus node:dns: fällt DoH aus, verschwindet
+ * kein Record, nur seine TTL ist dann unbekannt (`null`).
+ */
+const TTL_RESOLVER = DOH_RESOLVERS.find((r) => r.id === 'cloudflare')!;
+
+/**
+ * Obergrenze für die TTL-Abfrage. Sie läuft parallel zum node:dns-Lookup und
+ * antwortet normalerweise in unter 100 ms. Hängt DoH, soll der schnelle Kern
+ * von /api/lookup (meist 0,2–0,8 s) höchstens um diese Zeit warten — die
+ * Records sind wichtiger als ihre TTL.
+ */
+export const TTL_LOOKUP_TIMEOUT_MS = 1500;
 
 /**
  * Welche Record-Typen wir abfragen — für jeden Namen gleich, Apex wie Subdomain.
@@ -85,6 +107,9 @@ export async function lookupStandardRecords(
 /**
  * Lookup für einen spezifischen Record-Typ. Wir nutzen `resolveAny` nicht,
  * weil viele Resolver das nicht mehr unterstützen — typisierte Calls sind verlässlicher.
+ *
+ * Für alle Typen außer A/AAAA läuft die TTL-Abfrage per DoH parallel mit
+ * (lookupRrsetTtl), damit der Lookup nicht auf zwei Runden nacheinander wartet.
  */
 async function lookupSingleType(domain: string, type: RecordType): Promise<DnsRecord[]> {
   switch (type) {
@@ -110,7 +135,10 @@ async function lookupSingleType(domain: string, type: RecordType): Promise<DnsRe
     }
 
     case 'MX': {
-      const results = await resolver.resolveMx(domain);
+      const [results, ttl] = await Promise.all([
+        resolver.resolveMx(domain),
+        lookupRrsetTtl(domain, 'MX'),
+      ]);
       return results
         .sort((a, b) => a.priority - b.priority)
         .map((r) => ({
@@ -118,34 +146,43 @@ async function lookupSingleType(domain: string, type: RecordType): Promise<DnsRe
           name: domain,
           value: r.exchange,
           priority: r.priority,
-          ttl: 0, // resolveMx liefert keine TTL — wir setzen 0 als "unbekannt"
+          ttl,
         }));
     }
 
     case 'NS': {
-      const results = await resolver.resolveNs(domain);
+      const [results, ttl] = await Promise.all([
+        resolver.resolveNs(domain),
+        lookupRrsetTtl(domain, 'NS'),
+      ]);
       return results.map((value) => ({
         type: 'NS',
         name: domain,
         value,
-        ttl: 0,
+        ttl,
       }));
     }
 
     case 'TXT': {
-      const results = await resolver.resolveTxt(domain);
+      const [results, ttl] = await Promise.all([
+        resolver.resolveTxt(domain),
+        lookupRrsetTtl(domain, 'TXT'),
+      ]);
       // resolveTxt liefert string[][] — chunks pro Record zusammenfügen
       return results.map((chunks) => ({
         type: 'TXT',
         name: domain,
         value: chunks.join(''),
-        ttl: 0,
+        ttl,
       }));
     }
 
     case 'CAA': {
       // CAA-Records haben dynamische Felder: { critical, issue?, issuewild?, iodef?, contactemail?, ... }
-      const results = await resolver.resolveCaa(domain);
+      const [results, ttl] = await Promise.all([
+        resolver.resolveCaa(domain),
+        lookupRrsetTtl(domain, 'CAA'),
+      ]);
       return results.map((record) => {
         const r = record as unknown as Record<string, string | number | undefined>;
         const flags = (r.critical as number | undefined) ?? 0;
@@ -162,18 +199,23 @@ async function lookupSingleType(domain: string, type: RecordType): Promise<DnsRe
           type: 'CAA' as const,
           name: domain,
           value: `${flags} ${tag} "${value}"`,
-          ttl: 0,
+          ttl,
         };
       });
     }
 
     case 'SOA': {
-      const result = await resolver.resolveSoa(domain);
+      const [result, ttl] = await Promise.all([
+        resolver.resolveSoa(domain),
+        lookupRrsetTtl(domain, 'SOA'),
+      ]);
       return [{
         type: 'SOA',
         name: domain,
         value: `${result.nsname} ${result.hostmaster} ${result.serial} ${result.refresh} ${result.retry} ${result.expire} ${result.minttl}`,
-        ttl: result.minttl,
+        // Nicht `minttl`: das ist die TTL für negative Antworten (RFC 2308),
+        // nicht die des SOA-Records selbst — bei mittwald.de 3600 statt 300.
+        ttl,
       }];
     }
 
@@ -184,16 +226,54 @@ async function lookupSingleType(domain: string, type: RecordType): Promise<DnsRe
 
 async function lookupCname(domain: string): Promise<DnsRecord[]> {
   try {
-    const results = await resolver.resolveCname(domain);
+    const [results, ttl] = await Promise.all([
+      resolver.resolveCname(domain),
+      lookupRrsetTtl(domain, 'CNAME'),
+    ]);
     return results.map((value) => ({
       type: 'CNAME',
       name: domain,
       value,
-      ttl: 0,
+      ttl,
     }));
   } catch {
     return [];
   }
+}
+
+/**
+ * Holt die TTL eines RRsets per DoH. Wirft nie: jeder Fehler (Timeout,
+ * HTTP-Fehler, kaputtes JSON) heißt nur „TTL unbekannt“ — sonst risse
+ * Promise.all im Aufrufer den Record mit, obwohl node:dns ihn geliefert hat.
+ */
+async function lookupRrsetTtl(domain: string, type: RecordType): Promise<number | null> {
+  try {
+    const { records } = await dohQuery(TTL_RESOLVER, domain, type, {
+      timeoutMs: TTL_LOOKUP_TIMEOUT_MS,
+    });
+    return rrsetTtl(records, type);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Eine TTL pro RRset: alle Records gleichen Namens und Typs teilen sie
+ * (RFC 2181 §5.2). Deshalb ordnen wir über den Typ zu statt Wert für Wert —
+ * das spart den fehleranfälligen Abgleich der Darstellungen (TXT-Quoting,
+ * Groß-/Kleinschreibung, CAA-Format) zwischen node:dns und DoH.
+ *
+ * Gefiltert wird nach Typ, nicht nach Name: bei einem Alias steht zuerst
+ * der CNAME in der Antwort, dann das RRset des Ziels — dessen TTL gehört zu
+ * den Daten, die node:dns für den Alias liefert. Weichen TTLs im RRset
+ * doch voneinander ab, nehmen wir die kleinste: so lange sind alle gültig.
+ */
+function rrsetTtl(records: DnsRecord[], type: RecordType): number | null {
+  const ttls = records
+    .filter((r) => r.type === type)
+    .map((r) => r.ttl)
+    .filter((ttl): ttl is number => typeof ttl === 'number' && Number.isFinite(ttl) && ttl >= 0);
+  return ttls.length > 0 ? Math.min(...ttls) : null;
 }
 
 /**
