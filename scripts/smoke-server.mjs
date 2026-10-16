@@ -104,6 +104,11 @@ await waitUntilUp();
 
 const indexHtml = readFileSync(INDEX, 'utf8');
 const stylesheet = indexHtml.match(/href="\/(assets\/[^"]+\.css)"/)?.[1];
+// Das Inline-Script lädt das englische Wörterbuch vor (#86). Ein Pfad ins
+// Leere bricht nichts sichtbar — englische Besucher warteten nur wieder eine
+// Runde länger auf die erste Ansicht.
+const englishChunk =
+  indexHtml.match(/link\.href = '\/(assets\/en-[^']+\.js)'/)?.[1] ?? 'englisches-woerterbuch-fehlt';
 
 /** Liest `content` eines Meta-Tags — `attr` ist `name` oder `property`. */
 function meta(body, attr, key) {
@@ -161,6 +166,7 @@ const checks = [
   // Unbekannte API-Pfade dürfen NICHT im Fallback landen.
   ['/api/gibt-es-nicht', (res) => res.status === 404],
   [`/${stylesheet}`, (res) => res.status === 200 && res.headers.get('content-type')?.startsWith('text/css')],
+  [`/${englishChunk}`, (res) => res.status === 200 && /javascript/.test(res.headers.get('content-type') ?? '')],
 ];
 
 let failed = false;

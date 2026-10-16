@@ -99,7 +99,7 @@ technischen Fakten:
 | Prüfsumme über Absender+Nachricht (Duplikatserkennung) | `contactSpamGuard.ts` | 5 min |
 | Empfänger-Sperre für Auto-Replies | `contactSpamGuard.ts` | 24 h |
 | Kontaktanfrage | per SMTP an den Betreiber | im Postfach |
-| Lookup-History, Theme | `localStorage` im Browser | bis der Nutzer löscht |
+| Lookup-History, Theme, Sprache (nur bei Wahl im Menü) | `localStorage` im Browser | bis der Nutzer löscht |
 
 **Keine automatisierte Entscheidungsfindung im Sinne von Art. 22 DSGVO.** Der
 Health-Score bewertet die technische Konfiguration einer Domain, nicht eine

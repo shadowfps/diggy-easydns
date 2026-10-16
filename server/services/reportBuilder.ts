@@ -2,8 +2,10 @@ import type {
   DnsRecord,
   DnssecInfo,
   Finding,
+  FindingKey,
   LookupFailure,
   MailSecurity,
+  Phrase,
   RecordType,
   ResolverResult,
   SslInfo,
@@ -15,25 +17,33 @@ import {
   countsMissingAnswers,
   primaryPropagationType,
 } from '../../shared/propagation.js';
-import { lookupFailureLabel } from '../../shared/lookupFailure.js';
+import { lookupFailureLabel, lookupFailurePhrase } from '../../shared/lookupFailure.js';
 import { dmarcPct, noMailProtection } from '../../shared/nullMx.js';
-import { bimiDmarcGap } from '../../shared/bimiTlsRpt.js';
+import { bimiDmarcGapPhrase } from '../../shared/bimiTlsRpt.js';
 import {
   type DmarcPolicy,
   type DmarcPolicyFlaw,
-  dmarcFlawEffect,
-  dmarcPolicyFlawText,
+  dmarcFlawEffectPhrase,
+  dmarcPolicyFlawPhrase,
   effectiveDmarcPolicy,
   isDmarcPolicy,
 } from '../../shared/dmarc.js';
+import { germanText, phrase } from '../../shared/phrase.js';
 
 /* ─── Gescheiterte Checks ─────────────────────────────────────────────── */
 
-const FAILURE_DETAIL: Record<LookupFailure, string> = {
-  timeout: 'Die Abfrage lief in eine Zeitüberschreitung.',
-  servfail:
-    'Der Resolver antwortete mit SERVFAIL — meist vorübergehend, manchmal ein Zeichen für gestörte Nameserver der Domain.',
-  network: 'Die Abfrage scheiterte an einem Netzwerkfehler.',
+/*
+ * Wo der Server Sätze aus Bausteinen zusammensetzt, sind die Bausteine
+ * `Phrase`s (#86): auf Deutsch eingesetzt in Titel und Beschreibung, als
+ * Wert in `params` für die Übersetzung im Client (shared/phrase.ts).
+ */
+
+const FAILURE_DETAIL: Record<LookupFailure, Phrase> = {
+  timeout: phrase('Die Abfrage lief in eine Zeitüberschreitung.'),
+  servfail: phrase(
+    'Der Resolver antwortete mit SERVFAIL — meist vorübergehend, manchmal ein Zeichen für gestörte Nameserver der Domain.'
+  ),
+  network: phrase('Die Abfrage scheiterte an einem Netzwerkfehler.'),
 };
 
 /**
@@ -49,16 +59,33 @@ function uncheckedFinding(
   check: string,
   reason: LookupFailure,
   detail = FAILURE_DETAIL[reason]
-): Finding {
+): KeyedFinding {
   return {
     id,
+    key: 'unchecked',
     severity: 'info',
     title: `${check} konnte nicht geprüft werden — ${lookupFailureLabel(reason)}`,
-    description: `${detail} Ohne Antwort gibt es keine Bewertung und keinen Punktabzug — später erneut prüfen.`,
+    description: `${germanText(detail)} Ohne Antwort gibt es keine Bewertung und keinen Punktabzug — später erneut prüfen.`,
+    params: { check, reason: lookupFailurePhrase(reason), detail },
     category,
     unchecked: true,
   };
 }
+
+/**
+ * Ein Finding, dessen Text der Client übersetzen kann (#86).
+ *
+ * Entweder ist die `id` selbst eine bekannte Text-Kennung, oder `key` nennt
+ * eine. So scheitert ein neues Finding am Compiler, bis seine Kennung in
+ * shared/textKeys.ts steht — und dort am englischen Wörterbuch, bis es
+ * übersetzt ist. Die deutschen Texte bleiben wie sie sind: sie sind der
+ * Rückfall für alte Clients und für alles, was der Client nicht kennt.
+ *
+ * Werte, die im Satz stehen (Tage, Domain, Version), gehen zusätzlich als
+ * `params` mit. Zahlen, die über die Mehrzahl entscheiden, heißen `count`.
+ */
+export type KeyedFinding = Omit<Finding, 'id' | 'key'> &
+  ({ id: FindingKey; key?: undefined } | { id: string; key: FindingKey });
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
@@ -86,8 +113,8 @@ const DOMAIN_LIFECYCLE_CAUSES = [
   'whois-status-pendingrestore',
 ];
 
-export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {
-  const findings: Finding[] = [];
+export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): KeyedFinding[] {
+  const findings: KeyedFinding[] = [];
 
   // `s1._domainkey.example.com` ist kein Host — fehlende A/AAAA-Records sind
   // dort der Normalfall, kein Befund. Wer so einen Namen nachschlägt, will
@@ -99,6 +126,7 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
         severity: 'critical',
         title: 'Kein Eintrag unter diesem Namen',
         description: `Unter ${domain} liegt kein DNS-Record. Steht dort ein DKIM-Schlüssel, eine DMARC-Policy oder ein Challenge-Token, ist er nicht (mehr) veröffentlicht — oder der Name ist vertippt.`,
+        params: { domain },
         category: 'dns',
         causedBy: DOMAIN_LIFECYCLE_CAUSES,
       });
@@ -112,11 +140,13 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
   if (!types.has('A') && !types.has('AAAA') && !types.has('CNAME')) {
     findings.push({
       id: 'no-address',
+      key: isApex ? 'no-address' : 'no-address-host',
       severity: 'critical',
       title: 'Keine A/AAAA/CNAME-Records gefunden',
       description: isApex
         ? 'Die Domain löst zu keiner IP auf. Besucher können die Seite nicht erreichen.'
         : `Der Hostname ${domain} löst zu keiner IP auf. Besucher können diesen Host nicht erreichen.`,
+      params: { domain },
       category: 'dns',
       causedBy: DOMAIN_LIFECYCLE_CAUSES,
     });
@@ -125,11 +155,13 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
   if (!types.has('AAAA')) {
     findings.push({
       id: 'no-ipv6',
+      key: isApex ? 'no-ipv6' : 'no-ipv6-host',
       severity: 'info',
       title: 'Kein IPv6 (AAAA-Record)',
       description: isApex
         ? 'Domain ist nur über IPv4 erreichbar. IPv6 verbessert Erreichbarkeit für moderne Netzwerke.'
         : `${domain} ist nur über IPv4 erreichbar.`,
+      params: { domain },
       category: 'dns',
     });
   }
@@ -174,8 +206,8 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
 
 /* ─── Mail ────────────────────────────────────────────────────────────── */
 
-export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
-  const findings: Finding[] = [];
+export function mailFindings(mail: MailSecurity, apexDomain: string): KeyedFinding[] {
+  const findings: KeyedFinding[] = [];
   // Ein Null-MX ist zwar ein MX-Record, sagt aber das Gegenteil eines
   // normalen: hier kommt keine Mail an. Für alles, was am Empfang hängt,
   // zählt er deshalb wie gar kein MX (Regel: shared/nullMx.ts).
@@ -190,6 +222,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   } else if (!mail.spf.present) {
     findings.push({
       id: 'no-spf',
+      key: receivesMail ? 'no-spf' : 'no-spf-no-mx',
       severity: receivesMail ? 'warning' : 'info',
       title: 'Kein SPF-Record gefunden',
       description: receivesMail
@@ -204,21 +237,27 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
       category: 'mail',
     });
   } else {
-    for (const issue of mail.spf.issues) {
+    mail.spf.issues.forEach((issue, index) => {
+      // Ohne Kennung (gecachte Daten von vor #86, Tests mit Hand-Objekten)
+      // gilt die allgemeine — der Client zeigt dann einen allgemeinen Satz.
+      const detail = mail.spf.issueDetails?.[index];
       findings.push({
         id: spfIssueId(issue),
+        key: detail?.key ?? 'spf-issue',
+        params: detail?.params,
         severity: issue.includes('+all') ? 'critical' : 'warning',
         title: 'SPF-Record problematisch',
         description: issue,
         category: 'mail',
       });
-    }
+    });
     if (mail.spf.issues.length === 0) {
       findings.push({
         id: 'spf-ok',
         severity: 'success',
         title: 'SPF-Record vorhanden und plausibel',
         description: `${mail.spf.lookupCount ?? 0} DNS-Lookups, gültiger Abschluss.`,
+        params: { count: mail.spf.lookupCount ?? 0 },
         category: 'mail',
       });
     }
@@ -237,7 +276,9 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
         'mail',
         'DKIM',
         mail.dkim.lookupFailed,
-        `Nicht alle gängigen Selectors ließen sich abfragen. ${FAILURE_DETAIL[mail.dkim.lookupFailed]}`
+        phrase('Nicht alle gängigen Selectors ließen sich abfragen. {detail}', {
+          detail: FAILURE_DETAIL[mail.dkim.lookupFailed],
+        })
       )
     );
   } else if (receivesMail && mail.dkim.selectors.length === 0) {
@@ -254,6 +295,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
       severity: 'success',
       title: `DKIM-Selectors aktiv: ${mail.dkim.selectors.map((s) => s.selector).join(', ')}`,
       description: 'Ausgehende Mails werden signiert — Empfänger können die Authentizität prüfen.',
+      params: { selectors: mail.dkim.selectors.map((s) => s.selector).join(', ') },
       category: 'mail',
     });
   }
@@ -297,20 +339,21 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
  * Vorschlag nennen den Mangel; vorher ging so ein Record als
  * „DMARC-Policy: gesetzt“ durch.
  */
-function dmarcFinding(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding {
+function dmarcFinding(mail: MailSecurity, apexDomain: string, receivesMail: boolean): KeyedFinding {
   const { policy, flaw } = effectiveDmarcPolicy(mail.dmarc);
   if (flaw) return flawedDmarcFinding(mail, apexDomain, receivesMail, policy, flaw);
 
   if (policy === null) {
     return {
       id: 'no-dmarc',
+      key: mail.nullMx ? 'no-dmarc-null-mx' : 'no-dmarc',
       severity: receivesMail ? 'warning' : 'info',
       title: 'Kein DMARC-Record auf _dmarc.<domain>',
       description: 'Ohne DMARC können Angreifer leichter E-Mails in deinem Namen verschicken (Spoofing).',
       fix: {
         explanation: mail.nullMx
-          ? `Lege einen DMARC-Record mit p=reject an — ${NULL_MX_DMARC_ADVICE}`
-          : `Lege einen DMARC-Record an. ${DMARC_START_ADVICE}`,
+          ? `Lege einen DMARC-Record mit p=reject an — ${germanText(NULL_MX_DMARC_ADVICE)}`
+          : `Lege einen DMARC-Record an. ${germanText(DMARC_START_ADVICE)}`,
         snippet: newDmarcSnippet(mail, apexDomain),
       },
       category: 'mail',
@@ -318,11 +361,13 @@ function dmarcFinding(mail: MailSecurity, apexDomain: string, receivesMail: bool
   }
 
   if (policy === 'none') {
+    const next = dmarcNoneNextStep(mail);
     return {
       id: 'dmarc-policy-none',
       severity: 'warning',
       title: 'DMARC-Policy ist p=none (nur Reporting)',
-      description: `Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. ${dmarcNoneNextStep(mail)}`,
+      description: `Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. ${germanText(next)}`,
+      params: { next },
       category: 'mail',
     };
   }
@@ -332,6 +377,7 @@ function dmarcFinding(mail: MailSecurity, apexDomain: string, receivesMail: bool
     severity: 'success',
     title: `DMARC-Policy: ${policy}`,
     description: 'DMARC-Record vorhanden — Mail-Spoofing-Schutz aktiv.',
+    params: { policy },
     category: 'mail',
   };
 }
@@ -343,29 +389,36 @@ function flawedDmarcFinding(
   receivesMail: boolean,
   policy: DmarcPolicy | null,
   flaw: DmarcPolicyFlaw
-): Finding {
-  const effect = dmarcFlawEffect(policy, flaw);
-  const fix = dmarcFlawFix(mail, apexDomain, policy, flaw);
+): KeyedFinding {
+  const flawText = dmarcPolicyFlawPhrase(flaw);
+  const effect = dmarcFlawEffectPhrase(policy, flaw);
+  const { explanation, snippet } = dmarcFlawFix(mail, apexDomain, policy, flaw);
+  const fix = { explanation: germanText(explanation), ...(snippet && { snippet }) };
 
   if (policy === null) {
     return {
       id: 'no-dmarc',
+      key: 'dmarc-ignored',
       severity: receivesMail ? 'warning' : 'info',
-      title: `DMARC wirkt nicht: ${dmarcPolicyFlawText(flaw)}`,
-      description: `${effect} Angreifer können so leichter E-Mails in deinem Namen verschicken (Spoofing).`,
+      title: `DMARC wirkt nicht: ${germanText(flawText)}`,
+      description: `${germanText(effect)} Angreifer können so leichter E-Mails in deinem Namen verschicken (Spoofing).`,
       fix,
+      params: { flaw: flawText, effect, fix: explanation },
       category: 'mail',
     };
   }
 
+  // Bei einem ungültigen sp= steht die gewollte Policy schon in p=; der
+  // nächste Schritt ist der Fix, nicht das Verschärfen.
+  const next = flaw.kind === 'sp-invalid' ? undefined : dmarcNoneNextStep(mail);
   return {
     id: 'dmarc-policy-none',
+    key: next ? 'dmarc-as-none' : 'dmarc-sp-invalid',
     severity: 'warning',
-    title: `DMARC wirkt wie p=none: ${dmarcPolicyFlawText(flaw)}`,
-    // Bei einem ungültigen sp= steht die gewollte Policy schon in p=; der
-    // nächste Schritt ist der Fix, nicht das Verschärfen.
-    description: flaw.kind === 'sp-invalid' ? effect : `${effect} ${dmarcNoneNextStep(mail)}`,
+    title: `DMARC wirkt wie p=none: ${germanText(flawText)}`,
+    description: next ? `${germanText(effect)} ${germanText(next)}` : germanText(effect),
     fix,
+    params: { flaw: flawText, effect, fix: explanation, ...(next && { next }) },
     category: 'mail',
   };
 }
@@ -376,8 +429,10 @@ function flawedDmarcFinding(
  * echten Mails gibt, die verloren gehen könnten, gibt es auch keinen Grund,
  * mit p=none oder quarantine vorsichtig anzufangen.
  */
-const NULL_MX_DMARC_ADVICE = 'ohne echte Mails geht dabei nichts verloren. Reports (rua) nur an eine Adresse auf einer anderen Domain: diese hier nimmt keine Mails an.';
-const DMARC_START_ADVICE = 'Mit p=none läuft erstmal nur Reporting, ohne abzulehnen.';
+const NULL_MX_DMARC_ADVICE = phrase(
+  'ohne echte Mails geht dabei nichts verloren. Reports (rua) nur an eine Adresse auf einer anderen Domain: diese hier nimmt keine Mails an.'
+);
+const DMARC_START_ADVICE = phrase('Mit p=none läuft erstmal nur Reporting, ohne abzulehnen.');
 
 function newDmarcSnippet(mail: MailSecurity, apexDomain: string): string {
   return mail.nullMx
@@ -390,10 +445,10 @@ function newDmarcSnippet(mail: MailSecurity, apexDomain: string): string {
  * gehen könnten — der Zwischenschritt über quarantine widerspräche dem
  * Hinweis null-mx-incomplete (p=reject).
  */
-function dmarcNoneNextStep(mail: MailSecurity): string {
+function dmarcNoneNextStep(mail: MailSecurity): Phrase {
   return mail.nullMx
-    ? 'Ohne echte Mails geht beim Ablehnen nichts verloren: direkt auf p=reject wechseln.'
-    : 'Sobald Reports stabil aussehen: auf quarantine wechseln.';
+    ? phrase('Ohne echte Mails geht beim Ablehnen nichts verloren: direkt auf p=reject wechseln.')
+    : phrase('Sobald Reports stabil aussehen: auf quarantine wechseln.');
 }
 
 /**
@@ -407,14 +462,16 @@ function dmarcFlawFix(
   apexDomain: string,
   policy: DmarcPolicy | null,
   flaw: DmarcPolicyFlaw
-): Finding['fix'] {
+): { explanation: Phrase; snippet?: string } {
   const record = mail.dmarc.record ?? '';
   const snippet = (value: string) => `_dmarc.${apexDomain}  TXT  "${value}"`;
 
   if (flaw.kind === 'multiple') {
     // Welcher Record gemeint ist, wissen nur die Betreiber: kein Snippet.
     return {
-      explanation: 'Lass nur einen DMARC-Record stehen und entferne die übrigen. Brauchst du Report-Adressen aus mehreren, trag sie kommagetrennt in das rua= des einen ein.',
+      explanation: phrase(
+        'Lass nur einen DMARC-Record stehen und entferne die übrigen. Brauchst du Report-Adressen aus mehreren, trag sie kommagetrennt in das rua= des einen ein.'
+      ),
     };
   }
 
@@ -422,8 +479,13 @@ function dmarcFlawFix(
     const target = mail.nullMx ? 'reject' : flaw.declared;
     return {
       explanation: mail.nullMx && flaw.declared !== 'reject'
-        ? 'Entferne sp= und setz p=reject — ohne echte Mails geht dabei nichts verloren, und ohne sp= gilt p= auch für Subdomains.'
-        : `Entferne sp= oder setz es auf none, quarantine oder reject — ohne sp= gilt p=${target} auch für Subdomains.`,
+        ? phrase(
+            'Entferne sp= und setz p=reject — ohne echte Mails geht dabei nichts verloren, und ohne sp= gilt p= auch für Subdomains.'
+          )
+        : phrase(
+            'Entferne sp= oder setz es auf none, quarantine oder reject — ohne sp= gilt p={target} auch für Subdomains.',
+            { target }
+          ),
       snippet: snippet(withDmarcPolicy(record, target)),
     };
   }
@@ -433,8 +495,13 @@ function dmarcFlawFix(
   if (policy === null) {
     return {
       explanation: mail.nullMx
-        ? `Ersetze den Record durch einen mit p=reject direkt hinter v=DMARC1 — ${NULL_MX_DMARC_ADVICE}`
-        : `Ersetze den Record durch einen mit p= direkt hinter v=DMARC1: none, quarantine oder reject. ${DMARC_START_ADVICE}`,
+        ? phrase('Ersetze den Record durch einen mit p=reject direkt hinter v=DMARC1 — {advice}', {
+            advice: NULL_MX_DMARC_ADVICE,
+          })
+        : phrase(
+            'Ersetze den Record durch einen mit p= direkt hinter v=DMARC1: none, quarantine oder reject. {advice}',
+            { advice: DMARC_START_ADVICE }
+          ),
       snippet: newDmarcSnippet(mail, apexDomain),
     };
   }
@@ -444,8 +511,10 @@ function dmarcFlawFix(
   // Empfänger heute schon tun — bei einem Null-MX gleich p=reject.
   return {
     explanation: mail.nullMx
-      ? 'Trag p=reject direkt hinter v=DMARC1 ein — ohne echte Mails geht dabei nichts verloren.'
-      : 'Trag p= direkt hinter v=DMARC1 ein. p=none hält fest, was Empfänger heute schon tun; danach Schritt für Schritt verschärfen.',
+      ? phrase('Trag p=reject direkt hinter v=DMARC1 ein — ohne echte Mails geht dabei nichts verloren.')
+      : phrase(
+          'Trag p= direkt hinter v=DMARC1 ein. p=none hält fest, was Empfänger heute schon tun; danach Schritt für Schritt verschärfen.'
+        ),
     snippet: snippet(withDmarcPolicy(record, mail.nullMx ? 'reject' : 'none')),
   };
 }
@@ -482,7 +551,7 @@ function withDmarcPolicy(record: string, policy: DmarcPolicy): string {
  * dann nicht, ob er fehlt.
  */
 
-function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding[] {
+function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): KeyedFinding[] {
   const tlsRpt = mail.tlsRpt;
   if (!tlsRpt || tlsRpt.lookupFailed) return [];
 
@@ -490,6 +559,7 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
     if (!receivesMail) return [];
     return [{
       id: 'no-tls-rpt',
+      key: mail.mtaSts.present ? 'no-tls-rpt-mta-sts' : 'no-tls-rpt',
       severity: 'info',
       title: 'Kein TLS-RPT',
       description: mail.mtaSts.present
@@ -510,6 +580,7 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
       severity: 'info',
       title: 'TLS-RPT-Record ungültig',
       description: `${tlsRpt.invalid}. Absender schicken dann keine Berichte (RFC 8460 §3).`,
+      params: tlsRpt.invalidDetail && { reason: tlsRpt.invalidDetail },
       category: 'mail',
       advisory: true,
     }];
@@ -520,6 +591,7 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
     severity: 'success',
     title: 'TLS-RPT aktiv',
     description: `Berichte über Probleme bei der verschlüsselten Zustellung gehen an ${tlsRpt.rua?.join(', ')}.`,
+    params: { rua: tlsRpt.rua?.join(', ') ?? '' },
     category: 'mail',
   }];
 }
@@ -530,13 +602,13 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
  * deshalb DMARC der nächste Schritt — BIMI zu empfehlen hieße, etwas
  * einzurichten, das nicht wirkt.
  */
-function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding[] {
+function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): KeyedFinding[] {
   const bimi = mail.bimi;
   if (!bimi || bimi.lookupFailed) return [];
   // Ob BIMI wirkt, hängt an DMARC. Ist DMARC nicht prüfbar (#101), bleibt
   // auch das offen — dann weder „erst DMARC verschärfen“ noch „wirkt“.
   const dmarcUnknown = Boolean(mail.dmarc.lookupFailed);
-  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGap(mail.dmarc);
+  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGapPhrase(mail.dmarc);
 
   if (!bimi.present) {
     if (!receivesMail || dmarcUnknown) return [];
@@ -545,7 +617,8 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
         id: 'bimi-needs-dmarc',
         severity: 'info',
         title: 'BIMI erst mit strengerer DMARC-Policy',
-        description: `Mit BIMI zeigen Postfächer dein Markenlogo neben deinen Mails — aber nur bei DMARC mit p=quarantine oder p=reject. Jetzt: ${dmarcGap}. Erst DMARC verschärfen, dann lohnt sich BIMI.`,
+        description: `Mit BIMI zeigen Postfächer dein Markenlogo neben deinen Mails — aber nur bei DMARC mit p=quarantine oder p=reject. Jetzt: ${germanText(dmarcGap)}. Erst DMARC verschärfen, dann lohnt sich BIMI.`,
+        params: { gap: dmarcGap },
         category: 'mail',
         advisory: true,
       }];
@@ -573,6 +646,7 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
       severity: 'info',
       title: 'BIMI-Record ungültig',
       description: `${bimi.invalid}. Empfänger zeigen dann kein Logo.`,
+      params: bimi.invalidDetail && { reason: bimi.invalidDetail },
       category: 'mail',
       advisory: true,
     }];
@@ -585,7 +659,8 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
       id: 'bimi-dmarc-weak',
       severity: 'info',
       title: 'BIMI-Record wirkt noch nicht',
-      description: `Der Record ist da, aber Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject. Jetzt: ${dmarcGap}.`,
+      description: `Der Record ist da, aber Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject. Jetzt: ${germanText(dmarcGap)}.`,
+      params: { gap: dmarcGap },
       category: 'mail',
       advisory: true,
     }];
@@ -593,6 +668,7 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
 
   return [{
     id: 'bimi-present',
+    key: bimi.evidenceUrl ? 'bimi-present' : 'bimi-present-no-vmc',
     severity: 'success',
     title: 'BIMI-Record vorhanden',
     description: bimi.evidenceUrl
@@ -615,12 +691,13 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
  * `p=quarantine`). Kostet aber keine zweiten Punkte, wenn eines davon
  * schon gemeldet ist (`causedBy`).
  */
-function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
+function noMailFindings(mail: MailSecurity, apexDomain: string): KeyedFinding[] {
   const protection = noMailProtection(mail);
 
-  const nullMxFinding: Finding = protection.complete
+  const nullMxFinding: KeyedFinding = protection.complete
     ? {
         id: 'null-mx',
+        key: 'null-mx-complete',
         severity: 'success',
         title: 'Keine Mails: Domain sauber als mail-frei markiert',
         description: 'Null-MX (RFC 7505), SPF -all und DMARC p=reject: Die Domain nimmt keine Mails an, und Empfänger weisen Mails ab, die sich als diese Domain ausgeben. DKIM und MTA-STS braucht sie deshalb nicht.',
@@ -638,10 +715,10 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
 
   // Scheiterte die SPF- oder DMARC-Abfrage, ist offen, ob dort etwas fehlt —
   // das meldet schon spf-unchecked bzw. dmarc-unchecked (#101).
-  const missing: string[] = [];
+  const missing: Phrase[] = [];
   const snippets: string[] = [];
   if (!protection.spfAllowsNoSender && !mail.spf.lookupFailed) {
-    missing.push('ein SPF, das niemanden senden lässt (v=spf1 -all)');
+    missing.push(phrase('ein SPF, das niemanden senden lässt (v=spf1 -all)'));
     snippets.push(`${apexDomain}  TXT  "v=spf1 -all"`);
   }
   if (!protection.dmarcReject && !mail.dmarc.lookupFailed) {
@@ -650,16 +727,18 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
     const { policy, flaw } = effectiveDmarcPolicy(mail.dmarc);
     missing.push(
       flaw
-        ? `DMARC mit p=reject (jetzt: ${dmarcPolicyFlawText(flaw)})`
+        ? phrase('DMARC mit p=reject (jetzt: {flaw})', { flaw: dmarcPolicyFlawPhrase(flaw) })
         : policy === 'reject'
-        ? `DMARC mit p=reject für alle Mails (jetzt pct=${dmarcPct(mail.dmarc.record)})`
+        ? phrase('DMARC mit p=reject für alle Mails (jetzt pct={pct})', { pct: dmarcPct(mail.dmarc.record) })
         : policy
-        ? `DMARC mit p=reject (jetzt p=${policy})`
-        : 'DMARC mit p=reject'
+        ? phrase('DMARC mit p=reject (jetzt p={policy})', { policy })
+        : phrase('DMARC mit p=reject')
     );
     snippets.push(`_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`);
   }
   if (missing.length === 0) return [nullMxFinding];
+  const [first, second] = missing;
+  const gaps = second ? phrase('{first} und {second}', { first, second }) : first;
 
   return [
     nullMxFinding,
@@ -667,7 +746,8 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
       id: 'null-mx-incomplete',
       severity: 'info',
       title: 'Keine Mails, aber Schutz vor Fälschungen unvollständig',
-      description: `Der Null-MX regelt nur den Empfang. Damit Empfänger Mails abweisen, die sich als ${apexDomain} ausgeben, fehlt noch ${missing.join(' und ')}.`,
+      description: `Der Null-MX regelt nur den Empfang. Damit Empfänger Mails abweisen, die sich als ${apexDomain} ausgeben, fehlt noch ${germanText(gaps)}.`,
+      params: { domain: apexDomain, missing: gaps },
       fix: {
         explanation: 'Eine Domain ohne Mail erlaubt niemandem das Senden und lässt Fälschungen ablehnen.',
         snippet: snippets.join('\n'),
@@ -682,7 +762,7 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
-export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
+export function dnssecFindings(dnssec: DnssecInfo): KeyedFinding[] {
   if (!dnssec.enabled && dnssec.lookupFailed) {
     const reason = dnssec.lookupFailed;
     return [
@@ -694,8 +774,12 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
         // Eine unsignierte Zone landet nie hier (siehe checkDnssec): bei
         // SERVFAIL ist die kaputte Signatur deshalb die naheliegende Ursache.
         reason === 'servfail'
-          ? 'Der Resolver antwortete auf die DS- oder DNSKEY-Abfrage mit SERVFAIL. Das kann vorübergehend sein. Bleibt es dabei, steckt meist eine fehlerhafte DNSSEC-Signatur dahinter — dann scheitern validierende Resolver an der ganzen Domain.'
-          : `Die DS- oder DNSKEY-Abfrage blieb unbeantwortet. ${FAILURE_DETAIL[reason]}`
+          ? phrase(
+              'Der Resolver antwortete auf die DS- oder DNSKEY-Abfrage mit SERVFAIL. Das kann vorübergehend sein. Bleibt es dabei, steckt meist eine fehlerhafte DNSSEC-Signatur dahinter — dann scheitern validierende Resolver an der ganzen Domain.'
+            )
+          : phrase('Die DS- oder DNSKEY-Abfrage blieb unbeantwortet. {detail}', {
+              detail: FAILURE_DETAIL[reason],
+            })
       ),
     ];
   }
@@ -735,6 +819,8 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
 
   return [{
     id: 'dnssec-valid',
+    key: dnssec.algorithm ? 'dnssec-valid' : 'dnssec-valid-no-algorithm',
+    params: dnssec.algorithm ? { algorithm: dnssec.algorithm } : undefined,
     severity: 'success',
     title: 'DNSSEC aktiv und valide',
     description: dnssec.algorithm
@@ -746,18 +832,19 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
 
 /* ─── SSL ─────────────────────────────────────────────────────────────── */
 
-const SSL_FAILURE_DETAIL: Record<LookupFailure, string> = {
-  timeout:
-    'Port 443 hat den TLS-Handshake nicht rechtzeitig abgeschlossen — ein überlasteter Server oder eine Firewall, die den Port stumm verwirft.',
-  servfail: 'Die Adresse des Hosts ließ sich gerade nicht auflösen (SERVFAIL oder Resolver-Timeout).',
-  network: 'Der Host war über das Netz nicht erreichbar.',
+const SSL_FAILURE_DETAIL: Record<LookupFailure, Phrase> = {
+  timeout: phrase(
+    'Port 443 hat den TLS-Handshake nicht rechtzeitig abgeschlossen — ein überlasteter Server oder eine Firewall, die den Port stumm verwirft.'
+  ),
+  servfail: phrase('Die Adresse des Hosts ließ sich gerade nicht auflösen (SERVFAIL oder Resolver-Timeout).'),
+  network: phrase('Der Host war über das Netz nicht erreichbar.'),
 };
 
 /**
  * `lookupFailed`: der Check kam zu keinem Ergebnis (siehe SslCheckResult in
  * services/ssl.ts). Ohne ihn heißt `ssl: null` wie bisher „kein TLS“.
  */
-export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): Finding[] {
+export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): KeyedFinding[] {
   if (!ssl && lookupFailed) {
     const detail = SSL_FAILURE_DETAIL[lookupFailed];
     return [uncheckedFinding('ssl-unchecked', 'ssl', 'SSL', lookupFailed, detail)];
@@ -773,7 +860,7 @@ export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): 
     }];
   }
 
-  const findings: Finding[] = [];
+  const findings: KeyedFinding[] = [];
 
   const isExpired = ssl.daysUntilExpiry < 0;
 
@@ -798,6 +885,7 @@ export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): 
       severity: 'critical',
       title: `Zertifikat seit ${Math.abs(ssl.daysUntilExpiry)} Tagen abgelaufen`,
       description: 'Browser zeigen Sicherheitswarnungen. Sofort erneuern.',
+      params: { count: Math.abs(ssl.daysUntilExpiry) },
       category: 'ssl',
     });
   } else if (ssl.daysUntilExpiry < 14) {
@@ -806,6 +894,7 @@ export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): 
       severity: 'warning',
       title: `Zertifikat läuft in ${ssl.daysUntilExpiry} Tagen ab`,
       description: 'Wenn kein Auto-Renew läuft: jetzt erneuern. Let\'s Encrypt wird in der Regel 30 Tage vorher renewed.',
+      params: { count: ssl.daysUntilExpiry },
       category: 'ssl',
     });
   } else if (ssl.valid) {
@@ -814,6 +903,7 @@ export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): 
       severity: 'success',
       title: `SSL-Zertifikat gültig (noch ${ssl.daysUntilExpiry} Tage)`,
       description: `Ausgestellt von ${ssl.issuer} via ${ssl.tlsVersion}.`,
+      params: { count: ssl.daysUntilExpiry, issuer: ssl.issuer, tlsVersion: ssl.tlsVersion },
       category: 'ssl',
     });
   }
@@ -824,6 +914,7 @@ export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): 
       severity: 'warning',
       title: `Veraltete TLS-Version: ${ssl.tlsVersion}`,
       description: 'TLS 1.0/1.1 sind deprecated. Auf TLS 1.2+ aktualisieren.',
+      params: { tlsVersion: ssl.tlsVersion },
       category: 'ssl',
     });
   }
@@ -841,7 +932,7 @@ export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): 
  * Resolver antwortet: bei Hosts A, bei DNS-Einträgen wie
  * `s1._domainkey.example.com` TXT.
  */
-export function propagationFindings(results: ResolverResult[], types: RecordType[]): Finding[] {
+export function propagationFindings(results: ResolverResult[], types: RecordType[]): KeyedFinding[] {
   const type = primaryPropagationType(results, types);
   if (!type) return [];
 
@@ -863,9 +954,11 @@ export function propagationFindings(results: ResolverResult[], types: RecordType
       id: 'propagation-mismatch',
       severity: 'warning',
       title: 'Propagation-Abweichung erkannt',
+      key: entry ? 'propagation-mismatch-entry' : 'propagation-mismatch',
       description: entry
         ? `${deviating} von ${compared} Resolvern weichen beim ${type}-Record von der Mehrheit ab — eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).`
         : `${compared} Resolver liefern ${distinct} verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.`,
+      params: entry ? { count: deviating, compared, type } : { count: compared, answers: distinct },
       category: 'dns',
     }];
   }
@@ -874,9 +967,11 @@ export function propagationFindings(results: ResolverResult[], types: RecordType
     id: 'propagation-consistent',
     severity: 'success',
     title: 'Konsistente Propagation',
+    key: entry ? 'propagation-consistent-entry' : 'propagation-consistent',
     description: entry
       ? `Alle ${compared} Resolver liefern denselben ${type}-Record.`
       : `Alle ${compared} Resolver liefern dasselbe Ergebnis.`,
+    params: entry ? { count: compared, type } : { count: compared },
     category: 'dns',
   }];
 }
@@ -887,7 +982,7 @@ export function propagationFindings(results: ResolverResult[], types: RecordType
  * EPP-Status-Codes die ein klares Problem signalisieren.
  * Vollständige Liste: https://icann.org/epp
  */
-const CRITICAL_STATUS = new Set([
+const CRITICAL_STATUS = new Set<CriticalStatus>([
   'clienthold',
   'serverhold',
   'pendingdelete',
@@ -895,7 +990,13 @@ const CRITICAL_STATUS = new Set([
   'redemptionperiod',
 ]);
 
-export function whoisFindings(whois: WhoisInfo | null): Finding[] {
+type CriticalStatus = 'clienthold' | 'serverhold' | 'pendingdelete' | 'pendingrestore' | 'redemptionperiod';
+
+function isCriticalStatus(status: string): status is CriticalStatus {
+  return CRITICAL_STATUS.has(status as CriticalStatus);
+}
+
+export function whoisFindings(whois: WhoisInfo | null): KeyedFinding[] {
   if (!whois) {
     // Gar kein Finding: dass eine ccTLD kein RDAP anbietet, ist eine
     // Eigenschaft der Datenquelle und keine Schwäche der geprüften Domain.
@@ -904,7 +1005,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
     return [];
   }
 
-  const findings: Finding[] = [];
+  const findings: KeyedFinding[] = [];
 
   // ── Ablauf-Check ─────────────────────────────────────────────────────
   if (whois.expiresAt) {
@@ -917,6 +1018,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'critical',
         title: `Domain seit ${Math.abs(daysUntilExpiry)} Tagen abgelaufen`,
         description: 'Die Domain ist offiziell abgelaufen und kann jederzeit gelöscht oder neu vergeben werden.',
+        params: { count: Math.abs(daysUntilExpiry) },
         category: 'dns',
       });
     } else if (daysUntilExpiry < 7) {
@@ -925,6 +1027,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'critical',
         title: `Domain läuft in ${daysUntilExpiry} Tagen ab`,
         description: 'Verlängerung dringend! Andernfalls geht die Domain verloren.',
+        params: { count: daysUntilExpiry },
         category: 'dns',
       });
     } else if (daysUntilExpiry < 30) {
@@ -933,6 +1036,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'warning',
         title: `Domain läuft in ${daysUntilExpiry} Tagen ab`,
         description: 'Verlängerung sollte rechtzeitig erfolgen, bevor die Frist knapp wird.',
+        params: { count: daysUntilExpiry },
         category: 'dns',
       });
     }
@@ -965,12 +1069,13 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
   for (const status of whois.status ?? []) {
     const norm = status.toLowerCase().replace(/\s+/g, '');
     if (alreadyReportedExpired && REDUNDANT_WHEN_EXPIRED.has(norm)) continue;
-    if (CRITICAL_STATUS.has(norm)) {
+    if (isCriticalStatus(norm)) {
       findings.push({
-        id: `whois-status-${norm}`,
+        id: `whois-status-${norm}` as const,
         severity: 'critical',
         title: `Domain-Status: ${status}`,
         description: getStatusExplanation(norm),
+        params: { status },
         category: 'dns',
       });
     }
@@ -987,6 +1092,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'info',
         title: `Domain ist erst ${ageDays} Tage alt`,
         description: 'Frisch registrierte Domains werden von Spam-/Phishing-Filtern oft skeptischer behandelt.',
+        params: { count: ageDays },
         category: 'dns',
       });
     }

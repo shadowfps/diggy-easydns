@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { CircleHelp } from 'lucide-react';
 import type { Explanation } from '@/lib/explanations';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/i18n';
 
 /** Mindestabstand des Popovers zum Fensterrand und zum Button, in px. */
 const EDGE = 16;
@@ -31,6 +32,7 @@ interface InfoButtonProps {
  * im Viewport gehalten und nach oben geklappt, wenn unten der Platz fehlt.
  */
 export function InfoButton({ term, explanation, className }: InfoButtonProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrapperRef = useRef<HTMLSpanElement>(null);
@@ -102,7 +104,7 @@ export function InfoButton({ term, explanation, className }: InfoButtonProps) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-label={`Was bedeutet ${term}?`}
+        aria-label={t('Was bedeutet {term}?', { term })}
         aria-expanded={open}
         // Nur bei offenem Popover: sonst zeigte die Referenz auf eine ID, die
         // es im DOM nicht gibt (gleiches Problem wie früher bei den Tabs).
@@ -126,9 +128,9 @@ export function InfoButton({ term, explanation, className }: InfoButtonProps) {
           <span className="block text-sm font-semibold text-fg">
             {/* Der Punkt trennt nur fürs Auge; manche Screenreader lesen ihn
                 sonst als „Mittelpunkt“ vor. */}
-            {term} <span className="text-fg-subtle" aria-hidden="true">·</span> {explanation.title}
+            {term} <span className="text-fg-subtle" aria-hidden="true">·</span> {t(explanation.title)}
           </span>
-          <span className="mt-1 block text-sm leading-relaxed text-fg-muted">{explanation.text}</span>
+          <span className="mt-1 block text-sm leading-relaxed text-fg-muted">{t(explanation.text)}</span>
         </motion.span>
       )}
     </span>

@@ -7,6 +7,8 @@
  * Funktionen ohne DOM testbar sind.
  */
 
+import { t } from '@/i18n';
+
 export interface ComparePair {
   /** Domain A (links); leer, solange keine eingetragen ist. */
   left: string;
@@ -64,9 +66,12 @@ export function getComparePairFromPath(pathname: string): ComparePair | null {
   }
 }
 
-/** Tab-Titel: beide Domains, damit offene Vergleiche unterscheidbar bleiben. */
+/**
+ * Tab-Titel: beide Domains, damit offene Vergleiche unterscheidbar bleiben.
+ * Übersetzt beim Aufruf — App.tsx setzt ihn bei einem Sprachwechsel neu.
+ */
 export function compareDocumentTitle({ left, right }: ComparePair): string {
   if (left && right) return `${left} vs. ${right} — diggy`;
-  if (left) return `${left} vergleichen — diggy`;
-  return 'Vergleich — diggy';
+  if (left) return `${t('{domain} vergleichen', { domain: left })} — diggy`;
+  return `${t('Vergleich')} — diggy`;
 }

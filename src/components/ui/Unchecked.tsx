@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { CircleHelp } from 'lucide-react';
-import { lookupFailureLabel } from '@/lib/lookupFailure';
+import { lookupFailurePhrase } from '@/lib/lookupFailure';
+import { phraseText, useI18n } from '@/i18n';
 
 /*
  * „nicht prüfbar“ (#101): der Check scheiterte (Timeout, SERVFAIL …), über
@@ -11,10 +12,11 @@ import { lookupFailureLabel } from '@/lib/lookupFailure';
 
 /** Badge im Kartenkopf. */
 export function UncheckedBadge() {
+  const { t } = useI18n();
   return (
     <span className="badge">
       <CircleHelp className="size-3" aria-hidden />
-      nicht prüfbar
+      {t('nicht prüfbar')}
     </span>
   );
 }
@@ -35,12 +37,20 @@ export function UncheckedLine({
   /** Ergänzung hinter dem Satz, etwa was ein anhaltender Fehler bedeutet. */
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-start gap-2 text-sm leading-relaxed text-fg-muted">
       <CircleHelp className="mt-0.5 size-4 shrink-0 text-fg-subtle" aria-hidden />
       <span>
-        Der {name}-Check scheiterte{reason ? ` (${lookupFailureLabel(reason)})` : ''}. Ob {name}{' '}
-        eingerichtet ist, bleibt offen — später erneut prüfen.{children && <> {children}</>}
+        {reason
+          ? t('Der {name}-Check scheiterte ({reason}). Ob {name} eingerichtet ist, bleibt offen — später erneut prüfen.', {
+              name,
+              reason: phraseText(lookupFailurePhrase(reason)),
+            })
+          : t('Der {name}-Check scheiterte. Ob {name} eingerichtet ist, bleibt offen — später erneut prüfen.', {
+              name,
+            })}
+        {children && <> {children}</>}
       </span>
     </div>
   );

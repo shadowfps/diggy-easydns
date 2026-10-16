@@ -34,7 +34,12 @@ export type LoadStatus = 'idle' | 'loading' | 'done' | 'error' | 'skipped';
 export interface SectionSlice<T> {
   status: LoadStatus;
   data: T | undefined;
-  error?: string;
+  /**
+   * Der geworfene Fehler selbst, nicht nur seine Meldung: die Ansicht
+   * übersetzt ihn beim Rendern (Fehlercode des Servers, #86) und folgt damit
+   * auch einem Sprachwechsel.
+   */
+  error?: unknown;
   /**
    * Fertig, aber der Check kam zu keinem Ergebnis (Timeout, SERVFAIL). Nur
    * SSL nutzt das: ohne Zertifikat gibt es kein Objekt, das den Ausfall wie
@@ -92,7 +97,7 @@ interface State {
   records: DnsRecord[] | null;
   failedRecordTypes: RecordType[] | undefined;
   recordsStatus: LoadStatus;
-  recordsError: string | null;
+  recordsError: unknown;
   dnsFindings: Finding[];
   sections: Record<SectionKey, SectionSlice<unknown>>;
   sectionFindings: Partial<Record<SectionKey, Finding[]>>;
@@ -125,7 +130,7 @@ type Action =
   | { type: 'reset' }
   | { type: 'start'; seq: number; domain: string; skipped: readonly SectionKey[] }
   | { type: 'recordsDone'; seq: number; core: LookupCore }
-  | { type: 'recordsError'; seq: number; message: string }
+  | { type: 'recordsError'; seq: number; error: unknown }
   | {
       type: 'sectionDone';
       seq: number;
@@ -134,7 +139,7 @@ type Action =
       findings: Finding[];
       lookupFailed?: LookupFailure;
     }
-  | { type: 'sectionError'; seq: number; key: SectionKey; message: string };
+  | { type: 'sectionError'; seq: number; key: SectionKey; error: unknown };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -161,7 +166,7 @@ function reducer(state: State, action: Action): State {
       };
     case 'recordsError':
       if (action.seq !== state.seq) return state;
-      return { ...state, recordsStatus: 'error', recordsError: action.message };
+      return { ...state, recordsStatus: 'error', recordsError: action.error };
     case 'sectionDone':
       if (action.seq !== state.seq) return state;
       return {
@@ -182,16 +187,12 @@ function reducer(state: State, action: Action): State {
         ...state,
         sections: {
           ...state.sections,
-          [action.key]: { status: 'error', data: undefined, error: action.message },
+          [action.key]: { status: 'error', data: undefined, error: action.error },
         },
       };
     default:
       return state;
   }
-}
-
-function errMessage(e: unknown): string {
-  return e instanceof Error ? e.message : 'Fehlgeschlagen';
 }
 
 /* ─── Hook ─────────────────────────────────────────────────────────────── */
@@ -200,7 +201,7 @@ export interface ProgressiveLookup {
   domain: string | null;
   records: DnsRecord[] | null;
   recordsStatus: LoadStatus;
-  recordsError: string | null;
+  recordsError: unknown;
   sections: TypedSections;
   findings: Finding[];
   healthScore: HealthScore;
@@ -255,7 +256,7 @@ export function useProgressiveLookup(): ProgressiveLookup {
             })
             .catch((e) => {
               if (seq !== seqRef.current) return;
-              dispatch({ type: 'sectionError', seq, key, message: errMessage(e) });
+              dispatch({ type: 'sectionError', seq, key, error: e });
             });
         };
 
@@ -276,7 +277,7 @@ export function useProgressiveLookup(): ProgressiveLookup {
       })
       .catch((e) => {
         if (seq !== seqRef.current) return;
-        dispatch({ type: 'recordsError', seq, message: errMessage(e) });
+        dispatch({ type: 'recordsError', seq, error: e });
       });
   }, []);
 

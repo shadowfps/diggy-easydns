@@ -310,6 +310,7 @@ function quotaLimiter(provider: string) {
     max: 10,
     code: 'quota_rate_limited',
     message: `Der ${provider}-Check ist auf 10 Abfragen pro Stunde begrenzt, weil er ein externes API-Kontingent nutzt.`,
+    params: { provider },
   });
 }
 
@@ -400,11 +401,14 @@ function resolveDomainParam(
     res.status(400).json({
       error: 'not_a_hostname',
       message: `"${forMessage(rawInput)}" ist ein DNS-Eintrag, kein Host — dieser Check braucht einen Webserver.`,
+      // Werte aus der Meldung, damit der Client sie übersetzen kann (#86).
+      params: { input: forMessage(rawInput) },
     });
   } else {
     res.status(400).json({
       error: 'invalid_domain',
       message: `"${forMessage(rawInput)}" sieht nicht nach einer gültigen Domain aus.`,
+      params: { input: forMessage(rawInput) },
     });
   }
   return null;
@@ -430,6 +434,7 @@ app.get('/api/ip-details', async (req: Request, res: Response) => {
     return res.status(400).json({
       error: 'invalid_ip',
       message: `"${forMessage(ip)}" ist keine öffentliche IP-Adresse.`,
+      params: { input: forMessage(ip) },
     });
   }
 
@@ -653,6 +658,7 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
       return res.status(404).json({
         error: 'domain_not_found',
         message: `Die Domain "${domain}" konnte nicht aufgelöst werden.`,
+        params: { domain },
       });
     }
 

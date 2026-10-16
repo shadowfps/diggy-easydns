@@ -12,13 +12,17 @@ import type {
   RecordType,
   ResolverResult,
   SslInfo,
+  TextParams,
   VirusScanReport,
   WhoisInfo,
 } from '@/types/dns';
+import { t } from '@/i18n';
 
 export interface LookupError {
   error: string;
   message: string;
+  /** Werte aus `message`, damit der Client sie übersetzen kann (#86). */
+  params?: TextParams;
 }
 
 /**
@@ -31,11 +35,13 @@ export interface LookupError {
  */
 export class ApiError extends Error {
   readonly code: string;
+  readonly params?: TextParams;
 
   constructor(payload: LookupError) {
     super(payload.message);
     this.name = 'ApiError';
     this.code = payload.error;
+    this.params = payload.params;
   }
 }
 
@@ -47,13 +53,19 @@ export class ApiError extends Error {
 async function getJson<T>(url: string, fallback: LookupError): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
-    let payload = fallback;
+    let payload: LookupError;
     try {
       payload = await res.json();
     } catch {
-      // JSON-parse fehlgeschlagen — Fallback-Message reicht
+      // Keine JSON-Antwort (Fehlerseite eines Proxys, Timeout): die eigene,
+      // schon übersetzte Meldung — ohne Code. Der Code steht für die Meldung
+      // des Servers, und deren englische Fassung kann enger sein als „ging
+      // nicht“: `domain_check_failed` meint eine ungültige Eingabe.
+      throw new Error(fallback.message);
     }
-    throw new Error(payload.message);
+    // ApiError statt Error: der Code reist mit, die Oberfläche kann daran
+    // übersetzen (#86). `message` bleibt dieselbe wie bisher.
+    throw new ApiError(payload);
   }
   return res.json() as Promise<T>;
 }
@@ -105,49 +117,49 @@ export interface TechStackSection {
 export function lookupRecords(domain: string): Promise<LookupCore> {
   return getJson(`/api/lookup?domain=${dq(domain)}`, {
     error: 'lookup_failed',
-    message: 'Lookup fehlgeschlagen',
+    message: t('Lookup fehlgeschlagen'),
   });
 }
 
 export function lookupPropagation(domain: string): Promise<PropagationSection> {
   return getJson(`/api/lookup/propagation?domain=${dq(domain)}`, {
     error: 'propagation_failed',
-    message: 'Propagation-Check fehlgeschlagen',
+    message: t('Propagation-Check fehlgeschlagen'),
   });
 }
 
 export function lookupDnssec(domain: string): Promise<DnssecSection> {
   return getJson(`/api/lookup/dnssec?domain=${dq(domain)}`, {
     error: 'dnssec_failed',
-    message: 'DNSSEC-Check fehlgeschlagen',
+    message: t('DNSSEC-Check fehlgeschlagen'),
   });
 }
 
 export function lookupSsl(domain: string): Promise<SslSection> {
   return getJson(`/api/lookup/ssl?domain=${dq(domain)}`, {
     error: 'ssl_failed',
-    message: 'SSL-Check fehlgeschlagen',
+    message: t('SSL-Check fehlgeschlagen'),
   });
 }
 
 export function lookupMail(domain: string): Promise<MailSection> {
   return getJson(`/api/lookup/mail?domain=${dq(domain)}`, {
     error: 'mail_failed',
-    message: 'Mail-Audit fehlgeschlagen',
+    message: t('Mail-Audit fehlgeschlagen'),
   });
 }
 
 export function lookupWhois(domain: string): Promise<WhoisSection> {
   return getJson(`/api/lookup/whois?domain=${dq(domain)}`, {
     error: 'whois_failed',
-    message: 'WHOIS-Lookup fehlgeschlagen',
+    message: t('WHOIS-Lookup fehlgeschlagen'),
   });
 }
 
 export function lookupTechStack(domain: string): Promise<TechStackSection> {
   return getJson(`/api/lookup/techstack?domain=${dq(domain)}`, {
     error: 'techstack_failed',
-    message: 'Tech-Stack-Erkennung fehlgeschlagen',
+    message: t('Tech-Stack-Erkennung fehlgeschlagen'),
   });
 }
 
@@ -159,28 +171,28 @@ export function lookupPageSpeed(
 ): Promise<PageSpeedReport> {
   return getJson(`/api/pagespeed?domain=${dq(domain)}&strategy=${encodeURIComponent(strategy)}`, {
     error: 'pagespeed_failed',
-    message: 'PageSpeed fehlgeschlagen',
+    message: t('PageSpeed fehlgeschlagen'),
   });
 }
 
 export function lookupVirusScan(domain: string): Promise<VirusScanReport> {
   return getJson(`/api/virusscan?domain=${dq(domain)}`, {
     error: 'virusscan_failed',
-    message: 'VirusTotal-Scan fehlgeschlagen',
+    message: t('VirusTotal-Scan fehlgeschlagen'),
   });
 }
 
 export function lookupIpDetails(ip: string): Promise<IpDetails> {
   return getJson(`/api/ip-details?ip=${encodeURIComponent(ip)}`, {
     error: 'ip_details_failed',
-    message: 'IP-Details fehlgeschlagen',
+    message: t('IP-Details fehlgeschlagen'),
   });
 }
 
 export function checkDomainAvailability(query: string): Promise<DomainCheckReport> {
   return getJson(`/api/domain-check?q=${encodeURIComponent(query)}`, {
     error: 'domain_check_failed',
-    message: 'Verfügbarkeits-Check fehlgeschlagen',
+    message: t('Verfügbarkeits-Check fehlgeschlagen'),
   });
 }
 
@@ -198,7 +210,7 @@ export interface ContactMessagePayload {
 export async function fetchContactChallenge(): Promise<{ token: string; minDelayMs: number }> {
   const res = await fetch('/api/contact/challenge');
   if (!res.ok) {
-    throw new Error('Kontaktformular konnte nicht geladen werden.');
+    throw new Error(t('Kontaktformular konnte nicht geladen werden.'));
   }
   return res.json();
 }
@@ -215,7 +227,7 @@ export async function sendContactMessage(
   if (!res.ok) {
     let errorPayload: LookupError = {
       error: 'contact_failed',
-      message: `Nachricht konnte nicht gesendet werden (${res.status})`,
+      message: t('Nachricht konnte nicht gesendet werden ({status})', { status: res.status }),
     };
     try {
       errorPayload = await res.json();

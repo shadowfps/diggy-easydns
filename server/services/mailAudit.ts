@@ -16,7 +16,7 @@
  */
 
 import { promises as dnsPromises, type MxRecord } from 'node:dns';
-import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt } from '../types.js';
+import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt, SpfIssueKey, TextRef } from '../types.js';
 import { dnsLookupFailure } from '../lib/dnsFailure.js';
 import type { SpfLookup } from './dnsLookup.js';
 import { isNullMx } from '../../shared/nullMx.js';
@@ -93,6 +93,8 @@ export interface AnalyzedSpf {
   lookupCount?: number;
   valid: boolean;
   issues: string[];
+  /** Dieselben Probleme als Kennung und Werte, für die Übersetzung im Client (#86). */
+  issueDetails?: TextRef<SpfIssueKey>[];
 }
 
 /**
@@ -140,22 +142,32 @@ export function analyzeSpf(record?: string): AnalyzedSpf {
     return { present: false, valid: false, issues: [] };
   }
 
-  const issues: string[] = [];
+  // Satz und Kennung entstehen zusammen, damit sie nicht auseinanderlaufen.
+  const found: (TextRef<SpfIssueKey> & { text: string })[] = [];
   const lookupCount = countSpfLookups(record);
 
   if (lookupCount > 10) {
-    issues.push(`${lookupCount} DNS-Lookups — RFC-Limit ist 10, SPF schlägt fehl.`);
+    found.push({
+      key: 'spf-lookups-over-limit',
+      params: { count: lookupCount },
+      text: `${lookupCount} DNS-Lookups — RFC-Limit ist 10, SPF schlägt fehl.`,
+    });
   } else if (lookupCount > 8) {
-    issues.push(`${lookupCount} DNS-Lookups — knapp am 10er-Limit.`);
+    found.push({
+      key: 'spf-lookups-near-limit',
+      params: { count: lookupCount },
+      text: `${lookupCount} DNS-Lookups — knapp am 10er-Limit.`,
+    });
   }
 
   const allMechanism = record.match(/[~\-+?]all\b/i)?.[0]?.toLowerCase();
   if (allMechanism === '+all') {
-    issues.push('+all erlaubt jeden Sender — bietet effektiv keinen Schutz.');
+    found.push({ key: 'spf-plus-all', text: '+all erlaubt jeden Sender — bietet effektiv keinen Schutz.' });
   } else if (!allMechanism) {
-    issues.push('Kein "all"-Mechanismus am Ende — ungewöhnlich, prüfe Policy.');
+    found.push({ key: 'spf-no-all', text: 'Kein "all"-Mechanismus am Ende — ungewöhnlich, prüfe Policy.' });
   }
 
+  const issues = found.map((issue) => issue.text);
   const valid = issues.length === 0 || (lookupCount <= 10 && allMechanism !== '+all');
 
   return {
@@ -164,6 +176,7 @@ export function analyzeSpf(record?: string): AnalyzedSpf {
     lookupCount,
     valid,
     issues,
+    issueDetails: found.map(({ key, params }) => (params ? { key, params } : { key })),
   };
 }
 

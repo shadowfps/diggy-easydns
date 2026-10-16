@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Moon, Sun, Menu, X, ArrowUpRight } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/cn';
+import { setLanguage, useI18n } from '@/i18n';
 
 interface HeaderProps {
   onHome?: () => void;
@@ -16,7 +17,10 @@ interface HeaderProps {
 
 export function Header({ onHome, onHistory, onAvailability, onCompare, onAbout, search }: HeaderProps) {
   const { theme, toggle } = useTheme();
+  const { language, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const themeLabel = useId();
+  const languageLabel = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Klick außerhalb → schließen
@@ -78,7 +82,7 @@ export function Header({ onHome, onHistory, onAvailability, onCompare, onAbout, 
             type="button"
             onClick={handleHome}
             className="rounded-full font-brand text-xl font-bold lowercase tracking-tight text-fg transition-opacity hover:opacity-70"
-            aria-label="Zur Startseite"
+            aria-label={t('Zur Startseite')}
           >
             diggy
           </button>
@@ -105,7 +109,7 @@ export function Header({ onHome, onHistory, onAvailability, onCompare, onAbout, 
             <button
               type="button"
               onClick={() => setOpen((o) => !o)}
-              aria-label={open ? 'Menü schließen' : 'Menü öffnen'}
+              aria-label={open ? t('Menü schließen') : t('Menü öffnen')}
               aria-expanded={open}
               className="btn btn-secondary btn-icon"
             >
@@ -146,29 +150,60 @@ export function Header({ onHome, onHistory, onAvailability, onCompare, onAbout, 
                   className="overlay absolute right-0 top-full mt-2 w-72 origin-top-right p-2"
                 >
                   <MenuItem onClick={handleHistory} label="History" />
-                  <MenuItem onClick={handleCompare} label="Vergleichen" />
-                  <MenuItem onClick={handleAvailability} label="Available Check" />
+                  <MenuItem onClick={handleCompare} label={t('Vergleichen')} />
+                  <MenuItem onClick={handleAvailability} label={t('Available Check')} />
                   <MenuItem onClick={handleAbout} label="About" />
 
                   <div className="my-2 border-t border-line-subtle" />
 
                   <div className="px-3 pb-1 pt-2">
-                    <p className="eyebrow mb-2">Theme</p>
-                    <div className="flex gap-1 rounded-full bg-surface-muted p-1">
-                      <ThemeButton
+                    <p id={themeLabel} className="eyebrow mb-2">
+                      Theme
+                    </p>
+                    <div
+                      role="group"
+                      aria-labelledby={themeLabel}
+                      className="flex gap-1 rounded-full bg-surface-muted p-1"
+                    >
+                      <SegmentButton
                         active={theme === 'light'}
                         onClick={() => theme !== 'light' && toggle()}
-                        label="Light"
+                        ariaLabel="Light mode"
                       >
                         <Sun className="size-3.5" />
-                      </ThemeButton>
-                      <ThemeButton
+                        <span>Light</span>
+                      </SegmentButton>
+                      <SegmentButton
                         active={theme === 'dark'}
                         onClick={() => theme !== 'dark' && toggle()}
-                        label="Dark"
+                        ariaLabel="Dark mode"
                       >
                         <Moon className="size-3.5" />
-                      </ThemeButton>
+                        <span>Dark</span>
+                      </SegmentButton>
+                    </div>
+                  </div>
+
+                  {/* Gleiche Form wie der Theme-Umschalter darüber. Die Sprachen
+                      heißen in jeder Sprache gleich — wer Deutsch nicht lesen
+                      kann, findet „English“ trotzdem. `lang` sagt Screenreadern,
+                      wie sie das Wort aussprechen; die Überschrift benennt die
+                      Gruppe, sonst hörte man nur „Deutsch, gedrückt“. */}
+                  <div className="px-3 pb-1 pt-3">
+                    <p id={languageLabel} className="eyebrow mb-2">
+                      {t('Sprache')}
+                    </p>
+                    <div
+                      role="group"
+                      aria-labelledby={languageLabel}
+                      className="flex gap-1 rounded-full bg-surface-muted p-1"
+                    >
+                      <SegmentButton active={language === 'de'} onClick={() => void setLanguage('de')}>
+                        <span lang="de">Deutsch</span>
+                      </SegmentButton>
+                      <SegmentButton active={language === 'en'} onClick={() => void setLanguage('en')}>
+                        <span lang="en">English</span>
+                      </SegmentButton>
                     </div>
                   </div>
                 </motion.div>
@@ -194,22 +229,23 @@ function MenuItem({ label, onClick }: { label: string; onClick?: () => void }) {
   );
 }
 
-function ThemeButton({
+/** Eine Option eines Umschalters im Menü (Theme, Sprache). */
+function SegmentButton({
   active,
   onClick,
-  label,
+  ariaLabel,
   children,
 }: {
   active: boolean;
   onClick: () => void;
-  label: string;
+  ariaLabel?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${label} mode`}
+      aria-label={ariaLabel}
       aria-pressed={active}
       className={cn(
         'flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-colors',
@@ -217,7 +253,6 @@ function ThemeButton({
       )}
     >
       {children}
-      <span>{label}</span>
     </button>
   );
 }

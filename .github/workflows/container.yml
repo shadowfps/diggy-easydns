@@ -52,6 +52,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Deutsche Texte, die am Übersetzungsmodul vorbeilaufen (#86) —
+      # sonst fällt ein vergessener Text erst auf Englisch auf.
+      - name: Übersetzung
+        run: npm run i18n
+
       - name: Typecheck
         run: npm run typecheck
 

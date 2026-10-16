@@ -377,6 +377,80 @@ describe('whoisFindings', () => {
 });
 
 /**
+ * #86: Findings tragen zusätzlich zur deutschen Meldung eine Text-Kennung und
+ * die Werte aus dem Satz. Der Client übersetzt daraus; die deutschen Texte
+ * bleiben unverändert der Rückfall.
+ */
+describe('Kennung und Werte für die Übersetzung', () => {
+  it('unterscheidet Apex und Host über die Kennung, nicht über die id', () => {
+    const apex = dnsFindings([], 'example.com', 'example.com');
+    const host = dnsFindings([], 'www.example.com', 'example.com');
+    const noAddress = (list: typeof apex) => list.find((f) => f.id === 'no-address');
+    expect(noAddress(apex)).toMatchObject({ key: 'no-address' });
+    expect(noAddress(host)).toMatchObject({ key: 'no-address-host', params: { domain: 'www.example.com' } });
+  });
+
+  it('gibt die Tage als count mit, den deutschen Satz unverändert', () => {
+    const [finding] = sslFindings(ssl({ daysUntilExpiry: 5 }));
+    expect(finding).toMatchObject({
+      id: 'ssl-expiring-soon',
+      title: 'Zertifikat läuft in 5 Tagen ab',
+      params: { count: 5 },
+    });
+  });
+
+  it('nimmt die Kennung der SPF-Probleme in das Finding', () => {
+    const findings = mailFindings(
+      {
+        spf: { ...analyzeSpf('v=spf1 include:x.de'), present: true },
+        dmarc: { present: true, record: 'v=DMARC1; p=reject', policy: 'reject' },
+        dkim: { selectors: [] },
+        mtaSts: { present: true },
+        hasMx: false,
+        nullMx: false,
+      },
+      'example.com'
+    );
+    const issue = findings.find((f) => f.id.startsWith('spf-issue-'));
+    expect(issue).toMatchObject({ key: 'spf-no-all', description: expect.stringContaining('Kein "all"') });
+    expect(findings.find((f) => f.id === 'dmarc-present')).toMatchObject({ params: { policy: 'reject' } });
+  });
+
+  it('gibt zusammengesetzte Sätze als Bausteine mit, der deutsche Text bleibt', () => {
+    const [unchecked] = sslFindings(null, 'timeout');
+    expect(unchecked).toMatchObject({
+      id: 'ssl-unchecked',
+      key: 'unchecked',
+      title: 'SSL konnte nicht geprüft werden — Zeitüberschreitung',
+      params: { check: 'SSL', reason: { text: 'Zeitüberschreitung' } },
+    });
+    expect(unchecked.description).toMatch(/^Port 443 hat den TLS-Handshake nicht rechtzeitig abgeschlossen/);
+
+    const ignored = mailFindings(
+      {
+        spf: { present: false, valid: false, issues: [] },
+        dmarc: { present: true, record: 'v=DMARC1; p=foo' },
+        dkim: { selectors: [] },
+        mtaSts: { present: false },
+        hasMx: true,
+        nullMx: false,
+      },
+      'example.com'
+    ).find((f) => f.id === 'no-dmarc');
+    expect(ignored).toMatchObject({
+      key: 'dmarc-ignored',
+      title: 'DMARC wirkt nicht: p=foo ist ungültig',
+      params: { flaw: { text: '{tag}={value} ist ungültig', params: { tag: 'p', value: 'foo' } } },
+    });
+  });
+
+  it('meldet den Status-Code roh als Wert', () => {
+    const [finding] = whoisFindings({ status: ['client hold'] });
+    expect(finding).toMatchObject({ id: 'whois-status-clienthold', params: { status: 'client hold' } });
+  });
+});
+
+/**
  * Score vor und nach #101.
  *
  * Die Werte stammen aus einem Lauf mit dem Stand VOR der Änderung (gleiche

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertCircle, CalendarPlus } from 'lucide-react';
 import type { ExpiryReminder } from '@/lib/calendar';
+import { useI18n } from '@/i18n';
 
 /**
  * „In den Kalender“: lädt eine .ics mit dem Ablauftermin herunter.
@@ -11,6 +12,7 @@ import type { ExpiryReminder } from '@/lib/calendar';
  * bereits und zeigt sie im Badge an.
  */
 export function CalendarButton({ reminder }: { reminder: ExpiryReminder }) {
+  const { t } = useI18n();
   const [failed, setFailed] = useState(false);
 
   if (Number.isNaN(new Date(reminder.expiresAt).getTime())) return null;
@@ -41,17 +43,16 @@ export function CalendarButton({ reminder }: { reminder: ExpiryReminder }) {
         type="button"
         onClick={handleClick}
         className="btn btn-secondary btn-sm"
-        title="Termin am Ablaufdatum mit Erinnerung 14 Tage und 1 Tag vorher (.ics)"
+        title={t('Termin am Ablaufdatum mit Erinnerung 14 Tage und 1 Tag vorher (.ics)')}
       >
         <CalendarPlus className="size-3.5" />
-        In den Kalender
+        {t('In den Kalender')}
       </button>
       {failed && (
         <p role="alert" className="mt-2 flex items-start gap-2 text-xs text-fg-muted">
           <AlertCircle className="mt-px size-3.5 shrink-0 text-danger" />
           <span>
-            Die Kalender-Datei ließ sich nicht laden. Lade die Seite neu und versuch es noch
-            einmal.
+            {t('Die Kalender-Datei ließ sich nicht laden. Lade die Seite neu und versuch es noch einmal.')}
           </span>
         </p>
       )}

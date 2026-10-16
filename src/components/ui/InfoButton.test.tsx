@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { RECORD_EXPLANATIONS } from '@/lib/explanations';
 import { InfoButton } from './InfoButton';
 
 /**
@@ -9,10 +10,9 @@ import { InfoButton } from './InfoButton';
  * meldet.
  */
 
-const EXPLANATION = {
-  title: 'Mailserver',
-  text: 'Nennt die Server, die E-Mails für die Domain annehmen.',
-};
+// Titel und Text sind Schlüssel aus dem Wörterbuch (#86) — deshalb ein
+// echter Eintrag statt eines Fantasietexts.
+const EXPLANATION = RECORD_EXPLANATIONS.MX;
 
 function setup() {
   const user = userEvent.setup();

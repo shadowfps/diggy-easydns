@@ -5,6 +5,8 @@ import type { WhoisInfo } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { t, useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 import { CalendarButton } from '@/components/calendar/CalendarButton';
 
 interface WhoisViewProps {
@@ -15,7 +17,7 @@ interface WhoisViewProps {
 }
 
 /** EPP-Status-Codes übersetzt für Laien — kurz & verständlich. */
-const STATUS_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad' }> = {
+const STATUS_LABELS: Record<string, { label: DeKey; tone: 'ok' | 'warn' | 'bad' }> = {
   clienttransferprohibited: { label: 'Transfer-Sperre (Client)', tone: 'ok' },
   servertransferprohibited: { label: 'Transfer-Sperre (Registry)', tone: 'ok' },
   clientdeleteprohibited: { label: 'Lösch-Sperre (Client)', tone: 'ok' },
@@ -55,11 +57,12 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
    * Steht bewusst VOR dem frühen Return: Hooks müssen in jedem Render laufen.
    */
   const [now] = useState(() => Date.now());
+  const { tRich, formatDate } = useI18n();
 
   if (!whois) {
     return (
-      <EmptyState icon={<AlertCircle className="size-5" />} title="WHOIS / RDAP nicht verfügbar">
-        Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.
+      <EmptyState icon={<AlertCircle className="size-5" />} title={t('WHOIS / RDAP nicht verfügbar')}>
+        {t('Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.')}
       </EmptyState>
     );
   }
@@ -93,7 +96,7 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
       >
         <CardHeader
           icon={<Building2 className="size-4" />}
-          title="Registrierung"
+          title={t('Registrierung')}
           aside={
             whois.source && (
               <span
@@ -109,11 +112,11 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
         <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
           <Row label="Registrar" value={whois.registrar ?? '—'} />
           <Row
-            label="Erstellt"
+            label={t('Erstellt')}
             value={
               whois.createdAt ? (
                 <span>
-                  {formatDate(whois.createdAt)}
+                  {formatDate(whois.createdAt, DATE_FORMAT)}
                   {ageDays !== undefined && (
                     <span className="ml-2 text-xs text-fg-subtle">
                       ({formatAge(ageDays)})
@@ -126,16 +129,16 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
             }
           />
           <Row
-            label="Läuft ab"
+            label={t('Läuft ab')}
             value={
               whois.expiresAt ? (
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span>{formatDate(whois.expiresAt)}</span>
+                  <span>{formatDate(whois.expiresAt, DATE_FORMAT)}</span>
                   {expiresInDays !== undefined && (
                     <span className={cn('badge', expiryBadge)}>
                       {expiresInDays < 0
-                        ? `vor ${Math.abs(expiresInDays)} Tagen`
-                        : `noch ${expiresInDays} Tage`}
+                        ? t('vor {count} Tagen', { count: Math.abs(expiresInDays) })
+                        : t('noch {count} Tage', { count: expiresInDays })}
                     </span>
                   )}
                 </span>
@@ -145,8 +148,8 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
             }
           />
           <Row
-            label="Geändert"
-            value={whois.updatedAt ? formatDate(whois.updatedAt) : '—'}
+            label={t('Geändert')}
+            value={whois.updatedAt ? formatDate(whois.updatedAt, DATE_FORMAT) : '—'}
           />
         </dl>
 
@@ -175,7 +178,7 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
         transition={{ duration: 0.3, delay: 0.05 }}
         className="card"
       >
-        <CardHeader icon={<Server className="size-4" />} title="Nameserver (laut Registry)" />
+        <CardHeader icon={<Server className="size-4" />} title={t('Nameserver (laut Registry)')} />
 
         {whois.nameServers && whois.nameServers.length > 0 ? (
           // Klickbar als Chips (übernimmt den Namen in die Suche), sonst eine
@@ -188,7 +191,7 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
                     type="button"
                     onClick={() => onUseDomain(ns)}
                     className="chip max-w-full font-mono"
-                    title={`${ns} in die Suche übernehmen`}
+                    title={t('{value} in die Suche übernehmen', { value: ns })}
                   >
                     <span className="min-w-0 truncate">{ns}</span>
                   </button>
@@ -199,7 +202,7 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-sm text-fg-subtle">Keine Nameserver gemeldet.</p>
+          <p className="mt-4 text-sm text-fg-subtle">{t('Keine Nameserver gemeldet.')}</p>
         )}
       </motion.div>
 
@@ -210,22 +213,23 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
         transition={{ duration: 0.3, delay: 0.1 }}
         className="card"
       >
-        <CardHeader icon={<Lock className="size-4" />} title="Domain-Status" />
+        <CardHeader icon={<Lock className="size-4" />} title={t('Domain-Status')} />
 
         {whois.status && whois.status.length > 0 ? (
           <div className="mt-4 flex flex-wrap gap-1.5">
             {whois.status.map((s) => {
               const norm = s.toLowerCase().replace(/\s+/g, '');
-              const meta = STATUS_LABELS[norm] ?? { label: s, tone: 'ok' as const };
+              // Unbekannte Codes erscheinen roh — so, wie die Registry sie meldet.
+              const meta = STATUS_LABELS[norm];
               return (
-                <span key={s} title={s} className={cn('badge', STATUS_BADGE[meta.tone])}>
-                  {meta.label}
+                <span key={s} title={s} className={cn('badge', STATUS_BADGE[meta?.tone ?? 'ok'])}>
+                  {meta ? t(meta.label) : s}
                 </span>
               );
             })}
           </div>
         ) : (
-          <p className="mt-4 text-sm text-fg-subtle">Keine Status-Codes.</p>
+          <p className="mt-4 text-sm text-fg-subtle">{t('Keine Status-Codes.')}</p>
         )}
 
         <div className="mt-5 flex items-center gap-2 border-t border-line-subtle pt-4 text-sm">
@@ -235,10 +239,13 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
             <ShieldOff className="size-4 shrink-0 text-fg-subtle" />
           )}
           <span className="text-fg-muted">
-            DNSSEC bei Registry:{' '}
-            <span className={whois.dnssecDelegated ? 'font-medium text-success' : 'text-fg-subtle'}>
-              {whois.dnssecDelegated ? 'delegiert' : 'nicht delegiert'}
-            </span>
+            {tRich('DNSSEC bei Registry: {status}', {
+              status: (
+                <span className={whois.dnssecDelegated ? 'font-medium text-success' : 'text-fg-subtle'}>
+                  {whois.dnssecDelegated ? t('delegiert') : t('nicht delegiert')}
+                </span>
+              ),
+            })}
           </span>
         </div>
       </motion.div>
@@ -258,20 +265,14 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
+const DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
 
 function formatAge(days: number): string {
-  if (days < 60) return `${days} Tage`;
+  if (days < 60) return t('{count} Tage', { count: days });
   const months = Math.floor(days / 30);
-  if (months < 24) return `${months} Monate`;
+  if (months < 24) return t('{count} Monate', { count: months });
   const years = Math.floor(days / 365);
   const remainingMonths = Math.floor((days % 365) / 30);
-  if (remainingMonths === 0) return `${years} Jahre`;
-  return `${years} Jahre, ${remainingMonths} Monate`;
+  if (remainingMonths === 0) return t('{count} Jahre', { count: years });
+  return `${t('{count} Jahre', { count: years })}, ${t('{count} Monate', { count: remainingMonths })}`;
 }

@@ -54,6 +54,8 @@ export interface RateLimitOptions {
   message: string;
   /** Fehler-Code im JSON-Body. */
   code?: string;
+  /** Werte aus der Meldung, für die Übersetzung im Client (#86). */
+  params?: Record<string, string | number>;
 }
 
 /** Obergrenze für die Zähler-Map, damit viele IPs den Speicher nicht sprengen. */
@@ -150,6 +152,7 @@ export function rateLimit(options: RateLimitOptions) {
       res.status(429).json({
         error: options.code ?? 'rate_limited',
         message: options.message,
+        ...(options.params && { params: options.params }),
         retryAfterSeconds: secondsUntilNextToken,
       });
       return;

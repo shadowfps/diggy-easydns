@@ -4,7 +4,10 @@ import { AlertCircle, AlertTriangle, ArrowRight, Check, CircleHelp, Info } from 
 import type { Finding, HealthScore } from '@/types/dns';
 import type { SectionKey } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { verdictFor } from '@/lib/scoring';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { findingText, useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 
 interface ScoreCardProps {
   score: HealthScore;
@@ -34,6 +37,7 @@ function scoreTone(s: number) {
 }
 
 export function ScoreCard({ score, findings, failed = [], onShowFindings }: ScoreCardProps) {
+  const { t, tRich } = useI18n();
   const reducedMotion = useReducedMotion();
   const tone = scoreTone(score.score);
   // „Nicht prüfbar“ zieht nichts ab (#101). Ohne diesen Hinweis sähe ein
@@ -78,7 +82,7 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="card-title">Health Score</h2>
-        <span className={cn('badge', tone.badge)}>{score.verdict}</span>
+        <span className={cn('badge', tone.badge)}>{t(verdictFor(score.score))}</span>
       </div>
 
       <div className="mt-4">
@@ -112,15 +116,17 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
           <Stat label="ok" count={score.counts.success} dot="bg-success" />
           <Stat label="info" count={score.counts.info} dot="bg-fg-subtle" />
-          <Stat label="Warnung" count={score.counts.warning} dot="bg-warning" />
+          <Stat label="Warnungen" count={score.counts.warning} dot="bg-warning" />
           <Stat label="kritisch" count={score.counts.critical} dot="bg-danger" />
         </div>
 
         {unchecked > 0 && (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted">
             <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
-            <span className="font-medium text-fg">Unvollständig:</span>
-            {unchecked} {unchecked > 1 ? 'Checks' : 'Check'} nicht prüfbar
+            {tRich('{label} {count} Checks nicht prüfbar', {
+              label: <span className="font-medium text-fg">{t('Unvollständig:')}</span>,
+              count: unchecked,
+            })}
           </p>
         )}
       </div>
@@ -131,7 +137,7 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
         <div className="flex items-center gap-3 border-t border-line-subtle pt-4">
           <TopFinding finding={top} />
           <button type="button" onClick={onShowFindings} className="btn btn-ghost btn-sm -mr-2 group">
-            Alle Findings
+            {t('Alle Findings')}
             <ArrowRight className="size-3.5 transition-transform motion-safe:group-hover:translate-x-0.5" />
           </button>
         </div>
@@ -141,13 +147,14 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
 }
 
 function TopFinding({ finding }: { finding?: Finding }) {
+  const { t } = useI18n();
   if (!finding) {
     return (
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="icon-tile icon-tile-success size-8">
           <Check className="size-4" />
         </span>
-        <p className="text-sm font-medium text-fg">Keine offenen Punkte</p>
+        <p className="text-sm font-medium text-fg">{t('Keine offenen Punkte')}</p>
       </div>
     );
   }
@@ -159,19 +166,25 @@ function TopFinding({ finding }: { finding?: Finding }) {
         <Icon className="size-4" />
       </span>
       <div className="min-w-0">
-        <p className="text-xs text-fg-subtle">Wichtigster Punkt</p>
-        <p className="truncate text-sm font-medium text-fg">{finding.title}</p>
+        <p className="text-xs text-fg-subtle">{t('Wichtigster Punkt')}</p>
+        <p className="truncate text-sm font-medium text-fg">{findingText(finding).title}</p>
       </div>
     </div>
   );
 }
 
-function Stat({ label, count, dot }: { label: string; count: number; dot: string }) {
+/**
+ * `label` ist ein Schlüssel: „3 Warnungen“ braucht die Mehrzahl, das
+ * Englische auch dort („3 warnings“). „ok“ und „info“ heißen in beiden
+ * Sprachen gleich und brauchen keinen Eintrag.
+ */
+function Stat({ label, count, dot }: { label: DeKey | 'ok' | 'info'; count: number; dot: string }) {
+  const { t } = useI18n();
   return (
     <span className="flex items-center gap-1.5 text-fg-muted">
       <span className={cn('size-2 rounded-full', dot)} />
       <span className="font-semibold tabular-nums text-fg">{count}</span>
-      {label}
+      {label === 'ok' || label === 'info' ? label : t(label, { count })}
     </span>
   );
 }

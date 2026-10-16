@@ -35,6 +35,43 @@
       }
     </script>
 
+    <!--
+      Englisches Wörterbuch früh anstoßen (#86).
+
+      Englische Besucher rendern erst, wenn src/i18n/en.ts da ist (main.tsx).
+      Ohne diesen Block holt die App den Chunk erst, nachdem index.js samt
+      React geladen und ausgeführt ist — eine Runde mehr, auf "Fast 3G"
+      gemessen 0,65 s leere Seite gegenüber Deutsch. So lädt er parallel.
+
+      Gleiche Regel wie detectLanguage() in src/i18n/index.ts: gespeicherte
+      Wahl, sonst die erste unterstützte Browser-Sprache, sonst Englisch.
+      Ändert sich die eine, die andere mitziehen (i18n.test.ts vergleicht
+      beide). Den Dateinamen setzt der Build ein (vite.config.ts); der
+      CSP-Hash folgt wie beim Theme-Script von selbst.
+    -->
+    <script>
+      (function () {
+        var language = null;
+        try {
+          var stored = localStorage.getItem('diggy-language');
+          if (stored === 'de' || stored === 'en') language = stored;
+        } catch (e) {
+          /* Ohne Storage zählt der Browser. */
+        }
+        var tags = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+        for (var i = 0; !language && i < tags.length; i++) {
+          var base = String(tags[i] || '').toLowerCase().split('-')[0];
+          if (base === 'de' || base === 'en') language = base;
+        }
+        if (language === 'de') return;
+        var link = document.createElement('link');
+        link.rel = 'modulepreload';
+        link.crossOrigin = '';
+        link.href = '__DIGGY_EN_CHUNK__';
+        document.head.appendChild(link);
+      })();
+    </script>
+
     <title>diggy — DNS made friendly</title>
   </head>
   <body>

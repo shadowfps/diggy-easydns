@@ -12,10 +12,11 @@ import type {
 import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { isNullMx } from '@/lib/nullMx';
-import { dmarcPolicyFlawLabel, effectiveDmarcPolicy } from '@/lib/dmarc';
+import { dmarcPolicyFlawLabelPhrase, effectiveDmarcPolicy } from '@/lib/dmarc';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
+import { phraseText, useI18n } from '@/i18n';
 
 /* ─── Tech-Stack SVG logos ───────────────────────────────────────────────── */
 
@@ -324,6 +325,7 @@ interface QuickFactsProps {
 }
 
 export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain }: QuickFactsProps) {
+  const { t } = useI18n();
   const aRecord = records.find((r) => r.type === 'A');
   const mxRecords = records.filter((r) => r.type === 'MX');
   const mxRecord = mxRecords[0];
@@ -334,7 +336,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // den Records des gefragten Namens, die sofort da sind; der Mail-Check
   // läuft auf der Apex-Domain und kommt später.
   const mxItem: QuickFactItem = isNullMx(mxRecords)
-    ? { label: 'MX', value: 'keine Mails (Null-MX)' }
+    ? { label: 'MX', value: t('keine Mails (Null-MX)') }
     : { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord };
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
@@ -349,7 +351,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
         type="button"
         onClick={() => onUseDomain(nsRecord.value)}
         className="min-w-0 truncate rounded-full text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
-        title={`${nsRecord.value} in die Suche übernehmen`}
+        title={t('{value} in die Suche übernehmen', { value: nsRecord.value })}
       >
         {nsRecord.value}
       </button>
@@ -371,7 +373,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
     status === 'loading'
       ? { label, loading: true }
       : status === 'error' || (status === 'done' && failed)
-        ? { label, value: 'nicht prüfbar', unchecked: true }
+        ? { label, value: t('nicht prüfbar'), unchecked: true }
         : status !== 'done'
           ? { label, value: '—', muted: true }
           : null;
@@ -380,7 +382,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const sslItem: QuickFactItem =
     placeholder('SSL', ssl.status, !sslInfo && ssl.lookupFailed) ?? {
       label: 'SSL',
-      value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
+      value: sslInfo ? t('{count} Tage', { count: sslInfo.daysUntilExpiry }) : t('kein Cert'),
       ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
       bad: !sslInfo?.valid || (sslInfo?.daysUntilExpiry ?? 999) < 14,
     };
@@ -389,7 +391,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const dnssecItem: QuickFactItem =
     placeholder('DNSSEC', dnssec.status, !dnssecInfo?.enabled && dnssecInfo?.lookupFailed) ?? {
       label: 'DNSSEC',
-      value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
+      value: dnssecInfo?.enabled && dnssecInfo?.valid ? t('aktiv') : t('inaktiv'),
       ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
       bad: !dnssecInfo?.enabled,
     };
@@ -401,10 +403,10 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const dmarcItem: QuickFactItem =
     placeholder('DMARC', mail.status, mail.data?.dmarc.lookupFailed) ??
     (dmarcPolicy === null
-      ? { label: 'DMARC', value: dmarcFlaw ? 'unwirksam' : 'fehlt', bad: true }
+      ? { label: 'DMARC', value: dmarcFlaw ? t('unwirksam') : t('fehlt'), bad: true }
       : dmarcFlaw
-        ? { label: 'DMARC', value: dmarcPolicyFlawLabel(dmarcFlaw) }
-        : { label: 'DMARC', value: 'gesetzt', ok: true });
+        ? { label: 'DMARC', value: phraseText(dmarcPolicyFlawLabelPhrase(dmarcFlaw)) }
+        : { label: 'DMARC', value: t('gesetzt'), ok: true });
 
   const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
@@ -425,7 +427,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       transition={{ duration: 0.4, delay: 0.15 }}
       className="card"
     >
-      <h2 className="card-title">Schnellübersicht</h2>
+      <h2 className="card-title">{t('Schnellübersicht')}</h2>
 
       {/* Einspaltig, wo die Karte schmal ist: mobil, halbe Breite ab md und
           in der Seitenspalte ab xl. */}

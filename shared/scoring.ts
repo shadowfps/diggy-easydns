@@ -61,7 +61,14 @@ export function calculateScore(findings: Finding[]): HealthScore {
   return { score, verdict: verdictFor(score), counts };
 }
 
-export function verdictFor(score: number): string {
+/**
+ * Urteil zum Score. Ein fester Satz deutscher Wörter: der Client übersetzt sie
+ * als Schlüssel (#86) und leitet sie dafür aus dem Score ab — `verdict` im
+ * Report und in alten History-Einträgen bleibt ein deutscher String.
+ */
+export type Verdict = 'Hervorragend' | 'Solides Setup' | 'Optimierbar' | 'Lückenhaft' | 'Kritisch';
+
+export function verdictFor(score: number): Verdict {
   if (score >= 90) return 'Hervorragend';
   if (score >= 75) return 'Solides Setup';
   if (score >= 55) return 'Optimierbar';

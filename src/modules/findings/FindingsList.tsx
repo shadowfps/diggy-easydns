@@ -4,6 +4,8 @@ import { AlertCircle, AlertTriangle, Info, Check, Copy } from 'lucide-react';
 import type { Finding, Severity } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
+import { findingText, useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 
 interface FindingsListProps {
   findings: Finding[];
@@ -11,7 +13,7 @@ interface FindingsListProps {
 
 const SEVERITY_CONFIG: Record<
   Severity,
-  { label: string; icon: typeof AlertCircle; badge: string; tile: string }
+  { label: DeKey; icon: typeof AlertCircle; badge: string; tile: string }
 > = {
   critical: { label: 'Kritisch', icon: AlertCircle, badge: 'badge-danger', tile: 'icon-tile-danger' },
   warning: { label: 'Warnung', icon: AlertTriangle, badge: 'badge-warning', tile: 'icon-tile-warning' },
@@ -19,6 +21,7 @@ const SEVERITY_CONFIG: Record<
   success: { label: 'OK', icon: Check, badge: 'badge-success', tile: 'icon-tile-success' },
 };
 
+// Fachbegriffe — in beiden Sprachen gleich.
 const CATEGORY_LABEL: Record<string, string> = {
   dns: 'DNS',
   dnssec: 'DNSSEC',
@@ -51,6 +54,8 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
   const cfg = SEVERITY_CONFIG[finding.severity];
   const Icon = cfg.icon;
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
+  const text = findingText(finding);
 
   const copySnippet = () => {
     if (!finding.fix?.snippet) return;
@@ -72,23 +77,21 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
 
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <h3 className="mr-1 text-sm font-semibold text-fg">{finding.title}</h3>
-          <span className={cn('badge', cfg.badge)}>{cfg.label}</span>
+          <h3 className="mr-1 text-sm font-semibold text-fg">{text.title}</h3>
+          <span className={cn('badge', cfg.badge)}>{t(cfg.label)}</span>
           <span className="text-xs text-fg-subtle">
             {CATEGORY_LABEL[finding.category] ?? finding.category}
             {/* Ein „Hinweis“ kostet sonst Punkte — hier sieht man, warum der
                 Score trotzdem bleibt. In derselben Zeile wie die Kategorie,
                 damit der Zusatz auf schmalen Schirmen nicht allein umbricht. */}
-            {finding.advisory && ' · ohne Punktabzug'}
+            {finding.advisory && <> · {t('ohne Punktabzug')}</>}
           </span>
         </div>
-        <p className="mt-1 text-sm leading-relaxed text-fg-muted">{finding.description}</p>
+        <p className="mt-1 text-sm leading-relaxed text-fg-muted">{text.description}</p>
 
         {finding.fix && (
           <div className="mt-3 space-y-2">
-            {finding.fix.explanation && (
-              <p className="text-sm text-fg-muted">{finding.fix.explanation}</p>
-            )}
+            {text.fixExplanation && <p className="text-sm text-fg-muted">{text.fixExplanation}</p>}
             {finding.fix.snippet && (
               <div className="panel flex items-start gap-3 py-3 pr-2">
                 <pre className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs text-fg">
@@ -100,7 +103,7 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
                   type="button"
                   onClick={copySnippet}
                   className="btn btn-secondary btn-sm btn-icon"
-                  aria-label={copied ? 'Snippet kopiert' : 'Snippet kopieren'}
+                  aria-label={copied ? t('Snippet kopiert') : t('Snippet kopieren')}
                 >
                   {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
                 </button>

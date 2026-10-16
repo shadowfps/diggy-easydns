@@ -21,16 +21,27 @@
  * statt als fehlend, damit man den Fehler auch findet.
  */
 
-import type { MailBimi, MailSecurity, MailTlsRpt } from './types/dns.js';
+import type { MailBimi, MailPolicyRecord, MailSecurity, MailTlsRpt, Phrase } from './types/dns.js';
 import { leadingVersion, matchTag } from './mailTags.js';
 import { dmarcPct } from './nullMx.js';
-import { dmarcPolicyFlawText, effectiveDmarcPolicy } from './dmarc.js';
+import { dmarcPolicyFlawPhrase, effectiveDmarcPolicy } from './dmarc.js';
+import { germanText, phrase } from './phrase.js';
 
 type Discovery =
   | { kind: 'none' }
   | { kind: 'one'; record: string }
   | { kind: 'many'; records: string[] }
-  | { kind: 'malformed'; record: string; reason: string };
+  | { kind: 'malformed'; record: string; reason: Phrase };
+
+/**
+ * Den Grund eintragen: deutsch in `invalid` wie bisher, als Satzbaustein in
+ * `invalidDetail`, damit der Client ihn übersetzen kann (#86).
+ */
+function markInvalid<T extends MailPolicyRecord>(target: T, reason: Phrase): T {
+  target.invalid = germanText(reason);
+  target.invalidDetail = reason;
+  return target;
+}
 
 /**
  * Den einen Record mit Versions-Tag finden, so wie Empfänger es tun (BIMI
@@ -53,13 +64,17 @@ function discover(txt: readonly string[], version: string, typicalTag: string): 
   for (const record of txt) {
     const leading = leadingVersion(record);
     if (leading?.toLowerCase() === wanted) {
-      return { kind: 'malformed', record, reason: `Die Version muss genau v=${version} lauten, nicht v=${leading}` };
+      return {
+        kind: 'malformed',
+        record,
+        reason: phrase('Die Version muss genau v={version} lauten, nicht v={leading}', { version, leading }),
+      };
     }
     if (matchTag(record, 'v')?.toLowerCase() === wanted) {
-      return { kind: 'malformed', record, reason: `v=${version} muss als erstes Tag stehen` };
+      return { kind: 'malformed', record, reason: phrase('v={version} muss als erstes Tag stehen', { version }) };
     }
     if (leading === undefined && matchTag(record, typicalTag) !== undefined) {
-      return { kind: 'malformed', record, reason: `v=${version} fehlt am Anfang` };
+      return { kind: 'malformed', record, reason: phrase('v={version} fehlt am Anfang', { version }) };
     }
   }
   return { kind: 'none' };
@@ -80,14 +95,13 @@ export function parseBimi(txt: readonly string[]): MailBimi {
   const found = discover(txt, 'BIMI1', 'l');
   if (found.kind === 'none') return { present: false };
   if (found.kind === 'malformed') {
-    return { present: true, records: [found.record], invalid: found.reason };
+    return markInvalid({ present: true, records: [found.record] }, found.reason);
   }
   if (found.kind === 'many') {
-    return {
-      present: true,
-      records: found.records,
-      invalid: `${found.records.length} BIMI-Records — es darf nur einen geben`,
-    };
+    return markInvalid(
+      { present: true, records: found.records },
+      phrase('{count} BIMI-Records — es darf nur einen geben', { count: found.records.length })
+    );
   }
 
   const { record } = found;
@@ -99,21 +113,27 @@ export function parseBimi(txt: readonly string[]): MailBimi {
   if (isHttpsUrl(evidence)) bimi.evidenceUrl = evidence;
 
   const invalid = bimiProblem(logo, evidence);
-  if (invalid) bimi.invalid = invalid;
+  if (invalid) markInvalid(bimi, invalid);
   // Beide leer: ausdrücklicher Verzicht, kein Fehler (§4.3.1).
   else if (logo === '' && evidence === '') bimi.declined = true;
   return bimi;
 }
 
-function bimiProblem(logo: string | undefined, evidence: string): string | undefined {
-  if (logo === undefined) return 'l= fehlt — das Tag ist Pflicht, zum Verzichten leer';
+function bimiProblem(logo: string | undefined, evidence: string): Phrase | undefined {
+  if (logo === undefined) return phrase('l= fehlt — das Tag ist Pflicht, zum Verzichten leer');
   if (logo === '') {
     // §7.3: Ohne gültige l=-URL gibt es kein Logo, auch nicht mit Zertifikat.
-    return evidence === '' ? undefined : 'l= ist leer, a= aber gesetzt — ohne Logo-URL zeigen Empfänger kein Logo';
+    return evidence === ''
+      ? undefined
+      : phrase('l= ist leer, a= aber gesetzt — ohne Logo-URL zeigen Empfänger kein Logo');
   }
-  if (!isHttpsUrl(logo)) return 'Die Logo-URL in l= muss mit https:// beginnen';
-  if (RASTER_EXTENSIONS.has(extensionOf(logo))) return 'Das Logo muss ein SVG sein (SVG Tiny PS), kein Pixelbild';
-  if (evidence !== '' && !isHttpsUrl(evidence)) return 'Die Zertifikats-URL in a= muss mit https:// beginnen';
+  if (!isHttpsUrl(logo)) return phrase('Die Logo-URL in l= muss mit https:// beginnen');
+  if (RASTER_EXTENSIONS.has(extensionOf(logo))) {
+    return phrase('Das Logo muss ein SVG sein (SVG Tiny PS), kein Pixelbild');
+  }
+  if (evidence !== '' && !isHttpsUrl(evidence)) {
+    return phrase('Die Zertifikats-URL in a= muss mit https:// beginnen');
+  }
   return undefined;
 }
 
@@ -129,19 +149,26 @@ function bimiProblem(logo: string | undefined, evidence: string): string | undef
  * nichts. Den Mangel nennen wir mit, sonst stünde dort „p=none“ für einen
  * Record, in dem gar kein `p=` steht.
  */
-export function bimiDmarcGap(dmarc: MailSecurity['dmarc']): string | undefined {
-  if (!dmarc.present) return 'kein DMARC-Record';
+export function bimiDmarcGapPhrase(dmarc: MailSecurity['dmarc']): Phrase | undefined {
+  if (!dmarc.present) return phrase('kein DMARC-Record');
   const { policy, flaw } = effectiveDmarcPolicy(dmarc);
   if (flaw) {
-    const problem = dmarcPolicyFlawText(flaw);
-    return policy ? `DMARC wirkt wie p=none (${problem})` : `DMARC wirkt nicht (${problem})`;
+    const problem = dmarcPolicyFlawPhrase(flaw);
+    return policy
+      ? phrase('DMARC wirkt wie p=none ({problem})', { problem })
+      : phrase('DMARC wirkt nicht ({problem})', { problem });
   }
-  if (!policy) return 'kein DMARC-Record';
-  if (policy === 'none') return 'DMARC p=none';
+  if (!policy) return phrase('kein DMARC-Record');
+  if (policy === 'none') return phrase('DMARC p=none');
   const pct = dmarcPct(dmarc.record);
-  if (policy === 'quarantine' && pct < 100) return `DMARC p=quarantine mit pct=${pct}`;
-  if (matchTag(dmarc.record, 'sp')?.toLowerCase() === 'none') return 'DMARC sp=none';
+  if (policy === 'quarantine' && pct < 100) return phrase('DMARC p=quarantine mit pct={pct}', { pct });
+  if (matchTag(dmarc.record, 'sp')?.toLowerCase() === 'none') return phrase('DMARC sp=none');
   return undefined;
+}
+
+export function bimiDmarcGap(dmarc: MailSecurity['dmarc']): string | undefined {
+  const gap = bimiDmarcGapPhrase(dmarc);
+  return gap && germanText(gap);
 }
 
 /* ─── TLS-RPT ─────────────────────────────────────────────────────────── */
@@ -151,14 +178,13 @@ export function parseTlsRpt(txt: readonly string[]): MailTlsRpt {
   const found = discover(txt, 'TLSRPTv1', 'rua');
   if (found.kind === 'none') return { present: false };
   if (found.kind === 'malformed') {
-    return { present: true, records: [found.record], invalid: found.reason };
+    return markInvalid({ present: true, records: [found.record] }, found.reason);
   }
   if (found.kind === 'many') {
-    return {
-      present: true,
-      records: found.records,
-      invalid: `${found.records.length} TLS-RPT-Records — RFC 8460 verlangt genau einen`,
-    };
+    return markInvalid(
+      { present: true, records: found.records },
+      phrase('{count} TLS-RPT-Records — RFC 8460 verlangt genau einen', { count: found.records.length })
+    );
   }
 
   const { record } = found;
@@ -166,12 +192,13 @@ export function parseTlsRpt(txt: readonly string[]): MailTlsRpt {
   const rua = matchTag(record, 'rua')?.split(',').map((uri) => uri.trim()).filter(Boolean) ?? [];
   const tlsRpt: MailTlsRpt = { present: true, records: [record] };
   if (rua.length === 0) {
-    tlsRpt.invalid = 'rua= fehlt — ohne Ziel verschickt niemand Berichte';
-    return tlsRpt;
+    return markInvalid(tlsRpt, phrase('rua= fehlt — ohne Ziel verschickt niemand Berichte'));
   }
   tlsRpt.rua = rua;
   const unsupported = rua.find((uri) => !isReportUri(uri));
-  if (unsupported) tlsRpt.invalid = `„${unsupported}“ ist kein Berichtsziel — erlaubt sind mailto: und https:`;
+  if (unsupported) {
+    markInvalid(tlsRpt, phrase('„{uri}“ ist kein Berichtsziel — erlaubt sind mailto: und https:', { uri: unsupported }));
+  }
   return tlsRpt;
 }
 

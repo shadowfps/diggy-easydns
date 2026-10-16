@@ -3,6 +3,8 @@ import type { PageSpeedReport, PageSpeedStrategy } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { t, useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
 import {
   AlertCircle,
@@ -37,7 +39,7 @@ type MetricTone = 'good' | 'warn' | 'bad' | 'neutral';
  * Lighthouse-Bewertung als Farbe UND Form: Haken, Dreieck, Kreis — wie bei
  * den Findings. Vorher war „verbesserungswürdig“ genauso rot wie „schlecht“.
  */
-const METRIC_TONE: Record<MetricTone, { text: string; icon?: typeof Check; label?: string }> = {
+const METRIC_TONE: Record<MetricTone, { text: string; icon?: typeof Check; label?: DeKey }> = {
   good: { text: 'text-success', icon: Check, label: 'gut' },
   warn: { text: 'text-warning', icon: AlertTriangle, label: 'verbesserungswürdig' },
   bad: { text: 'text-danger', icon: AlertCircle, label: 'schlecht' },
@@ -52,6 +54,7 @@ export function PageSpeedView({
   onStrategyChange,
   onRun,
 }: PageSpeedViewProps) {
+  useI18n();
   return (
     <div className="flex flex-col gap-4">
       {/* Scan-Block: Titel, Umschalter, Start — darunter Leerlauf, Ladeanzeige
@@ -92,7 +95,7 @@ export function PageSpeedView({
           {data && (
             <span className="badge mt-5">
               <CheckCircle2 className="size-3" />
-              Scan abgeschlossen
+              {t('Scan abgeschlossen')}
             </span>
           )}
         </div>
@@ -157,8 +160,8 @@ export function PageSpeedView({
 function Opportunities({ items }: { items: PageSpeedReport['opportunities'] }) {
   if (items.length === 0) {
     return (
-      <EmptyState icon={<Sparkles className="size-5" />} title="Top Optimierungspotenziale">
-        Keine kritischen Opportunities gefunden.
+      <EmptyState icon={<Sparkles className="size-5" />} title={t('Top Optimierungspotenziale')}>
+        {t('Keine kritischen Opportunities gefunden.')}
       </EmptyState>
     );
   }
@@ -168,7 +171,7 @@ function Opportunities({ items }: { items: PageSpeedReport['opportunities'] }) {
       <CardHeader
         className="px-5 py-4 sm:px-6"
         icon={<Sparkles className="size-4" />}
-        title="Top Optimierungspotenziale"
+        title={t('Top Optimierungspotenziale')}
       />
       <ul className="divide-y divide-line-subtle">
         {items.map((item) => (
@@ -214,12 +217,12 @@ function StrategyButton({
   );
 }
 
-const LOADING_STAGES = [
-  'Verbinde mit PageSpeed Insights...',
-  'Starte Lighthouse Runner...',
-  'Messe Core Web Vitals...',
-  'Analysiere Render-Pfad...',
-  'Bereite Ergebnisse auf...',
+const LOADING_STAGES: DeKey[] = [
+  'Verbinde mit PageSpeed Insights…',
+  'Starte Lighthouse Runner…',
+  'Messe Core Web Vitals…',
+  'Analysiere Render-Pfad…',
+  'Bereite Ergebnisse auf…',
 ];
 
 function IdleSpeedPanel() {
@@ -259,13 +262,13 @@ function PageSpeedLoader() {
   // wieder false ist“ — das wurde es nie, die Anzeige verschwand einfach.
   return (
     <div className="mx-auto mt-8 max-w-md">
-      <LoadingAnnouncement>PageSpeed-Analyse läuft…</LoadingAnnouncement>
+      <LoadingAnnouncement>{t('PageSpeed-Analyse läuft…')}</LoadingAnnouncement>
       <div className="panel px-6 py-6 text-center" aria-hidden="true">
         <Loader2 className="mx-auto size-5 animate-spin text-fg" />
 
-        <div className="eyebrow mt-4">Analyse läuft</div>
+        <div className="eyebrow mt-4">{t('Analyse läuft')}</div>
         <div key={stage} className="mt-1.5 animate-fade-in-up text-sm text-fg">
-          {LOADING_STAGES[stage]}
+          {t(LOADING_STAGES[stage])}
         </div>
 
         <div className="mt-5 grid grid-cols-5 gap-2">
@@ -311,7 +314,7 @@ function MetricPanel({
         {StatusIcon && <StatusIcon className="size-4 shrink-0" aria-hidden />}
         {value}
         {/* Für Screenreader das Urteil als Wort — Farbe und Icon sieht er nicht. */}
-        {cfg.label && <span className="sr-only">({cfg.label})</span>}
+        {cfg.label && <span className="sr-only">({t(cfg.label)})</span>}
       </div>
     </div>
   );

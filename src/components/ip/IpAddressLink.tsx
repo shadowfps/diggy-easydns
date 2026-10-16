@@ -23,6 +23,7 @@ import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { formatIpOwnerLabel, useIpDetails } from './useIpDetails';
+import { t, useI18n } from '@/i18n';
 
 interface IpAddressLinkProps {
   ip: string;
@@ -69,6 +70,7 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
     setMounted(true);
     setOpen(true);
   };
+  useI18n();
 
   return (
     <>
@@ -79,8 +81,8 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
           'group inline-flex max-w-full min-w-0 items-center gap-1.5 text-left font-mono text-[13px] underline-offset-4 transition-colors hover:text-fg hover:underline',
           className
         )}
-        aria-label={`Details zu ${ip} anzeigen`}
-        title={`Details zu ${ip}`}
+        aria-label={t('Details zu {ip} anzeigen', { ip })}
+        title={t('Details zu {ip}', { ip })}
       >
         <span className="truncate">{ip}</span>
         <Link2 className="size-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
@@ -130,6 +132,7 @@ function IpDetailsOverlay({
   const { details, loading, error } = useIpDetails(ip, open);
   const [copied, setCopied] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  useI18n();
 
   useFocusTrap(dialogRef, open);
 
@@ -157,7 +160,7 @@ function IpDetailsOverlay({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
-      window.prompt('IP kopieren:', ip);
+      window.prompt(t('IP kopieren:'), ip);
     }
   };
 
@@ -193,25 +196,27 @@ function IpDetailsOverlay({
                   {ip}
                 </span>
               }
-              subtitle="IP-, Netzwerk- und Geolocation-Details"
+              subtitle={t('IP-, Netzwerk- und Geolocation-Details')}
               aside={
                 <div className="-mt-1 flex items-center gap-1">
                   <button
                     type="button"
                     onClick={handleCopy}
                     className="btn btn-secondary btn-sm"
-                    aria-label={copied ? 'IP kopiert' : 'IP kopieren'}
-                    title={copied ? 'IP kopiert' : 'IP kopieren'}
+                    aria-label={copied ? t('IP kopiert') : t('IP kopieren')}
+                    title={copied ? t('IP kopiert') : t('IP kopieren')}
                   >
                     {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                    <span className="hidden sm:inline">{copied ? 'IP kopiert' : 'IP kopieren'}</span>
+                    <span className="hidden sm:inline">
+                      {copied ? t('IP kopiert') : t('IP kopieren')}
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={onClose}
                     className="btn btn-ghost btn-sm btn-icon"
-                    aria-label="Details schließen"
-                    title="Schließen"
+                    aria-label={t('Details schließen')}
+                    title={t('Schließen')}
                   >
                     <X className="size-4" />
                   </button>
@@ -223,7 +228,7 @@ function IpDetailsOverlay({
               {loading && (
                 <div role="status" className="panel flex items-center gap-2 text-sm text-fg-muted">
                   <Loader2 className="size-4 animate-spin" />
-                  <span>IP-Details werden geladen...</span>
+                  <span>{t('IP-Details werden geladen…')}</span>
                 </div>
               )}
 
@@ -267,13 +272,13 @@ export function IpDetailsRows({ details }: { details: IpDetails }) {
                 ))}
               </span>
             ) : (
-              <MissingValue>nicht konfiguriert</MissingValue>
+              <MissingValue>{t('nicht konfiguriert')}</MissingValue>
             )
           }
         />
         <DetailRow
           icon={<Building2 className="size-3.5" />}
-          label="Organisation"
+          label={t('Organisation')}
           value={details.organization ?? <MissingValue />}
         />
         <DetailRow icon={<Wifi className="size-3.5" />} label="ISP" value={details.isp ?? <MissingValue />} />
@@ -285,23 +290,23 @@ export function IpDetailsRows({ details }: { details: IpDetails }) {
         />
         <DetailRow
           icon={<Globe2 className="size-3.5" />}
-          label="Netzwerk"
+          label={t('Netzwerk')}
           value={details.network ?? <MissingValue />}
           mono={Boolean(details.network)}
         />
         <DetailRow
           icon={<MapPin className="size-3.5" />}
-          label="Standort"
+          label={t('Standort')}
           value={formatLocation(details) ?? <MissingValue />}
         />
         <DetailRow
           icon={<Compass className="size-3.5" />}
-          label="Koordinaten"
+          label={t('Koordinaten')}
           value={formatCoordinates(details) ?? <MissingValue />}
         />
         <DetailRow
           icon={<Clock className="size-3.5" />}
-          label="Zeitzone"
+          label={t('Zeitzone')}
           value={details.timezone ?? <MissingValue />}
           mono={Boolean(details.timezone)}
         />
@@ -339,8 +344,8 @@ function DetailRow({
   );
 }
 
-function MissingValue({ children = 'nicht verfügbar' }: { children?: ReactNode }) {
-  return <span className="text-fg-subtle">{children}</span>;
+function MissingValue({ children }: { children?: ReactNode }) {
+  return <span className="text-fg-subtle">{children ?? t('nicht verfügbar')}</span>;
 }
 
 function formatAsn(details: IpDetails): string | undefined {

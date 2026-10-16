@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useEffect, useRef, type FormEvent } from 'react';
 import type { LookupHistoryEntry } from '@/lib/lookupHistory';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/i18n';
 
 interface SearchBarProps {
   onSearch: (domain: string) => void;
@@ -40,6 +41,7 @@ export function SearchBar({
   recent = [],
 }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (!autoFocus || !prefersAutoFocus()) return;
@@ -80,8 +82,8 @@ export function SearchBar({
         type="text"
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder="Jetzt deine Anfrage starten"
-        aria-label="Domain oder IP-Adresse"
+        placeholder={t('Jetzt deine Anfrage starten')}
+        aria-label={t('Domain oder IP-Adresse')}
         autoComplete="off"
         spellCheck={false}
         className={cn(
@@ -96,7 +98,7 @@ export function SearchBar({
           'btn btn-primary btn-icon absolute',
           variant === 'hero' ? 'right-2 top-2' : 'btn-sm right-1 top-1'
         )}
-        aria-label="Suchen"
+        aria-label={t('Suchen')}
       >
         {loading ? (
           <span className="dig-dots">
@@ -127,7 +129,7 @@ export function SearchBar({
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         {shortcuts.length > 0 ? (
           <>
-            <span className="text-xs text-fg-subtle">Zuletzt geprüft</span>
+            <span className="text-xs text-fg-subtle">{t('Zuletzt geprüft')}</span>
             {shortcuts.map((entry) => (
               <button
                 key={entry.domain}
@@ -144,7 +146,7 @@ export function SearchBar({
           </>
         ) : (
           <>
-            <span className="text-xs text-fg-subtle">Beispiele</span>
+            <span className="text-xs text-fg-subtle">{t('Beispiele')}</span>
             {EXAMPLES.map((ex) => (
               <button
                 key={ex}

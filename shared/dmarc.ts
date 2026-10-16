@@ -24,8 +24,9 @@
  * `v=DMARC1; sp=reject` — den Empfänger schlicht ignorieren.
  */
 
-import type { MailSecurity } from './types/dns.js';
+import type { MailSecurity, Phrase } from './types/dns.js';
 import { matchTag } from './mailTags.js';
+import { germanText, phrase } from './phrase.js';
 
 export type DmarcPolicy = NonNullable<MailSecurity['dmarc']['policy']>;
 
@@ -119,38 +120,52 @@ export function hasDmarcReportUri(record: string | undefined): boolean {
 const MAX_SHOWN_VALUE = 20;
 
 /** Ein ungültiger Tag-Wert als Satzteil: „p=foo ist ungültig“, „sp= ist leer“. */
-function invalidTagText(tag: 'p' | 'sp', value: string): string {
-  if (value === '') return `${tag}= ist leer`;
+function invalidTag(tag: 'p' | 'sp', value: string): Phrase {
+  if (value === '') return phrase('{tag}= ist leer', { tag });
   const shown = value.length > MAX_SHOWN_VALUE ? `${value.slice(0, MAX_SHOWN_VALUE)}…` : value;
-  return `${tag}=${shown} ist ungültig`;
+  return phrase('{tag}={value} ist ungültig', { tag, value: shown });
 }
 
+/*
+ * Die Texte unten sind Satzbausteine (#86): Server und Mail-Tab setzen sie in
+ * längere Sätze ein, der Client übersetzt sie (shared/phrase.ts). Die
+ * `…Text`-Fassungen liefern das Deutsch für den Server.
+ */
+
 /** Der Mangel als Satzteil, mit dem ungültigen Wert: „p=foo ist ungültig“. */
-export function dmarcPolicyFlawText(flaw: DmarcPolicyFlaw): string {
+export function dmarcPolicyFlawPhrase(flaw: DmarcPolicyFlaw): Phrase {
   switch (flaw.kind) {
     case 'p-missing':
-      return 'p= fehlt';
+      return phrase('p= fehlt');
     case 'p-invalid':
-      return invalidTagText('p', flaw.value);
+      return invalidTag('p', flaw.value);
     case 'sp-invalid':
-      return invalidTagText('sp', flaw.value);
+      return invalidTag('sp', flaw.value);
     case 'multiple':
-      return `${flaw.count} DMARC-Records statt einem`;
+      return phrase('{count} DMARC-Records statt einem', { count: flaw.count });
   }
+}
+
+export function dmarcPolicyFlawText(flaw: DmarcPolicyFlaw): string {
+  return germanText(dmarcPolicyFlawPhrase(flaw));
 }
 
 /** Der Mangel in zwei Wörtern, für Badges und knappe Statuswerte. */
-export function dmarcPolicyFlawLabel(flaw: DmarcPolicyFlaw): string {
+export function dmarcPolicyFlawLabelPhrase(flaw: DmarcPolicyFlaw): Phrase {
   switch (flaw.kind) {
     case 'p-missing':
-      return 'p= fehlt';
+      return phrase('p= fehlt');
     case 'p-invalid':
-      return 'p= ungültig';
+      return phrase('p= ungültig');
     case 'sp-invalid':
-      return 'sp= ungültig';
+      return phrase('sp= ungültig');
     case 'multiple':
-      return `${flaw.count} Records`;
+      return phrase('{count} Records', { count: flaw.count });
   }
+}
+
+export function dmarcPolicyFlawLabel(flaw: DmarcPolicyFlaw): string {
+  return germanText(dmarcPolicyFlawLabelPhrase(flaw));
 }
 
 /**
@@ -158,17 +173,21 @@ export function dmarcPolicyFlawLabel(flaw: DmarcPolicyFlaw): string {
  * und Findings, damit beide dasselbe sagen. `policy` ist die wirksame
  * Policy aus `effectiveDmarcPolicy`: `none` oder `null`.
  */
-export function dmarcFlawEffect(policy: DmarcPolicy | null, flaw: DmarcPolicyFlaw): string {
+export function dmarcFlawEffectPhrase(policy: DmarcPolicy | null, flaw: DmarcPolicyFlaw): Phrase {
   if (flaw.kind === 'multiple') {
-    return 'Bei mehr als einem DMARC-Record wenden Empfänger DMARC gar nicht an (RFC 7489 §6.6.3) — als gäbe es keins.';
+    return phrase('Bei mehr als einem DMARC-Record wenden Empfänger DMARC gar nicht an (RFC 7489 §6.6.3) — als gäbe es keins.');
   }
   if (flaw.kind === 'sp-invalid') {
-    const spoiled = `Ein ungültiges sp= macht den ganzen Record ungültig, auch p=${flaw.declared}.`;
+    const declared = flaw.declared;
     return policy
-      ? `${spoiled} Weil rua= eine Report-Adresse nennt, werten Empfänger ihn wie p=none (RFC 7489 §6.6.3): Fälschungen werden gemeldet, aber nicht abgelehnt.`
-      : `${spoiled} Ohne gültige Report-Adresse in rua= ignorieren Empfänger ihn (RFC 7489 §6.6.3) — als gäbe es kein DMARC.`;
+      ? phrase('Ein ungültiges sp= macht den ganzen Record ungültig, auch p={declared}. Weil rua= eine Report-Adresse nennt, werten Empfänger ihn wie p=none (RFC 7489 §6.6.3): Fälschungen werden gemeldet, aber nicht abgelehnt.', { declared })
+      : phrase('Ein ungültiges sp= macht den ganzen Record ungültig, auch p={declared}. Ohne gültige Report-Adresse in rua= ignorieren Empfänger ihn (RFC 7489 §6.6.3) — als gäbe es kein DMARC.', { declared });
   }
   return policy
-    ? 'Ohne gültiges p= werten Empfänger den Record wie p=none, weil rua= eine Report-Adresse nennt (RFC 7489 §6.6.3): Fälschungen werden gemeldet, aber nicht abgelehnt.'
-    : 'Ohne gültiges p= und ohne gültige Report-Adresse in rua= ignorieren Empfänger den Record (RFC 7489 §6.6.3) — als gäbe es kein DMARC.';
+    ? phrase('Ohne gültiges p= werten Empfänger den Record wie p=none, weil rua= eine Report-Adresse nennt (RFC 7489 §6.6.3): Fälschungen werden gemeldet, aber nicht abgelehnt.')
+    : phrase('Ohne gültiges p= und ohne gültige Report-Adresse in rua= ignorieren Empfänger den Record (RFC 7489 §6.6.3) — als gäbe es kein DMARC.');
+}
+
+export function dmarcFlawEffect(policy: DmarcPolicy | null, flaw: DmarcPolicyFlaw): string {
+  return germanText(dmarcFlawEffectPhrase(policy, flaw));
 }
