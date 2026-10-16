@@ -8,7 +8,8 @@ zweierlei:
    als der Viewport sein. Geprüft wird jede wichtige Ansicht in hell und
    dunkel, mobil (exakt 390 px) und am Desktop (1440 px): Startseite (auch mit
    offenem Menü), Report für example.com und github.com mit jedem Tab, History,
-   Available Check mit Ergebnis, About, Impressum, Datenschutz, IP-Lookup.
+   Available Check mit Ergebnis, About, Impressum, Datenschutz, IP-Lookup,
+   Vergleich example.com mit github.com.
    Schlägt der Check an, nennt die Meldung das Element, das herausragt:
 
    ```

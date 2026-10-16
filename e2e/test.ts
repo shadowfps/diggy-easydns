@@ -33,7 +33,7 @@ export const REPORT_TABS = [
  * WHOIS-Laufzeiten und die History („vor 3 min“) mit jedem Tag weiter.
  * „Geprüft am …“ kommt dagegen aus dem `timestamp` der Testdaten.
  */
-export const FIXED_NOW = new Date('2026-10-16T08:30:00Z');
+export const FIXED_NOW = new Date('2026-10-16T14:30:00Z');
 
 /**
  * Hält im Browser nur `Date` an (`new Date()`, `Date.now()`); Timer,

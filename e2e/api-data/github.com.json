@@ -1,260 +1,260 @@
 {
   "lookup": {
     "domain": "github.com",
-    "timestamp": "2026-10-16T08:24:45.315Z",
+    "timestamp": "2026-10-16T14:09:07.619Z",
     "records": [
       {
         "type": "A",
         "name": "github.com",
-        "value": "140.82.121.3",
-        "ttl": 53
+        "value": "140.82.121.4",
+        "ttl": 12
       },
       {
         "type": "MX",
         "name": "github.com",
         "value": "github-com.mail.protection.outlook.com",
         "priority": 0,
-        "ttl": 0
+        "ttl": 300
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "dns1.p08.nsone.net",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "dns2.p08.nsone.net",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "dns3.p08.nsone.net",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "dns4.p08.nsone.net",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "ns-1283.awsdns-32.org",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "ns-1707.awsdns-21.co.uk",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "ns-421.awsdns-52.com",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "NS",
         "name": "github.com",
         "value": "ns-520.awsdns-01.net",
-        "ttl": 0
+        "ttl": 3464
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "00Dd0000000hHE0=1TBKg000000TN2r",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "MS=6BF03E6AF5CB689E315FB6199603BABF2C88D805",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "MS=ms44452932",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "MS=ms58704441",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "TAILSCALE-xOzoDvFUzZr5YYVCQFuD",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "adobe-idp-site-verification=b92c9e999aef825edc36e0a3d847d2dbad5b2fc0e05c79ddd7a16139b48ecf4b",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "anthropic-domain-verification-4az7qn=if8YWuRRqwLycGJDooumzHtxm",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "apple-domain-verification=RyQhdzTl6Z6x8ZP4",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "atlassian-domain-verification=jjgw98AKv2aeoYFxiL/VFaoyPkn3undEssTRuMg6C/3Fp/iqhkV4HVV7WjYlVeF8",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "calendly-site-verification=at0DQARi7IZvJtXQAWhMqpmIzpvoBNF7aam5VKKxP",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "cursor-domain-verification-gtfwmt=1rfLOtiTngX5QSxD5HvNKTvm3",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "docusign=087098e3-3d46-47b7-9b4e-8a23028154cd",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "facebook-domain-verification=39xu4jzl7roi7x0n93ldkxjiaarx50",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "google-site-verification=82Le34Flgtd15ojYhHlGF_6g72muSjamlMVThBOJpks",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "google-site-verification=UTM-3akMgubp6tQtgEuAkYNYLyYAvpTnnSrDMWoDR3o",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "jamf-site-verification=XtaPNIYghF_e_xRDI8CjgQ",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "krisp-domain-verification=ZlyiK7XLhnaoUQb2hpak1PLY7dFkl1WE",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "loom-site-verification=f3787154f1154b7880e720a511ea664d",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "miro-verification=d2e174fdb00c71e0bcf58f8e58c3da2dd80dcfa9",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "openai-domain-verification=dv-3nh33eQwdkotMIAzLrIDVZo1",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "serval-domain-verification-ydryhj=qbkiEakpwEpTvHh5fIiCqtaue",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "shopify-verification-code=t1YPwcmvnxZyBycaCpk1MPyWoFs72o",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "stripe-verification=f88ef17321660a01bab1660454192e014defa29ba7b8de9633c69d6b4912217f",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "TXT",
         "name": "github.com",
         "value": "v=spf1 ip4:192.30.252.0/22 include:spf.protection.outlook.com include:_netblocks.google.com include:_netblocks2.google.com include:mail.zendesk.com include:_spf.salesforce.com include:servers.mcsv.net include:mktomail.com include:sendgrid.net ip4:62.253.227.114 ip4:166.78.69.169 ip4:166.78.69.170 ip4:166.78.71.131 ~all",
-        "ttl": 0
+        "ttl": 205
       },
       {
         "type": "CAA",
         "name": "github.com",
         "value": "0 issue \"digicert.com\"",
-        "ttl": 0
+        "ttl": 3600
       },
       {
         "type": "CAA",
         "name": "github.com",
         "value": "0 issue \"globalsign.com\"",
-        "ttl": 0
+        "ttl": 3600
       },
       {
         "type": "CAA",
         "name": "github.com",
         "value": "0 issue \"letsencrypt.org\"",
-        "ttl": 0
+        "ttl": 3600
       },
       {
         "type": "CAA",
         "name": "github.com",
         "value": "0 issue \"sectigo.com\"",
-        "ttl": 0
+        "ttl": 3600
       },
       {
         "type": "CAA",
         "name": "github.com",
         "value": "0 issuewild \"digicert.com\"",
-        "ttl": 0
+        "ttl": 3600
       },
       {
         "type": "CAA",
         "name": "github.com",
         "value": "0 issuewild \"letsencrypt.org\"",
-        "ttl": 0
+        "ttl": 3600
       },
       {
         "type": "CAA",
         "name": "github.com",
         "value": "0 issuewild \"sectigo.com\"",
-        "ttl": 0
+        "ttl": 3600
       },
       {
         "type": "SOA",
         "name": "github.com",
-        "value": "dns1.p08.nsone.net hostmaster.nsone.net 1656468023 43200 7200 1209600 3600",
-        "ttl": 3600
+        "value": "ns-1707.awsdns-21.co.uk awsdns-hostmaster.amazon.com 1 7200 900 1209600 86400",
+        "ttl": 1870
       }
     ],
     "findings": [
@@ -289,11 +289,11 @@
           {
             "type": "A",
             "name": "github.com",
-            "value": "140.82.121.4",
-            "ttl": 4
+            "value": "20.250.119.67",
+            "ttl": 17
           }
         ],
-        "responseTimeMs": 62
+        "responseTimeMs": 20
       },
       {
         "resolver": {
@@ -312,7 +312,7 @@
             "ttl": 60
           }
         ],
-        "responseTimeMs": 70
+        "responseTimeMs": 24
       },
       {
         "resolver": {
@@ -326,12 +326,12 @@
         "records": [
           {
             "type": "A",
-            "name": "giTHuB.COM",
-            "value": "20.250.119.67",
-            "ttl": 25
+            "name": "GitHuB.CoM",
+            "value": "140.82.121.4",
+            "ttl": 26
           }
         ],
-        "responseTimeMs": 133
+        "responseTimeMs": 39
       },
       {
         "resolver": {
@@ -346,11 +346,11 @@
           {
             "type": "A",
             "name": "github.com",
-            "value": "140.82.121.3",
-            "ttl": 19
+            "value": "140.82.113.4",
+            "ttl": 41
           }
         ],
-        "responseTimeMs": 59
+        "responseTimeMs": 125
       },
       {
         "resolver": {
@@ -365,11 +365,11 @@
           {
             "type": "A",
             "name": "github.com",
-            "value": "20.250.119.67",
-            "ttl": 3
+            "value": "140.82.121.4",
+            "ttl": 5
           }
         ],
-        "responseTimeMs": 185
+        "responseTimeMs": 18
       }
     ],
     "findings": [
@@ -377,7 +377,7 @@
         "id": "propagation-mismatch",
         "severity": "warning",
         "title": "Propagation-Abweichung erkannt",
-        "description": "5 Resolver liefern 3 verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.",
+        "description": "5 Resolver liefern 4 verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.",
         "category": "dns"
       }
     ]
@@ -486,7 +486,14 @@
       "mtaSts": {
         "present": false
       },
-      "hasMx": true
+      "hasMx": true,
+      "nullMx": false,
+      "bimi": {
+        "present": false
+      },
+      "tlsRpt": {
+        "present": false
+      }
     },
     "findings": [
       {
@@ -516,11 +523,36 @@
         "title": "Kein MTA-STS",
         "description": "MTA-STS erzwingt TLS für eingehende Mail. Ohne MTA-STS können Angreifer einen Downgrade auf unverschlüsselten SMTP-Transport erzwingen.",
         "category": "mail"
+      },
+      {
+        "id": "no-tls-rpt",
+        "severity": "info",
+        "title": "Kein TLS-RPT",
+        "description": "Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine Mailserver scheitert — etwa an einem abgelaufenen Zertifikat oder einem Downgrade-Angriff.",
+        "fix": {
+          "explanation": "Lege einen TXT-Record mit einer Adresse für die Berichte an. Mehrere Ziele kommagetrennt, auch https:-URLs sind möglich.",
+          "snippet": "_smtp._tls.github.com  TXT  \"v=TLSRPTv1; rua=mailto:tls-reports@github.com\""
+        },
+        "category": "mail",
+        "advisory": true
+      },
+      {
+        "id": "no-bimi",
+        "severity": "info",
+        "title": "Kein BIMI-Record",
+        "description": "Mit BIMI zeigen Postfächer dein Markenlogo neben deinen Mails. Deine DMARC-Policy erfüllt die Voraussetzung schon. Gmail und Apple Mail zeigen das Logo nur mit Markenzertifikat (VMC oder CMC).",
+        "fix": {
+          "explanation": "Das Logo als SVG (Profil SVG Tiny PS) per https veröffentlichen und den Record anlegen; ein Markenzertifikat kommt mit a=https://… dazu.",
+          "snippet": "default._bimi.github.com  TXT  \"v=BIMI1; l=https://github.com/bimi/logo.svg\""
+        },
+        "category": "mail",
+        "advisory": true
       }
     ]
   },
   "whois": {
     "whois": {
+      "domain": "github.com",
       "registrar": "MarkMonitor Inc.",
       "createdAt": "2007-10-09T18:20:50Z",
       "expiresAt": "2028-10-09T18:20:50Z",

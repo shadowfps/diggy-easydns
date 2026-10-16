@@ -1,68 +1,68 @@
 {
   "lookup": {
     "domain": "example.com",
-    "timestamp": "2026-10-16T08:24:35.883Z",
+    "timestamp": "2026-10-16T14:09:06.735Z",
     "records": [
       {
         "type": "A",
         "name": "example.com",
-        "value": "172.66.147.243",
-        "ttl": 109
+        "value": "104.20.23.154",
+        "ttl": 218
       },
       {
         "type": "A",
         "name": "example.com",
-        "value": "104.20.23.154",
-        "ttl": 109
-      },
-      {
-        "type": "AAAA",
-        "name": "example.com",
-        "value": "2606:4700:10::ac42:93f3",
-        "ttl": 45
+        "value": "172.66.147.243",
+        "ttl": 218
       },
       {
         "type": "AAAA",
         "name": "example.com",
         "value": "2606:4700:10::6814:179a",
-        "ttl": 45
+        "ttl": 97
+      },
+      {
+        "type": "AAAA",
+        "name": "example.com",
+        "value": "2606:4700:10::ac42:93f3",
+        "ttl": 97
       },
       {
         "type": "MX",
         "name": "example.com",
         "value": "",
         "priority": 0,
-        "ttl": 0
+        "ttl": 190
       },
       {
         "type": "NS",
         "name": "example.com",
         "value": "hera.ns.cloudflare.com",
-        "ttl": 0
+        "ttl": 78207
       },
       {
         "type": "NS",
         "name": "example.com",
         "value": "elliott.ns.cloudflare.com",
-        "ttl": 0
+        "ttl": 78207
       },
       {
         "type": "TXT",
         "name": "example.com",
         "value": "v=spf1 -all",
-        "ttl": 0
+        "ttl": 163
       },
       {
         "type": "TXT",
         "name": "example.com",
         "value": "_k2n1y4vw3qtb4skdx9e7dxt97qrmmq9",
-        "ttl": 0
+        "ttl": 163
       },
       {
         "type": "SOA",
         "name": "example.com",
         "value": "elliott.ns.cloudflare.com dns.cloudflare.com 2416374680 10000 2400 604800 1800",
-        "ttl": 1800
+        "ttl": 235
       }
     ],
     "findings": [
@@ -95,28 +95,28 @@
             "type": "A",
             "name": "example.com",
             "value": "172.66.147.243",
-            "ttl": 126
+            "ttl": 82
           },
           {
             "type": "A",
             "name": "example.com",
             "value": "104.20.23.154",
-            "ttl": 126
-          },
-          {
-            "type": "AAAA",
-            "name": "example.com",
-            "value": "2606:4700:10::ac42:93f3",
-            "ttl": 158
+            "ttl": 82
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::6814:179a",
-            "ttl": 158
+            "ttl": 155
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 155
           }
         ],
-        "responseTimeMs": 86
+        "responseTimeMs": 18
       },
       {
         "resolver": {
@@ -132,12 +132,18 @@
             "type": "A",
             "name": "example.com",
             "value": "104.20.23.154",
-            "ttl": 300
+            "ttl": 281
           },
           {
             "type": "A",
             "name": "example.com",
             "value": "172.66.147.243",
+            "ttl": 281
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
             "ttl": 300
           },
           {
@@ -145,15 +151,9 @@
             "name": "example.com",
             "value": "2606:4700:10::ac42:93f3",
             "ttl": 300
-          },
-          {
-            "type": "AAAA",
-            "name": "example.com",
-            "value": "2606:4700:10::6814:179a",
-            "ttl": 300
           }
         ],
-        "responseTimeMs": 68
+        "responseTimeMs": 121
       },
       {
         "resolver": {
@@ -168,29 +168,29 @@
           {
             "type": "A",
             "name": "example.com",
-            "value": "172.66.147.243",
-            "ttl": 128
+            "value": "104.20.23.154",
+            "ttl": 175
           },
           {
             "type": "A",
             "name": "example.com",
-            "value": "104.20.23.154",
-            "ttl": 128
+            "value": "172.66.147.243",
+            "ttl": 175
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::6814:179a",
-            "ttl": 300
+            "ttl": 41
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::ac42:93f3",
-            "ttl": 300
+            "ttl": 41
           }
         ],
-        "responseTimeMs": 130
+        "responseTimeMs": 178
       },
       {
         "resolver": {
@@ -201,9 +201,33 @@
           "flag": "🇭🇰",
           "provider": "DNS.SB"
         },
-        "records": [],
-        "responseTimeMs": 5000,
-        "error": "Timeout"
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 29
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 29
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 280
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 280
+          }
+        ],
+        "responseTimeMs": 376
       },
       {
         "resolver": {
@@ -219,28 +243,28 @@
             "type": "A",
             "name": "example.com",
             "value": "104.20.23.154",
-            "ttl": 235
+            "ttl": 238
           },
           {
             "type": "A",
             "name": "example.com",
             "value": "172.66.147.243",
-            "ttl": 235
-          },
-          {
-            "type": "AAAA",
-            "name": "example.com",
-            "value": "2606:4700:10::ac42:93f3",
-            "ttl": 300
+            "ttl": 238
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::6814:179a",
-            "ttl": 300
+            "ttl": 58
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 58
           }
         ],
-        "responseTimeMs": 303
+        "responseTimeMs": 134
       }
     ],
     "findings": [
@@ -248,7 +272,7 @@
         "id": "propagation-consistent",
         "severity": "success",
         "title": "Konsistente Propagation",
-        "description": "Alle 4 Resolver liefern dasselbe Ergebnis.",
+        "description": "Alle 5 Resolver liefern dasselbe Ergebnis.",
         "category": "dns"
       }
     ]
@@ -316,7 +340,14 @@
       "mtaSts": {
         "present": false
       },
-      "hasMx": true
+      "hasMx": true,
+      "nullMx": true,
+      "bimi": {
+        "present": false
+      },
+      "tlsRpt": {
+        "present": false
+      }
     },
     "findings": [
       {
@@ -334,23 +365,17 @@
         "category": "mail"
       },
       {
-        "id": "no-dkim-found",
-        "severity": "info",
-        "title": "Kein DKIM-Selector gefunden",
-        "description": "Wir haben gängige Selectors probiert (default, google, selector1, k1, …) und nichts gefunden. Vielleicht nutzt du einen exotischen Selector — manuell prüfen, oder DKIM einrichten.",
-        "category": "mail"
-      },
-      {
-        "id": "no-mta-sts",
-        "severity": "info",
-        "title": "Kein MTA-STS",
-        "description": "MTA-STS erzwingt TLS für eingehende Mail. Ohne MTA-STS können Angreifer einen Downgrade auf unverschlüsselten SMTP-Transport erzwingen.",
+        "id": "null-mx",
+        "severity": "success",
+        "title": "Keine Mails: Domain sauber als mail-frei markiert",
+        "description": "Null-MX (RFC 7505), SPF -all und DMARC p=reject: Die Domain nimmt keine Mails an, und Empfänger weisen Mails ab, die sich als diese Domain ausgeben. DKIM und MTA-STS braucht sie deshalb nicht.",
         "category": "mail"
       }
     ]
   },
   "whois": {
     "whois": {
+      "domain": "example.com",
       "registrar": "RESERVED-Internet Assigned Numbers Authority",
       "createdAt": "1995-08-14T04:00:00Z",
       "expiresAt": "2027-08-13T04:00:00Z",
