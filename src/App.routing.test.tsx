@@ -290,8 +290,8 @@ describe('Report', () => {
 
 /**
  * #64: Für einen DNS-Eintrag wie `crsend._domainkey.kksn.de` laufen nur die
- * DNS-Checks. SSL, Tech-Stack und Propagation bräuchten einen Host, den es
- * dort nicht gibt.
+ * DNS-Checks. SSL und Tech-Stack bräuchten einen Host, den es dort nicht gibt.
+ * #82: Die Propagation läuft dagegen mit — sie vergleicht dort TXT und CNAME.
  */
 describe('DNS-Einträge mit Unterstrich', () => {
   const dkim = 'crsend._domainkey.kksn.de';
@@ -310,28 +310,55 @@ describe('DNS-Einträge mit Unterstrich', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText(/v=DKIM1/)).toBeInTheDocument());
-    for (const check of [api.lookupDnssec, api.lookupMail, api.lookupWhois]) {
+    for (const check of [api.lookupDnssec, api.lookupMail, api.lookupWhois, api.lookupPropagation]) {
       expect(check).toHaveBeenCalledWith(dkim);
     }
-    for (const check of [api.lookupSsl, api.lookupTechStack, api.lookupPropagation]) {
+    for (const check of [api.lookupSsl, api.lookupTechStack]) {
       expect(check).not.toHaveBeenCalled();
     }
   });
 
   // Die übersprungenen Sektionen zählen als erledigt — sonst bliebe der
   // Score für immer beim Skeleton.
-  it('zeigt den Score, obwohl drei Sektionen übersprungen sind', async () => {
+  it('zeigt den Score, obwohl zwei Sektionen übersprungen sind', async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText('Health Score')).toBeInTheDocument());
   });
 
-  it('blendet die Tabs aus, die einen Host bräuchten', async () => {
+  it('blendet die Tabs aus, die eine Website bräuchten', async () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole('tab', { name: /Records/ })).toBeInTheDocument());
-    for (const name of [/Propagation/, /Speed/, /Virus Scan/]) {
+    for (const name of [/Speed/, /Virus Scan/]) {
       expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument();
     }
-    expect(screen.getByRole('tab', { name: /Security/ })).toBeInTheDocument();
+    for (const name of [/Propagation/, /Security/]) {
+      expect(screen.getByRole('tab', { name })).toBeInTheDocument();
+    }
+  });
+
+  /**
+   * #82: Nach einem DKIM-Wechsel will man sehen, ob der neue Schlüssel bei
+   * allen Resolvern angekommen ist.
+   */
+  it('vergleicht im Propagation-Tab den TXT-Record über alle Resolver', async () => {
+    const key = `v=DKIM1; k=rsa; p=${'A'.repeat(380)}wIDAQAB`;
+    vi.mocked(api.lookupPropagation).mockResolvedValue({
+      propagation: ['Cloudflare', 'Google', 'AdGuard'].map((name) => ({
+        resolver: { id: name.toLowerCase(), name, ip: '0.0.0.0', country: 'X', flag: '', provider: name },
+        records: [{ type: 'TXT' as const, name: dkim, value: key, ttl: 3600 }],
+        responseTimeMs: 20,
+      })),
+      findings: [],
+    });
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Propagation/ }));
+    const panel = await screen.findByRole('tabpanel');
+    expect(await within(panel).findByRole('region', { name: 'Antwort A' })).toHaveTextContent(
+      'Cloudflare, Google, AdGuard'
+    );
+    expect(within(panel).getByRole('button', { name: /Ganzen Wert zeigen/ })).toBeInTheDocument();
+    expect(within(panel).getByText(/denselben TXT-Record/)).toBeInTheDocument();
   });
 });

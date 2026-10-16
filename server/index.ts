@@ -19,6 +19,7 @@ import { cached } from './lib/cache.js';
 import { BlockedTargetError } from './lib/safeTarget.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { queryAllResolvers } from './services/propagation.js';
+import { propagationTypes } from '../shared/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
 import { auditMail } from './services/mailAudit.js';
@@ -646,10 +647,13 @@ app.get('/api/lookup/propagation', async (req: Request, res: Response) => {
   const domain = resolveDomainParam(req, res, 'dns');
   if (!domain) return;
   try {
+    // Hosts vergleichen A/AAAA, DNS-Einträge wie `s1._domainkey.example.com`
+    // TXT und CNAME. Der Typ hängt nur am Namen, der Cache-Key bleibt gültig.
+    const types = propagationTypes(domain);
     const propagation = await cached(`propagation:${domain}`, LOOKUP_TTL_MS, () =>
-      queryAllResolvers(domain, { types: ['A', 'AAAA'] })
+      queryAllResolvers(domain, { types })
     );
-    res.json({ propagation, findings: propagationFindings(propagation) });
+    res.json({ propagation, findings: propagationFindings(propagation, types) });
   } catch (error) {
     sectionError(res, 'propagation_failed', error);
   }

@@ -3,7 +3,9 @@
  *
  * Wir fragen mehrere DoH-Resolver parallel und vergleichen die Antworten.
  * Damit kann man sehen ob ein DNS-Wechsel weltweit angekommen ist —
- * oder ob ein einzelner Resolver noch eine alte IP cached.
+ * oder ob ein einzelner Resolver noch eine alte IP oder einen alten
+ * DKIM-Schlüssel cached. Welche Typen abgefragt werden, entscheidet
+ * `propagationTypes` (shared/propagation.ts).
  */
 
 import { DOH_RESOLVERS, dohQuery, type DohResolver } from './doh.js';
@@ -51,8 +53,16 @@ async function queryResolverSafe(
       types.map((type) => dohQuery(resolver, domain, type, { timeoutMs }))
     );
 
+    // Folgt ein Name einem CNAME, steht der in der Antwort jeder Abfrage —
+    // bei TXT + CNAME also doppelt, und so landete er auch im Export.
     const records: DnsRecord[] = [];
-    for (const r of responses) records.push(...r.records);
+    const seen = new Set<string>();
+    for (const rec of responses.flatMap((r) => r.records)) {
+      const id = `${rec.type}|${rec.name.toLowerCase()}|${rec.value}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      records.push(rec);
+    }
 
     return {
       resolver: {

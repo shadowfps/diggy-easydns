@@ -10,7 +10,8 @@
  *
  * Für solche Namen laufen deshalb nur die DNS-Checks. SSL, Tech-Stack,
  * PageSpeed und VirusTotal würden einen Webserver ansprechen, den es hier
- * nicht gibt, und die Propagation vergleicht A/AAAA-Records.
+ * nicht gibt. Die Propagation vergleicht hier TXT und CNAME statt A/AAAA
+ * (siehe propagationTypes).
  */
 export function isDnsOnlyName(name: string): boolean {
   return name.includes('_');

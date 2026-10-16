@@ -65,6 +65,7 @@ import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { isDnsOnlyName } from '@/lib/dnsName';
+import { propagationTypes } from '@/lib/propagation';
 import {
   buildDocumentTitle,
   formatExportTimestamp,
@@ -632,18 +633,11 @@ export default function App() {
                 onChange={setActiveTab}
                 tabs={[
                   { id: 'records', label: 'Records', count: report.records.length },
-                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten
-                  // Propagation (vergleicht A/AAAA), Speed und Virus Scan
-                  // (brauchen eine Website) nichts zu zeigen.
-                  ...(dnsOnly
-                    ? []
-                    : [
-                        {
-                          id: 'propagation' as const,
-                          label: 'Propagation',
-                          count: propagation.data?.length || undefined,
-                        },
-                      ]),
+                  {
+                    id: 'propagation',
+                    label: 'Propagation',
+                    count: propagation.data?.length || undefined,
+                  },
                   { id: 'security', label: 'Security' },
                   { id: 'mail', label: 'Mail', count: mailCount },
                   {
@@ -656,6 +650,8 @@ export default function App() {
                     label: 'WHOIS',
                     count: whois.status === 'done' && whois.data ? 1 : undefined,
                   },
+                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten Speed und
+                  // Virus Scan (brauchen eine Website) nichts zu zeigen.
                   ...(dnsOnly
                     ? []
                     : [
@@ -715,7 +711,11 @@ export default function App() {
                       ) : propagation.status === 'error' ? (
                         <SectionError message={propagation.error} />
                       ) : propagation.data && propagation.data.length > 0 ? (
-                        <PropagationView key={report.domain} results={propagation.data} />
+                        <PropagationView
+                          key={report.domain}
+                          results={propagation.data}
+                          types={propagationTypes(report.domain)}
+                        />
                       ) : (
                         <Placeholder
                           title="Multi-Resolver-Propagation"
