@@ -151,7 +151,9 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
 - **„Nicht prüfbar“ ist kein „fehlt“.** Scheitert ein Check (Timeout,
   SERVFAIL), sagt das nichts über die Domain: Karte und Schnellübersicht
   zeigen neutral ein Fragezeichen mit „nicht prüfbar“, die Karte darunter den
-  Grund. Keine Statusfarbe, und das Finding dazu zieht keine Punkte ab.
+  Grund. Keine Statusfarbe, und das Finding dazu zieht keine Punkte ab. Dafür
+  sagt der Health Score, dass er unvollständig ist — sonst sähe ein Check, der
+  ins Leere lief, besser aus als einer mit Befund.
 
 ## Bewegung
 

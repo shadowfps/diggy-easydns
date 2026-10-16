@@ -28,7 +28,7 @@ describe('SecurityView', () => {
     );
 
     expect(screen.getAllByText('nicht prüfbar')).toHaveLength(1);
-    expect(screen.getByText(/kam nicht zustande \(Zeitüberschreitung\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Der SSL-Check scheiterte \(Zeitüberschreitung\)/)).toBeInTheDocument();
     expect(screen.queryByText('Kein TLS auf Port 443 erreichbar')).not.toBeInTheDocument();
   });
 
@@ -49,7 +49,9 @@ describe('SecurityView', () => {
 
     expect(screen.getByText('DNSSEC · unbekannt')).toBeInTheDocument();
     expect(screen.getByText('nicht prüfbar')).toBeInTheDocument();
-    expect(screen.getByText(/scheiterte \(SERVFAIL\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Der DNSSEC-Check scheiterte \(SERVFAIL\)/)).toBeInTheDocument();
+    // SERVFAIL kann eine kaputte Signatur sein — das soll auf der Karte stehen.
+    expect(screen.getByText(/fehlerhafte Signatur/)).toBeInTheDocument();
     expect(screen.queryByText('nicht aktiviert')).not.toBeInTheDocument();
   });
 
@@ -57,9 +59,9 @@ describe('SecurityView', () => {
     render(<SecurityView ssl={failedSection()} dnssec={failedSection()} />);
 
     expect(screen.getAllByText('nicht prüfbar')).toHaveLength(2);
-    // Kein Handshake-Satz: versucht wurde dann gar nichts.
-    expect(screen.getByText(/^Der SSL-Check ist fehlgeschlagen\./)).toBeInTheDocument();
-    expect(screen.getByText(/^Der DNSSEC-Check ist fehlgeschlagen\./)).toBeInTheDocument();
+    // Ohne Grund in Klammern: der Server meldete nur einen Fehler.
+    expect(screen.getByText(/^Der SSL-Check scheiterte\. Ob SSL/)).toBeInTheDocument();
+    expect(screen.getByText(/^Der DNSSEC-Check scheiterte\. Ob DNSSEC/)).toBeInTheDocument();
     expect(screen.queryByText('Kein TLS auf Port 443 erreichbar')).not.toBeInTheDocument();
     expect(screen.queryByText('nicht aktiviert')).not.toBeInTheDocument();
   });

@@ -622,6 +622,7 @@ export default function App() {
                 <ScoreCard
                   score={lookup.healthScore}
                   findings={lookup.findings}
+                  failed={lookup.failed}
                   onShowFindings={handleShowFindings}
                 />
               ) : (

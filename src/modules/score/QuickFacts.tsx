@@ -300,11 +300,6 @@ function getTechSvg(name: string): ReactNode {
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
-/** Kein „fehlt“, wenn nur der Check scheiterte (#101) — siehe components/ui/Unchecked. */
-function unchecked(label: string): QuickFactItem {
-  return { label, value: 'nicht prüfbar', unchecked: true };
-}
-
 interface QuickFactItem {
   label: string;
   value?: ReactNode;
@@ -355,51 +350,47 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts. Nur
   // solange sie wirklich laden: bei einem Fehler oder einer übersprungenen
   // Sektion (DNS-Eintrag ohne Host) blieb sonst das Skeleton für immer stehen.
-  // Ein Fehler ist „nicht prüfbar“, übersprungen heißt „nicht anwendbar“ (—).
-  const placeholder = (label: string, status: LoadStatus): QuickFactItem | null =>
+  // Ein Fehler ist „nicht prüfbar“ — ebenso eine fertige Sektion, deren
+  // Abfrage scheiterte (`failed`, #101). Übersprungen heißt „nicht anwendbar“ (—).
+  const placeholder = (
+    label: string,
+    status: LoadStatus,
+    failed?: unknown
+  ): QuickFactItem | null =>
     status === 'loading'
       ? { label, loading: true }
-      : status === 'error'
-        ? unchecked(label)
+      : status === 'error' || (status === 'done' && failed)
+        ? { label, value: 'nicht prüfbar', unchecked: true }
         : status !== 'done'
           ? { label, value: '—', muted: true }
           : null;
 
   const sslInfo = ssl.data;
   const sslItem: QuickFactItem =
-    placeholder('SSL', ssl.status) ??
-    (!sslInfo && ssl.lookupFailed
-      ? unchecked('SSL')
-      : {
-          label: 'SSL',
-          value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
-          ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
-          bad: !sslInfo?.valid || (sslInfo?.daysUntilExpiry ?? 999) < 14,
-        });
+    placeholder('SSL', ssl.status, !sslInfo && ssl.lookupFailed) ?? {
+      label: 'SSL',
+      value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
+      ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
+      bad: !sslInfo?.valid || (sslInfo?.daysUntilExpiry ?? 999) < 14,
+    };
 
   const dnssecInfo = dnssec.data;
   const dnssecItem: QuickFactItem =
-    placeholder('DNSSEC', dnssec.status) ??
-    (!dnssecInfo?.enabled && dnssecInfo?.lookupFailed
-      ? unchecked('DNSSEC')
-      : {
-          label: 'DNSSEC',
-          value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
-          ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
-          bad: !dnssecInfo?.enabled,
-        });
+    placeholder('DNSSEC', dnssec.status, !dnssecInfo?.enabled && dnssecInfo?.lookupFailed) ?? {
+      label: 'DNSSEC',
+      value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
+      ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
+      bad: !dnssecInfo?.enabled,
+    };
 
   const dmarc = mail.data?.dmarc;
   const dmarcItem: QuickFactItem =
-    placeholder('DMARC', mail.status) ??
-    (dmarc?.lookupFailed
-      ? unchecked('DMARC')
-      : {
-          label: 'DMARC',
-          value: dmarc?.present ? 'gesetzt' : 'fehlt',
-          ok: Boolean(dmarc?.present),
-          bad: !dmarc?.present,
-        });
+    placeholder('DMARC', mail.status, dmarc?.lookupFailed) ?? {
+      label: 'DMARC',
+      value: dmarc?.present ? 'gesetzt' : 'fehlt',
+      ok: Boolean(dmarc?.present),
+      bad: !dmarc?.present,
+    };
 
   const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },

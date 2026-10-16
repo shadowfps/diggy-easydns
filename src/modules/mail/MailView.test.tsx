@@ -28,14 +28,31 @@ describe('MailView', () => {
     );
 
     expect(screen.getAllByText('nicht prüfbar')).toHaveLength(4);
-    expect(
-      screen.getByText(/TXT-Abfrage der Domain scheiterte \(Zeitüberschreitung\)/)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/_dmarc\.<domain> scheiterte \(SERVFAIL\)/)).toBeInTheDocument();
-    expect(screen.getByText(/_mta-sts\.<domain> scheiterte \(Netzwerkfehler\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Der SPF-Check scheiterte \(Zeitüberschreitung\)\. Ob SPF/))
+      .toBeInTheDocument();
+    expect(screen.getByText(/^Der DMARC-Check scheiterte \(SERVFAIL\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Der DKIM-Check scheiterte \(Zeitüberschreitung\)/))
+      .toBeInTheDocument();
+    expect(screen.getByText(/^Der MTA-STS-Check scheiterte \(Netzwerkfehler\)/))
+      .toBeInTheDocument();
     expect(screen.queryByText('Kein SPF-Record gefunden')).not.toBeInTheDocument();
     expect(screen.queryByText('Kein DMARC-Record auf _dmarc.<domain>')).not.toBeInTheDocument();
     expect(screen.queryByText('nicht eingerichtet')).not.toBeInTheDocument();
+  });
+
+  // Ein gefundener Selector ist ein Ergebnis, auch wenn andere Proben scheiterten.
+  it('zeigt DKIM mit Fund normal, auch wenn eine Probe scheiterte', () => {
+    render(
+      <MailView
+        mail={{
+          ...missing,
+          dkim: { selectors: [{ selector: 'google', present: true }], lookupFailed: 'timeout' },
+        }}
+      />
+    );
+
+    expect(screen.getByText('google._domainkey')).toBeInTheDocument();
+    expect(screen.queryByText(/DKIM-Check scheiterte/)).not.toBeInTheDocument();
   });
 
   it('zeigt echtes Fehlen wie bisher', () => {

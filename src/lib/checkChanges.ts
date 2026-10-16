@@ -156,8 +156,9 @@ function legacyRecords(entry: LookupHistoryEntry): ComparableState['records'] {
 
 /**
  * Zertifikatsstand — nur, wenn ein Zertifikat gelesen wurde. Ohne eines
- * (`ssl: null`) ist offen, ob die Seite kein TLS hat oder der Handshake nur
- * in den Timeout lief: der Server liefert für beides dasselbe.
+ * (`ssl: null`) gibt es nichts zu vergleichen. Ein Timeout steht seit #101
+ * eigens in `failedChecks`; Einträge davor trennen „kein TLS“ und „Handshake
+ * im Timeout“ nicht.
  *
  * Alte Einträge haben statt des Ablaufdatums nur die Resttage zum
  * Prüfzeitpunkt — daraus lässt es sich auf etwa einen Tag genau schätzen.

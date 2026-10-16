@@ -4,7 +4,6 @@ import { Lock, ShieldCheck, ShieldAlert, ShieldOff, ShieldQuestion } from 'lucid
 import type { DnssecInfo, SslInfo } from '@/types/dns';
 import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
-import { lookupFailureLabel } from '@/lib/lookupFailure';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 
@@ -20,28 +19,25 @@ const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'non
 /*
  * „nicht prüfbar“ (#101): eine ausgefallene Sektion genauso wie ein Timeout
  * im Check — vorher stand dort „Kein TLS“ bzw. „nicht aktiviert“. `unchecked`
- * ist der Satz, warum; ohne ihn hat der Check ein Ergebnis.
+ * ist die Zeile, warum; ohne sie hat der Check ein Ergebnis.
  */
 export function SecurityView({ ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
   const dnssecInfo = dnssec.data ?? NO_DNSSEC;
 
-  const sslReason = ssl.lookupFailed && lookupFailureLabel(ssl.lookupFailed);
-  const sslUnchecked =
-    ssl.status === 'error'
-      ? 'Der SSL-Check ist fehlgeschlagen.'
-      : sslReason
-        ? `Der TLS-Handshake auf Port 443 kam nicht zustande (${sslReason}).`
-        : undefined;
+  const sslUnchecked = (ssl.status === 'error' || ssl.lookupFailed) && (
+    <UncheckedLine name="SSL" reason={ssl.lookupFailed} />
+  );
 
   // Ein gefundener Schlüssel ist ein Ergebnis, auch wenn die zweite Abfrage
   // scheiterte.
   const dnssecFailed = !dnssecInfo.enabled && dnssecInfo.lookupFailed;
-  const dnssecUnchecked =
-    dnssec.status === 'error'
-      ? 'Der DNSSEC-Check ist fehlgeschlagen.'
-      : dnssecFailed
-        ? `Die DS- oder DNSKEY-Abfrage scheiterte (${lookupFailureLabel(dnssecFailed)}).`
-        : undefined;
+  const dnssecUnchecked = (dnssec.status === 'error' || dnssecFailed) && (
+    <UncheckedLine name="DNSSEC" reason={dnssecFailed}>
+      {/* Validierende Resolver weisen eine kaputte Signatur mit SERVFAIL ab. */}
+      {dnssecFailed === 'servfail' &&
+        'Bleibt es bei SERVFAIL, steckt meist eine fehlerhafte Signatur dahinter.'}
+    </UncheckedLine>
+  );
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -67,7 +63,7 @@ function SslCard({
 }: {
   ssl?: SslInfo;
   applicable: boolean;
-  unchecked?: string;
+  unchecked?: ReactNode;
 }) {
   if (!applicable) {
     return (
@@ -86,7 +82,9 @@ function SslCard({
     );
   }
 
-  if (!ssl && unchecked) {
+  if (!ssl) {
+    // Der zugehörige Befund (no-ssl) ist eine Warnung, kein kritischer Fehler.
+    // Scheiterte nur der Check, ist nichts bewertet: neutral, „nicht prüfbar“.
     return (
       <motion.div
         initial={{ opacity: 0, y: 6 }}
@@ -97,31 +95,17 @@ function SslCard({
         <CardHeader
           icon={<Lock className="size-4" />}
           title="SSL / TLS"
-          aside={<UncheckedBadge />}
+          tone={unchecked ? 'neutral' : 'warning'}
+          aside={unchecked && <UncheckedBadge />}
         />
-        <div className="mt-4">
-          <UncheckedLine>
-            {unchecked} Ob ein gültiges Zertifikat da ist, bleibt offen — später erneut prüfen.
-          </UncheckedLine>
-        </div>
-      </motion.div>
-    );
-  }
-
-  if (!ssl) {
-    // Der zugehörige Befund (no-ssl) ist eine Warnung, kein kritischer Fehler.
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="card"
-      >
-        <CardHeader icon={<Lock className="size-4" />} title="SSL / TLS" tone="warning" />
-        <div className="mt-4 flex items-center gap-2 text-sm font-medium text-warning">
-          <ShieldOff className="size-4 shrink-0" />
-          <span>Kein TLS auf Port 443 erreichbar</span>
-        </div>
+        {unchecked ? (
+          <div className="mt-4">{unchecked}</div>
+        ) : (
+          <div className="mt-4 flex items-center gap-2 text-sm font-medium text-warning">
+            <ShieldOff className="size-4 shrink-0" />
+            <span>Kein TLS auf Port 443 erreichbar</span>
+          </div>
+        )}
       </motion.div>
     );
   }
@@ -201,7 +185,7 @@ function SslCard({
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
-function DnssecCard({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: string }) {
+function DnssecCard({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: ReactNode }) {
   let icon = <ShieldOff className="size-4" />;
   let tone: Tone = 'neutral';
   let statusText = 'inaktiv';
@@ -217,11 +201,7 @@ function DnssecCard({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: str
     icon = <ShieldQuestion className="size-4" />;
     statusText = 'unbekannt';
     badge = <UncheckedBadge />;
-    body = (
-      <UncheckedLine>
-        {unchecked} Ob DNSSEC aktiv ist, bleibt offen — später erneut prüfen.
-      </UncheckedLine>
-    );
+    body = <>{unchecked}</>;
   } else if (dnssec.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
     icon = <ShieldCheck className="size-4" />;
     tone = 'success';
