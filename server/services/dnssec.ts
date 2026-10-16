@@ -13,8 +13,25 @@
  * wir der AD-Bewertung mehrerer Resolver.
  */
 
-import { DOH_RESOLVERS, dohQuery } from './doh.js';
-import type { DnssecInfo } from '../types.js';
+import { DOH_RESOLVERS, dohQuery, type DohQueryResult } from './doh.js';
+import type { DnssecInfo, LookupFailure } from '../types.js';
+
+/** DNS-RCODEs, die eine Antwort sind: NOERROR (auch ohne Records) und NXDOMAIN. */
+const ANSWER_STATUS = new Set([0, 3]);
+
+/**
+ * Warum eine DS- oder DNSKEY-Abfrage nichts taugt — oder `undefined`, wenn
+ * sie beantwortet wurde. `dohQuery` wirft bei Timeout und HTTP-Fehlern, gibt
+ * SERVFAIL aber als Antwort ohne Records zurück; das las sich bisher wie
+ * „nicht signiert“ (#101).
+ */
+function dohFailure(result: PromiseSettledResult<DohQueryResult>): LookupFailure | undefined {
+  if (result.status === 'rejected') {
+    const name = (result.reason as Error | undefined)?.name;
+    return name === 'AbortError' || name === 'TimeoutError' ? 'timeout' : 'network';
+  }
+  return ANSWER_STATUS.has(result.value.status) ? undefined : 'servfail';
+}
 
 /**
  * DNSKEY-Algorithmen laut IANA-Registry.
@@ -81,7 +98,7 @@ export async function checkDnssec(domain: string): Promise<DnssecInfo> {
   }
 
   // Ohne DS- oder DNSKEY-Antwort hieße `enabled: false` nur „nicht gesehen“.
-  const lookupFailed = dnskeyCf.status === 'rejected' || dsCf.status === 'rejected';
+  const lookupFailed = dohFailure(dsCf) ?? dohFailure(dnskeyCf);
 
   return {
     enabled,

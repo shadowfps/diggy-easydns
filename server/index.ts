@@ -16,6 +16,7 @@ import {
   whoisFindings,
 } from './services/reportBuilder.js';
 import { cached } from './lib/cache.js';
+import { hasMailLookupFailure } from '../shared/lookupFailure.js';
 import { BlockedTargetError } from './lib/safeTarget.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { queryAllResolvers } from './services/propagation.js';
@@ -662,8 +663,13 @@ app.get('/api/lookup/dnssec', async (req: Request, res: Response) => {
   if (!domain) return;
   const apexDomain = getApexDomain(domain);
   try {
-    const dnssec = await cached(`dnssec:${apexDomain}`, LOOKUP_TTL_MS, () =>
-      checkDnssec(apexDomain)
+    // Ein Ausfall wird nicht gecacht: „nicht prüfbar“ soll beim nächsten
+    // Aufruf neu prüfen, nicht eine Minute lang dasselbe melden (#101).
+    const dnssec = await cached(
+      `dnssec:${apexDomain}`,
+      LOOKUP_TTL_MS,
+      () => checkDnssec(apexDomain),
+      { cacheIf: (result) => !result.lookupFailed }
     );
     res.json({ dnssec, findings: dnssecFindings(dnssec) });
   } catch (error) {
@@ -675,8 +681,18 @@ app.get('/api/lookup/ssl', async (req: Request, res: Response) => {
   const domain = resolveDomainParam(req, res);
   if (!domain) return;
   try {
-    const ssl = await cached(`ssl:${domain}`, LOOKUP_TTL_MS, () => checkSsl(domain));
-    res.json({ ssl, findings: sslFindings(ssl) });
+    const result = await cached(`ssl:${domain}`, LOOKUP_TTL_MS, () => checkSsl(domain), {
+      cacheIf: (check) => check.status !== 'failed',
+    });
+    const ssl = result.status === 'ok' ? result.info : null;
+    const lookupFailed = result.status === 'failed' ? result.reason : undefined;
+    // `ssl` bleibt `SslInfo | null` wie bisher; `lookupFailed` kommt nur dazu,
+    // wenn der Check scheiterte — ältere Clients lesen es einfach nicht.
+    res.json({
+      ssl,
+      findings: sslFindings(ssl, lookupFailed),
+      ...(lookupFailed && { lookupFailed }),
+    });
   } catch (error) {
     sectionError(res, 'ssl_failed', error);
   }
@@ -689,10 +705,12 @@ app.get('/api/lookup/mail', async (req: Request, res: Response) => {
   try {
     // SPF liegt auf der Apex-Domain — hier eigenständig holen (der Primär-
     // Endpoint liefert die Records ja nicht mehr an diesen Endpoint durch).
-    const mail = await cached(`mail:${apexDomain}`, LOOKUP_TTL_MS, async () => {
-      const spf = await lookupSpfRecord(apexDomain);
-      return auditMail(apexDomain, spf);
-    });
+    const mail = await cached(
+      `mail:${apexDomain}`,
+      LOOKUP_TTL_MS,
+      async () => auditMail(apexDomain, await lookupSpfRecord(apexDomain)),
+      { cacheIf: (audit) => !hasMailLookupFailure(audit) }
+    );
     res.json({ mail, findings: mailFindings(mail, apexDomain) });
   } catch (error) {
     sectionError(res, 'mail_failed', error);

@@ -91,9 +91,7 @@ import {
   saveLookupToHistory,
   useLookupHistory,
 } from '@/lib/lookupHistory';
-import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
-
-const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+import type { PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
@@ -766,11 +764,7 @@ export default function App() {
                       (securityLoading ? (
                         <SectionCardsSkeleton count={2} />
                       ) : (
-                        <SecurityView
-                          ssl={ssl.data ?? undefined}
-                          sslApplicable={!dnsOnly}
-                          dnssec={dnssec.data ?? NO_DNSSEC}
-                        />
+                        <SecurityView ssl={ssl} sslApplicable={!dnsOnly} dnssec={dnssec} />
                       ))}
                     {activeTab === 'mail' &&
                       (mail.status === 'loading' ? (

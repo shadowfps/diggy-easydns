@@ -1,8 +1,9 @@
 import { promises as dnsPromises } from 'node:dns';
 import { domainToASCII } from 'node:url';
 import { getDomain } from 'tldts';
-import type { DnsRecord, RecordType } from '../types.js';
+import type { DnsRecord, LookupFailure, RecordType } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
+import { dnsLookupFailure } from '../lib/dnsFailure.js';
 
 /**
  * Konfigurierter Resolver — nutzt Cloudflare als Default,
@@ -287,14 +288,22 @@ export async function lookupPtrRecords(ip: string): Promise<string[]> {
   }
 }
 
+export interface SpfLookup {
+  record?: string;
+  /** Die TXT-Abfrage scheiterte — ob es einen SPF-Record gibt, ist offen. */
+  lookupFailed?: LookupFailure;
+}
+
 /** Holt den SPF-Record von der Apex-Domain (für Mail-Audit bei Subdomain-Lookups). */
-export async function lookupSpfRecord(domain: string): Promise<string | undefined> {
+export async function lookupSpfRecord(domain: string): Promise<SpfLookup> {
   try {
     const results = await resolver.resolveTxt(domain);
-    return results
+    const record = results
       .map((chunks) => chunks.join(''))
       .find((value) => value.toLowerCase().startsWith('v=spf1'));
-  } catch {
-    return undefined;
+    return { record };
+  } catch (error) {
+    const lookupFailed = dnsLookupFailure(error);
+    return lookupFailed ? { lookupFailed } : {};
   }
 }

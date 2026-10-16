@@ -40,6 +40,9 @@ const MAX_ENTRIES = 4_000;
  * Zwei Eigenschaften, die nicht offensichtlich sind:
  *
  *  - **Fehler werden NICHT gecacht.** Der nächste Aufruf versucht es erneut.
+ *    Dasselbe gilt für Werte, die `cacheIf` ablehnt: ein Check, der einen
+ *    Timeout als „nicht prüfbar“ meldet, wirft nicht, soll aber beim nächsten
+ *    Aufruf trotzdem neu laufen (#101).
  *  - **Parallele Aufrufe auf denselben Key teilen sich eine Produktion.**
  *    Ohne das führten fünf gleichzeitige Requests fünf komplette Lookups aus —
  *    was im Normalbetrieb regelmäßig passiert, weil das Frontend sechs
@@ -49,7 +52,8 @@ const MAX_ENTRIES = 4_000;
 export async function cached<T>(
   key: string,
   ttlMs: number,
-  produce: () => Promise<T>
+  produce: () => Promise<T>,
+  options: { cacheIf?: (value: T) => boolean } = {}
 ): Promise<T> {
   const hit = store.get(key);
   if (hit && hit.expiresAt > Date.now()) {
@@ -63,7 +67,7 @@ export async function cached<T>(
 
   const pending = produce()
     .then((value) => {
-      remember(key, ttlMs, value);
+      if (options.cacheIf?.(value) ?? true) remember(key, ttlMs, value);
       return value;
     })
     .finally(() => {

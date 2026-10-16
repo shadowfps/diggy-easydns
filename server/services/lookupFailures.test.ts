@@ -62,11 +62,14 @@ describe('checkDnssec', () => {
 
   it('markiert das Ergebnis, wenn die DS-Abfrage scheitert', async () => {
     vi.mocked(dohQuery).mockImplementation(async (_resolver, _domain, type) => {
-      if (type === 'DS') throw new Error('Timeout');
+      if (type === 'DS') throw Object.assign(new Error('Timeout'), { name: 'AbortError' });
       return answer;
     });
 
-    expect(await checkDnssec('example.com')).toMatchObject({ enabled: false, lookupFailed: true });
+    expect(await checkDnssec('example.com')).toMatchObject({
+      enabled: false,
+      lookupFailed: 'timeout',
+    });
   });
 
   it('lässt eine unsignierte Zone unmarkiert', async () => {

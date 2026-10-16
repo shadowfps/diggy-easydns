@@ -82,6 +82,22 @@ describe('cached', () => {
     }
   });
 
+  /**
+   * #101: ein Check, der einen Timeout als „nicht prüfbar“ meldet, wirft
+   * nicht. Gecacht hieße das: eine Minute lang dieselbe Meldung, auch wenn
+   * der Nutzer gleich erneut prüft.
+   */
+  it('cached keine Werte, die cacheIf ablehnt', async () => {
+    let calls = 0;
+    const produce = async () => ({ failed: ++calls === 1 });
+    const cacheIf = (value: { failed: boolean }) => !value.failed;
+
+    expect(await cached('check', 5_000, produce, { cacheIf })).toEqual({ failed: true });
+    expect(await cached('check', 5_000, produce, { cacheIf })).toEqual({ failed: false });
+    expect(await cached('check', 5_000, produce, { cacheIf })).toEqual({ failed: false });
+    expect(calls).toBe(2);
+  });
+
   it('hält verschiedene Keys auseinander', async () => {
     expect(await cached('a', 5_000, async () => 'A')).toBe('A');
     expect(await cached('b', 5_000, async () => 'B')).toBe('B');

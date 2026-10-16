@@ -161,4 +161,37 @@ describe('Seit dem letzten Check im Report', () => {
       expect(screen.getByText(/^Keine Änderungen seit /)).toBeInTheDocument()
     );
   });
+
+  // #101: ein SSL-Timeout kostet keine Punkte mehr. Der Score ist dann eine
+  // andere Rechnung als beim letzten Check — „Health Score gestiegen“ wäre
+  // erfunden. Prüft zugleich den Weg vom API-Feld bis in die Schnellübersicht.
+  it('zeigt einen SSL-Timeout als „nicht prüfbar“ und vergleicht den Score nicht', async () => {
+    const finding = (id: string, severity: 'warning' | 'info', unchecked?: boolean) => ({
+      id,
+      severity,
+      title: id,
+      description: '',
+      category: 'ssl' as const,
+      ...(unchecked && { unchecked }),
+    });
+    vi.mocked(api.lookupSsl).mockResolvedValue({
+      ssl: null,
+      findings: [finding('no-ssl', 'warning')],
+    });
+    render(<App />);
+    await screen.findByText('Health Score');
+
+    stubApi({ ip: '198.51.100.7', timestamp: '2026-10-16T09:00:00.000Z', dmarc: false });
+    vi.mocked(api.lookupSsl).mockResolvedValue({
+      ssl: null,
+      lookupFailed: 'timeout',
+      findings: [finding('ssl-unchecked', 'info', true)],
+    });
+    await lookUpAgain();
+
+    await waitFor(() =>
+      expect(screen.getByText(/^Keine Änderungen seit /)).toBeInTheDocument()
+    );
+    expect(screen.getByText('SSL').nextElementSibling).toHaveTextContent('nicht prüfbar');
+  });
 });

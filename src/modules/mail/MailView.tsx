@@ -3,7 +3,9 @@ import { motion } from 'motion/react';
 import { Mail, Check, X, AlertTriangle, FileSignature, Send } from 'lucide-react';
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { lookupFailureLabel } from '@/lib/lookupFailure';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 
 interface MailViewProps {
   mail: MailSecurity;
@@ -23,12 +25,28 @@ export function MailView({ mail }: MailViewProps) {
 /*
  * Die Töne der Kartenköpfe folgen den Mail-Findings (reportBuilder): ein
  * fehlender SPF-/DMARC-Record ist mit MX eine Warnung, ohne MX nur ein
- * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis.
+ * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis. Scheiterte die
+ * Abfrage (`lookupFailed`), ist nichts bewertet: neutral und „nicht prüfbar“
+ * statt „fehlt“ (#101).
  */
 
 /* ─── SPF ─────────────────────────────────────────────────────────────── */
 
 function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
+  if (spf.lookupFailed) {
+    return (
+      <UncheckedCard
+        icon={<Send className="size-4" />}
+        title="SPF"
+        subtitle="Wer darf in deinem Namen senden?"
+        delay={0}
+      >
+        Die TXT-Abfrage der Domain scheiterte ({lookupFailureLabel(spf.lookupFailed)}). Ob ein
+        SPF-Record existiert, bleibt offen — später erneut prüfen.
+      </UncheckedCard>
+    );
+  }
+
   const tone: Tone = !spf.present
     ? hasMx
       ? 'warning'
@@ -79,6 +97,20 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
 /* ─── DMARC ──────────────────────────────────────────────────────────── */
 
 function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: boolean }) {
+  if (dmarc.lookupFailed) {
+    return (
+      <UncheckedCard
+        icon={<Mail className="size-4" />}
+        title="DMARC"
+        subtitle="Was passiert mit Spoofing-Versuchen?"
+        delay={0.05}
+      >
+        Die Abfrage von _dmarc.&lt;domain&gt; scheiterte ({lookupFailureLabel(dmarc.lookupFailed)}).
+        Ob ein DMARC-Record existiert, bleibt offen — später erneut prüfen.
+      </UncheckedCard>
+    );
+  }
+
   const policyTone: Tone =
     dmarc.policy === 'reject'
       ? 'success'
@@ -127,6 +159,21 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
 function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
   const found = dkim.selectors.length > 0;
 
+  if (!found && dkim.lookupFailed) {
+    return (
+      <UncheckedCard
+        icon={<FileSignature className="size-4" />}
+        title="DKIM"
+        subtitle="Welche Selectors signieren ausgehende Mails?"
+        delay={0.1}
+      >
+        Nicht alle gängigen Selectors ließen sich abfragen (
+        {lookupFailureLabel(dkim.lookupFailed)}). Ob DKIM eingerichtet ist, bleibt offen — später
+        erneut prüfen.
+      </UncheckedCard>
+    );
+  }
+
   return (
     <Card
       icon={<FileSignature className="size-4" />}
@@ -164,6 +211,21 @@ function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
 /* ─── MTA-STS ────────────────────────────────────────────────────────── */
 
 function MtaStsCard({ mtaSts }: { mtaSts: MailSecurity['mtaSts'] }) {
+  if (mtaSts.lookupFailed) {
+    return (
+      <UncheckedCard
+        icon={<Mail className="size-4" />}
+        title="MTA-STS"
+        subtitle="Erzwingt TLS für eingehende Mail"
+        delay={0.15}
+      >
+        Die Abfrage von _mta-sts.&lt;domain&gt; scheiterte (
+        {lookupFailureLabel(mtaSts.lookupFailed)}). Ob MTA-STS eingerichtet ist, bleibt offen —
+        später erneut prüfen.
+      </UncheckedCard>
+    );
+  }
+
   return (
     <Card
       icon={<Mail className="size-4" />}
@@ -202,6 +264,7 @@ function Card({
   title,
   subtitle,
   tone,
+  aside,
   delay,
   children,
 }: {
@@ -209,6 +272,7 @@ function Card({
   title: string;
   subtitle: string;
   tone: Tone;
+  aside?: ReactNode;
   delay: number;
   children: ReactNode;
 }) {
@@ -219,9 +283,37 @@ function Card({
       transition={{ duration: 0.3, delay }}
       className="card"
     >
-      <CardHeader icon={icon} title={title} subtitle={subtitle} tone={tone} />
+      <CardHeader icon={icon} title={title} subtitle={subtitle} tone={tone} aside={aside} />
       <div className="mt-4">{children}</div>
     </motion.div>
+  );
+}
+
+/** Karte, deren Abfrage scheiterte: neutral, Badge „nicht prüfbar“, darunter der Grund. */
+function UncheckedCard({
+  icon,
+  title,
+  subtitle,
+  delay,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  delay: number;
+  children: ReactNode;
+}) {
+  return (
+    <Card
+      icon={icon}
+      title={title}
+      subtitle={subtitle}
+      tone="neutral"
+      aside={<UncheckedBadge />}
+      delay={delay}
+    >
+      <UncheckedLine>{children}</UncheckedLine>
+    </Card>
   );
 }
 

@@ -1,22 +1,52 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Lock, ShieldCheck, ShieldAlert, ShieldOff } from 'lucide-react';
+import { Lock, ShieldCheck, ShieldAlert, ShieldOff, ShieldQuestion } from 'lucide-react';
 import type { DnssecInfo, SslInfo } from '@/types/dns';
+import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { lookupFailureLabel } from '@/lib/lookupFailure';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 
 interface SecurityViewProps {
-  ssl?: SslInfo;
+  ssl: SectionSlice<SslInfo | null>;
   /** false bei DNS-Einträgen wie `_dmarc.…` — dort gibt es keinen Host für TLS. */
   sslApplicable?: boolean;
-  dnssec: DnssecInfo;
+  dnssec: SectionSlice<DnssecInfo>;
 }
 
+const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+
+/*
+ * „nicht prüfbar“ (#101): eine ausgefallene Sektion genauso wie ein Timeout
+ * im Check — vorher stand dort „Kein TLS“ bzw. „nicht aktiviert“. `unchecked`
+ * ist der Satz, warum; ohne ihn hat der Check ein Ergebnis.
+ */
 export function SecurityView({ ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
+  const dnssecInfo = dnssec.data ?? NO_DNSSEC;
+
+  const sslReason = ssl.lookupFailed && lookupFailureLabel(ssl.lookupFailed);
+  const sslUnchecked =
+    ssl.status === 'error'
+      ? 'Der SSL-Check ist fehlgeschlagen.'
+      : sslReason
+        ? `Der TLS-Handshake auf Port 443 kam nicht zustande (${sslReason}).`
+        : undefined;
+
+  // Ein gefundener Schlüssel ist ein Ergebnis, auch wenn die zweite Abfrage
+  // scheiterte.
+  const dnssecFailed = !dnssecInfo.enabled && dnssecInfo.lookupFailed;
+  const dnssecUnchecked =
+    dnssec.status === 'error'
+      ? 'Der DNSSEC-Check ist fehlgeschlagen.'
+      : dnssecFailed
+        ? `Die DS- oder DNSKEY-Abfrage scheiterte (${lookupFailureLabel(dnssecFailed)}).`
+        : undefined;
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <SslCard ssl={ssl} applicable={sslApplicable} />
-      <DnssecCard dnssec={dnssec} />
+      <SslCard ssl={ssl.data ?? undefined} applicable={sslApplicable} unchecked={sslUnchecked} />
+      <DnssecCard dnssec={dnssecInfo} unchecked={dnssecUnchecked} />
     </div>
   );
 }
@@ -30,7 +60,15 @@ function sslTone(ssl: SslInfo): Tone {
   return 'success';
 }
 
-function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
+function SslCard({
+  ssl,
+  applicable,
+  unchecked,
+}: {
+  ssl?: SslInfo;
+  applicable: boolean;
+  unchecked?: string;
+}) {
   if (!applicable) {
     return (
       <motion.div
@@ -44,6 +82,28 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
           Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts —
           unter ihnen läuft kein Webserver mit Zertifikat.
         </p>
+      </motion.div>
+    );
+  }
+
+  if (!ssl && unchecked) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="card"
+      >
+        <CardHeader
+          icon={<Lock className="size-4" />}
+          title="SSL / TLS"
+          aside={<UncheckedBadge />}
+        />
+        <div className="mt-4">
+          <UncheckedLine>
+            {unchecked} Ob ein gültiges Zertifikat da ist, bleibt offen — später erneut prüfen.
+          </UncheckedLine>
+        </div>
       </motion.div>
     );
   }
@@ -141,7 +201,7 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
-function DnssecCard({ dnssec }: { dnssec: DnssecInfo }) {
+function DnssecCard({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: string }) {
   let icon = <ShieldOff className="size-4" />;
   let tone: Tone = 'neutral';
   let statusText = 'inaktiv';
@@ -153,7 +213,16 @@ function DnssecCard({ dnssec }: { dnssec: DnssecInfo }) {
     </p>
   );
 
-  if (dnssec.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
+  if (unchecked) {
+    icon = <ShieldQuestion className="size-4" />;
+    statusText = 'unbekannt';
+    badge = <UncheckedBadge />;
+    body = (
+      <UncheckedLine>
+        {unchecked} Ob DNSSEC aktiv ist, bleibt offen — später erneut prüfen.
+      </UncheckedLine>
+    );
+  } else if (dnssec.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
     icon = <ShieldCheck className="size-4" />;
     tone = 'success';
     statusText = 'aktiv & valide';

@@ -2,12 +2,47 @@ import type {
   DnsRecord,
   DnssecInfo,
   Finding,
+  LookupFailure,
   MailSecurity,
   ResolverResult,
   SslInfo,
   WhoisInfo,
 } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
+import { lookupFailureLabel } from '../../shared/lookupFailure.js';
+
+/* ─── Gescheiterte Checks ─────────────────────────────────────────────── */
+
+const FAILURE_DETAIL: Record<LookupFailure, string> = {
+  timeout: 'Die Abfrage lief in eine Zeitüberschreitung.',
+  servfail:
+    'Der Resolver antwortete mit SERVFAIL — meist vorübergehend, manchmal ein Zeichen für gestörte Nameserver der Domain.',
+  network: 'Die Abfrage scheiterte an einem Netzwerkfehler.',
+};
+
+/**
+ * Hinweis „konnte nicht geprüft werden“ statt „fehlt“ (#101).
+ *
+ * Ein Timeout oder SERVFAIL sagt nichts über die Domain. Als „fehlt“
+ * gemeldet, zog er Punkte ab, und wer zweimal prüfte, bekam für dieselbe
+ * Domain zwei Scores. `unchecked` hält ihn aus dem Score (shared/scoring.ts).
+ */
+function uncheckedFinding(
+  id: string,
+  category: Finding['category'],
+  check: string,
+  reason: LookupFailure,
+  detail = FAILURE_DETAIL[reason]
+): Finding {
+  return {
+    id,
+    severity: 'info',
+    title: `${check} konnte nicht geprüft werden — ${lookupFailureLabel(reason)}`,
+    description: `${detail} Ohne Antwort gibt es keine Bewertung und keinen Punktabzug — später erneut prüfen.`,
+    category,
+    unchecked: true,
+  };
+}
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
@@ -131,7 +166,9 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   // Spoofing-Schutz (jemand kann ja in deinem Namen Mails versenden, auch
   // wenn du nicht empfängst).
 
-  if (!mail.spf.present) {
+  if (mail.spf.lookupFailed) {
+    findings.push(uncheckedFinding('spf-unchecked', 'mail', 'SPF', mail.spf.lookupFailed));
+  } else if (!mail.spf.present) {
     findings.push({
       id: 'no-spf',
       severity: hasMx ? 'warning' : 'info',
@@ -168,7 +205,9 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     }
   }
 
-  if (!mail.dmarc.present) {
+  if (mail.dmarc.lookupFailed) {
+    findings.push(uncheckedFinding('dmarc-unchecked', 'mail', 'DMARC', mail.dmarc.lookupFailed));
+  } else if (!mail.dmarc.present) {
     findings.push({
       id: 'no-dmarc',
       severity: hasMx ? 'warning' : 'info',
@@ -201,7 +240,17 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     }
   }
 
-  if (hasMx && mail.dkim.selectors.length === 0) {
+  if (hasMx && mail.dkim.selectors.length === 0 && mail.dkim.lookupFailed) {
+    findings.push(
+      uncheckedFinding(
+        'dkim-unchecked',
+        'mail',
+        'DKIM',
+        mail.dkim.lookupFailed,
+        `Nicht alle gängigen Selectors ließen sich abfragen. ${FAILURE_DETAIL[mail.dkim.lookupFailed]}`
+      )
+    );
+  } else if (hasMx && mail.dkim.selectors.length === 0) {
     findings.push({
       id: 'no-dkim-found',
       severity: 'info',
@@ -219,7 +268,11 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     });
   }
 
-  if (hasMx && !mail.mtaSts.present) {
+  if (hasMx && mail.mtaSts.lookupFailed) {
+    findings.push(
+      uncheckedFinding('mta-sts-unchecked', 'mail', 'MTA-STS', mail.mtaSts.lookupFailed)
+    );
+  } else if (hasMx && !mail.mtaSts.present) {
     findings.push({
       id: 'no-mta-sts',
       severity: 'info',
@@ -235,6 +288,21 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
 export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
+  if (!dnssec.enabled && dnssec.lookupFailed) {
+    const reason = dnssec.lookupFailed;
+    return [
+      uncheckedFinding(
+        'dnssec-unchecked',
+        'dnssec',
+        'DNSSEC',
+        reason,
+        reason === 'servfail'
+          ? 'Der Resolver antwortete auf die DS- oder DNSKEY-Abfrage mit SERVFAIL. Das ist oft vorübergehend — es kann aber auch eine fehlerhafte DNSSEC-Signatur dahinterstecken.'
+          : `Die DS- oder DNSKEY-Abfrage blieb unbeantwortet. ${FAILURE_DETAIL[reason]}`
+      ),
+    ];
+  }
+
   if (!dnssec.enabled) {
     return [{
       id: 'dnssec-off',
@@ -281,7 +349,23 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
 
 /* ─── SSL ─────────────────────────────────────────────────────────────── */
 
-export function sslFindings(ssl: SslInfo | null): Finding[] {
+const SSL_FAILURE_DETAIL: Record<LookupFailure, string> = {
+  timeout:
+    'Port 443 hat den TLS-Handshake nicht rechtzeitig abgeschlossen — ein überlasteter Server oder eine Firewall, die den Port stumm verwirft.',
+  servfail: 'Die Adresse des Hosts ließ sich gerade nicht auflösen (SERVFAIL oder Resolver-Timeout).',
+  network: 'Der Host war über das Netz nicht erreichbar.',
+};
+
+/**
+ * `lookupFailed`: der Check kam zu keinem Ergebnis (siehe SslCheckResult in
+ * services/ssl.ts). Ohne ihn heißt `ssl: null` wie bisher „kein TLS“.
+ */
+export function sslFindings(ssl: SslInfo | null, lookupFailed?: LookupFailure): Finding[] {
+  if (!ssl && lookupFailed) {
+    const detail = SSL_FAILURE_DETAIL[lookupFailed];
+    return [uncheckedFinding('ssl-unchecked', 'ssl', 'SSL', lookupFailed, detail)];
+  }
+
   if (!ssl) {
     return [{
       id: 'no-ssl',
