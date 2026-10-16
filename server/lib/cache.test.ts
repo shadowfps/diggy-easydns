@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cached, clearCache } from './cache.js';
+import { cached, clearCache, FAILED_TTL_MS } from './cache.js';
 
 describe('cached', () => {
   beforeEach(() => clearCache());
@@ -76,6 +76,35 @@ describe('cached', () => {
       // Nach Ablauf: neu produziert.
       vi.setSystemTime(Date.now() + 2_000);
       await cached('ttl', 30_000, produce);
+      expect(calls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * #101: ein Check, der einen Timeout als „nicht prüfbar“ meldet, wirft
+   * nicht. Eine Minute gecacht hieße: wer gleich erneut prüft, bekommt
+   * dieselbe Meldung. Gar nicht gecacht: jeder Reload kostet den vollen
+   * Timeout. Deshalb nur kurz.
+   */
+  it('cached einen gemeldeten Ausfall nur FAILED_TTL_MS lang', async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const produce = async () => ({ failed: ++calls === 1 });
+      const failed = (value: { failed: boolean }) => value.failed;
+
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: true });
+      // Ein Burst direkt danach: aus dem Cache.
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: true });
+      expect(calls).toBe(1);
+
+      vi.setSystemTime(Date.now() + FAILED_TTL_MS + 1);
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: false });
+      // Ein Erfolg bleibt die volle TTL.
+      vi.setSystemTime(Date.now() + 30_000);
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: false });
       expect(calls).toBe(2);
     } finally {
       vi.useRealTimers();

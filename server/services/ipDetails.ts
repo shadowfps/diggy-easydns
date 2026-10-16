@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import { cached } from '../lib/cache.js';
+import { RDAP_HEADERS, warnRdapError } from '../lib/rdap.js';
 import { isPublicIp } from '../lib/safeTarget.js';
 import type { IpDetails } from '../types.js';
 import { lookupPtrRecords } from './dnsLookup.js';
@@ -131,15 +132,18 @@ async function fetchIpDetails(normalizedIp: string, timeoutMs: number): Promise<
 
 async function fetchIpWho(ip: string, timeoutMs: number): Promise<IpWhoResponse | null> {
   const url = new URL(`${IPWHO_ENDPOINT}/${encodeURIComponent(ip)}`);
-  const data = await fetchJson<IpWhoResponse>(url, timeoutMs, 'application/json');
+  const data = await fetchJson<IpWhoResponse>(url, timeoutMs, { accept: 'application/json' });
   if (data.success === false) return null;
   return data;
 }
 
 async function fetchRdap(ip: string, timeoutMs: number): Promise<RdapDetails | null> {
   const url = new URL(`${RDAP_ENDPOINT}/${encodeURIComponent(ip)}`);
-  const data = await fetchJson<RdapIpResponse>(url, timeoutMs, 'application/rdap+json, application/json');
-  if (data.errorCode) return null;
+  const data = await fetchJson<RdapIpResponse>(url, timeoutMs, RDAP_HEADERS);
+  if (data.errorCode) {
+    warnRdapError(url, new Error(`RDAP ${data.errorCode}`));
+    return null;
+  }
 
   const cidrs = (data.cidr0_cidrs ?? [])
     .map((cidr) => {
@@ -164,7 +168,7 @@ async function fetchRdap(ip: string, timeoutMs: number): Promise<RdapDetails | n
   };
 }
 
-async function fetchJson<T>(url: URL, timeoutMs: number, accept: string): Promise<T> {
+async function fetchJson<T>(url: URL, timeoutMs: number, headers: Record<string, string>): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -172,12 +176,16 @@ async function fetchJson<T>(url: URL, timeoutMs: number, accept: string): Promis
     const res = await fetch(url, {
       method: 'GET',
       signal: controller.signal,
-      headers: { accept },
+      headers,
+      redirect: 'follow',
     });
     if (!res.ok) {
-      throw new Error(`IP-Details API Fehler (${res.status})`);
+      throw new Error(`IP-Details API Fehler (HTTP ${res.status})`);
     }
     return (await res.json()) as T;
+  } catch (error) {
+    if (headers === RDAP_HEADERS) warnRdapError(url, error, controller.signal);
+    throw error;
   } finally {
     clearTimeout(timer);
   }
