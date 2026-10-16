@@ -57,6 +57,7 @@ describe('WHOIS-RDAP', () => {
     fetchMock.mockResolvedValue(domainResponse());
 
     expect(await lookupWhois(domain)).toEqual({
+      domain,
       registrar: 'Example Registrar',
       createdAt: '2000-01-01T00:00:00Z',
       expiresAt: undefined,

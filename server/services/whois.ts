@@ -160,6 +160,9 @@ async function tryEndpoint(
     const source = data.port43 ?? new URL(res.url).hostname;
 
     return {
+      // Der Server fragt die Apex-Domain ab, nicht den eingegebenen Namen. Ohne
+      // dieses Feld wüsste das Frontend nicht, wessen Ablauf es anzeigt.
+      domain,
       registrar,
       createdAt,
       expiresAt,
