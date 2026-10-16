@@ -89,6 +89,55 @@ describe('useLookupHistory', () => {
   });
 });
 
+/** #107: „DMARC gesetzt“ nur für einen Record, den Empfänger auch anwenden. */
+describe('saveLookupToHistory — DMARC', () => {
+  const withDmarc = (record: string): LookupReport => {
+    const report = reportFor('example.com');
+    return { ...report, mail: { ...report.mail, dmarc: { present: true, record } } };
+  };
+
+  it.each([
+    ['v=DMARC1; p=reject', true],
+    // Wirkt wie p=none (RFC 7489 §6.6.3) — wie ein p=none gilt es als gesetzt.
+    ['v=DMARC1; rua=mailto:x@y', true],
+    // Ohne p= und ohne rua= ignorieren Empfänger den Record.
+    ['v=DMARC1; sp=reject', false],
+  ])('%s → dmarcPresent %s', (record, present) => {
+    const { result } = renderHook(() => useLookupHistory());
+    act(() => {
+      saveLookupToHistory(withDmarc(record));
+    });
+    expect(result.current[0].dmarcPresent).toBe(present);
+  });
+
+  // Für „Seit dem letzten Check“ (#79) zählt dieselbe wirksame Policy.
+  it.each([
+    ['v=DMARC1; p=quarantine', 'quarantine'],
+    ['v=DMARC1; rua=mailto:x@y', 'none'],
+    ['v=DMARC1; p=reject; sp=foo; rua=mailto:x@y', 'none'],
+    ['v=DMARC1; sp=reject', undefined],
+  ])('%s → dmarcPolicy %s', (record, policy) => {
+    const { result } = renderHook(() => useLookupHistory());
+    act(() => {
+      saveLookupToHistory(withDmarc(record));
+    });
+    expect(result.current[0].dmarcPolicy).toBe(policy);
+  });
+
+  it('zählt mehrere DMARC-Records nicht als gesetzt', () => {
+    const report = reportFor('example.com');
+    const records = ['v=DMARC1; p=reject', 'v=DMARC1; p=none'];
+    const { result } = renderHook(() => useLookupHistory());
+    act(() => {
+      saveLookupToHistory({
+        ...report,
+        mail: { ...report.mail, dmarc: { present: true, record: records[0], records, policy: 'reject' } },
+      });
+    });
+    expect(result.current[0].dmarcPresent).toBe(false);
+  });
+});
+
 /**
  * #79: Für „Seit dem letzten Check“ speichert die History mehr als vorher.
  * Einträge im alten Format liegen aber schon in den Browsern — sie müssen
@@ -124,7 +173,7 @@ describe('Speicherformat für den Vergleich', () => {
       },
       mail: {
         ...report.mail,
-        dmarc: { present: true, policy: 'reject' },
+        dmarc: { present: true, record: 'v=DMARC1; p=reject', policy: 'reject' },
       },
     };
   }

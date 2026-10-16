@@ -56,7 +56,10 @@ function stubApi({ ip, timestamp, dmarc }: { ip: string; timestamp: string; dmar
   vi.mocked(api.lookupMail).mockResolvedValue({
     mail: {
       spf: { present: false, valid: false, issues: [] },
-      dmarc: dmarc ? { present: true, policy: 'reject' } : { present: false },
+      // Mit Record: gewertet wird die wirksame Policy daraus (#107).
+      dmarc: dmarc
+        ? { present: true, record: 'v=DMARC1; p=reject', policy: 'reject' }
+        : { present: false },
       dkim: { selectors: [] },
       mtaSts: { present: false },
       hasMx: false,

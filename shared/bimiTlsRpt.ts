@@ -24,6 +24,7 @@
 import type { MailBimi, MailSecurity, MailTlsRpt } from './types/dns.js';
 import { leadingVersion, matchTag } from './mailTags.js';
 import { dmarcPct } from './nullMx.js';
+import { dmarcPolicyFlawText, effectiveDmarcPolicy } from './dmarc.js';
 
 type Discovery =
   | { kind: 'none' }
@@ -122,13 +123,23 @@ function bimiProblem(logo: string | undefined, evidence: string): string | undef
  * kein Logo bei p=none, bei sp=none und bei p=quarantine mit pct unter 100
  * (§7.1). Für reject nennt der Draft kein pct, denn der Rest landet dort
  * ohnehin in Quarantäne (RFC 7489 §6.6.4).
+ *
+ * Maßgeblich ist die wirksame Policy (shared/dmarc.ts): Ohne gültiges `p=`
+ * gilt höchstens `none` (RFC 7489 §6.6.3), ein `sp=reject` ändert daran
+ * nichts. Den Mangel nennen wir mit, sonst stünde dort „p=none“ für einen
+ * Record, in dem gar kein `p=` steht.
  */
 export function bimiDmarcGap(dmarc: MailSecurity['dmarc']): string | undefined {
   if (!dmarc.present) return 'kein DMARC-Record';
-  if (!dmarc.policy) return 'keine gültige DMARC-Policy';
-  if (dmarc.policy === 'none') return 'DMARC p=none';
+  const { policy, flaw } = effectiveDmarcPolicy(dmarc);
+  if (flaw) {
+    const problem = dmarcPolicyFlawText(flaw);
+    return policy ? `DMARC wirkt wie p=none (${problem})` : `DMARC wirkt nicht (${problem})`;
+  }
+  if (!policy) return 'kein DMARC-Record';
+  if (policy === 'none') return 'DMARC p=none';
   const pct = dmarcPct(dmarc.record);
-  if (dmarc.policy === 'quarantine' && pct < 100) return `DMARC p=quarantine mit pct=${pct}`;
+  if (policy === 'quarantine' && pct < 100) return `DMARC p=quarantine mit pct=${pct}`;
   if (matchTag(dmarc.record, 'sp')?.toLowerCase() === 'none') return 'DMARC sp=none';
   return undefined;
 }

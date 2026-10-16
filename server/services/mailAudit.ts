@@ -21,6 +21,7 @@ import { dnsLookupFailure } from '../lib/dnsFailure.js';
 import type { SpfLookup } from './dnsLookup.js';
 import { isNullMx } from '../../shared/nullMx.js';
 import { leadingVersion, matchTag } from '../../shared/mailTags.js';
+import { declaredDmarcPolicy } from '../../shared/dmarc.js';
 import { parseBimi, parseTlsRpt } from '../../shared/bimiTlsRpt.js';
 
 const resolver = new dnsPromises.Resolver({ timeout: 4000, tries: 2 });
@@ -172,19 +173,20 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
   try {
     const records = await resolver.resolveTxt(`_dmarc.${domain}`);
     const merged = records.map((chunks) => chunks.join(''));
-    const dmarcLine = merged.find((r) => leadingVersion(r)?.toLowerCase() === 'dmarc1');
+    const dmarcLines = merged.filter((r) => leadingVersion(r)?.toLowerCase() === 'dmarc1');
+    const [dmarcLine] = dmarcLines;
 
     if (!dmarcLine) return { present: false };
 
-    // Policy-Werte sind unabhängig von der Schreibweise; Report-Adressen bleiben unverändert.
-    const policy = matchTag(dmarcLine, 'p')?.toLowerCase();
-    const rua = matchTag(dmarcLine, 'rua');
-
+    // Nur das gültige p= — was Empfänger ohne eins tun, entscheidet erst
+    // effectiveDmarcPolicy (shared/dmarc.ts), ebenso, dass bei mehreren
+    // Records keiner gilt. Report-Adressen bleiben unverändert.
     return {
       present: true,
       record: dmarcLine,
-      policy: isValidPolicy(policy) ? policy : undefined,
-      rua,
+      ...(dmarcLines.length > 1 && { records: dmarcLines }),
+      policy: declaredDmarcPolicy(dmarcLine),
+      rua: matchTag(dmarcLine, 'rua'),
     };
   } catch (error) {
     // NXDOMAIN/NODATA heißt: kein DMARC-Record. Alles andere (Timeout,
@@ -194,10 +196,6 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
     const lookupFailed = dnsLookupFailure(error);
     return lookupFailed ? { present: false, lookupFailed } : { present: false };
   }
-}
-
-function isValidPolicy(p?: string): p is 'none' | 'quarantine' | 'reject' {
-  return p === 'none' || p === 'quarantine' || p === 'reject';
 }
 
 /* ─── DKIM ────────────────────────────────────────────────────────────── */

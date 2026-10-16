@@ -164,6 +164,30 @@ describe('noMailProtection', () => {
     ).toBe(true);
   });
 
+  /**
+   * #107: Ohne gültiges p= wirkt der Record höchstens wie p=none (RFC 7489
+   * §6.6.3) — auch neben sp=reject, das nur Subdomains regelt.
+   */
+  it.each([
+    'v=DMARC1; sp=reject',
+    'v=DMARC1; sp=reject; rua=mailto:dmarc@example.net',
+    'v=DMARC1; p=rejected; sp=reject; rua=mailto:dmarc@example.net',
+    // Ein ungültiges sp= entwertet auch p=reject (§6.6.3 Schritt 6).
+    'v=DMARC1; p=reject; sp=foo; rua=mailto:dmarc@example.net',
+  ])('ist mit DMARC ohne gültiges p= unvollständig: %s', (record) => {
+    const result = noMailProtection(mail({ dmarc: { present: true, record } }));
+    expect(result.dmarcReject).toBe(false);
+    expect(result.complete).toBe(false);
+  });
+
+  /** §6.6.3 Schritt 5: Bei mehreren Records gilt keiner, auch kein p=reject. */
+  it('ist mit mehreren DMARC-Records unvollständig', () => {
+    const records = ['v=DMARC1; p=reject', 'v=DMARC1; p=reject'];
+    const result = noMailProtection(mail({ dmarc: { present: true, record: records[0], records, policy: 'reject' } }));
+    expect(result.dmarcReject).toBe(false);
+    expect(result.complete).toBe(false);
+  });
+
   it('ist mit DMARC quarantine unvollständig', () => {
     const result = noMailProtection(mail({ dmarc: { present: true, policy: 'quarantine' } }));
     expect(result.dmarcReject).toBe(false);

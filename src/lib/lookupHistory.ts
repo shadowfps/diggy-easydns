@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { LookupReport, MailSecurity, RecordType } from '@/types/dns';
 import { SECTION_KEYS, type SectionKey } from '@/hooks/useProgressiveLookup';
 import { hasMailLookupFailure } from '@/lib/lookupFailure';
+import { effectiveDmarcPolicy } from '@/lib/dmarc';
 
 /**
  * Record-Typen, deren Werte für „Seit dem letzten Check“ (#79) vollständig
@@ -158,7 +159,7 @@ export function createHistoryEntry(
   failed: readonly SectionKey[] = [],
   lookedUpAt: string = new Date().toISOString()
 ): LookupHistoryEntry {
-  const dmarc = report.mail.dmarc;
+  const dmarcPolicy = effectiveDmarcPolicy(report.mail.dmarc).policy;
   // Teilausfälle zählen wie ein Ausfall der Sektion: der Server meldet dann
   // `false`, weiß es aber nicht.
   const unreliable = new Set<SectionKey>(failed);
@@ -178,12 +179,16 @@ export function createHistoryEntry(
     sslValid: Boolean(report.ssl?.valid),
     sslDaysUntilExpiry: report.ssl?.daysUntilExpiry,
     dnssecValid: report.dnssec.enabled && report.dnssec.valid,
-    dmarcPresent: dmarc.present,
+    // „DMARC gesetzt“ nur, wenn Empfänger den Record auch anwenden — einer
+    // ohne gültiges p= und ohne rua= zählt wie keiner (shared/dmarc.ts).
+    dmarcPresent: dmarcPolicy !== null,
     findingsCount: report.findings.length,
     records: trackedRecords(report),
     // Felder mit undefined lässt JSON.stringify weg — sie kosten keinen Platz.
     sslValidTo: report.ssl?.validTo || undefined,
-    dmarcPolicy: dmarc.present ? dmarc.policy : undefined,
+    // Ebenso die Policy, nach der Empfänger handeln: ein Record ohne p=, aber
+    // mit rua= gilt als none — der Vergleich (#79) soll das sehen, nicht „—“.
+    dmarcPolicy: dmarcPolicy ?? undefined,
     failedChecks: unreliable.size > 0 ? [...unreliable] : undefined,
   };
 }

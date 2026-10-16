@@ -152,8 +152,23 @@ export interface MailSecurity {
     lookupFailed?: LookupFailure;
   };
   dmarc: {
+    /** Unter `_dmarc.<domain>` steht ein Record mit `v=DMARC1` — ob er wirkt, ist eine andere Frage. */
     present: boolean;
+    /** Der Record — bei mehreren der erste, alle stehen dann in `records`. */
     record?: string;
+    /**
+     * Nur bei mehr als einem Record mit `v=DMARC1`: alle. Dann wenden
+     * Empfänger DMARC gar nicht an (RFC 7489 §6.6.3, Schritt 5). Fehlt bei
+     * genau einem Record und in Antworten älterer Server.
+     */
+    records?: string[];
+    /**
+     * `p=` aus dem Record, nur wenn gültig. Bewertet wird nicht dieses Feld,
+     * sondern die wirksame Policy (`effectiveDmarcPolicy`, shared/dmarc.ts):
+     * Ohne gültiges `p=` kann sie trotzdem `none` sein, mit ungültigem `sp=`
+     * ist sie höchstens `none`, auch neben `p=reject`, und bei mehreren
+     * Records gilt gar keine (RFC 7489 §6.6.3).
+     */
     policy?: 'none' | 'quarantine' | 'reject';
     rua?: string;
     lookupFailed?: LookupFailure;

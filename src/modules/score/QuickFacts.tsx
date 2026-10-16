@@ -12,6 +12,7 @@ import type {
 import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { isNullMx } from '@/lib/nullMx';
+import { dmarcPolicyFlawLabel, effectiveDmarcPolicy } from '@/lib/dmarc';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
@@ -393,14 +394,17 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       bad: !dnssecInfo?.enabled,
     };
 
-  const dmarc = mail.data?.dmarc;
+  // Ein Record, der nicht wie geschrieben gilt, ist nicht „gesetzt“
+  // (shared/dmarc.ts). Wirkt er dank rua= wie p=none, steht der Mangel da —
+  // ohne Haken. Ignorieren ihn Empfänger, ist er so schlecht wie keiner.
+  const { policy: dmarcPolicy, flaw: dmarcFlaw } = effectiveDmarcPolicy(mail.data?.dmarc);
   const dmarcItem: QuickFactItem =
-    placeholder('DMARC', mail.status, dmarc?.lookupFailed) ?? {
-      label: 'DMARC',
-      value: dmarc?.present ? 'gesetzt' : 'fehlt',
-      ok: Boolean(dmarc?.present),
-      bad: !dmarc?.present,
-    };
+    placeholder('DMARC', mail.status, mail.data?.dmarc.lookupFailed) ??
+    (dmarcPolicy === null
+      ? { label: 'DMARC', value: dmarcFlaw ? 'unwirksam' : 'fehlt', bad: true }
+      : dmarcFlaw
+        ? { label: 'DMARC', value: dmarcPolicyFlawLabel(dmarcFlaw) }
+        : { label: 'DMARC', value: 'gesetzt', ok: true });
 
   const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
