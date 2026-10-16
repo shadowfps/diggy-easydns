@@ -419,7 +419,7 @@ describe('Score einer normalen Domain bleibt wie vor #101', () => {
   } = {}) {
     const findings = [
       ...dnsFindings(over.records ?? records, D, D),
-      ...propagationFindings([]),
+      ...propagationFindings([], ['A']),
       ...dnssecFindings(over.dnssec ?? dnssecOff),
       ...sslFindings(
         over.ssl === undefined ? ssl({ daysUntilExpiry: 60 }) : over.ssl,
