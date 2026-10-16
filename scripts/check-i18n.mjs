@@ -279,7 +279,7 @@ function main() {
   if (count > 0 || orphaned.length > 0) {
     console.error(
       `\n${count} deutsche Texte ohne Übersetzung, ${orphaned.length} verwaiste Schlüssel.` +
-        '\nVorgehen: docs/I18N.md („Neuen Text hinzufügen“).'
+        '\nVorgehen: docs/I18N.md („Kurzfassung“).'
     );
     process.exit(1);
   }

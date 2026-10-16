@@ -29,7 +29,7 @@ export const findings: Record<FindingKey, FindingText> = {
   'no-records': {
     title: 'No entry under this name',
     description:
-      'There’s no DNS record at {domain}. If a DKIM key, a DMARC policy or a challenge token belongs here, it isn’t published (anymore) — or the name has a typo.',
+      'There’s no DNS record at {domain}. If a DKIM key, a DMARC policy or a challenge token belongs here, it isn’t published (or no longer is) — or the name has a typo.',
   },
   'no-address': {
     title: 'No A/AAAA/CNAME records found',
@@ -97,7 +97,10 @@ export const findings: Record<FindingKey, FindingText> = {
   },
   'spf-ok': {
     title: 'SPF record present and plausible',
-    description: { one: '{count} DNS lookup, valid ending.', other: '{count} DNS lookups, valid ending.' },
+    description: {
+      one: '{count} DNS lookup, valid "all" at the end.',
+      other: '{count} DNS lookups, valid "all" at the end.',
+    },
   },
   'no-dmarc': {
     title: 'No DMARC record at _dmarc.<domain>',
@@ -208,7 +211,7 @@ export const findings: Record<FindingKey, FindingText> = {
   },
   'domain-expiring-critical': {
     title: { one: 'Domain expires in {count} day', other: 'Domain expires in {count} days' },
-    description: 'Renew urgently! Otherwise you’ll lose the domain.',
+    description: 'Renew it now — otherwise you’ll lose the domain.',
   },
   'domain-expiring-soon': {
     title: { one: 'Domain expires in {count} day', other: 'Domain expires in {count} days' },

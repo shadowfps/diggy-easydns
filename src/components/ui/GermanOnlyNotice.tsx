@@ -15,7 +15,7 @@ export function GermanOnlyNotice() {
   return (
     <p className="panel mt-4 flex items-start gap-2.5 py-3 text-sm text-fg-muted">
       <Info className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-      <span>This page is only available in German for legal reasons.</span>
+      <span>The legal information on this page is only available in German.</span>
     </p>
   );
 }

@@ -128,7 +128,7 @@ describe('App auf Englisch', () => {
     render(<App />);
     expect(screen.getByRole('heading', { level: 1, name: 'Legal notice' })).toBeInTheDocument();
     expect(
-      screen.getByText('This page is only available in German for legal reasons.')
+      screen.getByText('The legal information on this page is only available in German.')
     ).toBeInTheDocument();
     const legal = screen.getByText('Angaben gemäß § 5 DDG').closest('section');
     expect(legal).toHaveAttribute('lang', 'de');
@@ -142,7 +142,7 @@ describe('App auf Englisch', () => {
     render(<App />);
     expect(screen.getByRole('heading', { level: 1, name: 'Privacy policy' })).toBeInTheDocument();
     expect(
-      screen.getByText('This page is only available in German for legal reasons.')
+      screen.getByText('The legal information on this page is only available in German.')
     ).toBeInTheDocument();
     const section = await screen.findByRole('heading', { name: 'Verantwortlicher' });
     expect(section.closest('[lang]')).toHaveAttribute('lang', 'de');

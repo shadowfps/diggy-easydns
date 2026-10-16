@@ -37,7 +37,7 @@ const ui: Dictionary = {
   'Was diggy prüft': 'What diggy checks',
   'Sechs Bereiche, ein Befund': 'Six areas, one verdict',
   'Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.':
-    'Every area counts towards the Health Score. PageSpeed and VirusTotal are one click away.',
+    'Every area counts toward the Health Score. PageSpeed and VirusTotal are one click away.',
   'A, AAAA, MX, NS, TXT, CAA, SOA und CNAME — mit dem Netzbetreiber hinter jeder IP.':
     'A, AAAA, MX, NS, TXT, CAA, SOA and CNAME — plus the network behind every IP.',
   'Mail-Schutz': 'Email protection',
@@ -51,7 +51,7 @@ const ui: Dictionary = {
     'Five public resolvers side by side: has your change arrived everywhere?',
   'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.':
     'Registrar, term and status — before a domain quietly expires.',
-  'Kennst du schon {converter} by diggy?': 'Have you met {converter} by diggy?',
+  'Kennst du schon {converter} by diggy?': 'Have you tried {converter} by diggy?',
   'Bilder umwandeln, skalieren & komprimieren — direkt im Browser.':
     'Convert, resize & compress images — right in your browser.',
   'Zu Converter': 'Open converter',
@@ -316,7 +316,7 @@ const ui: Dictionary = {
   'Webhosting-Bezug': 'Rooted in web hosting',
   'Inspiriert von realen Fragen rund um Domains, Mail und SSL.':
     'Inspired by real questions about domains, email and SSL.',
-  'Öffentlich nutzbar': 'Free for everyone',
+  'Öffentlich nutzbar': 'Open to everyone',
   'Ein kleines Tool für schnelle Checks, nicht nur für mich allein.':
     'A small tool for quick checks — not just for me.',
   'Was diggy sein soll': 'What diggy wants to be',

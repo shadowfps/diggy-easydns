@@ -37,5 +37,10 @@ describe('Sprachumschalter', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Menü öffnen' }));
     expect(screen.getByText('English')).toHaveAttribute('lang', 'en');
     expect(screen.getByText('Deutsch')).toHaveAttribute('lang', 'de');
+    // Die Überschrift benennt die Gruppe — sonst fehlt der Zusammenhang.
+    expect(screen.getByRole('group', { name: 'Sprache' })).toContainElement(
+      screen.getByRole('button', { name: 'English' })
+    );
+    expect(screen.getByRole('group', { name: 'Theme' })).toBeInTheDocument();
   });
 });

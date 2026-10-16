@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Moon, Sun, Menu, X, ArrowUpRight } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -18,6 +18,8 @@ export function Header({ onHome, onHistory, onAvailability, onAbout, search }: H
   const { theme, toggle } = useTheme();
   const { language, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const themeLabel = useId();
+  const languageLabel = useId();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Klick außerhalb → schließen
@@ -148,8 +150,14 @@ export function Header({ onHome, onHistory, onAvailability, onAbout, search }: H
                   <div className="my-2 border-t border-line-subtle" />
 
                   <div className="px-3 pb-1 pt-2">
-                    <p className="eyebrow mb-2">Theme</p>
-                    <div className="flex gap-1 rounded-full bg-surface-muted p-1">
+                    <p id={themeLabel} className="eyebrow mb-2">
+                      Theme
+                    </p>
+                    <div
+                      role="group"
+                      aria-labelledby={themeLabel}
+                      className="flex gap-1 rounded-full bg-surface-muted p-1"
+                    >
                       <SegmentButton
                         active={theme === 'light'}
                         onClick={() => theme !== 'light' && toggle()}
@@ -172,10 +180,17 @@ export function Header({ onHome, onHistory, onAvailability, onAbout, search }: H
                   {/* Gleiche Form wie der Theme-Umschalter darüber. Die Sprachen
                       heißen in jeder Sprache gleich — wer Deutsch nicht lesen
                       kann, findet „English“ trotzdem. `lang` sagt Screenreadern,
-                      wie sie das Wort aussprechen. */}
+                      wie sie das Wort aussprechen; die Überschrift benennt die
+                      Gruppe, sonst hörte man nur „Deutsch, gedrückt“. */}
                   <div className="px-3 pb-1 pt-3">
-                    <p className="eyebrow mb-2">{t('Sprache')}</p>
-                    <div className="flex gap-1 rounded-full bg-surface-muted p-1">
+                    <p id={languageLabel} className="eyebrow mb-2">
+                      {t('Sprache')}
+                    </p>
+                    <div
+                      role="group"
+                      aria-labelledby={languageLabel}
+                      className="flex gap-1 rounded-full bg-surface-muted p-1"
+                    >
                       <SegmentButton active={language === 'de'} onClick={() => void setLanguage('de')}>
                         <span lang="de">Deutsch</span>
                       </SegmentButton>
