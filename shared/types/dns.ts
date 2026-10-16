@@ -120,6 +120,12 @@ export interface MailSecurity {
 }
 
 export interface WhoisInfo {
+  /**
+   * Die tatsächlich abgefragte, registrierbare Domain — bei `www.example.com`
+   * also `example.com`. Optional, weil ältere Reports (History, JSON-Export)
+   * sie noch nicht enthalten.
+   */
+  domain?: string;
   registrar?: string;
   /** ISO date — Domain-Registrierung */
   createdAt?: string;

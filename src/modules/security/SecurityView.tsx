@@ -4,18 +4,21 @@ import { Lock, ShieldCheck, ShieldAlert, ShieldOff } from 'lucide-react';
 import type { DnssecInfo, SslInfo } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { CalendarButton } from '@/components/calendar/CalendarButton';
 
 interface SecurityViewProps {
+  /** Geprüfter Host — Betreff und Report-Link der Kalender-Erinnerung. */
+  domain: string;
   ssl?: SslInfo;
   /** false bei DNS-Einträgen wie `_dmarc.…` — dort gibt es keinen Host für TLS. */
   sslApplicable?: boolean;
   dnssec: DnssecInfo;
 }
 
-export function SecurityView({ ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
+export function SecurityView({ domain, ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <SslCard ssl={ssl} applicable={sslApplicable} />
+      <SslCard domain={domain} ssl={ssl} applicable={sslApplicable} />
       <DnssecCard dnssec={dnssec} />
     </div>
   );
@@ -30,7 +33,15 @@ function sslTone(ssl: SslInfo): Tone {
   return 'success';
 }
 
-function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
+function SslCard({
+  domain,
+  ssl,
+  applicable,
+}: {
+  domain: string;
+  ssl?: SslInfo;
+  applicable: boolean;
+}) {
   if (!applicable) {
     return (
       <motion.div
@@ -117,6 +128,20 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
         />
         <Row label="Protokoll" value={`${ssl.tlsVersion} · ${ssl.signatureAlgorithm}`} />
       </dl>
+
+      {/* Für ein abgelaufenes Zertifikat gibt es nichts mehr vorzumerken. */}
+      {ssl.daysUntilExpiry >= 0 && (
+        <div className="mt-4">
+          <CalendarButton
+            reminder={{
+              kind: 'certificate',
+              subject: domain,
+              expiresAt: ssl.validTo,
+              reportDomain: domain,
+            }}
+          />
+        </div>
+      )}
 
       {ssl.sans.length > 0 && (
         <div className="mt-5 border-t border-line-subtle pt-5">
