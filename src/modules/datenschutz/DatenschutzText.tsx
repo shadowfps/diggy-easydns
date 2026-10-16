@@ -22,7 +22,7 @@
  */
 
 /** Wird im Footer und im Text als Datumsangabe genutzt. */
-const LAST_UPDATED = '8. September 2026';
+const LAST_UPDATED = '16. Oktober 2026';
 
 interface DatenschutzTextProps {
   onOpenImpressum?: () => void;
@@ -187,19 +187,21 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
 
       <Section title="Speicherung in deinem Browser">
         <p>
-          diggy legt zwei Einträge im{' '}
+          diggy legt bis zu drei Einträge im{' '}
           <span className="font-mono text-[13px]">localStorage</span> ab:{' '}
           <span className="font-mono text-[13px]">diggy-lookup-history</span> mit deinen
-          letzten zehn Abfragen und{' '}
+          letzten zehn Abfragen,{' '}
           <span className="font-mono text-[13px]">diggy-theme</span> mit der Einstellung
-          Hell/Dunkel. Beides bleibt in deinem Browser und wird nicht an den Server
-          übertragen. Über „History löschen“ oder das Löschen der Websitedaten bist du
-          beides los.
+          Hell/Dunkel und{' '}
+          <span className="font-mono text-[13px]">diggy-language</span> mit der Sprache,
+          wenn du sie im Menü wählst. Alles bleibt in deinem Browser und wird nicht an den
+          Server übertragen. Die History bist du über „History löschen“ los, alle
+          Einträge über das Löschen der Websitedaten.
         </p>
         <p className="mt-3">
-          Cookies setzt die Seite nicht. Diese beiden Einträge sind für die von dir
-          aufgerufenen Funktionen erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG), eine
-          Einwilligung ist dafür nicht nötig.
+          Cookies setzt die Seite nicht. Diese Einträge sind für die von dir aufgerufenen
+          Funktionen erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG), eine Einwilligung ist dafür
+          nicht nötig.
         </p>
       </Section>
 
