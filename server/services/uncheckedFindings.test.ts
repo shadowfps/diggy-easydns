@@ -180,19 +180,25 @@ describe('MTA-STS', () => {
 });
 
 describe('DNSSEC', () => {
-  const answer = (status: number) => ({
-    records: [],
-    authenticated: false,
-    status,
-    responseTimeMs: 1,
-  });
+  /** Antwort mit RCODE `status`; `signed`: mit einem Record des gefragten Typs. */
+  type Reply = Error | number | 'signed';
 
-  /** DS-Abfrage nach Wunsch, DNSKEY und A beantwortet ohne Records. */
-  function ds(result: Error | number) {
+  const timeout = () =>
+    Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+
+  /** DS und DNSKEY nach Wunsch, die A-Abfrage (AD-Flag) ohne Records. */
+  function doh(replies: { DS: Reply; DNSKEY: Reply }) {
     vi.mocked(dohQuery).mockImplementation(async (_resolver, _domain, type) => {
-      if (type !== 'DS') return answer(0);
-      if (result instanceof Error) throw result;
-      return answer(result);
+      const reply = type === 'DS' || type === 'DNSKEY' ? replies[type] : 0;
+      if (reply instanceof Error) throw reply;
+      const value = type === 'DS' ? '2371 13 2 ABCD' : '257 3 13 abcd';
+      const records = reply === 'signed' ? [{ type, name: DOMAIN, value, ttl: 300 }] : [];
+      return {
+        records,
+        authenticated: false,
+        status: reply === 'signed' ? 0 : reply,
+        responseTimeMs: 1,
+      };
     });
   }
 
@@ -203,7 +209,7 @@ describe('DNSSEC', () => {
   }
 
   it('Timeout (abgebrochener DoH-Request): nicht prüfbar, kein Abzug', async () => {
-    ds(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }));
+    doh({ DS: 'signed', DNSKEY: timeout() });
     const { dnssec, findings, score } = await dnssecCheck();
 
     expect(dnssec).toMatchObject({ enabled: false, lookupFailed: 'timeout' });
@@ -218,8 +224,14 @@ describe('DNSSEC', () => {
     expect(score).toBe(100);
   });
 
-  it('SERVFAIL in der DoH-Antwort: nicht prüfbar, mit Hinweis auf kaputte Signaturen', async () => {
-    ds(2);
+  /**
+   * Das Muster einer kaputten Signatur: der Parent kennt einen DS, der
+   * validierende Resolver weist die DNSKEY-Antwort mit SERVFAIL ab. Ohne
+   * Abfrage mit CD-Flag nicht von einem Ausfall zu trennen — deshalb „nicht
+   * prüfbar“, aber mit dem Hinweis darauf.
+   */
+  it('SERVFAIL bei vorhandenem DS: nicht prüfbar, mit Hinweis auf kaputte Signaturen', async () => {
+    doh({ DS: 'signed', DNSKEY: 2 });
     const { dnssec, findings, score } = await dnssecCheck();
 
     expect(dnssec.lookupFailed).toBe('servfail');
@@ -229,7 +241,7 @@ describe('DNSSEC', () => {
   });
 
   it('HTTP-Fehler des Resolvers: Netzwerkfehler', async () => {
-    ds(new Error('cloudflare HTTP 503'));
+    doh({ DS: new Error('cloudflare HTTP 503'), DNSKEY: 'signed' });
     expect((await dnssecCheck()).dnssec.lookupFailed).toBe('network');
   });
 
@@ -237,7 +249,27 @@ describe('DNSSEC', () => {
     ['unsignierte Zone (NOERROR ohne Records)', 0],
     ['NXDOMAIN', 3],
   ])('%s: „nicht aktiviert“ wie bisher', async (_label, status) => {
-    ds(status);
+    doh({ DS: status, DNSKEY: status });
+    const { dnssec, ids: found, score } = await dnssecCheck();
+
+    expect(dnssec).not.toHaveProperty('lookupFailed');
+    expect(found).toEqual(['dnssec-off']);
+    expect(score).toBe(98);
+  });
+
+  /**
+   * Ohne DS beim Parent oder ohne DNSKEY in der Zone ist DNSSEC aus — was die
+   * andere Abfrage ergibt, ändert daran nichts. Sonst würde aus der häufigsten
+   * Lage, einer unsignierten Domain, bei jedem Ausfall „nicht prüfbar“; und
+   * Nameserver, die DNSKEY-Abfragen mit SERVFAIL beantworten, sparten sich
+   * den Abzug.
+   */
+  it.each([
+    ['kein DS, DNSKEY mit SERVFAIL', { DS: 0, DNSKEY: 2 }],
+    ['kein DS, DNSKEY im Timeout', { DS: 0, DNSKEY: timeout() }],
+    ['DS im Timeout, kein DNSKEY', { DS: timeout(), DNSKEY: 0 }],
+  ] as const)('%s: „nicht aktiviert“, nicht „nicht prüfbar“', async (_label, replies) => {
+    doh(replies);
     const { dnssec, ids: found, score } = await dnssecCheck();
 
     expect(dnssec).not.toHaveProperty('lookupFailed');

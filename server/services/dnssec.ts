@@ -24,6 +24,11 @@ const ANSWER_STATUS = new Set([0, 3]);
  * sie beantwortet wurde. `dohQuery` wirft bei Timeout und HTTP-Fehlern, gibt
  * SERVFAIL aber als Antwort ohne Records zurück; das las sich bisher wie
  * „nicht signiert“ (#101).
+ *
+ * Grenze: Cloudflare validiert. Eine kaputte Signatur (DS beim Parent, aber
+ * die Zone signiert falsch) beantwortet es deshalb mit SERVFAIL — hier
+ * „nicht prüfbar“, nicht „ungültig“. Sicher trennen ließe sich das erst mit
+ * einer zweiten Abfrage ohne Validierung (CD-Flag).
  */
 function dohFailure(result: PromiseSettledResult<DohQueryResult>): LookupFailure | undefined {
   if (result.status === 'rejected') {
@@ -97,8 +102,15 @@ export async function checkDnssec(domain: string): Promise<DnssecInfo> {
     }
   }
 
-  // Ohne DS- oder DNSKEY-Antwort hieße `enabled: false` nur „nicht gesehen“.
-  const lookupFailed = dohFailure(dsCf) ?? dohFailure(dnskeyCf);
+  // Ohne DS- oder DNSKEY-Antwort hieße `enabled: false` nur „nicht gesehen“ —
+  // außer die andere Abfrage sagt schon „nichts da“: ohne DS beim Parent oder
+  // ohne DNSKEY in der Zone ist DNSSEC aus, egal was die zweite ergeben hätte.
+  // Die DS-Antwort kommt vom Parent; eine unsignierte Domain kann ihren
+  // Befund also nicht per SERVFAIL in „nicht prüfbar“ verwandeln.
+  const dsFailed = dohFailure(dsCf);
+  const dnskeyFailed = dohFailure(dnskeyCf);
+  const answeredEmpty = (!dsFailed && !hasDs) || (!dnskeyFailed && !hasDnskey);
+  const lookupFailed = answeredEmpty ? undefined : (dsFailed ?? dnskeyFailed);
 
   return {
     enabled,

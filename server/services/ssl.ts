@@ -35,6 +35,8 @@ export type SslCheckResult =
  *
  * Alles andere — ECONNREFUSED (Port zu), ECONNRESET und die OpenSSL-Fehler
  * (Handshake abgelehnt, kein TLS auf dem Port) — ist eine Antwort des Servers.
+ * ECONNRESET meldet Node auch, wenn der Server die Verbindung vor dem
+ * Handshake schließt: ein RST oder FIN von dort, kein Schweigen.
  */
 const NETWORK_ERRORS = new Set([
   'ENETUNREACH',
@@ -46,10 +48,23 @@ const NETWORK_ERRORS = new Set([
 
 const NONE: SslCheckResult = { status: 'none' };
 
+/**
+ * Hat der Host mehrere Adressen, probiert Node sie nacheinander (Happy
+ * Eyeballs) und meldet am Ende einen AggregateError, dessen `code` nur der
+ * ERSTE Fehler ist. IPv6 unerreichbar, IPv4 abgelehnt hieße dann „Netzwerk“ —
+ * dabei hat eine Adresse geantwortet: Port 443 ist zu. Deshalb zählt jeder
+ * Einzelfehler; gescheitert ist der Check nur, wenn keine Adresse antwortete.
+ */
 function socketFailure(error: NodeJS.ErrnoException): SslCheckResult {
-  if (error.code === 'ETIMEDOUT') return { status: 'failed', reason: 'timeout' };
-  if (error.code && NETWORK_ERRORS.has(error.code)) return { status: 'failed', reason: 'network' };
-  return NONE;
+  const codes =
+    error instanceof AggregateError
+      ? error.errors.map((inner) => (inner as NodeJS.ErrnoException | undefined)?.code)
+      : [error.code];
+  const unreached = (code?: string) =>
+    code === 'ETIMEDOUT' || (code !== undefined && NETWORK_ERRORS.has(code));
+
+  if (!codes.every(unreached)) return NONE;
+  return { status: 'failed', reason: codes.includes('ETIMEDOUT') ? 'timeout' : 'network' };
 }
 
 /**

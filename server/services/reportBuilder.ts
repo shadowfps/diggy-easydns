@@ -296,8 +296,10 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
         'dnssec',
         'DNSSEC',
         reason,
+        // Eine unsignierte Zone landet nie hier (siehe checkDnssec): bei
+        // SERVFAIL ist die kaputte Signatur deshalb die naheliegende Ursache.
         reason === 'servfail'
-          ? 'Der Resolver antwortete auf die DS- oder DNSKEY-Abfrage mit SERVFAIL. Das ist oft vorübergehend — es kann aber auch eine fehlerhafte DNSSEC-Signatur dahinterstecken.'
+          ? 'Der Resolver antwortete auf die DS- oder DNSKEY-Abfrage mit SERVFAIL. Das kann vorübergehend sein. Bleibt es dabei, steckt meist eine fehlerhafte DNSSEC-Signatur dahinter — dann scheitern validierende Resolver an der ganzen Domain.'
           : `Die DS- oder DNSKEY-Abfrage blieb unbeantwortet. ${FAILURE_DETAIL[reason]}`
       ),
     ];

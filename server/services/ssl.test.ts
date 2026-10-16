@@ -95,6 +95,40 @@ describe('checkSsl', () => {
     }
   );
 
+  /**
+   * Mehrere Adressen: Node probiert sie nacheinander und meldet einen
+   * AggregateError, dessen `code` der ERSTE Einzelfehler ist. Echt
+   * nachgestellt (Node 26): erste Adresse schweigt, zweite lehnt ab →
+   * `code: 'ETIMEDOUT'`, `errors: [ETIMEDOUT, ECONNREFUSED]`.
+   */
+  describe('mehrere Adressen (Happy Eyeballs)', () => {
+    const aggregate = (...codes: string[]) => (socket: FakeSocket) =>
+      socket.emit(
+        'error',
+        Object.assign(
+          new AggregateError(codes.map((code) => Object.assign(new Error(code), { code }))),
+          { code: codes[0] }
+        )
+      );
+
+    it.each([
+      [['ETIMEDOUT', 'ECONNREFUSED']],
+      [['ENETUNREACH', 'ECONNREFUSED']],
+      [['ENETUNREACH', 'ECONNRESET']],
+    ])('%j: eine Adresse hat geantwortet — kein TLS', async (codes) => {
+      handshake(aggregate(...codes));
+      expect(await checkSsl(DOMAIN)).toEqual({ status: 'none' });
+    });
+
+    it.each([
+      [['ENETUNREACH', 'ETIMEDOUT'], 'timeout'],
+      [['ENETUNREACH', 'EHOSTUNREACH'], 'network'],
+    ] as const)('%j: keine Adresse erreicht — gescheitert (%s)', async (codes, reason) => {
+      handshake(aggregate(...codes));
+      expect(await checkSsl(DOMAIN)).toEqual({ status: 'failed', reason });
+    });
+  });
+
   it('Name ohne Adresse: kein TLS', async () => {
     vi.mocked(resolvePublicHost).mockRejectedValue(
       new UnresolvableTargetError('nicht auflösbar', { cause: { code: 'ENOTFOUND' } })
