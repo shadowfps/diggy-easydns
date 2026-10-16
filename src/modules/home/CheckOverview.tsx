@@ -1,45 +1,54 @@
 import { motion } from 'motion/react';
 import { Globe, Landmark, ListTree, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { useI18n, type I18n } from '@/i18n';
 
 /**
  * „Was diggy prüft“ auf der Startseite: die sechs Bereiche, die jeder Report
  * bewertet. Wer zum ersten Mal kommt, sieht vor der ersten Suche, was ihn
  * erwartet — vorher stand unter dem Suchfeld nur der Converter-Hinweis.
+ *
+ * Eine Funktion statt einer Konstante, damit die Texte beim Rendern in der
+ * aktiven Sprache entstehen. Die Bereichsnamen sind Fachbegriffe und heißen
+ * in beiden Sprachen gleich — bis auf den Mail-Schutz.
  */
-const CHECKS = [
-  {
-    icon: ListTree,
-    title: 'Records',
-    text: 'A, AAAA, MX, NS, TXT, CAA, SOA und CNAME — mit dem Netzbetreiber hinter jeder IP.',
-  },
-  {
-    icon: Mail,
-    title: 'Mail-Schutz',
-    text: 'SPF, DKIM, DMARC und MTA-STS: Kann jemand in deinem Namen Mails fälschen?',
-  },
-  {
-    icon: Lock,
-    title: 'SSL / TLS',
-    text: 'Zertifikat, Aussteller und Ablaufdatum — bevor Besucher eine Warnung sehen.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'DNSSEC',
-    text: 'Sind die Antworten signiert, und hält die Vertrauenskette?',
-  },
-  {
-    icon: Globe,
-    title: 'Propagation',
-    text: 'Fünf öffentliche Resolver im Vergleich: Ist eine Änderung überall angekommen?',
-  },
-  {
-    icon: Landmark,
-    title: 'WHOIS / RDAP',
-    text: 'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.',
-  },
-];
+function checks({ t }: I18n) {
+  return [
+    {
+      icon: ListTree,
+      title: 'Records',
+      text: t('A, AAAA, MX, NS, TXT, CAA, SOA und CNAME — mit dem Netzbetreiber hinter jeder IP.'),
+    },
+    {
+      icon: Mail,
+      title: t('Mail-Schutz'),
+      text: t('SPF, DKIM, DMARC und MTA-STS: Kann jemand in deinem Namen Mails fälschen?'),
+    },
+    {
+      icon: Lock,
+      title: 'SSL / TLS',
+      text: t('Zertifikat, Aussteller und Ablaufdatum — bevor Besucher eine Warnung sehen.'),
+    },
+    {
+      icon: ShieldCheck,
+      title: 'DNSSEC',
+      text: t('Sind die Antworten signiert, und hält die Vertrauenskette?'),
+    },
+    {
+      icon: Globe,
+      title: 'Propagation',
+      text: t('Fünf öffentliche Resolver im Vergleich: Ist eine Änderung überall angekommen?'),
+    },
+    {
+      icon: Landmark,
+      title: 'WHOIS / RDAP',
+      text: t('Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.'),
+    },
+  ];
+}
 
 export function CheckOverview() {
+  const i18n = useI18n();
+  const { t } = i18n;
   return (
     <motion.section
       initial={{ opacity: 0, y: 10 }}
@@ -50,17 +59,17 @@ export function CheckOverview() {
       className="mx-auto mt-16 max-w-5xl md:mt-24"
     >
       <div className="text-center">
-        <p className="eyebrow">Was diggy prüft</p>
+        <p className="eyebrow">{t('Was diggy prüft')}</p>
         <h2 id="check-overview-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-          Sechs Bereiche, ein Befund
+          {t('Sechs Bereiche, ein Befund')}
         </h2>
         <p className="mx-auto mt-2 max-w-xl text-sm text-fg-muted">
-          Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.
+          {t('Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.')}
         </p>
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {CHECKS.map(({ icon: Icon, title, text }) => (
+        {checks(i18n).map(({ icon: Icon, title, text }) => (
           <div key={title} className="card">
             <span className="icon-tile">
               <Icon className="size-4" />

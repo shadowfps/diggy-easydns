@@ -4,6 +4,7 @@ import { IpDetailsRows } from '@/components/ip/IpAddressLink';
 import { formatIpOwnerLabel, useIpDetails } from '@/components/ip/useIpDetails';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useI18n } from '@/i18n';
 
 interface IpResultViewProps {
   ip: string;
@@ -15,6 +16,7 @@ interface IpResultViewProps {
  */
 export function IpResultView({ ip }: IpResultViewProps) {
   const { details, loading, error } = useIpDetails(ip);
+  const { t } = useI18n();
   const ptrHosts = details?.ptr && details.ptr.length > 0 ? details.ptr : details?.reverse ? [details.reverse] : [];
   const owner = details ? formatIpOwnerLabel(details) : null;
 
@@ -28,7 +30,7 @@ export function IpResultView({ ip }: IpResultViewProps) {
     >
       {/* Kopf wie beim DNS-Report: Überzeile, dann die Adresse selbst. */}
       <div className="min-w-0">
-        <p className="eyebrow">IP-Lookup</p>
+        <p className="eyebrow">{t('IP-Lookup')}</p>
         <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
           {ip}
         </h1>
@@ -42,7 +44,7 @@ export function IpResultView({ ip }: IpResultViewProps) {
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-fg-muted">
                 <Loader2 className="size-4 animate-spin" />
-                <span>Reverse-DNS wird ermittelt…</span>
+                <span>{t('Reverse-DNS wird ermittelt…')}</span>
               </div>
             ) : ptrHosts.length > 0 ? (
               <div className="flex flex-col gap-1">
@@ -53,7 +55,7 @@ export function IpResultView({ ip }: IpResultViewProps) {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-fg-subtle">Für diese IP ist kein PTR-Record konfiguriert.</p>
+              <p className="text-sm text-fg-subtle">{t('Für diese IP ist kein PTR-Record konfiguriert.')}</p>
             )}
             {owner && !loading && <p className="mt-2 text-sm text-fg-muted">{owner}</p>}
           </div>
@@ -63,7 +65,7 @@ export function IpResultView({ ip }: IpResultViewProps) {
         {loading && (
           <div className="card flex items-center gap-2 text-sm text-fg-muted">
             <Loader2 className="size-4 animate-spin" />
-            <span>IP-Details werden geladen…</span>
+            <span>{t('IP-Details werden geladen…')}</span>
           </div>
         )}
 
@@ -75,7 +77,10 @@ export function IpResultView({ ip }: IpResultViewProps) {
 
         {details && !loading && !error && (
           <div className="card">
-            <CardHeader icon={<Network className="size-4" />} title="IP-, Netzwerk- und Geolocation-Details" />
+            <CardHeader
+              icon={<Network className="size-4" />}
+              title={t('IP-, Netzwerk- und Geolocation-Details')}
+            />
             <div className="mt-4">
               <IpDetailsRows details={details} />
             </div>

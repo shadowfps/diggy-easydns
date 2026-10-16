@@ -13,6 +13,8 @@ import {
 import type { LookupHistoryEntry } from '@/lib/lookupHistory';
 import { cn } from '@/lib/cn';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { verdictFor } from '@/lib/scoring';
+import { formatDate, t, useI18n } from '@/i18n';
 
 interface HistoryViewProps {
   entries: LookupHistoryEntry[];
@@ -22,6 +24,7 @@ interface HistoryViewProps {
 }
 
 export function HistoryView({ entries, onRun, onUseDomain, onClear }: HistoryViewProps) {
+  useI18n();
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -35,7 +38,7 @@ export function HistoryView({ entries, onRun, onUseDomain, onClear }: HistoryVie
             <History className="size-3.5" />
             History
           </p>
-          <h1 className="page-title mt-2">Letzte Suchanfragen</h1>
+          <h1 className="page-title mt-2">{t('Letzte Suchanfragen')}</h1>
         </div>
 
         <button
@@ -45,14 +48,14 @@ export function HistoryView({ entries, onRun, onUseDomain, onClear }: HistoryVie
           className="btn btn-secondary btn-sm self-start sm:self-auto"
         >
           <Trash2 className="size-3.5" />
-          History löschen
+          {t('History löschen')}
         </button>
       </div>
 
       <div className="mt-8 space-y-4">
         {entries.length === 0 ? (
-          <EmptyState icon={<History className="size-5" />} title="Noch keine History">
-            Erfolgreiche Domain-Lookups erscheinen hier automatisch.
+          <EmptyState icon={<History className="size-5" />} title={t('Noch keine History')}>
+            {t('Erfolgreiche Domain-Lookups erscheinen hier automatisch.')}
           </EmptyState>
         ) : (
           // Eine Liste statt je Lookup eine Karte: die Einträge lesen sich als
@@ -111,7 +114,9 @@ function HistoryRow({
           <div className={cn('text-2xl font-semibold tabular-nums tracking-tight', scoreClass(entry.score))}>
             {entry.score}
           </div>
-          <div className="max-w-28 truncate text-xs text-fg-subtle">{entry.verdict}</div>
+          {/* Aus dem Score statt aus dem gespeicherten Wort: das steht auf
+              Deutsch im Storage und ließe sich sonst nicht übersetzen. */}
+          <div className="max-w-28 truncate text-xs text-fg-subtle">{t(verdictFor(entry.score))}</div>
         </div>
       </div>
 
@@ -128,14 +133,20 @@ function HistoryRow({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
-          <StatusPill ok={entry.sslValid} label={entry.sslValid ? sslLabel(entry) : 'SSL fehlt'} />
-          <StatusPill ok={entry.dnssecValid} label={entry.dnssecValid ? 'DNSSEC aktiv' : 'DNSSEC inaktiv'} />
-          <StatusPill ok={entry.dmarcPresent} label={entry.dmarcPresent ? 'DMARC gesetzt' : 'DMARC fehlt'} />
+          <StatusPill ok={entry.sslValid} label={entry.sslValid ? sslLabel(entry) : t('SSL fehlt')} />
+          <StatusPill
+            ok={entry.dnssecValid}
+            label={entry.dnssecValid ? t('DNSSEC aktiv') : t('DNSSEC inaktiv')}
+          />
+          <StatusPill
+            ok={entry.dmarcPresent}
+            label={entry.dmarcPresent ? t('DMARC gesetzt') : t('DMARC fehlt')}
+          />
         </div>
 
         <button type="button" onClick={onRun} className="btn btn-ghost btn-sm">
           <RotateCcw className="size-3.5" />
-          Scan erneut
+          {t('Scan erneut')}
         </button>
       </div>
     </motion.div>
@@ -168,7 +179,7 @@ function CoreBlock({
                 type="button"
                 onClick={() => onUseValue(value)}
                 className="block max-w-full truncate rounded-full text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
-                title={`${value} in die Suche übernehmen`}
+                title={t('{value} in die Suche übernehmen', { value })}
               >
                 {value}
               </button>
@@ -184,12 +195,12 @@ function CoreBlock({
           ))}
           {values.length > 3 && (
             <div className="text-xs text-fg-subtle">
-              +{values.length - 3} weitere
+              {t('+{count} weitere', { count: values.length - 3 })}
             </div>
           )}
         </div>
       ) : (
-        <div className="mt-1.5 text-xs italic text-fg-subtle">keine Daten</div>
+        <div className="mt-1.5 text-xs italic text-fg-subtle">{t('keine Daten')}</div>
       )}
     </div>
   );
@@ -212,25 +223,21 @@ function scoreClass(score: number): string {
 }
 
 function sslLabel(entry: LookupHistoryEntry): string {
-  if (entry.sslDaysUntilExpiry === undefined) return 'SSL gültig';
-  return `SSL ${entry.sslDaysUntilExpiry} Tage`;
+  if (entry.sslDaysUntilExpiry === undefined) return t('SSL gültig');
+  return t('SSL {count} Tage', { count: entry.sslDaysUntilExpiry });
 }
 
 function formatRelativeTime(iso: string): string {
   const timestamp = new Date(iso).getTime();
-  if (!Number.isFinite(timestamp)) return 'unbekannt';
+  if (!Number.isFinite(timestamp)) return t('unbekannt');
   const diffMs = Date.now() - timestamp;
   const minutes = Math.max(0, Math.floor(diffMs / 60_000));
 
-  if (minutes < 1) return 'gerade eben';
-  if (minutes < 60) return `vor ${minutes} min`;
+  if (minutes < 1) return t('gerade eben');
+  if (minutes < 60) return t('vor {count} min', { count: minutes });
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `vor ${hours} h`;
+  if (hours < 24) return t('vor {count} h', { count: hours });
 
-  return new Date(iso).toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDate(iso, { day: '2-digit', month: 'short', year: 'numeric' });
 }

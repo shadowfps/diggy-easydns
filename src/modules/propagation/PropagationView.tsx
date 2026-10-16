@@ -4,6 +4,7 @@ import { AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import type { RecordType, ResolverResult } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
+import { useI18n } from '@/i18n';
 
 interface PropagationViewProps {
   results: ResolverResult[];
@@ -24,6 +25,7 @@ export function PropagationView({ results }: PropagationViewProps) {
   }, [results]);
 
   const [activeType, setActiveType] = useState<RecordType>(availableTypes[0] ?? 'A');
+  const { t } = useI18n();
 
   // Pro Resolver: alle Werte des aktiven Typs als sortiertes Array.
   // Sortiert, damit "1.2.3.4 + 5.6.7.8" und "5.6.7.8 + 1.2.3.4" als gleich gelten.
@@ -98,8 +100,10 @@ export function PropagationView({ results }: PropagationViewProps) {
           >
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
             <span>
-              {mismatchCount} von {perResolver.length} Resolvern weichen ab — möglicherweise noch
-              nicht propagiert, oder absichtlich GeoDNS / Anycast.
+              {t(
+                '{count} von {total} Resolvern weichen ab — möglicherweise noch nicht propagiert, oder absichtlich GeoDNS / Anycast.',
+                { count: mismatchCount, total: perResolver.length }
+              )}
             </span>
           </motion.div>
         )}
@@ -112,7 +116,7 @@ export function PropagationView({ results }: PropagationViewProps) {
             className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted"
           >
             <Check className="mt-0.5 size-4 shrink-0 text-success" />
-            <span>Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.</span>
+            <span>{t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')}</span>
           </motion.div>
         )}
       </div>
@@ -131,10 +135,11 @@ function ResolverRow({
   isMismatch: boolean;
   delay: number;
 }) {
+  const { t } = useI18n();
   const display = result.error
     ? result.error
     : values.length === 0
-    ? '— kein Eintrag'
+    ? t('— kein Eintrag')
     : values.join(', ');
 
   return (

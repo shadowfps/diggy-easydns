@@ -81,21 +81,24 @@ import {
   useLookupHistory,
 } from '@/lib/lookupHistory';
 import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
+import { errorText, formatDate, t, useI18n } from '@/i18n';
 
 const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
 
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
   const lookup = useProgressiveLookup();
+  const { language } = useI18n();
   const [ipQuery, setIpQuery] = useState<string | null>(null);
   const historyEntries = useLookupHistory();
   const [pageSpeed, setPageSpeed] = useState<PageSpeedReport | null>(null);
   const [pageSpeedLoading, setPageSpeedLoading] = useState(false);
-  const [pageSpeedError, setPageSpeedError] = useState<string | null>(null);
+  // Der Fehler selbst, nicht seine Meldung — übersetzt wird beim Rendern.
+  const [pageSpeedError, setPageSpeedError] = useState<unknown>(null);
   const [pageSpeedStrategy, setPageSpeedStrategy] = useState<PageSpeedStrategy>('mobile');
   const [virusScan, setVirusScan] = useState<VirusScanReport | null>(null);
   const [virusScanLoading, setVirusScanLoading] = useState(false);
-  const [virusScanError, setVirusScanError] = useState<string | null>(null);
+  const [virusScanError, setVirusScanError] = useState<unknown>(null);
   const [permalinkCopied, setPermalinkCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('records');
   const [searchValue, setSearchValue] = useState('');
@@ -198,7 +201,7 @@ export default function App() {
       const result = await lookupVirusScan(lookup.domain);
       setVirusScan(result);
     } catch (e) {
-      setVirusScanError(e instanceof Error ? e.message : 'VirusTotal-Scan fehlgeschlagen');
+      setVirusScanError(e);
     } finally {
       setVirusScanLoading(false);
     }
@@ -212,7 +215,7 @@ export default function App() {
       const result = await lookupPageSpeed(lookup.domain, pageSpeedStrategy);
       setPageSpeed(result);
     } catch (e) {
-      setPageSpeedError(e instanceof Error ? e.message : 'PageSpeed fehlgeschlagen');
+      setPageSpeedError(e);
     } finally {
       setPageSpeedLoading(false);
     }
@@ -324,7 +327,8 @@ export default function App() {
    */
   useEffect(() => {
     document.title = buildDocumentTitle(view, lookup.domain, ipQuery);
-  }, [view, lookup.domain, ipQuery]);
+    // `language`: der Titel ist übersetzt und folgt einem Sprachwechsel.
+  }, [view, lookup.domain, ipQuery, language]);
 
   // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
   useEffect(() => {
@@ -342,7 +346,7 @@ export default function App() {
       window.setTimeout(() => setPermalinkCopied(false), 1400);
     } catch {
       // Fallback für Browser ohne Clipboard-API-Rechte.
-      window.prompt('Permalink kopieren:', url);
+      window.prompt(t('Permalink kopieren:'), url);
     }
   };
 
@@ -463,12 +467,15 @@ export default function App() {
                 <Suspense
                   fallback={
                     <h1 className="text-4xl md:text-5xl font-medium tracking-tight">
-                      Was steckt hinter deiner Domain?
+                      {t('Was steckt hinter deiner Domain?')}
                     </h1>
                   }
                 >
+                  {/* key: bei einem Sprachwechsel neu aufbauen — SplitText
+                      zerlegt den Text nur beim Mount in Zeichen. */}
                   <SplitText
-                    text="Was steckt hinter deiner Domain?"
+                    key={language}
+                    text={t('Was steckt hinter deiner Domain?')}
                     tag="h1"
                     className="text-4xl md:text-5xl font-medium tracking-tight"
                     delay={40}
@@ -487,17 +494,18 @@ export default function App() {
                 <Suspense
                   fallback={
                     <p className="text-base text-fg-muted">
-                      DNS, SSL, Mail-Security und Propagation auf einen Blick.
+                      {t('DNS, SSL, Mail-Security und Propagation auf einen Blick.')}
                     </p>
                   }
                 >
                   <TextType
+                    key={language}
                     as="p"
                     className="text-base text-fg-muted"
                     text={[
-                      'DNS, SSL, Mail-Security und Propagation auf einen Blick.',
-                      'Ohne Fachchinesisch, mit Empfehlungen.',
-                      'Alles, was du wissen musst — in einem Tool.',
+                      t('DNS, SSL, Mail-Security und Propagation auf einen Blick.'),
+                      t('Ohne Fachchinesisch, mit Empfehlungen.'),
+                      t('Alles, was du wissen musst — in einem Tool.'),
                     ]}
                     typingSpeed={45}
                     pauseDuration={2200}
@@ -548,7 +556,7 @@ export default function App() {
             >
               <Loader2 className="mx-auto size-6 animate-spin text-fg" />
               <p className="mt-3 text-sm text-fg-muted">
-                Records werden geholt…
+                {t('Records werden geholt…')}
               </p>
             </motion.div>
           )}
@@ -560,7 +568,7 @@ export default function App() {
         {/* Error */}
         {view === 'lookup' && recordsErrored && (
           <div className="mx-auto mt-10 max-w-2xl">
-            <SectionError message={lookup.recordsError ?? undefined} />
+            <SectionError error={lookup.recordsError} />
           </div>
         )}
 
@@ -577,7 +585,7 @@ export default function App() {
             className="mx-auto w-full max-w-[110rem] xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-start xl:gap-8"
           >
             <aside
-              aria-label="Zusammenfassung"
+              aria-label={t('Zusammenfassung')}
               className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:sticky xl:top-20 xl:grid-cols-1"
             >
               {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann.
@@ -585,12 +593,12 @@ export default function App() {
                   Seitenende — wer sie suchte, musste erst durchscrollen. */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:col-span-2 xl:col-span-1 xl:flex-col xl:items-start xl:justify-start">
                 <div className="min-w-0">
-                  <p className="eyebrow">DNS-Report</p>
+                  <p className="eyebrow">{t('DNS-Report')}</p>
                   <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
                     {report.domain}
                   </h1>
                   <p className="mt-1.5 text-sm text-fg-muted">
-                    Geprüft am {formatCheckedAt(report.timestamp)}
+                    {t('Geprüft am {date}', { date: formatCheckedAt(report.timestamp) })}
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -600,7 +608,7 @@ export default function App() {
                   </ActionButton>
                   <ActionButton onClick={handleCopyPermalink}>
                     {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
-                    {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
+                    {permalinkCopied ? t('Link kopiert') : t('Permalink kopieren')}
                   </ActionButton>
                 </div>
               </div>
@@ -713,13 +721,13 @@ export default function App() {
                       (propagation.status === 'loading' ? (
                         <PropagationSkeleton />
                       ) : propagation.status === 'error' ? (
-                        <SectionError message={propagation.error} />
+                        <SectionError error={propagation.error} />
                       ) : propagation.data && propagation.data.length > 0 ? (
                         <PropagationView key={report.domain} results={propagation.data} />
                       ) : (
                         <Placeholder
-                          title="Multi-Resolver-Propagation"
-                          subtitle="Keine Resolver-Antworten — Lookup eventuell fehlgeschlagen."
+                          title={t('Multi-Resolver-Propagation')}
+                          subtitle={t('Keine Resolver-Antworten — Lookup eventuell fehlgeschlagen.')}
                         />
                       ))}
                     {activeTab === 'findings' &&
@@ -742,7 +750,7 @@ export default function App() {
                       (mail.status === 'loading' ? (
                         <SectionCardsSkeleton count={4} />
                       ) : mail.status === 'error' ? (
-                        <SectionError message={mail.error} />
+                        <SectionError error={mail.error} />
                       ) : mailData ? (
                         <MailView mail={mailData} />
                       ) : (
@@ -752,7 +760,7 @@ export default function App() {
                       (whois.status === 'loading' ? (
                         <WhoisSkeleton />
                       ) : whois.status === 'error' ? (
-                        <SectionError message={whois.error} />
+                        <SectionError error={whois.error} />
                       ) : (
                         <WhoisView whois={whois.data ?? undefined} onUseDomain={handleUseDomainInSearch} />
                       ))}
@@ -761,7 +769,11 @@ export default function App() {
                       <PageSpeedView
                         data={pageSpeed}
                         loading={pageSpeedLoading}
-                        error={pageSpeedError}
+                        error={
+                          pageSpeedError == null
+                            ? null
+                            : errorText(pageSpeedError, 'PageSpeed fehlgeschlagen')
+                        }
                         strategy={pageSpeedStrategy}
                         onStrategyChange={setPageSpeedStrategy}
                         onRun={handleRunPageSpeed}
@@ -773,7 +785,11 @@ export default function App() {
                       <VirusScanView
                         data={virusScan}
                         loading={virusScanLoading}
-                        error={virusScanError}
+                        error={
+                          virusScanError == null
+                            ? null
+                            : errorText(virusScanError, 'VirusTotal-Scan fehlgeschlagen')
+                        }
                         onRun={handleRunVirusScan}
                       />
                       </Suspense>
@@ -799,7 +815,7 @@ export default function App() {
               onClick={handleImpressum}
               className="transition-colors hover:text-fg"
             >
-              Impressum
+              {t('Impressum')}
             </button>
             <span className="hidden text-line sm:inline" aria-hidden>
               ·
@@ -809,7 +825,7 @@ export default function App() {
               onClick={handleDatenschutz}
               className="transition-colors hover:text-fg"
             >
-              Datenschutz
+              {t('Datenschutz')}
             </button>
           </div>
           <span>v0.3.0</span>
@@ -823,10 +839,11 @@ function Placeholder({ title, subtitle }: { title: string; subtitle: string }) {
   return <EmptyState title={title}>{subtitle}</EmptyState>;
 }
 
-function SectionError({ message }: { message?: string }) {
+function SectionError({ error }: { error?: unknown }) {
+  useI18n();
   return (
     <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
-      {message ?? 'Dieser Check ist fehlgeschlagen.'}
+      {errorText(error, 'Dieser Check ist fehlgeschlagen.')}
     </EmptyState>
   );
 }
@@ -854,7 +871,7 @@ function ActionButton({
 }
 
 function formatCheckedAt(timestamp: string): string {
-  return new Date(timestamp).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  return formatDate(timestamp, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function getLookupUrl(domain: string): string {

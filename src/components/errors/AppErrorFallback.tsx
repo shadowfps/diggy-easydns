@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useI18n } from '@/i18n';
 
 /**
  * Ganzseitiger Fallback — die App als Ganzes ist nicht mehr benutzbar.
@@ -9,15 +10,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
  * Fehlermeldung steht unter den Aktionen.
  */
 export function AppErrorFallback({ error }: { error: Error }) {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="card flex w-full max-w-md flex-col items-center py-10 text-center sm:py-12">
         <span className="icon-tile icon-tile-danger size-11">
           <AlertTriangle className="size-5" />
         </span>
-        <h1 className="mt-4 text-base font-semibold text-fg">Da ist etwas schiefgelaufen</h1>
+        <h1 className="mt-4 text-base font-semibold text-fg">{t('Da ist etwas schiefgelaufen')}</h1>
         <p className="mt-1 text-sm text-fg-muted">
-          Die Ansicht konnte nicht dargestellt werden. Ein Neuladen hilft meistens.
+          {t('Die Ansicht konnte nicht dargestellt werden. Ein Neuladen hilft meistens.')}
         </p>
         <div className="mt-5 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-center">
           <button
@@ -25,7 +27,7 @@ export function AppErrorFallback({ error }: { error: Error }) {
             onClick={() => window.location.reload()}
             className="btn btn-primary"
           >
-            Neu laden
+            {t('Neu laden')}
           </button>
           {/*
             Die App ist URL-basiert: ein kaputter Permalink würde beim Neuladen
@@ -33,7 +35,7 @@ export function AppErrorFallback({ error }: { error: Error }) {
             auf die Startseite.
           */}
           <a href="/" className="btn btn-secondary">
-            Zur Startseite
+            {t('Zur Startseite')}
           </a>
         </div>
         <p className="mt-5 wrap-break-word font-mono text-[11px] text-fg-subtle">
@@ -54,19 +56,20 @@ export function AppErrorFallback({ error }: { error: Error }) {
  * Sekundärbutton: im Report ist der Primärbutton schon die Suche.
  */
 export function SectionErrorFallback({ reset }: { error: Error; reset: () => void }) {
+  const { t } = useI18n();
   return (
     <EmptyState
       tone="danger"
       icon={<AlertTriangle className="size-5" />}
-      title="Dieser Bereich konnte nicht dargestellt werden"
+      title={t('Dieser Bereich konnte nicht dargestellt werden')}
       action={
         <button type="button" onClick={reset} className="btn btn-secondary btn-sm">
-          Erneut versuchen
+          {t('Erneut versuchen')}
         </button>
       }
       className="py-8 sm:py-8"
     >
-      Die übrigen Bereiche des Reports funktionieren weiter.
+      {t('Die übrigen Bereiche des Reports funktionieren weiter.')}
     </EmptyState>
   );
 }

@@ -4,6 +4,7 @@ import { Lock, ShieldCheck, ShieldAlert, ShieldOff } from 'lucide-react';
 import type { DnssecInfo, SslInfo } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { useI18n } from '@/i18n';
 
 interface SecurityViewProps {
   ssl?: SslInfo;
@@ -31,6 +32,7 @@ function sslTone(ssl: SslInfo): Tone {
 }
 
 function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
+  const { t, formatDate } = useI18n();
   if (!applicable) {
     return (
       <motion.div
@@ -41,8 +43,7 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
       >
         <CardHeader icon={<Lock className="size-4" />} title="SSL / TLS" />
         <p className="mt-4 text-sm leading-relaxed text-fg-muted">
-          Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts —
-          unter ihnen läuft kein Webserver mit Zertifikat.
+          {t('Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.')}
         </p>
       </motion.div>
     );
@@ -60,7 +61,7 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
         <CardHeader icon={<Lock className="size-4" />} title="SSL / TLS" tone="warning" />
         <div className="mt-4 flex items-center gap-2 text-sm font-medium text-warning">
           <ShieldOff className="size-4 shrink-0" />
-          <span>Kein TLS auf Port 443 erreichbar</span>
+          <span>{t('Kein TLS auf Port 443 erreichbar')}</span>
         </div>
       </motion.div>
     );
@@ -74,8 +75,8 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
       ? 'badge-warning'
       : 'badge-success';
 
-  const validFrom = new Date(ssl.validFrom).toLocaleDateString('de-DE');
-  const validTo = new Date(ssl.validTo).toLocaleDateString('de-DE');
+  const validFrom = formatDate(ssl.validFrom);
+  const validTo = formatDate(ssl.validTo);
 
   return (
     <motion.div
@@ -90,18 +91,18 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
         tone={tone}
         aside={
           ssl.valid ? (
-            <span className="badge badge-success">gültig</span>
+            <span className="badge badge-success">{t('gültig')}</span>
           ) : (
-            <span className="badge badge-danger">nicht vertrauenswürdig</span>
+            <span className="badge badge-danger">{t('nicht vertrauenswürdig')}</span>
           )
         }
       />
 
       <dl className="mt-4 space-y-3">
-        <Row label="Aussteller" value={ssl.issuer} />
+        <Row label={t('Aussteller')} value={ssl.issuer} />
         <Row label="Subject" value={ssl.subject} mono />
         <Row
-          label="Gültig"
+          label={t('Gültig')}
           value={
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>
@@ -109,13 +110,13 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
               </span>
               <span className={cn('badge', expiryBadge)}>
                 {ssl.daysUntilExpiry < 0
-                  ? `seit ${Math.abs(ssl.daysUntilExpiry)} Tagen abgelaufen`
-                  : `noch ${ssl.daysUntilExpiry} Tage`}
+                  ? t('seit {count} Tagen abgelaufen', { count: Math.abs(ssl.daysUntilExpiry) })
+                  : t('noch {count} Tage', { count: ssl.daysUntilExpiry })}
               </span>
             </span>
           }
         />
-        <Row label="Protokoll" value={`${ssl.tlsVersion} · ${ssl.signatureAlgorithm}`} />
+        <Row label={t('Protokoll')} value={`${ssl.tlsVersion} · ${ssl.signatureAlgorithm}`} />
       </dl>
 
       {ssl.sans.length > 0 && (
@@ -142,51 +143,49 @@ function SslCard({ ssl, applicable }: { ssl?: SslInfo; applicable: boolean }) {
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
 function DnssecCard({ dnssec }: { dnssec: DnssecInfo }) {
+  const { t } = useI18n();
   let icon = <ShieldOff className="size-4" />;
   let tone: Tone = 'neutral';
-  let statusText = 'inaktiv';
-  let badge = <span className="badge">nicht aktiviert</span>;
+  let statusText = t('inaktiv');
+  let badge = <span className="badge">{t('nicht aktiviert')}</span>;
   let body = (
     <p className="text-sm leading-relaxed text-fg-muted">
-      DNSSEC schützt deine Domain gegen DNS-Spoofing. Die meisten Registrare bieten DNSSEC mit
-      einem Klick — beim Hosting-Panel nachsehen.
+      {t('DNSSEC schützt deine Domain gegen DNS-Spoofing. Die meisten Registrare bieten DNSSEC mit einem Klick — beim Hosting-Panel nachsehen.')}
     </p>
   );
 
   if (dnssec.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
     icon = <ShieldCheck className="size-4" />;
     tone = 'success';
-    statusText = 'aktiv & valide';
-    badge = <span className="badge badge-success">Chain of Trust valide</span>;
+    statusText = t('aktiv & valide');
+    badge = <span className="badge badge-success">{t('Chain of Trust valide')}</span>;
     body = (
       <dl className="space-y-3">
-        <Row label="Algorithmus" value={dnssec.algorithm ?? 'unbekannt'} mono />
+        <Row label={t('Algorithmus')} value={dnssec.algorithm ?? t('unbekannt')} mono />
         <Row
           label="Status"
-          value="DS- und DNSKEY-Records vorhanden, von Cloudflare und Quad9 validiert."
+          value={t('DS- und DNSKEY-Records vorhanden, von Cloudflare und Quad9 validiert.')}
         />
       </dl>
     );
   } else if (dnssec.enabled && dnssec.chainOfTrust === 'incomplete') {
     icon = <ShieldAlert className="size-4" />;
     tone = 'danger';
-    statusText = 'Chain unterbrochen';
-    badge = <span className="badge badge-danger">Chain unterbrochen</span>;
+    statusText = t('Chain unterbrochen');
+    badge = <span className="badge badge-danger">{t('Chain unterbrochen')}</span>;
     body = (
       <p className="text-sm leading-relaxed text-fg-muted">
-        Die Domain hat einen DNSKEY, aber der Parent-DS-Record fehlt. Resolver können die Signatur
-        nicht prüfen → DNSSEC ist effektiv aus. Beim Registrar den DS-Record nachtragen.
+        {t('Die Domain hat einen DNSKEY, aber der Parent-DS-Record fehlt. Resolver können die Signatur nicht prüfen → DNSSEC ist effektiv aus. Beim Registrar den DS-Record nachtragen.')}
       </p>
     );
   } else if (dnssec.enabled && dnssec.chainOfTrust === 'invalid') {
     icon = <ShieldAlert className="size-4" />;
     tone = 'danger';
     statusText = 'invalid';
-    badge = <span className="badge badge-danger">Validierung fehlgeschlagen</span>;
+    badge = <span className="badge badge-danger">{t('Validierung fehlgeschlagen')}</span>;
     body = (
       <p className="text-sm leading-relaxed text-fg-muted">
-        DS und DNSKEY sind da, aber die Chain validiert nicht. Möglicherweise abgelaufene
-        Signaturen oder falsche Schlüssel.
+        {t('DS und DNSKEY sind da, aber die Chain validiert nicht. Möglicherweise abgelaufene Signaturen oder falsche Schlüssel.')}
       </p>
     );
   }

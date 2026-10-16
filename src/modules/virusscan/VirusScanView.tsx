@@ -3,6 +3,8 @@ import type { VirusScanReport } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatDate, t, tRich, useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 import {
   AlertCircle,
   AlertTriangle,
@@ -26,6 +28,7 @@ interface VirusScanViewProps {
 }
 
 export function VirusScanView({ data, loading, error, onRun }: VirusScanViewProps) {
+  useI18n();
   return (
     <div className="flex flex-col gap-4">
       {/* Scan-Block: Titel, Start — darunter Leerlauf, Ladeanzeige oder das
@@ -36,7 +39,7 @@ export function VirusScanView({ data, loading, error, onRun }: VirusScanViewProp
           <p className="eyebrow">Security Scan</p>
           <h3 className="mt-1.5 text-2xl font-semibold tracking-tight text-fg">VirusTotal Scan</h3>
           <p className="mt-1.5 max-w-md text-sm text-fg-muted">
-            Prüft die Domain gegen 80+ Sicherheits-Engines auf Malware, Phishing und Blacklists.
+            {t('Prüft die Domain gegen 80+ Sicherheits-Engines auf Malware, Phishing und Blacklists.')}
           </p>
 
           <button
@@ -46,13 +49,13 @@ export function VirusScanView({ data, loading, error, onRun }: VirusScanViewProp
             className="btn btn-primary btn-lg mt-6 min-w-40"
           >
             <Play className="size-4 fill-current" />
-            <span>{loading ? 'Scanning…' : 'Scan starten'}</span>
+            <span>{loading ? 'Scanning…' : t('Scan starten')}</span>
           </button>
 
           {data && (
             <span className="badge mt-5">
               <CheckCircle2 className="size-3" />
-              Scan abgeschlossen
+              {t('Scan abgeschlossen')}
             </span>
           )}
         </div>
@@ -102,7 +105,7 @@ function ScanSummary({ data }: { data: VirusScanReport }) {
           >
             {data.reputation > 0 ? `+${data.reputation}` : data.reputation}
           </p>
-          <p className="mt-1 text-xs text-fg-subtle">Community-Bewertung (negativ = schlechter Ruf)</p>
+          <p className="mt-1 text-xs text-fg-subtle">{t('Community-Bewertung (negativ = schlechter Ruf)')}</p>
         </div>
 
         <div className="panel">
@@ -122,7 +125,7 @@ function ScanSummary({ data }: { data: VirusScanReport }) {
             </div>
           </div>
           <p className="mt-1 text-xs text-fg-subtle">
-            Letzte Analyse: {new Date(data.lastAnalysisDate).toLocaleDateString('de-DE')}
+            {t('Letzte Analyse: {date}', { date: formatDate(data.lastAnalysisDate) })}
           </p>
         </div>
       </div>
@@ -148,11 +151,7 @@ function ScanDetails({ data }: { data: VirusScanReport }) {
             className="px-5 py-4 sm:px-6"
             tone={anyMalicious ? 'danger' : 'warning'}
             icon={anyMalicious ? <AlertCircle className="size-4" /> : <AlertTriangle className="size-4" />}
-            title={
-              <>
-                {flaggedVendors.length} Engine{flaggedVendors.length !== 1 ? 's' : ''} haben angeschlagen
-              </>
-            }
+            title={t('{count} Engines haben angeschlagen', { count: flaggedVendors.length })}
           />
           <ul className="divide-y divide-line-subtle">
             {flaggedVendors.map((v) => (
@@ -169,7 +168,10 @@ function ScanDetails({ data }: { data: VirusScanReport }) {
 
       {Object.keys(data.categories).length > 0 && (
         <div className="card">
-          <CardHeader icon={<Tag className="size-4" />} title="Kategorisierung durch Sicherheits-Engines" />
+          <CardHeader
+            icon={<Tag className="size-4" />}
+            title={t('Kategorisierung durch Sicherheits-Engines')}
+          />
           <div className="mt-4 flex flex-wrap gap-2">
             {[...new Set(Object.values(data.categories))].map((cat) => (
               <span key={cat} className="badge">
@@ -186,7 +188,9 @@ function ScanDetails({ data }: { data: VirusScanReport }) {
             <ShieldCheck className="size-4" />
           </span>
           <p className="text-sm text-fg">
-            {harmlessVendors.length} Engines haben die Domain als unbedenklich eingestuft.
+            {t('{count} Engines haben die Domain als unbedenklich eingestuft.', {
+              count: harmlessVendors.length,
+            })}
           </p>
         </div>
       )}
@@ -216,7 +220,7 @@ const VERDICT = {
     tile: 'icon-tile-danger',
     text: 'text-danger',
   },
-} as const;
+} as const satisfies Record<string, { label: DeKey; sub: DeKey } & Record<string, unknown>>;
 
 function Verdict({
   data,
@@ -236,13 +240,13 @@ function Verdict({
       <span className={cn('icon-tile size-12', config.tile)}>
         <Icon className="size-6" />
       </span>
-      <p className={cn('mt-3 text-2xl font-semibold tracking-tight', config.text)}>{config.label}</p>
-      <p className="mt-1 text-sm text-fg-muted">{config.sub}</p>
+      <p className={cn('mt-3 text-2xl font-semibold tracking-tight', config.text)}>{t(config.label)}</p>
+      <p className="mt-1 text-sm text-fg-muted">{t(config.sub)}</p>
       <p className="mt-3 text-sm text-fg-muted">
-        <span className="font-semibold text-fg">{flagged}</span>
-        {' '}von{' '}
-        <span className="font-semibold text-fg">{total}</span>
-        {' '}Engines haben angeschlagen
+        {tRich('{flagged} von {total} Engines haben angeschlagen', {
+          flagged: <span className="font-semibold text-fg">{flagged}</span>,
+          total: <span className="font-semibold text-fg">{total}</span>,
+        })}
       </p>
     </div>
   );
@@ -281,7 +285,7 @@ function StatPanel({
   );
 }
 
-const SCAN_STAGES = [
+const SCAN_STAGES: DeKey[] = [
   'Verbinde mit VirusTotal…',
   'Prüfe 80+ Security-Engines…',
   'Analysiere Blacklists…',
@@ -303,13 +307,13 @@ function ScanLoader() {
     <div className="mx-auto mt-8 max-w-md" aria-busy="true" aria-live="polite">
       <div className="panel px-6 py-6 text-center">
         <Loader2 className="mx-auto size-5 animate-spin text-fg" />
-        <div className="eyebrow mt-4">Scan läuft</div>
+        <div className="eyebrow mt-4">{t('Scan läuft')}</div>
         <div
           key={stage}
           className="mt-1.5 text-sm text-fg"
           style={{ animation: 'fadeInUp 0.4s ease-out' }}
         >
-          {SCAN_STAGES[stage]}
+          {t(SCAN_STAGES[stage])}
         </div>
         <div className="mt-5 grid grid-cols-5 gap-2">
           {[0, 1, 2, 3, 4].map((i) => (

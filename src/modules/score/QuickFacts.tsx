@@ -14,6 +14,7 @@ import { cn } from '@/lib/cn';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
+import { useI18n } from '@/i18n';
 
 /* ─── Tech-Stack SVG logos ───────────────────────────────────────────────── */
 
@@ -320,6 +321,7 @@ interface QuickFactsProps {
 }
 
 export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain }: QuickFactsProps) {
+  const { t } = useI18n();
   const aRecord = records.find((r) => r.type === 'A');
   const mxRecord = records.find((r) => r.type === 'MX');
   const nsRecord = records.find((r) => r.type === 'NS');
@@ -336,7 +338,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
         type="button"
         onClick={() => onUseDomain(nsRecord.value)}
         className="min-w-0 truncate rounded-full text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
-        title={`${nsRecord.value} in die Suche übernehmen`}
+        title={t('{value} in die Suche übernehmen', { value: nsRecord.value })}
       >
         {nsRecord.value}
       </button>
@@ -359,7 +361,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const sslItem: QuickFactItem =
     placeholder('SSL', ssl.status) ?? {
       label: 'SSL',
-      value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
+      value: sslInfo ? t('{count} Tage', { count: sslInfo.daysUntilExpiry }) : t('kein Cert'),
       ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
       bad: !sslInfo?.valid || (sslInfo?.daysUntilExpiry ?? 999) < 14,
     };
@@ -368,7 +370,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const dnssecItem: QuickFactItem =
     placeholder('DNSSEC', dnssec.status) ?? {
       label: 'DNSSEC',
-      value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
+      value: dnssecInfo?.enabled && dnssecInfo?.valid ? t('aktiv') : t('inaktiv'),
       ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
       bad: !dnssecInfo?.enabled,
     };
@@ -377,7 +379,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const dmarcItem: QuickFactItem =
     placeholder('DMARC', mail.status) ?? {
       label: 'DMARC',
-      value: dmarcPresent ? 'gesetzt' : 'fehlt',
+      value: dmarcPresent ? t('gesetzt') : t('fehlt'),
       ok: Boolean(dmarcPresent),
       bad: !dmarcPresent,
     };
@@ -401,7 +403,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       transition={{ duration: 0.4, delay: 0.15 }}
       className="card"
     >
-      <h2 className="card-title">Schnellübersicht</h2>
+      <h2 className="card-title">{t('Schnellübersicht')}</h2>
 
       {/* Einspaltig, wo die Karte schmal ist: mobil, halbe Breite ab md und
           in der Seitenspalte ab xl. */}

@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, AlertTriangle, ArrowRight, Check, Info } from 'lucide-react';
 import type { Finding, HealthScore } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { verdictFor } from '@/lib/scoring';
+import { useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 
 interface ScoreCardProps {
   score: HealthScore;
@@ -26,6 +29,7 @@ function scoreTone(s: number) {
 }
 
 export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
+  const { t } = useI18n();
   const tone = scoreTone(score.score);
   const top = PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
   const count = useMotionValue(0);
@@ -50,7 +54,7 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
     >
       <div className="flex items-center justify-between gap-3">
         <h2 className="card-title">Health Score</h2>
-        <span className={cn('badge', tone.badge)}>{score.verdict}</span>
+        <span className={cn('badge', tone.badge)}>{t(verdictFor(score.score))}</span>
       </div>
 
       <div className="mt-4">
@@ -73,7 +77,7 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
           <Stat label="ok" count={score.counts.success} dot="bg-success" />
           <Stat label="info" count={score.counts.info} dot="bg-fg-subtle" />
-          <Stat label="Warnung" count={score.counts.warning} dot="bg-warning" />
+          <Stat label="Warnungen" count={score.counts.warning} dot="bg-warning" />
           <Stat label="kritisch" count={score.counts.critical} dot="bg-danger" />
         </div>
       </div>
@@ -84,7 +88,7 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
         <div className="flex items-center gap-3 border-t border-line-subtle pt-4">
           <TopFinding finding={top} />
           <button type="button" onClick={onShowFindings} className="btn btn-ghost btn-sm -mr-2 group">
-            Alle Findings
+            {t('Alle Findings')}
             <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
           </button>
         </div>
@@ -94,13 +98,14 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
 }
 
 function TopFinding({ finding }: { finding?: Finding }) {
+  const { t } = useI18n();
   if (!finding) {
     return (
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="icon-tile icon-tile-success size-8">
           <Check className="size-4" />
         </span>
-        <p className="text-sm font-medium text-fg">Keine offenen Punkte</p>
+        <p className="text-sm font-medium text-fg">{t('Keine offenen Punkte')}</p>
       </div>
     );
   }
@@ -112,19 +117,25 @@ function TopFinding({ finding }: { finding?: Finding }) {
         <Icon className="size-4" />
       </span>
       <div className="min-w-0">
-        <p className="text-xs text-fg-subtle">Wichtigster Punkt</p>
+        <p className="text-xs text-fg-subtle">{t('Wichtigster Punkt')}</p>
         <p className="truncate text-sm font-medium text-fg">{finding.title}</p>
       </div>
     </div>
   );
 }
 
-function Stat({ label, count, dot }: { label: string; count: number; dot: string }) {
+/**
+ * `label` ist ein Schlüssel: „3 Warnungen“ braucht die Mehrzahl, das
+ * Englische auch dort („3 warnings“). „ok“ und „info“ heißen in beiden
+ * Sprachen gleich und brauchen keinen Eintrag.
+ */
+function Stat({ label, count, dot }: { label: DeKey | 'ok' | 'info'; count: number; dot: string }) {
+  const { t } = useI18n();
   return (
     <span className="flex items-center gap-1.5 text-fg-muted">
       <span className={cn('size-2 rounded-full', dot)} />
       <span className="font-semibold tabular-nums text-fg">{count}</span>
-      {label}
+      {label === 'ok' || label === 'info' ? label : t(label, { count })}
     </span>
   );
 }

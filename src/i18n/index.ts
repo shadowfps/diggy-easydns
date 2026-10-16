@@ -25,6 +25,7 @@ import type { EnglishPack } from './en';
 
 export type Language = 'de' | 'en';
 export type Params = Record<string, string | number>;
+export type { DeKey } from './de';
 
 const STORAGE_KEY = 'diggy-language';
 
@@ -203,6 +204,16 @@ export function tRich(key: DeKey, values: Record<string, ReactNode>): ReactNode[
           ? createElement(Fragment, { key: index }, nodes[part])
           : `{${part}}`
     );
+}
+
+/**
+ * Meldung zu einem Fehler. Trägt er keine eigene Meldung, gilt `fallback`.
+ *
+ * Die Meldungen des Servers sind deutsch — für Deutsch sind sie der Text.
+ */
+export function errorText(error: unknown, fallback: DeKey): string {
+  if (error instanceof Error && error.message) return error.message;
+  return t(fallback);
 }
 
 /* ─── Zahlen und Datum ────────────────────────────────────────────────── */

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { ApiError, fetchContactChallenge, sendContactMessage } from '@/lib/api';
+import { errorText, useI18n } from '@/i18n';
+import type { DeKey, Params } from '@/i18n';
 
 /**
  * Fehler, bei denen der Challenge-Token NICHT verbraucht ist.
@@ -17,6 +19,13 @@ import { ApiError, fetchContactChallenge, sendContactMessage } from '@/lib/api';
  * bis zur Validierung kommt.
  */
 const TOKEN_SURVIVING_ERRORS = new Set(['contact_invalid_input', 'contact_not_configured']);
+
+/**
+ * Was gerade schiefging: ein Fehler des Servers oder ein eigener Text mit
+ * Werten. Beides wird erst beim Rendern übersetzt, damit die Meldung einem
+ * Sprachwechsel folgt (#86).
+ */
+type FormError = { error: unknown } | { text: DeKey; params?: Params };
 
 interface ContactFormProps {
   /**
@@ -35,8 +44,9 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [readyAt, setReadyAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
   const [success, setSuccess] = useState(false);
+  const { t, tRich } = useI18n();
   const statusRef = useRef<HTMLDivElement>(null);
   /**
    * Tickt sekündlich, solange die Mindestwartezeit läuft.
@@ -106,7 +116,9 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
         await loadChallenge();
       } catch {
         if (!cancelled) {
-          setError('Kontaktformular konnte nicht initialisiert werden. Bitte Seite neu laden.');
+          setError({
+            text: 'Kontaktformular konnte nicht initialisiert werden. Bitte Seite neu laden.',
+          });
         }
       }
     })();
@@ -131,7 +143,10 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
       // Sollte durch den deaktivierten Button nicht mehr auftreten — bleibt
       // als Absicherung für Enter im Textfeld o. Ä.
       const remaining = Math.ceil((readyAt - Date.now()) / 1000);
-      setError(`Das Formular ist in ${remaining} Sekunden bereit.`);
+      setError({
+        text: 'Das Formular ist in {count} Sekunden bereit.',
+        params: { count: remaining },
+      });
       return;
     }
 
@@ -140,7 +155,10 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
     // erst serverseitig abgelehnt. Hier dieselbe Regel, damit die Meldung ohne
     // Round-Trip erscheint.
     if (message.trim().length < MIN_MESSAGE_LENGTH) {
-      setError(`Die Nachricht sollte mindestens ${MIN_MESSAGE_LENGTH} Zeichen lang sein.`);
+      setError({
+        text: 'Die Nachricht sollte mindestens {count} Zeichen lang sein.',
+        params: { count: MIN_MESSAGE_LENGTH },
+      });
       return;
     }
 
@@ -157,7 +175,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
       setMessage('');
       setWebsite('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nachricht konnte nicht gesendet werden.');
+      setError({ error: err });
       tokenStillValid = err instanceof ApiError && TOKEN_SURVIVING_ERRORS.has(err.code);
     }
 
@@ -184,29 +202,37 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
       // Nach erfolgreichem Versand ist das kein Fehler für den Nutzer — die
       // Nachricht ist raus. Nur wenn er erneut senden will, fehlt der Token,
       // und dann sagt es der deaktivierte Button.
-      if (!sent) setError('Bitte lade die Seite neu und versuche es erneut.');
+      if (!sent) setError({ text: 'Bitte lade die Seite neu und versuche es erneut.' });
     } finally {
       setLoading(false);
     }
   };
 
+  const errorMessage = !error
+    ? null
+    : 'error' in error
+      ? errorText(error.error, 'Nachricht konnte nicht gesendet werden.')
+      : t(error.text, error.params);
   const formReady = Boolean(challengeToken);
   const tooShort = message.trim().length > 0 && message.trim().length < MIN_MESSAGE_LENGTH;
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-fg">Kontaktformular</h2>
+      <h2 className="text-sm font-semibold text-fg">{t('Kontaktformular')}</h2>
       <p className="mt-1 text-sm leading-relaxed text-fg-muted">
-        Schreib mir alternativ direkt über das Formular — ich melde mich per E-Mail zurück.
+        {t('Schreib mir alternativ direkt über das Formular — ich melde mich per E-Mail zurück.')}
       </p>
       <p className="mb-5 mt-2 text-xs leading-relaxed text-fg-subtle">
-        Name, E-Mail und Nachricht werden per E-Mail an mich zugestellt und nur zur
-        Beantwortung genutzt. An deine Adresse geht eine Empfangsbestätigung. Details
-        unter{' '}
-        <button type="button" onClick={onOpenDatenschutz} className="link">
-          Datenschutz
-        </button>
-        .
+        {tRich(
+          'Name, E-Mail und Nachricht werden per E-Mail an mich zugestellt und nur zur Beantwortung genutzt. An deine Adresse geht eine Empfangsbestätigung. Details unter {link}.',
+          {
+            link: (
+              <button type="button" onClick={onOpenDatenschutz} className="link">
+                {t('Datenschutz')}
+              </button>
+            ),
+          }
+        )}
       </p>
 
       {/*
@@ -222,11 +248,11 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           className="panel mb-4 flex items-start gap-2.5 py-3 text-sm text-fg outline-hidden"
         >
           <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
-          <span>Danke! Deine Nachricht wurde gesendet.</span>
+          <span>{t('Danke! Deine Nachricht wurde gesendet.')}</span>
         </div>
       )}
 
-      {error && !success && (
+      {errorMessage && !success && (
         <div
           ref={statusRef}
           role="alert"
@@ -234,7 +260,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           className="panel mb-4 flex items-start gap-2.5 py-3 text-sm text-fg outline-hidden"
         >
           <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger" />
-          <span>{error}</span>
+          <span>{errorMessage}</span>
         </div>
       )}
 
@@ -255,7 +281,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
             />
           </Field>
 
-          <Field label="E-Mail" id="contact-email" required>
+          <Field label={t('E-Mail')} id="contact-email" required>
             <input
               id="contact-email"
               type="email"
@@ -269,7 +295,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           </Field>
         </div>
 
-        <Field label="Nachricht" id="contact-message" required>
+        <Field label={t('Nachricht')} id="contact-message" required>
           <textarea
             id="contact-message"
             value={message}
@@ -280,7 +306,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
             rows={6}
             aria-describedby="contact-message-counter"
             className="input min-h-36 resize-y"
-            placeholder="Worum geht es?"
+            placeholder={t('Worum geht es?')}
           />
           {/*
             Ohne Zähler hörte das Tippen bei 5000 Zeichen einfach auf, ohne
@@ -292,7 +318,9 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
             className="mt-1.5 flex justify-between text-xs text-fg-subtle"
           >
             <span>
-              {tooShort ? `Noch mindestens ${MIN_MESSAGE_LENGTH - message.trim().length} Zeichen` : ''}
+              {tooShort
+                ? t('Noch mindestens {count} Zeichen', { count: MIN_MESSAGE_LENGTH - message.trim().length })
+                : ''}
             </span>
             <span className="tabular-nums">
               {message.length} / {MAX_MESSAGE_LENGTH}
@@ -333,10 +361,10 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
         >
           {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           {!formReady
-            ? 'Formular wird geladen…'
+            ? t('Formular wird geladen…')
             : waitSeconds > 0
-              ? `Gleich bereit (${waitSeconds} s)`
-              : 'Nachricht senden'}
+              ? t('Gleich bereit ({count} s)', { count: waitSeconds })
+              : t('Nachricht senden')}
         </button>
       </form>
     </section>

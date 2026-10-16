@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { lookupIpDetails } from '@/lib/api';
 import type { IpDetails } from '@/types/dns';
+import { errorText, useI18n } from '@/i18n';
 
 /**
  * Laden und Zwischenspeichern von IP-Details.
@@ -52,8 +53,10 @@ export function useIpDetails(ip: string, enabled = true) {
   const [result, setResult] = useState<{
     ip: string;
     details: IpDetails | null;
-    error: string | null;
+    /** Der Fehler selbst — die Meldung entsteht erst beim Rendern (#86). */
+    error: unknown;
   } | null>(null);
+  useI18n();
 
   /*
    * Den Modul-Cache während des Renders lesen statt im Effect.
@@ -67,7 +70,10 @@ export function useIpDetails(ip: string, enabled = true) {
   const fresh = result?.ip === ip ? result : null;
 
   const details = cached ?? fresh?.details ?? null;
-  const error = details ? null : (fresh?.error ?? null);
+  const error =
+    details || fresh?.error == null
+      ? null
+      : errorText(fresh.error, 'IP-Details konnten nicht geladen werden.');
   const loading = enabled && !details && !error;
 
   useEffect(() => {
@@ -82,11 +88,7 @@ export function useIpDetails(ip: string, enabled = true) {
       })
       .catch((err) => {
         if (stale) return;
-        setResult({
-          ip,
-          details: null,
-          error: err instanceof Error ? err.message : 'IP-Details konnten nicht geladen werden.',
-        });
+        setResult({ ip, details: null, error: err ?? new Error() });
       });
 
     return () => {

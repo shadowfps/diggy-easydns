@@ -1,6 +1,8 @@
 import { motion } from 'motion/react';
 import { Scale } from 'lucide-react';
 import { ContactForm } from '@/modules/impressum/ContactForm';
+import { GermanOnlyNotice } from '@/components/ui/GermanOnlyNotice';
+import { useI18n } from '@/i18n';
 
 interface ImpressumViewProps {
   onOpenDatenschutz?: () => void;
@@ -9,7 +11,13 @@ interface ImpressumViewProps {
 /** Abschnitte in der Karte: Abstand plus feine Linie, der erste ohne. */
 const SECTION = 'mt-6 border-t border-line-subtle pt-6';
 
+/**
+ * Die Pflichtangaben bleiben deutsch (#86) und tragen `lang="de"` — für
+ * Screenreader und für das Prüfskript, das deutsche Texte außerhalb von
+ * `t()` sucht. Übersetzt sind Rahmen und Kontaktformular.
+ */
 export function ImpressumView({ onOpenDatenschutz }: ImpressumViewProps) {
+  const { t } = useI18n();
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -19,13 +27,14 @@ export function ImpressumView({ onOpenDatenschutz }: ImpressumViewProps) {
     >
       <p className="eyebrow flex items-center gap-1.5">
         <Scale className="size-3.5" />
-        Rechtliches
+        {t('Rechtliches')}
       </p>
-      <h1 className="page-title mt-2">Impressum</h1>
+      <h1 className="page-title mt-2">{t('Impressum')}</h1>
+      <GermanOnlyNotice />
 
       <div className="mt-8 space-y-4">
         <div className="card">
-          <section>
+          <section lang="de">
             <h2 className="text-sm font-semibold text-fg">Angaben gemäß § 5 DDG</h2>
             <address className="mt-2 not-italic text-sm leading-relaxed text-fg-muted">
               Ruben Yannik Riesen
@@ -38,7 +47,7 @@ export function ImpressumView({ onOpenDatenschutz }: ImpressumViewProps) {
             </address>
           </section>
 
-          <section className={SECTION}>
+          <section lang="de" className={SECTION}>
             <h2 className="text-sm font-semibold text-fg">Kontakt</h2>
             <dl className="mt-2 space-y-1.5 text-sm leading-relaxed text-fg-muted">
               <div>
@@ -60,7 +69,7 @@ export function ImpressumView({ onOpenDatenschutz }: ImpressumViewProps) {
             <ContactForm onOpenDatenschutz={onOpenDatenschutz} />
           </div>
 
-          <section className={SECTION}>
+          <section lang="de" className={SECTION}>
             <p className="text-sm leading-relaxed text-fg-muted">
               diggydns ist ein privates, kostenloses Open-Source-Projekt und wird nicht im Rahmen
               einer gewerblichen Tätigkeit angeboten.

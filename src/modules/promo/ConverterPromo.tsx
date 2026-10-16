@@ -1,5 +1,6 @@
 import { motion } from 'motion/react';
 import { ArrowUpRight, Images } from 'lucide-react';
+import { useI18n } from '@/i18n';
 
 /**
  * Schlichter Werbe-Block für das Schwester-Tool converter.diggydns.cloud
@@ -12,6 +13,7 @@ import { ArrowUpRight, Images } from 'lucide-react';
 const CONVERTER_URL = 'https://converter.diggydns.cloud';
 
 export function ConverterPromo() {
+  const { t, tRich } = useI18n();
   return (
     <motion.aside
       initial={{ opacity: 0, y: 10 }}
@@ -26,16 +28,17 @@ export function ConverterPromo() {
 
       <div className="min-w-0 flex-1">
         <h2 className="text-sm font-semibold text-fg">
-          Kennst du schon <span className="font-brand lowercase tracking-tight">converter</span> by
-          diggy?
+          {tRich('Kennst du schon {converter} by diggy?', {
+            converter: <span className="font-brand lowercase tracking-tight">converter</span>,
+          })}
         </h2>
         <p className="mt-0.5 text-sm text-fg-muted">
-          Bilder umwandeln, skalieren &amp; komprimieren — direkt im Browser.
+          {t('Bilder umwandeln, skalieren & komprimieren — direkt im Browser.')}
         </p>
       </div>
 
       <a href={CONVERTER_URL} target="_blank" rel="noopener noreferrer" className="btn btn-secondary group">
-        Zu Converter
+        {t('Zu Converter')}
         <ArrowUpRight className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
       </a>
     </motion.aside>

@@ -4,6 +4,8 @@ import { AlertCircle, AlertTriangle, Info, Check, Copy } from 'lucide-react';
 import type { Finding, Severity } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
+import { useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 
 interface FindingsListProps {
   findings: Finding[];
@@ -11,7 +13,7 @@ interface FindingsListProps {
 
 const SEVERITY_CONFIG: Record<
   Severity,
-  { label: string; icon: typeof AlertCircle; badge: string; tile: string }
+  { label: DeKey; icon: typeof AlertCircle; badge: string; tile: string }
 > = {
   critical: { label: 'Kritisch', icon: AlertCircle, badge: 'badge-danger', tile: 'icon-tile-danger' },
   warning: { label: 'Warnung', icon: AlertTriangle, badge: 'badge-warning', tile: 'icon-tile-warning' },
@@ -19,6 +21,7 @@ const SEVERITY_CONFIG: Record<
   success: { label: 'OK', icon: Check, badge: 'badge-success', tile: 'icon-tile-success' },
 };
 
+// Fachbegriffe — in beiden Sprachen gleich.
 const CATEGORY_LABEL: Record<string, string> = {
   dns: 'DNS',
   dnssec: 'DNSSEC',
@@ -51,6 +54,7 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
   const cfg = SEVERITY_CONFIG[finding.severity];
   const Icon = cfg.icon;
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
 
   const copySnippet = () => {
     if (!finding.fix?.snippet) return;
@@ -73,7 +77,7 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
           <h3 className="mr-1 text-sm font-semibold text-fg">{finding.title}</h3>
-          <span className={cn('badge', cfg.badge)}>{cfg.label}</span>
+          <span className={cn('badge', cfg.badge)}>{t(cfg.label)}</span>
           <span className="text-xs text-fg-subtle">
             {CATEGORY_LABEL[finding.category] ?? finding.category}
           </span>
@@ -96,7 +100,7 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
                   type="button"
                   onClick={copySnippet}
                   className="btn btn-secondary btn-sm btn-icon"
-                  aria-label={copied ? 'Snippet kopiert' : 'Snippet kopieren'}
+                  aria-label={copied ? t('Snippet kopiert') : t('Snippet kopieren')}
                 >
                   {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
                 </button>

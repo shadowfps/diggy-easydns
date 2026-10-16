@@ -4,6 +4,7 @@ import type { DnsRecord, RecordType } from '@/types/dns';
 import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
+import { useI18n } from '@/i18n';
 
 interface RecordsListProps {
   records: DnsRecord[];
@@ -13,6 +14,7 @@ interface RecordsListProps {
 export function RecordsList({ records, onUseDomain }: RecordsListProps) {
   const [filter, setFilter] = useState<RecordType | 'ALL'>('ALL');
   const reduced = useReducedMotion();
+  const { t } = useI18n();
 
   const types = useMemo(() => {
     const counts = new Map<RecordType, number>();
@@ -26,7 +28,7 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
         <FilterChip active={filter === 'ALL'} onClick={() => setFilter('ALL')}>
-          Alle <span className="tabular-nums opacity-60">· {records.length}</span>
+          {t('Alle')} <span className="tabular-nums opacity-60">· {records.length}</span>
         </FilterChip>
         {types.map(([type, count]) => (
           <FilterChip
@@ -90,12 +92,13 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
 }
 
 function NameserverButton({ value, onClick }: { value: string; onClick: () => void }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
       onClick={onClick}
       className="min-w-0 truncate text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
-      title={`${value} in die Suche übernehmen`}
+      title={t('{value} in die Suche übernehmen', { value })}
     >
       {value}
     </button>

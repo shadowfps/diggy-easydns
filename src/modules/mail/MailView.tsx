@@ -4,6 +4,7 @@ import { Mail, Check, X, AlertTriangle, FileSignature, Send } from 'lucide-react
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { useI18n } from '@/i18n';
 
 interface MailViewProps {
   mail: MailSecurity;
@@ -29,6 +30,7 @@ export function MailView({ mail }: MailViewProps) {
 /* ─── SPF ─────────────────────────────────────────────────────────────── */
 
 function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
+  const { t } = useI18n();
   const tone: Tone = !spf.present
     ? hasMx
       ? 'warning'
@@ -43,12 +45,12 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
     <Card
       icon={<Send className="size-4" />}
       title="SPF"
-      subtitle="Wer darf in deinem Namen senden?"
+      subtitle={t('Wer darf in deinem Namen senden?')}
       tone={tone}
       delay={0}
     >
       {!spf.present ? (
-        <StatusLine text="Kein SPF-Record gefunden" tone={hasMx ? 'warning' : 'neutral'} />
+        <StatusLine text={t('Kein SPF-Record gefunden')} tone={hasMx ? 'warning' : 'neutral'} />
       ) : (
         <div className="space-y-3">
           <CodeBlock>{spf.record}</CodeBlock>
@@ -56,7 +58,7 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
             <Stat label="Lookups" value={`${spf.lookupCount ?? 0} / 10`} />
             <Stat
               label="Status"
-              value={spf.valid ? 'gültig' : 'problematisch'}
+              value={spf.valid ? t('gültig') : t('problematisch')}
               tone={spf.valid ? 'success' : 'danger'}
             />
           </div>
@@ -79,6 +81,7 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
 /* ─── DMARC ──────────────────────────────────────────────────────────── */
 
 function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: boolean }) {
+  const { t } = useI18n();
   const policyTone: Tone =
     dmarc.policy === 'reject'
       ? 'success'
@@ -100,13 +103,13 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
     <Card
       icon={<Mail className="size-4" />}
       title="DMARC"
-      subtitle="Was passiert mit Spoofing-Versuchen?"
+      subtitle={t('Was passiert mit Spoofing-Versuchen?')}
       tone={tone}
       delay={0.05}
     >
       {!dmarc.present ? (
         <StatusLine
-          text="Kein DMARC-Record auf _dmarc.<domain>"
+          text={t('Kein DMARC-Record auf _dmarc.<domain>')}
           tone={hasMx ? 'warning' : 'neutral'}
         />
       ) : (
@@ -114,7 +117,7 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
           <CodeBlock>{dmarc.record}</CodeBlock>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Stat label="Policy" value={dmarc.policy ?? '—'} tone={policyTone} />
-            {dmarc.rua && <Stat label="Reports" value="rua gesetzt" tone="success" />}
+            {dmarc.rua && <Stat label="Reports" value={t('rua gesetzt')} tone="success" />}
           </div>
         </div>
       )}
@@ -125,19 +128,20 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
 /* ─── DKIM ───────────────────────────────────────────────────────────── */
 
 function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
+  const { t } = useI18n();
   const found = dkim.selectors.length > 0;
 
   return (
     <Card
       icon={<FileSignature className="size-4" />}
       title="DKIM"
-      subtitle="Welche Selectors signieren ausgehende Mails?"
+      subtitle={t('Welche Selectors signieren ausgehende Mails?')}
       tone={found ? 'success' : 'neutral'}
       delay={0.1}
     >
       {!found ? (
         <StatusLine
-          text="Keine gängigen DKIM-Selectors gefunden (default, google, selector1, k1, …)"
+          text={t('Keine gängigen DKIM-Selectors gefunden (default, google, selector1, k1, …)')}
           tone="neutral"
         />
       ) : (
@@ -164,11 +168,12 @@ function DkimCard({ dkim }: { dkim: MailSecurity['dkim'] }) {
 /* ─── MTA-STS ────────────────────────────────────────────────────────── */
 
 function MtaStsCard({ mtaSts }: { mtaSts: MailSecurity['mtaSts'] }) {
+  const { t } = useI18n();
   return (
     <Card
       icon={<Mail className="size-4" />}
       title="MTA-STS"
-      subtitle="Erzwingt TLS für eingehende Mail"
+      subtitle={t('Erzwingt TLS für eingehende Mail')}
       tone={mtaSts.present ? 'success' : 'neutral'}
       delay={0.15}
     >
@@ -176,19 +181,18 @@ function MtaStsCard({ mtaSts }: { mtaSts: MailSecurity['mtaSts'] }) {
         {mtaSts.present ? (
           <>
             <Check className="size-4 shrink-0 text-success" />
-            <span className="font-medium text-success">aktiviert</span>
+            <span className="font-medium text-success">{t('aktiviert')}</span>
           </>
         ) : (
           <>
             <X className="size-4 shrink-0 text-fg-subtle" />
-            <span className="text-fg-muted">nicht eingerichtet</span>
+            <span className="text-fg-muted">{t('nicht eingerichtet')}</span>
           </>
         )}
       </div>
       {!mtaSts.present && (
         <p className="mt-3 text-sm leading-relaxed text-fg-muted">
-          MTA-STS verhindert Downgrade-Angriffe, bei denen sich Angreifer zwischen Sender und
-          Empfänger setzen und TLS abschalten.
+          {t('MTA-STS verhindert Downgrade-Angriffe, bei denen sich Angreifer zwischen Sender und Empfänger setzen und TLS abschalten.')}
         </p>
       )}
     </Card>

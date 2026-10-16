@@ -1,3 +1,6 @@
+import { t } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
+
 /**
  * Pure Helfer rund um Lookup-Pfade, Titel und Dateinamen.
  *
@@ -18,7 +21,9 @@ export const STATIC_ROUTES: Record<string, AppView | undefined> = {
   '/datenschutz': 'datenschutz',
 };
 
-const VIEW_TITLES: Record<Exclude<AppView, 'lookup'>, string> = {
+// Schlüssel statt fertiger Titel: übersetzt wird beim Aufruf, damit der
+// Titel einem Sprachwechsel folgt (App.tsx setzt ihn dann neu).
+const VIEW_TITLES: Record<Exclude<AppView, 'lookup'>, DeKey> = {
   history: 'History',
   availability: 'Available Check',
   about: 'About',
@@ -31,7 +36,7 @@ export function buildDocumentTitle(
   domain: string | null,
   ipQuery: string | null
 ): string {
-  if (view !== 'lookup') return `${VIEW_TITLES[view]} — diggy`;
+  if (view !== 'lookup') return `${t(VIEW_TITLES[view])} — diggy`;
   const subject = domain ?? ipQuery;
   return subject ? `${subject} — diggy` : 'diggy — DNS made friendly';
 }

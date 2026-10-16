@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/i18n';
 
 export type TabId = 'records' | 'propagation' | 'security' | 'mail' | 'findings' | 'whois' | 'speed' | 'virusscan';
 
@@ -19,6 +20,7 @@ interface TabsProps {
 export function Tabs({ tabs, active, onChange }: TabsProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
+  const { t } = useI18n();
 
   /**
    * Hält den aktiven Tab im sichtbaren Bereich der Scroll-Leiste.
@@ -74,7 +76,7 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
     <div
       ref={listRef}
       role="tablist"
-      aria-label="Report-Bereiche"
+      aria-label={t('Report-Bereiche')}
       onKeyDown={handleKeyDown}
       /*
        * overflow-x-auto ist hier funktional, nicht kosmetisch: acht Tabs

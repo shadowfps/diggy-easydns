@@ -15,6 +15,8 @@ import { checkDomainAvailability } from '@/lib/api';
 import type { DomainAvailabilityResult, DomainCheckReport } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { errorText, t, useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 
 const MITTWALD_HOSTING_URL = 'https://www.mittwald.de/webhosting';
 
@@ -22,7 +24,9 @@ export function AvailabilityView() {
   const [query, setQuery] = useState('');
   const [report, setReport] = useState<DomainCheckReport | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Der Fehler selbst — übersetzt wird beim Rendern.
+  const [error, setError] = useState<unknown>(null);
+  const { tRich } = useI18n();
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -37,7 +41,7 @@ export function AvailabilityView() {
       const result = await checkDomainAvailability(trimmed);
       setReport(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verfügbarkeits-Check fehlgeschlagen');
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -52,11 +56,11 @@ export function AvailabilityView() {
     >
       <p className="eyebrow flex items-center gap-1.5">
         <Sparkles className="size-3.5" />
-        Available Check
+        {t('Available Check')}
       </p>
       <h1 className="page-title mt-2">Domain Generator</h1>
       <p className="mt-3 text-base text-fg-muted">
-        Finde die passende Domain für dein Projekt — mit Alternativen zu gängigen TLDs.
+        {t('Finde die passende Domain für dein Projekt — mit Alternativen zu gängigen TLDs.')}
       </p>
 
       <div className="mt-8 space-y-4">
@@ -74,7 +78,7 @@ export function AvailabilityView() {
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="meinprojekt oder meinprojekt.de"
+            placeholder={t('meinprojekt oder meinprojekt.de')}
             autoComplete="off"
             spellCheck={false}
             className="h-14 w-full rounded-full border border-line bg-surface pl-12 pr-16 font-mono text-base text-fg shadow-card transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-fg/30 focus:outline-hidden focus:ring-4 focus:ring-fg/6"
@@ -83,23 +87,25 @@ export function AvailabilityView() {
             type="submit"
             disabled={loading || !query.trim()}
             className="btn btn-primary btn-icon absolute right-2 top-2"
-            aria-label="Prüfen"
+            aria-label={t('Prüfen')}
           >
             {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
           </button>
         </form>
 
-        {error && (
+        {error != null && (
           <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
-            {error}
+            {errorText(error, 'Verfügbarkeits-Check fehlgeschlagen')}
           </EmptyState>
         )}
 
         {report && (
           <div className="card-flush">
             <p className="px-5 py-4 text-sm text-fg-muted sm:px-6">
-              {report.results.length} Vorschläge für{' '}
-              <span className="font-mono text-fg">{report.label}</span>
+              {tRich('{count} Vorschläge für {label}', {
+                count: report.results.length,
+                label: <span className="font-mono text-fg">{report.label}</span>,
+              })}
             </p>
 
             <div className="divide-y divide-line-subtle border-t border-line-subtle">
@@ -126,7 +132,7 @@ export function AvailabilityView() {
 /** Frei → success, vergeben → neutral, unklar → Warnung. Form des Icons trägt den Status mit. */
 const STATUS_CONFIG: Record<
   DomainAvailabilityResult['status'],
-  { label: string; icon: typeof Check; tile: string; badge: string }
+  { label: DeKey; icon: typeof Check; tile: string; badge: string }
 > = {
   available: { label: 'Verfügbar', icon: Check, tile: 'icon-tile-success', badge: 'badge-success' },
   taken: { label: 'Vergeben', icon: Globe2, tile: '', badge: '' },
@@ -144,6 +150,7 @@ function AvailabilityRow({
 }) {
   const [copied, setCopied] = useState(false);
   const status = STATUS_CONFIG[result.status];
+  useI18n();
   const StatusIcon = status.icon;
 
   const handleCopy = async () => {
@@ -152,7 +159,7 @@ function AvailabilityRow({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
-      window.prompt('Domain kopieren:', result.domain);
+      window.prompt(t('Domain kopieren:'), result.domain);
     }
   };
 
@@ -171,15 +178,15 @@ function AvailabilityRow({
         <span className={cn('break-all font-mono text-sm text-fg', highlight && 'font-semibold')}>
           {result.domain}
         </span>
-        <span className={cn('badge', status.badge)}>{status.label}</span>
+        <span className={cn('badge', status.badge)}>{t(status.label)}</span>
       </div>
 
       <button
         type="button"
         onClick={handleCopy}
         className="btn btn-ghost btn-sm btn-icon"
-        aria-label={copied ? 'Domain kopiert' : 'Domain kopieren'}
-        title={copied ? 'Domain kopiert' : 'Domain kopieren'}
+        aria-label={copied ? t('Domain kopiert') : t('Domain kopieren')}
+        title={copied ? t('Domain kopiert') : t('Domain kopieren')}
       >
         {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
       </button>
@@ -188,20 +195,26 @@ function AvailabilityRow({
 }
 
 function MittwaldHostingHint() {
+  const { tRich } = useI18n();
   return (
     <div className="panel">
       <p className="text-sm leading-relaxed text-fg-muted">
-        Du suchst qualitatives Hosting für dein neues Projekt? Dann schau doch mal bei{' '}
-        <a
-          href={MITTWALD_HOSTING_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="link inline-flex items-center gap-1"
-        >
-          Mittwald
-          <ArrowUpRight className="size-3.5 shrink-0" />
-        </a>{' '}
-        vorbei — Managed Webhosting aus Deutschland, gemacht für Agenturen und Freelancer.
+        {tRich(
+          'Du suchst qualitatives Hosting für dein neues Projekt? Dann schau doch mal bei {mittwald} vorbei — Managed Webhosting aus Deutschland, gemacht für Agenturen und Freelancer.',
+          {
+            mittwald: (
+              <a
+                href={MITTWALD_HOSTING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link inline-flex items-center gap-1"
+              >
+                Mittwald
+                <ArrowUpRight className="size-3.5 shrink-0" />
+              </a>
+            ),
+          }
+        )}
       </p>
     </div>
   );
