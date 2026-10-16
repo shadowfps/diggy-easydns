@@ -7,13 +7,15 @@
  *   3) DKIM — TXT auf <selector>._domainkey.<domain>
  *      mit gängigen Selectors (default, google, k1, mail, ...)
  *   4) MTA-STS — TXT auf _mta-sts.<domain> + HTTPS-Policy auf mta-sts.<domain>
+ *   5) MX — ob die Domain überhaupt Mail annimmt (Null-MX, RFC 7505)
  *
  * Alles parallel, alles per node:dns mit Cloudflare als Resolver
  * (siehe dnsLookup.ts) — günstiger als DoH für reine Existenz-Checks.
  */
 
-import { promises as dnsPromises } from 'node:dns';
+import { promises as dnsPromises, type MxRecord } from 'node:dns';
 import type { MailSecurity } from '../types.js';
+import { isNullMx } from '../../shared/nullMx.js';
 
 const resolver = new dnsPromises.Resolver({ timeout: 4000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
@@ -52,11 +54,11 @@ export async function auditMail(
   /** SPF aus dem Apex-TXT-Lookup, falls schon vorhanden */
   spfRecord?: string
 ): Promise<MailSecurity> {
-  const [dmarc, dkimSelectors, mtaSts, hasMx] = await Promise.all([
+  const [dmarc, dkimSelectors, mtaSts, mx] = await Promise.all([
     lookupDmarc(domain),
     probeDkimSelectors(domain),
     lookupMtaSts(domain),
-    hasMxRecords(domain),
+    lookupMx(domain),
   ]);
 
   const spf = analyzeSpf(spfRecord);
@@ -66,7 +68,7 @@ export async function auditMail(
     dmarc,
     dkim: { selectors: dkimSelectors },
     mtaSts,
-    hasMx,
+    ...summarizeMx(mx),
   };
 }
 
@@ -242,11 +244,24 @@ async function lookupMtaSts(domain: string): Promise<MailSecurity['mtaSts']> {
   }
 }
 
-async function hasMxRecords(domain: string): Promise<boolean> {
+/* ─── MX ──────────────────────────────────────────────────────────────── */
+
+async function lookupMx(domain: string): Promise<MxRecord[]> {
   try {
-    const records = await resolver.resolveMx(domain);
-    return records.length > 0;
+    return await resolver.resolveMx(domain);
   } catch {
-    return false;
+    return [];
   }
+}
+
+/**
+ * Ein Null-MX (`MX 0 .`) kommt aus `resolveMx` als `{ priority: 0, exchange: '' }`
+ * an — das leere Ziel ist die Wurzel. Er ist ein MX-Record (`hasMx`), sagt
+ * aber das Gegenteil eines normalen: hier wird keine Mail angenommen.
+ */
+export function summarizeMx(mx: readonly MxRecord[]): Pick<MailSecurity, 'hasMx' | 'nullMx'> {
+  return {
+    hasMx: mx.length > 0,
+    nullMx: isNullMx(mx.map((r) => ({ priority: r.priority, value: r.exchange }))),
+  };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSpf, countSpfLookups } from './mailAudit.js';
+import { analyzeSpf, countSpfLookups, summarizeMx } from './mailAudit.js';
 
 /**
  * Der Lookup-Zähler entscheidet über ein critical-Finding mit -25 Score-
@@ -85,5 +85,29 @@ describe('analyzeSpf', () => {
     expect(result.issues).toEqual([]);
     expect(result.valid).toBe(true);
     expect(result.lookupCount).toBe(1);
+  });
+});
+
+/**
+ * #77: example.com veröffentlicht `MX 0 .` (RFC 7505). Node liefert das als
+ * `{ exchange: '', priority: 0 }` — ein MX-Record, der sagt, dass hier keine
+ * Mail ankommt.
+ */
+describe('summarizeMx', () => {
+  it('erkennt den Null-MX so, wie resolveMx ihn liefert', () => {
+    expect(summarizeMx([{ exchange: '', priority: 0 }])).toEqual({ hasMx: true, nullMx: true });
+  });
+
+  it('meldet echte MX unverändert als vorhanden', () => {
+    expect(
+      summarizeMx([
+        { exchange: 'mx1.example.com', priority: 10 },
+        { exchange: 'mx2.example.com', priority: 20 },
+      ])
+    ).toEqual({ hasMx: true, nullMx: false });
+  });
+
+  it('meldet fehlende MX als fehlend', () => {
+    expect(summarizeMx([])).toEqual({ hasMx: false, nullMx: false });
   });
 });

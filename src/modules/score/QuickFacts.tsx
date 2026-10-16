@@ -11,6 +11,7 @@ import type {
 } from '@/types/dns';
 import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { isNullMx } from '@/lib/nullMx';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
@@ -321,8 +322,17 @@ interface QuickFactsProps {
 
 export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain }: QuickFactsProps) {
   const aRecord = records.find((r) => r.type === 'A');
-  const mxRecord = records.find((r) => r.type === 'MX');
+  const mxRecords = records.filter((r) => r.type === 'MX');
+  const mxRecord = mxRecords[0];
   const nsRecord = records.find((r) => r.type === 'NS');
+
+  // Ein Null-MX (`MX 0 .`) hat ein leeres Ziel — als Wert gezeigt, stand hier
+  // ein leeres Feld. Er ist eine Aussage, kein fehlender Eintrag. Erkannt an
+  // den Records des gefragten Namens, die sofort da sind; der Mail-Check
+  // läuft auf der Apex-Domain und kommt später.
+  const mxItem: QuickFactItem = isNullMx(mxRecords)
+    ? { label: 'MX', value: 'keine Mails (Null-MX)' }
+    : { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord };
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
       <IpAddressLink ip={aRecord.value} className="text-fg" />
@@ -385,7 +395,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
     { label: 'NS', value: nsValue, mono: true },
-    { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord },
+    mxItem,
     sslItem,
     dnssecItem,
     dmarcItem,
