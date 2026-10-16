@@ -1,80 +1,177 @@
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import { useEffect, useState } from 'react';
-import type { HealthScore } from '@/types/dns';
+import { AlertCircle, AlertTriangle, ArrowRight, Check, CircleHelp, Info } from 'lucide-react';
+import type { Finding, HealthScore } from '@/types/dns';
+import type { SectionKey } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface ScoreCardProps {
   score: HealthScore;
+  findings: Finding[];
+  /** Sektionen, deren Abfrage ganz ausfiel — ihre Findings fehlen im Score. */
+  failed?: readonly SectionKey[];
+  onShowFindings: () => void;
 }
 
-function scoreColor(s: number) {
-  if (s >= 85) return { bar: 'bg-emerald-500', text: 'text-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' };
-  if (s >= 65) return { bar: 'bg-emerald-500', text: 'text-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' };
-  if (s >= 40) return { bar: 'bg-red-500', text: 'text-red-500', badge: 'bg-red-500/10 text-red-600 dark:text-red-400' };
-  return { bar: 'bg-red-500', text: 'text-red-500', badge: 'bg-red-500/10 text-red-600 dark:text-red-400' };
+const PRIORITY: Finding['severity'][] = ['critical', 'warning', 'info'];
+
+function mostSevere(findings: Finding[]): Finding | undefined {
+  return PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
 }
 
-export function ScoreCard({ score }: ScoreCardProps) {
-  const colors = scoreColor(score.score);
+const TOP_TONE = {
+  critical: { icon: AlertCircle, tile: 'icon-tile-danger' },
+  warning: { icon: AlertTriangle, tile: 'icon-tile-warning' },
+  info: { icon: Info, tile: '' },
+} as const;
+
+/** Gut, Warnung, kritisch — dieselben Töne wie die Findings. */
+function scoreTone(s: number) {
+  if (s >= 65) return { bar: 'bg-success', text: 'text-success', badge: 'badge-success' };
+  if (s >= 40) return { bar: 'bg-warning', text: 'text-warning', badge: 'badge-warning' };
+  return { bar: 'bg-danger', text: 'text-danger', badge: 'badge-danger' };
+}
+
+export function ScoreCard({ score, findings, failed = [], onShowFindings }: ScoreCardProps) {
+  const reducedMotion = useReducedMotion();
+  const tone = scoreTone(score.score);
+  // „Nicht prüfbar“ zieht nichts ab (#101). Ohne diesen Hinweis sähe ein
+  // Score, dem ganze Checks fehlen, aus wie ein vollständiger — und wer
+  // Abfragen ins Leere laufen lässt, käme so zu einem besseren. Der
+  // Tech-Stack liefert keine Findings; fällt er aus, fehlt dem Score nichts.
+  const unchecked =
+    findings.filter((f) => f.unchecked).length + failed.filter((key) => key !== 'techStack').length;
+  // Reine Empfehlungen (`advisory`, etwa BIMI) erst, wenn sonst nichts offen ist.
+  const top = mostSevere(findings.filter((f) => !f.advisory)) ?? mostSevere(findings);
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
+    // `MotionConfig reducedMotion="user"` (main.tsx) erfasst nur
+    // motion-Komponenten, nicht dieses imperative animate() auf einem
+    // MotionValue: die Zahl zählte trotz „Bewegung reduzieren“ hoch (#103).
+    // Bei reduzierter Bewegung startet deshalb gar kein Zähler. Schaltet
+    // jemand die Präferenz mitten im Hochzählen ein, stoppt ihn das Cleanup.
+    if (reducedMotion) return;
+
     const controls = animate(count, score.score, { duration: 1.2, ease: 'easeOut' });
     const unsub = rounded.on('change', (v) => setDisplayValue(v));
     return () => {
       controls.stop();
       unsub();
     };
-  }, [score.score, count, rounded]);
+  }, [score.score, count, rounded, reducedMotion]);
+
+  // Direkt aus dem Score, statt displayValue im Effect nachzuziehen: das käme
+  // erst nach dem ersten Render, der dann kurz 0 bzw. bei einem neuen Lookup
+  // den alten Score zeigte.
+  const shownValue = reducedMotion ? score.score : displayValue;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.1 }}
-      className="surface rounded-2xl p-6"
+      className="card flex flex-col"
     >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-ink-900/60 dark:text-ink-50/60">Health Score</span>
-        <span className={cn('text-xs px-2.5 py-1 rounded-full font-medium', colors.badge)}>
-          {score.verdict}
-        </span>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="card-title">Health Score</h2>
+        <span className={cn('badge', tone.badge)}>{score.verdict}</span>
       </div>
 
-      <div className="flex items-baseline gap-1.5 mb-4">
-        <span className={cn('text-5xl font-medium tabular-nums tracking-tight', colors.text)}>
-          {displayValue}
-        </span>
-        <span className="text-base text-ink-900/40 dark:text-ink-50/40">/ 100</span>
+      <div className="mt-4">
+        <div className="flex items-baseline gap-1.5">
+          <span className={cn('text-6xl font-semibold tabular-nums tracking-tight', tone.text)}>
+            {shownValue}
+          </span>
+          <span className="text-base text-fg-subtle">/ 100</span>
+        </div>
+
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface-muted">
+          {/* Bei reduzierter Bewegung ein schlichtes div mit fester Breite.
+              MotionConfig schaltet die Breitenanimation zwar auf „sofort“, der
+              motion.div rendert aber trotzdem erst `initial` (0) und springt
+              einen Frame später — ebenso bei einem neuen Score. */}
+          {reducedMotion ? (
+            <div
+              style={{ width: `${score.score}%` }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          ) : (
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${score.score}%` }}
+              transition={{ duration: 1.2, ease: 'easeOut' }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+          <Stat label="ok" count={score.counts.success} dot="bg-success" />
+          <Stat label="info" count={score.counts.info} dot="bg-fg-subtle" />
+          <Stat label="Warnung" count={score.counts.warning} dot="bg-warning" />
+          <Stat label="kritisch" count={score.counts.critical} dot="bg-danger" />
+        </div>
+
+        {unchecked > 0 && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted">
+            <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+            <span className="font-medium text-fg">Unvollständig:</span>
+            {unchecked} {unchecked > 1 ? 'Checks' : 'Check'} nicht prüfbar
+          </p>
+        )}
       </div>
 
-      <div className="h-1.5 bg-ink-100 dark:bg-ink-900 rounded-full overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${score.score}%` }}
-          transition={{ duration: 1.2, ease: 'easeOut' }}
-          className={cn('h-full rounded-full', colors.bar)}
-        />
-      </div>
-
-      <div className="flex items-center gap-4 mt-4 text-xs">
-        <Stat label="ok" count={score.counts.success} dot="bg-emerald-500" />
-        <Stat label="info" count={score.counts.info} dot="bg-ink-500" />
-        <Stat label="warn" count={score.counts.warning} dot="bg-red-500" />
-        <Stat label="krit" count={score.counts.critical} dot="bg-red-500" />
+      {/* Der nächste Schritt: der schwerste offene Punkt, ein Klick zu allen.
+          Füllt zugleich die Höhe, die die Schnellübersicht daneben vorgibt. */}
+      <div className="mt-auto pt-5">
+        <div className="flex items-center gap-3 border-t border-line-subtle pt-4">
+          <TopFinding finding={top} />
+          <button type="button" onClick={onShowFindings} className="btn btn-ghost btn-sm -mr-2 group">
+            Alle Findings
+            <ArrowRight className="size-3.5 transition-transform motion-safe:group-hover:translate-x-0.5" />
+          </button>
+        </div>
       </div>
     </motion.div>
   );
 }
 
+function TopFinding({ finding }: { finding?: Finding }) {
+  if (!finding) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span className="icon-tile icon-tile-success size-8">
+          <Check className="size-4" />
+        </span>
+        <p className="text-sm font-medium text-fg">Keine offenen Punkte</p>
+      </div>
+    );
+  }
+  const cfg = TOP_TONE[finding.severity as keyof typeof TOP_TONE];
+  const Icon = cfg.icon;
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-3">
+      <span className={cn('icon-tile size-8', cfg.tile)}>
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs text-fg-subtle">Wichtigster Punkt</p>
+        <p className="truncate text-sm font-medium text-fg">{finding.title}</p>
+      </div>
+    </div>
+  );
+}
+
 function Stat({ label, count, dot }: { label: string; count: number; dot: string }) {
   return (
-    <span className="flex items-center gap-1.5 text-ink-900/60 dark:text-ink-50/60">
-      <span className={cn('w-1.5 h-1.5 rounded-full', dot)} />
-      <span className="font-medium text-ink-900 dark:text-ink-50 tabular-nums">{count}</span>
-      <span>{label}</span>
+    <span className="flex items-center gap-1.5 text-fg-muted">
+      <span className={cn('size-2 rounded-full', dot)} />
+      <span className="font-semibold tabular-nums text-fg">{count}</span>
+      {label}
     </span>
   );
 }

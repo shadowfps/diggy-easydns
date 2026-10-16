@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Check, X } from 'lucide-react';
+import { Check, CircleHelp, X } from 'lucide-react';
 import type {
   DetectedTech,
   DnsRecord,
@@ -11,6 +11,8 @@ import type {
 } from '@/types/dns';
 import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { isNullMx } from '@/lib/nullMx';
+import { dmarcPolicyFlawLabel, effectiveDmarcPolicy } from '@/lib/dmarc';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
@@ -43,10 +45,10 @@ function TechIcon({ tech }: TechIconProps) {
   return (
     <div
       title={label}
-      className="w-8 h-8 flex items-center justify-center rounded-lg border border-ink-100 dark:border-ink-900/80 bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700 transition-colors cursor-default"
+      className="icon-tile size-8 cursor-default"
     >
       {svg ?? (
-        <span className="text-[10px] font-semibold text-ink-900/50 dark:text-ink-50/50 leading-none">
+        <span className="text-[10px] font-semibold leading-none">
           {tech.name.slice(0, 2).toUpperCase()}
         </span>
       )}
@@ -307,6 +309,8 @@ interface QuickFactItem {
   muted?: boolean;
   ok?: boolean;
   bad?: boolean;
+  /** Check gescheitert (Sektion oder Abfrage): neutral, mit Fragezeichen (#101). */
+  unchecked?: boolean;
   loading?: boolean;
 }
 
@@ -321,11 +325,20 @@ interface QuickFactsProps {
 
 export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain }: QuickFactsProps) {
   const aRecord = records.find((r) => r.type === 'A');
-  const mxRecord = records.find((r) => r.type === 'MX');
+  const mxRecords = records.filter((r) => r.type === 'MX');
+  const mxRecord = mxRecords[0];
   const nsRecord = records.find((r) => r.type === 'NS');
+
+  // Ein Null-MX (`MX 0 .`) hat ein leeres Ziel — als Wert gezeigt, stand hier
+  // ein leeres Feld. Er ist eine Aussage, kein fehlender Eintrag. Erkannt an
+  // den Records des gefragten Namens, die sofort da sind; der Mail-Check
+  // läuft auf der Apex-Domain und kommt später.
+  const mxItem: QuickFactItem = isNullMx(mxRecords)
+    ? { label: 'MX', value: 'keine Mails (Null-MX)' }
+    : { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord };
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
-      <IpAddressLink ip={aRecord.value} className="text-ink-900/80 dark:text-ink-50/80" />
+      <IpAddressLink ip={aRecord.value} className="text-fg" />
     ) : (
       aRecord?.value ?? '—'
     );
@@ -335,7 +348,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       <button
         type="button"
         onClick={() => onUseDomain(nsRecord.value)}
-        className="min-w-0 truncate rounded-md text-left font-mono text-xs text-ink-900/80 transition-colors hover:text-ink-950 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/80 dark:hover:text-white dark:focus-visible:outline-ink-50"
+        className="min-w-0 truncate rounded-full text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
         title={`${nsRecord.value} in die Suche übernehmen`}
       >
         {nsRecord.value}
@@ -348,16 +361,24 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts. Nur
   // solange sie wirklich laden: bei einem Fehler oder einer übersprungenen
   // Sektion (DNS-Eintrag ohne Host) blieb sonst das Skeleton für immer stehen.
-  const placeholder = (label: string, status: LoadStatus): QuickFactItem | null =>
+  // Ein Fehler ist „nicht prüfbar“ — ebenso eine fertige Sektion, deren
+  // Abfrage scheiterte (`failed`, #101). Übersprungen heißt „nicht anwendbar“ (—).
+  const placeholder = (
+    label: string,
+    status: LoadStatus,
+    failed?: unknown
+  ): QuickFactItem | null =>
     status === 'loading'
       ? { label, loading: true }
-      : status !== 'done'
-        ? { label, value: '—', muted: true }
-        : null;
+      : status === 'error' || (status === 'done' && failed)
+        ? { label, value: 'nicht prüfbar', unchecked: true }
+        : status !== 'done'
+          ? { label, value: '—', muted: true }
+          : null;
 
   const sslInfo = ssl.data;
   const sslItem: QuickFactItem =
-    placeholder('SSL', ssl.status) ?? {
+    placeholder('SSL', ssl.status, !sslInfo && ssl.lookupFailed) ?? {
       label: 'SSL',
       value: sslInfo ? `${sslInfo.daysUntilExpiry} Tage` : 'kein Cert',
       ok: Boolean(sslInfo?.valid && (sslInfo?.daysUntilExpiry ?? 0) > 14),
@@ -366,26 +387,29 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
 
   const dnssecInfo = dnssec.data;
   const dnssecItem: QuickFactItem =
-    placeholder('DNSSEC', dnssec.status) ?? {
+    placeholder('DNSSEC', dnssec.status, !dnssecInfo?.enabled && dnssecInfo?.lookupFailed) ?? {
       label: 'DNSSEC',
       value: dnssecInfo?.enabled && dnssecInfo?.valid ? 'aktiv' : 'inaktiv',
       ok: Boolean(dnssecInfo?.enabled && dnssecInfo?.valid),
       bad: !dnssecInfo?.enabled,
     };
 
-  const dmarcPresent = mail.data?.dmarc.present;
+  // Ein Record, der nicht wie geschrieben gilt, ist nicht „gesetzt“
+  // (shared/dmarc.ts). Wirkt er dank rua= wie p=none, steht der Mangel da —
+  // ohne Haken. Ignorieren ihn Empfänger, ist er so schlecht wie keiner.
+  const { policy: dmarcPolicy, flaw: dmarcFlaw } = effectiveDmarcPolicy(mail.data?.dmarc);
   const dmarcItem: QuickFactItem =
-    placeholder('DMARC', mail.status) ?? {
-      label: 'DMARC',
-      value: dmarcPresent ? 'gesetzt' : 'fehlt',
-      ok: Boolean(dmarcPresent),
-      bad: !dmarcPresent,
-    };
+    placeholder('DMARC', mail.status, mail.data?.dmarc.lookupFailed) ??
+    (dmarcPolicy === null
+      ? { label: 'DMARC', value: dmarcFlaw ? 'unwirksam' : 'fehlt', bad: true }
+      : dmarcFlaw
+        ? { label: 'DMARC', value: dmarcPolicyFlawLabel(dmarcFlaw) }
+        : { label: 'DMARC', value: 'gesetzt', ok: true });
 
   const items: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
     { label: 'NS', value: nsValue, mono: true },
-    { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord },
+    mxItem,
     sslItem,
     dnssecItem,
     dmarcItem,
@@ -399,51 +423,55 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.15 }}
-      className="surface rounded-2xl p-6"
+      className="card"
     >
-      <div className="text-sm text-ink-900/60 dark:text-ink-50/60 mb-4">
-        Schnellübersicht
-      </div>
+      <h2 className="card-title">Schnellübersicht</h2>
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+      {/* Einspaltig, wo die Karte schmal ist: mobil, halbe Breite ab md und
+          in der Seitenspalte ab xl. */}
+      <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3.5 text-sm sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-1">
         {items.map((item) => (
-          <div key={item.label} className="flex items-center gap-3 min-w-0">
-            <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 w-14 shrink-0 font-medium">
-              {item.label}
-            </span>
-            {item.loading ? (
-              <Skeleton className="h-3.5 w-16" />
-            ) : (
-              <span
-                className={cn(
-                  'truncate',
-                  item.mono && 'font-mono text-xs',
-                  item.muted && 'text-ink-900/30 dark:text-ink-50/30',
-                  item.ok && 'text-emerald-600 dark:text-emerald-400 flex items-center gap-1',
-                  item.bad && 'text-red-600 dark:text-red-400 flex items-center gap-1'
-                )}
-              >
-                {item.ok && <Check className="w-3.5 h-3.5 shrink-0" />}
-                {item.bad && <X className="w-3.5 h-3.5 shrink-0" />}
-                {item.value}
-              </span>
-            )}
+          <div key={item.label} className="flex min-w-0 items-center gap-3">
+            <dt className="w-14 shrink-0 text-xs text-fg-subtle">{item.label}</dt>
+            <dd className="min-w-0">
+              {item.loading ? (
+                <Skeleton className="h-3.5 w-16" />
+              ) : (
+                <span
+                  className={cn(
+                    'flex min-w-0 items-center gap-1 truncate',
+                    item.mono && 'font-mono text-[13px]',
+                    item.muted ? 'text-fg-subtle' : 'text-fg',
+                    item.ok && 'font-medium text-success',
+                    item.bad && 'font-medium text-danger',
+                    item.unchecked && 'text-fg-muted'
+                  )}
+                >
+                  {item.ok && <Check className="size-3.5 shrink-0" />}
+                  {item.bad && <X className="size-3.5 shrink-0" />}
+                  {item.unchecked && (
+                    <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+                  )}
+                  {item.value}
+                </span>
+              )}
+            </dd>
           </div>
         ))}
-      </div>
 
-      {(techLoading || sortedTech.length > 0) && (
-        <div className="mt-4 pt-4 border-t border-ink-100 dark:border-ink-900/60">
-          <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 font-medium">
-            Tech-Stack
-          </span>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {techLoading
-              ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-8 rounded-lg" />)
-              : sortedTech.map((tech) => <TechIcon key={tech.name} tech={tech} />)}
+        {/* Eine Zeile wie die anderen statt eines eigenen Abschnitts — hält
+            die Karte flach genug für die mitlaufende Seitenspalte. */}
+        {(techLoading || sortedTech.length > 0) && (
+          <div className="col-span-full flex min-w-0 items-center gap-3">
+            <dt className="w-14 shrink-0 text-xs text-fg-subtle">Stack</dt>
+            <dd className="flex min-w-0 flex-wrap gap-1.5">
+              {techLoading
+                ? [0, 1, 2].map((i) => <Skeleton key={i} className="size-8 rounded-panel" />)
+                : sortedTech.map((tech) => <TechIcon key={tech.name} tech={tech} />)}
+            </dd>
           </div>
-        </div>
-      )}
+        )}
+      </dl>
     </motion.div>
   );
 }

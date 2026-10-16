@@ -20,3 +20,8 @@ yarn.lock
 vite.config.js
 vite.config.d.ts
 *.tsbuildinfo
+
+# E2E-Tests (Referenzbilder, Testdaten) und ihre Ergebnisse gehören nicht ins Image.
+e2e
+test-results
+playwright-report

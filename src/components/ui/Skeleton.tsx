@@ -10,7 +10,7 @@ import { cn } from '@/lib/cn';
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div
-      className={cn('animate-pulse rounded-md bg-ink-100 dark:bg-ink-900/70', className)}
+      className={cn('animate-pulse rounded-full bg-surface-muted', className)}
       aria-hidden
     />
   );
@@ -19,17 +19,44 @@ export function Skeleton({ className }: { className?: string }) {
 /** Platzhalter für den Health-Score (Aggregat — braucht alle Sektionen). */
 export function ScoreCardSkeleton() {
   return (
-    <div className="surface rounded-2xl p-6">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="card flex flex-col">
+      <div className="flex items-center justify-between">
         <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-5 w-20 rounded-full" />
+        <Skeleton className="h-5 w-20" />
       </div>
-      <Skeleton className="mb-4 h-12 w-28" />
-      <Skeleton className="h-1.5 w-full rounded-full" />
-      <div className="mt-4 flex items-center gap-4">
+      <Skeleton className="mt-4 h-14 w-28 rounded-panel" />
+      <Skeleton className="mt-5 h-2 w-full" />
+      <div className="mt-4 flex items-center gap-5">
         {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-3 w-12" />
+          <Skeleton key={i} className="h-3 w-14" />
         ))}
+      </div>
+      <div className="mt-auto pt-5">
+        <div className="flex items-center gap-3 border-t border-line-subtle pt-4">
+          <Skeleton className="size-8 rounded-panel" />
+          <Skeleton className="h-3.5 w-40" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Platzhalter für „Seit dem letzten Check“, solange deren Code nachlädt.
+ * Zeilenhöhen wie Titel (20 px) und Status (16 px) der eingeklappten Karte —
+ * sonst schöbe ihr Einblenden die Tabs darunter.
+ */
+export function SinceLastCheckSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn('card flex items-center gap-3', className)}>
+      <Skeleton className="hidden size-9 rounded-panel sm:block" />
+      <div className="min-w-0 flex-1">
+        <div className="flex h-5 items-center">
+          <Skeleton className="h-3.5 w-64 max-w-full" />
+        </div>
+        <div className="mt-0.5 flex h-4 items-center">
+          <Skeleton className="h-3 w-44 max-w-full" />
+        </div>
       </div>
     </div>
   );
@@ -38,11 +65,11 @@ export function ScoreCardSkeleton() {
 /** N Karten im 2-Spalten-Grid — für Security (2) und Mail (4). */
 export function SectionCardsSkeleton({ count = 2 }: { count?: number }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="surface rounded-xl p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Skeleton className="h-4 w-4 rounded-sm" />
+        <div key={i} className="card">
+          <div className="mb-4 flex items-center gap-3">
+            <Skeleton className="size-9 rounded-panel" />
             <Skeleton className="h-4 w-28" />
           </div>
           <div className="space-y-3">
@@ -59,12 +86,12 @@ export function SectionCardsSkeleton({ count = 2 }: { count?: number }) {
 /** Resolver-Zeilen für die Propagation-Ansicht. */
 export function PropagationSkeleton() {
   return (
-    <div className="surface rounded-xl p-5">
+    <div className="card">
       <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-4 rounded-full" />
+              <Skeleton className="size-4" />
               <Skeleton className="h-3 w-20" />
             </div>
             <Skeleton className="h-3 w-24" />
@@ -78,24 +105,24 @@ export function PropagationSkeleton() {
 /** WHOIS/RDAP — eine breite Karte plus zwei schmale. */
 export function WhoisSkeleton() {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="surface rounded-xl p-5 md:col-span-2">
-        <div className="mb-4 flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded-sm" />
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="card md:col-span-2">
+        <div className="mb-4 flex items-center gap-3">
+          <Skeleton className="size-9 rounded-panel" />
           <Skeleton className="h-4 w-28" />
         </div>
-        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-3 w-3/4" />
           ))}
         </div>
       </div>
       {[0, 1].map((card) => (
-        <div key={card} className="surface rounded-xl p-5">
+        <div key={card} className="card">
           <Skeleton className="mb-4 h-4 w-32" />
           <div className="flex flex-wrap gap-1.5">
             {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-5 w-20 rounded-full" />
+              <Skeleton key={i} className="h-6 w-20" />
             ))}
           </div>
         </div>
@@ -107,11 +134,11 @@ export function WhoisSkeleton() {
 /** Gestapelte Zeilen — für die (aggregierte) Findings-Liste. */
 export function ListSkeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="space-y-3">
+    <div className="card-flush divide-y divide-line-subtle">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="surface flex items-start gap-3 rounded-xl p-4">
-          <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
-          <div className="flex-1 space-y-2">
+        <div key={i} className="flex items-start gap-4 px-5 py-4 sm:px-6">
+          <Skeleton className="size-9 shrink-0 rounded-panel" />
+          <div className="flex-1 space-y-2.5 pt-1">
             <Skeleton className="h-3.5 w-1/3" />
             <Skeleton className="h-3 w-3/4" />
           </div>

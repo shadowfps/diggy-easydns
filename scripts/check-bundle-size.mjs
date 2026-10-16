@@ -42,7 +42,12 @@ const BUDGETS_KB = {
   // Motion 14.2 (15.10.2026): +3,3 kB für hardwarebeschleunigte x/y/scale —
   // genau die Transforms, die hier an über 60 Stellen animiert werden.
   'motion.js': 51, // 47,67
-  'index.js': 48, // 43,73
+  // Erklärungen zu Records und Mail-Begriffen (#80, 16.10.2026): +2,1 kB —
+  // die Texte und der InfoButton. Sie liegen im Haupt-Chunk, weil die Records
+  // der Start-Tab sind; nachladen hieße ein „?“, das erst lädt. Platz dafür
+  // schafft das Nachladen von Sicherheits-Tab, Impressum und Datenschutz
+  // (#79) — die Grenze bleibt bei 48 kB.
+  'index.js': 48, // 43,73 · 42,40 vor, 44,66 mit #80
   'icons.js': 9, // 7,78
   // Tailwind 4 (15.10.2026): +2,3 kB für `@property`-Deklarationen, ihren
   // Fallback-Block und die modernere Preflight. Lässt sich nicht abschalten.

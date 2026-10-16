@@ -20,6 +20,22 @@ describe('parseDohTxt', () => {
   });
 
   /**
+   * #82: Google liefert den Wert so, wie er im Eintrag steht, die anderen
+   * Resolver escaped. Beide müssen danach gleich sein — sonst meldet die
+   * Propagation eine Abweichung, die es nicht gibt.
+   */
+  it('liefert für Google- und Cloudflare-Format denselben Wert', () => {
+    const pairs: [google: string, cloudflare: string][] = [
+      ['sagt "hallo"', '"sagt \\"hallo\\""'],
+      // `\;` aus einer Zonendatei, versehentlich mit Backslash eingetragen.
+      ['v=DKIM1\\; k=rsa\\; p=MIIB', '"v=DKIM1\\\\; k=rsa\\\\; p=MIIB"'],
+    ];
+    for (const [google, cloudflare] of pairs) {
+      expect(parseDohTxt(google), google).toBe(parseDohTxt(cloudflare));
+    }
+  });
+
+  /**
    * Der Fallback ist der Fall, der in der Praxis über Erfolg entscheidet:
    * Resolver liefern TXT nicht einheitlich quotiert. Wird ein unquotierter
    * Wert verschluckt, fehlt anschließend der SPF-/DMARC-Record.

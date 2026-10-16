@@ -1,18 +1,15 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import {
-  Building2,
-  Calendar,
-  RefreshCw,
-  Server,
-  ShieldCheck,
-  Lock,
-  AlertCircle,
-} from 'lucide-react';
+import { Building2, Server, ShieldCheck, ShieldOff, Lock, AlertCircle } from 'lucide-react';
 import type { WhoisInfo } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { CardHeader } from '@/components/ui/CardHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CalendarButton } from '@/components/calendar/CalendarButton';
 
 interface WhoisViewProps {
+  /** Domain des Reports — Ziel des Links in der Kalender-Erinnerung. */
+  domain: string;
   whois?: WhoisInfo;
   onUseDomain?: (domain: string) => void;
 }
@@ -40,28 +37,30 @@ const STATUS_LABELS: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad'
   serverhold: { label: 'Server-Hold (nicht aufgelöst!)', tone: 'bad' },
 };
 
-export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
+const STATUS_BADGE: Record<'ok' | 'warn' | 'bad', string> = {
+  ok: 'badge-success',
+  warn: 'badge-warning',
+  bad: 'badge-danger',
+};
+
+export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
   /**
    * Bezugszeitpunkt einmal beim Mount festhalten.
    *
    * `Date.now()` stand vorher direkt in den beiden Rechnungen weiter unten und
    * lief damit bei jedem Render neu. Die Werte hingen also daran, wann die
-   * Komponente zufÃ¤llig neu rendert — genau das beanstandet react-hooks/purity.
+   * Komponente zufällig neu rendert — genau das beanstandet react-hooks/purity.
    * Beide Angaben sind auf Tage gerundet, ein fester Zeitpunkt pro Mount reicht.
    *
-   * Steht bewusst VOR dem frÃ¼hen Return: Hooks mÃ¼ssen in jedem Render laufen.
+   * Steht bewusst VOR dem frühen Return: Hooks müssen in jedem Render laufen.
    */
   const [now] = useState(() => Date.now());
 
   if (!whois) {
     return (
-      <div className="surface rounded-xl p-12 text-center">
-        <AlertCircle className="w-5 h-5 mx-auto mb-2 text-ink-900/40 dark:text-ink-50/40" />
-        <h3 className="text-base font-medium mb-1">WHOIS / RDAP nicht verfügbar</h3>
-        <p className="text-sm text-ink-900/50 dark:text-ink-50/50">
-          Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.
-        </p>
-      </div>
+      <EmptyState icon={<AlertCircle className="size-5" />} title="WHOIS / RDAP nicht verfügbar">
+        Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.
+      </EmptyState>
     );
   }
 
@@ -72,40 +71,51 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
     ? Math.floor((now - new Date(whois.createdAt).getTime()) / (1000 * 60 * 60 * 24))
     : undefined;
 
+  // Dieselben Schwellen wie die WHOIS-Findings: unter 7 Tagen (oder schon
+  // abgelaufen) kritisch, unter 30 Tagen eine Warnung.
+  const expiryBadge =
+    expiresInDays === undefined
+      ? ''
+      : expiresInDays < 7
+      ? 'badge-danger'
+      : expiresInDays < 30
+      ? 'badge-warning'
+      : 'badge-success';
+
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {/* Registrar + Daten */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="surface rounded-xl p-5 md:col-span-2"
+        className="card md:col-span-2"
       >
-        <div className="flex items-center gap-2 mb-4">
-          <Building2 className="w-4 h-4 text-ink-900/60 dark:text-ink-50/60" />
-          <span className="text-sm font-medium">Registrierung</span>
-          {whois.source && (
-            <span className="ml-auto text-[10px] uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 font-mono">
-              {whois.source}
-            </span>
-          )}
-        </div>
+        <CardHeader
+          icon={<Building2 className="size-4" />}
+          title="Registrierung"
+          aside={
+            whois.source && (
+              <span
+                className="block max-w-40 truncate font-mono text-xs text-fg-subtle sm:max-w-none"
+                title={whois.source}
+              >
+                {whois.source}
+              </span>
+            )
+          }
+        />
 
-        <div className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+        <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+          <Row label="Registrar" value={whois.registrar ?? '—'} />
           <Row
-            icon={<Building2 className="w-3.5 h-3.5" />}
-            label="Registrar"
-            value={whois.registrar ?? '—'}
-          />
-          <Row
-            icon={<Calendar className="w-3.5 h-3.5" />}
             label="Erstellt"
             value={
               whois.createdAt ? (
                 <span>
                   {formatDate(whois.createdAt)}
                   {ageDays !== undefined && (
-                    <span className="ml-2 text-xs text-ink-900/40 dark:text-ink-50/40">
+                    <span className="ml-2 text-xs text-fg-subtle">
                       ({formatAge(ageDays)})
                     </span>
                   )}
@@ -116,23 +126,13 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
             }
           />
           <Row
-            icon={<Calendar className="w-3.5 h-3.5" />}
             label="Läuft ab"
             value={
               whois.expiresAt ? (
-                <span className="flex items-center gap-2">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span>{formatDate(whois.expiresAt)}</span>
                   {expiresInDays !== undefined && (
-                    <span
-                      className={cn(
-                        'text-xs font-medium px-1.5 py-0.5 rounded-sm',
-                        expiresInDays < 0
-                          ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                          : expiresInDays < 30
-                          ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      )}
-                    >
+                    <span className={cn('badge', expiryBadge)}>
                       {expiresInDays < 0
                         ? `vor ${Math.abs(expiresInDays)} Tagen`
                         : `noch ${expiresInDays} Tage`}
@@ -145,11 +145,27 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
             }
           />
           <Row
-            icon={<RefreshCw className="w-3.5 h-3.5" />}
             label="Geändert"
             value={whois.updatedAt ? formatDate(whois.updatedAt) : '—'}
           />
-        </div>
+        </dl>
+
+        {/* Nur mit bekanntem Ablauf, der noch bevorsteht — eine bereits
+            abgelaufene Domain braucht keine Erinnerung mehr, sondern Handeln. */}
+        {whois.expiresAt && expiresInDays !== undefined && expiresInDays >= 0 && (
+          <div className="mt-4">
+            <CalendarButton
+              reminder={{
+                kind: 'domain',
+                // Liefert der Server die abgefragte Domain nicht mit (älterer
+                // Stand), ist der Report-Name die beste verfügbare Angabe.
+                subject: whois.domain ?? domain,
+                expiresAt: whois.expiresAt,
+                reportDomain: domain,
+              }}
+            />
+          </div>
+        )}
       </motion.div>
 
       {/* Nameserver aus WHOIS */}
@@ -157,38 +173,33 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.05 }}
-        className="surface rounded-xl p-5"
+        className="card"
       >
-        <div className="flex items-center gap-2 mb-4">
-          <Server className="w-4 h-4 text-ink-900/60 dark:text-ink-50/60" />
-          <span className="text-sm font-medium">Nameserver (laut Registry)</span>
-        </div>
+        <CardHeader icon={<Server className="size-4" />} title="Nameserver (laut Registry)" />
 
         {whois.nameServers && whois.nameServers.length > 0 ? (
-          <ul className="space-y-1.5">
+          // Klickbar als Chips (übernimmt den Namen in die Suche), sonst eine
+          // schlichte Liste — ein nicht klickbarer Chip sähe bedienbar aus.
+          <ul className={cn('mt-4', onUseDomain ? 'flex flex-wrap gap-2' : 'space-y-1.5')}>
             {whois.nameServers.map((ns) => (
-              <li
-                key={ns}
-                className="font-mono text-xs text-ink-900/80 dark:text-ink-50/80 flex items-center gap-2"
-              >
-                <span className="w-1 h-1 rounded-full bg-ink-900/60 dark:bg-ink-50/60" />
+              <li key={ns} className="min-w-0 max-w-full">
                 {onUseDomain ? (
                   <button
                     type="button"
                     onClick={() => onUseDomain(ns)}
-                    className="min-w-0 truncate rounded-md text-left font-mono text-xs text-ink-900/80 transition-colors hover:text-ink-950 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/80 dark:hover:text-white dark:focus-visible:outline-ink-50"
+                    className="chip max-w-full font-mono"
                     title={`${ns} in die Suche übernehmen`}
                   >
-                    {ns}
+                    <span className="min-w-0 truncate">{ns}</span>
                   </button>
                 ) : (
-                  ns
+                  <span className="block truncate font-mono text-[13px] text-fg">{ns}</span>
                 )}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-ink-900/50 dark:text-ink-50/50">Keine Nameserver gemeldet.</p>
+          <p className="mt-4 text-sm text-fg-subtle">Keine Nameserver gemeldet.</p>
         )}
       </motion.div>
 
@@ -197,53 +208,35 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1 }}
-        className="surface rounded-xl p-5"
+        className="card"
       >
-        <div className="flex items-center gap-2 mb-4">
-          <Lock className="w-4 h-4 text-ink-900/60 dark:text-ink-50/60" />
-          <span className="text-sm font-medium">Domain-Status</span>
-        </div>
+        <CardHeader icon={<Lock className="size-4" />} title="Domain-Status" />
 
         {whois.status && whois.status.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 mb-4">
+          <div className="mt-4 flex flex-wrap gap-1.5">
             {whois.status.map((s) => {
               const norm = s.toLowerCase().replace(/\s+/g, '');
               const meta = STATUS_LABELS[norm] ?? { label: s, tone: 'ok' as const };
               return (
-                <span
-                  key={s}
-                  title={s}
-                  className={cn(
-                    'text-[11px] px-2 py-0.5 rounded-full font-medium',
-                    meta.tone === 'ok' &&
-                      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-                    meta.tone === 'warn' &&
-                      'bg-red-500/10 text-red-700 dark:text-red-300',
-                    meta.tone === 'bad' &&
-                      'bg-red-500/10 text-red-700 dark:text-red-300'
-                  )}
-                >
+                <span key={s} title={s} className={cn('badge', STATUS_BADGE[meta.tone])}>
                   {meta.label}
                 </span>
               );
             })}
           </div>
         ) : (
-          <p className="text-sm text-ink-900/50 dark:text-ink-50/50 mb-4">Keine Status-Codes.</p>
+          <p className="mt-4 text-sm text-fg-subtle">Keine Status-Codes.</p>
         )}
 
-        <div className="pt-3 border-t border-ink-100 dark:border-ink-900/80 flex items-center gap-2 text-sm">
-          <ShieldCheck
-            className={cn(
-              'w-4 h-4',
-              whois.dnssecDelegated
-                ? 'text-emerald-500'
-                : 'text-ink-900/30 dark:text-ink-50/30'
-            )}
-          />
-          <span className="text-ink-900/70 dark:text-ink-50/70">
+        <div className="mt-5 flex items-center gap-2 border-t border-line-subtle pt-4 text-sm">
+          {whois.dnssecDelegated ? (
+            <ShieldCheck className="size-4 shrink-0 text-success" />
+          ) : (
+            <ShieldOff className="size-4 shrink-0 text-fg-subtle" />
+          )}
+          <span className="text-fg-muted">
             DNSSEC bei Registry:{' '}
-            <span className={whois.dnssecDelegated ? 'font-medium' : 'text-ink-900/50 dark:text-ink-50/50'}>
+            <span className={whois.dnssecDelegated ? 'font-medium text-success' : 'text-fg-subtle'}>
               {whois.dnssecDelegated ? 'delegiert' : 'nicht delegiert'}
             </span>
           </span>
@@ -255,22 +248,12 @@ export function WhoisView({ whois, onUseDomain }: WhoisViewProps) {
 
 /* ─── Bausteine ──────────────────────────────────────────────────────── */
 
-function Row({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-}) {
+/** Eine Zeile der Label/Wert-Liste — dieselbe Form wie in der Security-Ansicht. */
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <span className="text-ink-900/40 dark:text-ink-50/40 mt-0.5">{icon}</span>
-      <span className="text-xs uppercase tracking-wider text-ink-900/40 dark:text-ink-50/40 w-20 shrink-0 font-medium pt-0.5">
-        {label}
-      </span>
-      <span className="flex-1 text-ink-900/80 dark:text-ink-50/80 wrap-break-word">{value}</span>
+    <div className="flex items-baseline gap-3">
+      <dt className="w-24 shrink-0 text-xs text-fg-subtle">{label}</dt>
+      <dd className="min-w-0 flex-1 text-sm text-fg wrap-break-word">{value}</dd>
     </div>
   );
 }

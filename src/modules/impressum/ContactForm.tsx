@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Loader2, Send } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { ApiError, fetchContactChallenge, sendContactMessage } from '@/lib/api';
 
 /**
@@ -194,22 +194,16 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
   const tooShort = message.trim().length > 0 && message.trim().length < MIN_MESSAGE_LENGTH;
 
   return (
-    <section className="border-t border-ink-100 pt-8 dark:border-ink-900/80">
-      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-ink-900/50 dark:text-ink-50/50">
-        Kontaktformular
-      </h2>
-      <p className="mb-2 text-sm text-ink-900/60 dark:text-ink-50/60">
+    <section>
+      <h2 className="text-sm font-semibold text-fg">Kontaktformular</h2>
+      <p className="mt-1 text-sm leading-relaxed text-fg-muted">
         Schreib mir alternativ direkt über das Formular — ich melde mich per E-Mail zurück.
       </p>
-      <p className="mb-5 text-xs text-ink-900/45 dark:text-ink-50/45">
+      <p className="mb-5 mt-2 text-xs leading-relaxed text-fg-subtle">
         Name, E-Mail und Nachricht werden per E-Mail an mich zugestellt und nur zur
         Beantwortung genutzt. An deine Adresse geht eine Empfangsbestätigung. Details
         unter{' '}
-        <button
-          type="button"
-          onClick={onOpenDatenschutz}
-          className="underline underline-offset-2 hover:text-ink-900/70 dark:hover:text-ink-50/70"
-        >
+        <button type="button" onClick={onOpenDatenschutz} className="link">
           Datenschutz
         </button>
         .
@@ -225,9 +219,10 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           ref={statusRef}
           role="status"
           tabIndex={-1}
-          className="mb-4 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 outline-hidden dark:text-emerald-300"
+          className="panel mb-4 flex items-start gap-2.5 py-3 text-sm text-fg outline-hidden"
         >
-          Danke! Deine Nachricht wurde gesendet.
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+          <span>Danke! Deine Nachricht wurde gesendet.</span>
         </div>
       )}
 
@@ -236,16 +231,17 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           ref={statusRef}
           role="alert"
           tabIndex={-1}
-          className="mb-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 outline-hidden dark:text-red-400"
+          className="panel mb-4 flex items-start gap-2.5 py-3 text-sm text-fg outline-hidden"
         >
-          {error}
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger" />
+          <span>{error}</span>
         </div>
       )}
 
       {/* relative: die Honeypot-Felder liegen absolut und sollen sich am
           Formular ausrichten, nicht an einem weiter oben liegenden Container. */}
       <form onSubmit={handleSubmit} className="relative space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Name" id="contact-name" required>
             <input
               id="contact-name"
@@ -255,7 +251,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
               autoComplete="name"
               required
               maxLength={120}
-              className={inputClassName}
+              className="input"
             />
           </Field>
 
@@ -268,7 +264,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
               autoComplete="email"
               required
               maxLength={254}
-              className={inputClassName}
+              className="input"
             />
           </Field>
         </div>
@@ -283,7 +279,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
             maxLength={MAX_MESSAGE_LENGTH}
             rows={6}
             aria-describedby="contact-message-counter"
-            className={`${inputClassName} min-h-36 resize-y`}
+            className="input min-h-36 resize-y"
             placeholder="Worum geht es?"
           />
           {/*
@@ -293,7 +289,7 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
           */}
           <div
             id="contact-message-counter"
-            className="mt-1.5 flex justify-between text-xs text-ink-900/40 dark:text-ink-50/40"
+            className="mt-1.5 flex justify-between text-xs text-fg-subtle"
           >
             <span>
               {tooShort ? `Noch mindestens ${MIN_MESSAGE_LENGTH - message.trim().length} Zeichen` : ''}
@@ -333,9 +329,9 @@ export function ContactForm({ onOpenDatenschutz }: ContactFormProps) {
         <button
           type="submit"
           disabled={loading || !formReady || waitSeconds > 0}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-ink-950 px-5 text-sm font-medium text-white transition-colors hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-ink-50 dark:text-ink-950 dark:hover:bg-ink-200"
+          className="btn btn-primary"
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           {!formReady
             ? 'Formular wird geladen…'
             : waitSeconds > 0
@@ -360,9 +356,9 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-2 block text-sm font-medium text-ink-900/70 dark:text-ink-50/70">
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-fg">
         {label}
-        {required && <span className="text-ink-900/40 dark:text-ink-50/40"> *</span>}
+        {required && <span className="text-fg-subtle"> *</span>}
       </label>
       {children}
     </div>
@@ -372,9 +368,6 @@ function Field({
 /** Spiegelt die Server-Grenzen aus contactMail.ts. */
 const MIN_MESSAGE_LENGTH = 10;
 const MAX_MESSAGE_LENGTH = 5000;
-
-const inputClassName =
-  'w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 placeholder:text-ink-900/35 focus:border-ink-900/40 focus:outline-hidden focus:ring-2 focus:ring-ink-900/10 dark:border-ink-800 dark:bg-ink-950 dark:text-ink-50 dark:placeholder:text-ink-50/35 dark:focus:border-ink-50/40 dark:focus:ring-ink-50/10';
 
 const honeypotClassName =
   'pointer-events-none absolute left-[-9999px] h-0 w-0 overflow-hidden opacity-0';

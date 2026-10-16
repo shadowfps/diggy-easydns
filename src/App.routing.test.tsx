@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { setMediaQuery } from '@/test/setup';
 
 /**
  * Routing-Tests für App.tsx.
@@ -32,6 +33,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 const api = await import('@/lib/api');
+const { clearLookupHistory } = await import('@/lib/lookupHistory');
 const App = (await import('./App')).default;
 
 const EMPTY_SECTION = { findings: [] };
@@ -56,6 +58,7 @@ function stubApi(domain = 'example.com') {
       dkim: { selectors: [] },
       mtaSts: { present: false },
       hasMx: false,
+      nullMx: false,
     },
     ...EMPTY_SECTION,
   });
@@ -90,16 +93,17 @@ describe('Deep-Links beim ersten Laden', () => {
     expect(searchField()).toBeInTheDocument();
   });
 
-  it('öffnet /impressum direkt', () => {
+  // Beide Seiten werden nachgeladen (Bundle-Budget) — deshalb findBy.
+  it('öffnet /impressum direkt', async () => {
     setPath('/impressum');
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Impressum' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Impressum' })).toBeInTheDocument();
   });
 
-  it('öffnet /datenschutz direkt', () => {
+  it('öffnet /datenschutz direkt', async () => {
     setPath('/datenschutz');
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Datenschutz' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Datenschutz' })).toBeInTheDocument();
   });
 
   it('öffnet /history direkt', () => {
@@ -249,12 +253,110 @@ describe('Suche und History-Einträge', () => {
     await waitFor(() => expect(screen.getByText(/PTR \/ Reverse DNS/)).toBeInTheDocument());
     expect(api.lookupRecords).not.toHaveBeenCalled();
   });
+
+  /** #108: PTR und Details warten auf dieselbe Anfrage — eine Ansage, nicht zwei. */
+  it('sagt das Laden der IP-Details einmal an', async () => {
+    vi.mocked(api.lookupIpDetails).mockReturnValue(new Promise(() => {}));
+    render(<App />);
+    // Andere IP als oben: useIpDetails merkt sich Ergebnisse modulweit.
+    await userEvent.type(searchField(), '9.9.9.9{Enter}');
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Reverse-DNS wird ermittelt');
+    expect(screen.getByText(/IP-Details werden geladen/)).toBeInTheDocument();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+});
+
+describe('Layout', () => {
+  it('setzt die Suche auf Report-Seiten in die Kopfzeile', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    await screen.findByText('Health Score');
+    expect(within(screen.getByRole('banner')).getByPlaceholderText(/Anfrage starten/)).toBeInTheDocument();
+    // Nur eine Suche auf der Seite — die große über dem Report entfällt.
+    expect(screen.getAllByPlaceholderText(/Anfrage starten/)).toHaveLength(1);
+  });
+
+  it('bietet zuletzt geprüfte Domains auf der Startseite an', async () => {
+    clearLookupHistory();
+    render(<App />);
+    await userEvent.type(searchField(), 'example.com{Enter}');
+    await screen.findByText('Health Score');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zur Startseite' }));
+    const recent = await screen.findByRole('button', { name: /example\.com/ });
+    vi.mocked(api.lookupRecords).mockClear();
+    await userEvent.click(recent);
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledWith('example.com'));
+  });
+});
+
+describe('Report', () => {
+  it('springt aus der Score-Karte zu den Findings', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    const button = await screen.findByRole('button', { name: /Alle Findings/ });
+    await userEvent.click(button);
+    expect(screen.getByRole('tab', { name: /Findings/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  /** #83: Die Mail-Ansicht ist ein eigener Chunk — der Tab muss sie trotzdem zeigen. */
+  it('zeigt den nachgeladenen Mail-Tab', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    const tab = await screen.findByRole('tab', { name: /Mail/ });
+    await waitFor(() => expect(api.lookupMail).toHaveBeenCalled());
+    await userEvent.click(tab);
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'SPF' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'MTA-STS' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * #108: Sanftes Scrollen per JS erreichen weder MotionConfig noch die
+ * CSS-Regel — bei „Bewegung reduzieren“ springt die Seite stattdessen.
+ */
+describe('Scrollen und „Bewegung reduzieren“', () => {
+  afterEach(() => setMediaQuery());
+
+  async function gotoAbout() {
+    render(<App />);
+    await openMenu();
+    await userEvent.click(screen.getByRole('button', { name: 'About' }));
+  }
+
+  it('gleitet ohne die Einstellung nach oben', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo');
+    await gotoAbout();
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'smooth' });
+  });
+
+  it('springt bei reduzierter Bewegung nach oben', async () => {
+    setMediaQuery('(prefers-reduced-motion: reduce)');
+    const scrollTo = vi.spyOn(window, 'scrollTo');
+    await gotoAbout();
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'auto' });
+  });
+
+  it('holt die Findings bei reduzierter Bewegung ohne Gleiten in Sicht', async () => {
+    setMediaQuery('(prefers-reduced-motion: reduce)');
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Alle Findings/ }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'nearest' });
+  });
 });
 
 /**
  * #64: Für einen DNS-Eintrag wie `crsend._domainkey.kksn.de` laufen nur die
- * DNS-Checks. SSL, Tech-Stack und Propagation bräuchten einen Host, den es
- * dort nicht gibt.
+ * DNS-Checks. SSL und Tech-Stack bräuchten einen Host, den es dort nicht gibt.
+ * #82: Die Propagation läuft dagegen mit — sie vergleicht dort TXT und CNAME.
  */
 describe('DNS-Einträge mit Unterstrich', () => {
   const dkim = 'crsend._domainkey.kksn.de';
@@ -273,28 +375,55 @@ describe('DNS-Einträge mit Unterstrich', () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText(/v=DKIM1/)).toBeInTheDocument());
-    for (const check of [api.lookupDnssec, api.lookupMail, api.lookupWhois]) {
+    for (const check of [api.lookupDnssec, api.lookupMail, api.lookupWhois, api.lookupPropagation]) {
       expect(check).toHaveBeenCalledWith(dkim);
     }
-    for (const check of [api.lookupSsl, api.lookupTechStack, api.lookupPropagation]) {
+    for (const check of [api.lookupSsl, api.lookupTechStack]) {
       expect(check).not.toHaveBeenCalled();
     }
   });
 
   // Die übersprungenen Sektionen zählen als erledigt — sonst bliebe der
   // Score für immer beim Skeleton.
-  it('zeigt den Score, obwohl drei Sektionen übersprungen sind', async () => {
+  it('zeigt den Score, obwohl zwei Sektionen übersprungen sind', async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText('Health Score')).toBeInTheDocument());
   });
 
-  it('blendet die Tabs aus, die einen Host bräuchten', async () => {
+  it('blendet die Tabs aus, die eine Website bräuchten', async () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole('tab', { name: /Records/ })).toBeInTheDocument());
-    for (const name of [/Propagation/, /Speed/, /Virus Scan/]) {
+    for (const name of [/Speed/, /Virus Scan/]) {
       expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument();
     }
-    expect(screen.getByRole('tab', { name: /Security/ })).toBeInTheDocument();
+    for (const name of [/Propagation/, /Security/]) {
+      expect(screen.getByRole('tab', { name })).toBeInTheDocument();
+    }
+  });
+
+  /**
+   * #82: Nach einem DKIM-Wechsel will man sehen, ob der neue Schlüssel bei
+   * allen Resolvern angekommen ist.
+   */
+  it('vergleicht im Propagation-Tab den TXT-Record über alle Resolver', async () => {
+    const key = `v=DKIM1; k=rsa; p=${'A'.repeat(380)}wIDAQAB`;
+    vi.mocked(api.lookupPropagation).mockResolvedValue({
+      propagation: ['Cloudflare', 'Google', 'AdGuard'].map((name) => ({
+        resolver: { id: name.toLowerCase(), name, ip: '0.0.0.0', country: 'X', flag: '', provider: name },
+        records: [{ type: 'TXT' as const, name: dkim, value: key, ttl: 3600 }],
+        responseTimeMs: 20,
+      })),
+      findings: [],
+    });
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Propagation/ }));
+    const panel = await screen.findByRole('tabpanel');
+    expect(await within(panel).findByRole('region', { name: 'Antwort A' })).toHaveTextContent(
+      'Cloudflare, Google, AdGuard'
+    );
+    expect(within(panel).getByRole('button', { name: /Ganzen Wert zeigen/ })).toBeInTheDocument();
+    expect(within(panel).getByText(/denselben TXT-Record/)).toBeInTheDocument();
   });
 });

@@ -236,13 +236,25 @@ function mapAnswerToRecord(
   };
 }
 
+/** Ein TXT-Wert, der nur aus Zeichenketten in Anführungszeichen besteht: `"…" "…"`. */
+const QUOTED_TXT = /^\s*"(?:[^"\\]|\\.)*"(?:\s+"(?:[^"\\]|\\.)*")*\s*$/;
+const QUOTED_CHUNK = /"((?:[^"\\]|\\.)*)"/g;
+
 /**
  * DoH liefert TXT als '"chunk1" "chunk2"'. Wir wollen den reinen String.
+ *
+ * Google liefert ihn schon zusammengesetzt und ohne Anführungszeichen. Ein
+ * solcher Wert wird nur zerlegt, wenn er ganz aus Stücken besteht — sonst
+ * bliebe von `sagt "hallo"` nur `hallo`, und die Propagation meldete Google
+ * als abweichend. Aus demselben Grund werden `\"` und `\\` beide aufgelöst:
+ * Ein versehentlich eingetragener Backslash (`v=DKIM1\; …`) kommt bei Google
+ * als `\;` an, bei den anderen als `\\;`.
  */
 export function parseDohTxt(raw: string): string {
-  const matches = raw.match(/"((?:[^"\\]|\\.)*)"/g);
-  if (!matches) return raw;
-  return matches.map((m) => m.slice(1, -1).replace(/\\"/g, '"')).join('');
+  if (!QUOTED_TXT.test(raw)) return raw;
+  return [...raw.matchAll(QUOTED_CHUNK)]
+    .map((m) => m[1].replace(/\\(["\\])/g, '$1'))
+    .join('');
 }
 
 function stripTrailingDot(s: string): string {

@@ -18,7 +18,7 @@ Diggy ist ein webbasiertes DNS-Audit-Tool. Domain eingeben, fertig: Records, Mai
 - **IP-Owner** — Anzeige des Netz-Betreibers hinter A/AAAA-Records
 - **Health-Score** — automatisch berechnet aus Findings und Konfigurationslücken
 - **Findings & Empfehlungen** — konkrete Hinweise zu fehlenden oder fehlerhaften Einträgen
-- **Mail Security** — SPF, DKIM (Selector-Scan), DMARC, MTA-STS
+- **Mail Security** — SPF, DKIM (Selector-Scan), DMARC, MTA-STS, TLS-RPT, BIMI
 - **SSL / TLS** — Zertifikats-Details, Ablaufdatum, Chain-Check
 - **DNSSEC** — Validierungsstatus
 - **Propagation** — Vergleich über mehrere DNS-over-HTTPS-Resolver weltweit
@@ -32,7 +32,7 @@ Diggy ist ein webbasiertes DNS-Audit-Tool. Domain eingeben, fertig: Records, Mai
 - **IP-Lookup / Reverse DNS** — reine IP-Adresse (IPv4/IPv6) eingeben und PTR-Record, ASN, Netz & Geolocation abrufen
 - **Available Check** — Domain-Verfügbarkeit prüfen (RDAP, u. a. `.de`, `.com`, `.net`)
 - **Lookup-History** — zuletzt abgefragte Domains (lokal im Browser)
-- **Permalinks** — direkt verlinkbare Ergebnisseiten (`/lookup/<domain>`)
+- **Permalinks** — direkt verlinkbare Ergebnisseiten (`/lookup/<domain>`), mit eigener Link-Vorschau (Open Graph) beim Teilen
 - **JSON-Export** — vollständigen Report als Datei herunterladen
 - **Kontaktformular** — auf der Impressum-Seite, mit SMTP-Versand und Auto-Reply
 - **Dark Mode** — systembasiert, manuell umschaltbar
@@ -86,7 +86,7 @@ Alle Secrets gehören in `.env` (liegt in `.gitignore`). Vorlage: `.env.example`
 | `CONTACT_FROM` | Absender (Admin-Mail + Bestätigung an Nutzer) |
 | `CONTACT_FORM_SECRET` | Geheimer Schlüssel für Anti-Spam-Token. **In Produktion Pflicht** (mind. 32 Zeichen) — ohne ihn startet der Server nicht, sobald SMTP konfiguriert ist. |
 | `TRUST_PROXY` | Anzahl vertrauenswürdiger Proxy-Hops (`true` = 1) für korrektes IP-Rate-Limiting. **Nur setzen, wenn tatsächlich ein Proxy davor liegt** — sonst kann sich jeder per `X-Forwarded-For` einen frischen Zähler holen. |
-| `PUBLIC_ORIGIN` | Öffentliche Origin der Installation (z. B. `https://diggy.example`). Vertrauenswürdige Referenz für die CSRF-Prüfung des Kontaktformulars — ohne sie fällt die Prüfung auf den `Host`-Header zurück. |
+| `PUBLIC_ORIGIN` | Öffentliche Origin der Installation (z. B. `https://diggy.example`). Vertrauenswürdige Referenz für die CSRF-Prüfung des Kontaktformulars und Basis der absoluten URLs in der Link-Vorschau von Permalinks (`og:url`, `og:image`) — ohne sie fallen beide auf den `Host`-Header zurück. |
 | `CORS_ORIGINS` | Optional — komma-separierte Origins, die per CORS zugreifen dürfen. Leer lassen, wenn Frontend und API unter derselben Origin laufen (Standard). |
 | `PORT` | Backend-Port (Standard: `3001`) |
 
@@ -109,7 +109,14 @@ npm run lint        # ESLint 9 (Flat Config, inkl. react-hooks)
 npm run typecheck   # tsc für Client und Server
 npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
 npm run verify      # alle drei, so wie die CI es fährt
+npm run e2e         # Browser-Tests gegen den Build (vorher npm run build)
+npm run e2e:docker  # dasselbe im Playwright-Image, inkl. Pixelvergleich
 ```
+
+Die Browser-Tests (`e2e/`, Playwright) prüfen jede wichtige Ansicht hell/dunkel
+bei 390 und 1440 px auf seitliches Überlaufen und vergleichen Startseite und
+Report mit Referenzbildern. Wie man sie startet und die Referenzbilder
+aktualisiert, steht in [docs/E2E.md](docs/E2E.md).
 
 Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
 
@@ -129,8 +136,9 @@ einmal ein Defekt saß — nicht nach Abdeckungsquote. `src/test/setup.ts`
 dokumentiert, welche Browser-APIs jsdom fehlen und warum sie dort ergänzt
 werden.
 
-Jeder Push auf `main` und jeder Pull Request läuft durch den `verify`-Job;
-Image-Build und Deploy folgen nur auf `main`. Ein zweiter, **nicht
+Jeder Push auf `main` und jeder Pull Request läuft durch den `verify`-Job und
+parallel durch den `e2e`-Job; Image-Build und Deploy folgen nur auf `main` und
+warten allein auf `verify`. Ein zweiter, **nicht
 blockierender** `audit`-Job hält den Zustand der Abhängigkeiten sichtbar, ohne
 dass ein neu veröffentlichter Advisory einen bis dahin grünen Build rot macht —
 die eigentliche Arbeit macht Dependabot (`.github/dependabot.yml`).
@@ -245,7 +253,9 @@ technisch korrekt, aber **nicht juristisch geprüft**.
 ```
 diggy/
 ├── docs/
-│   └── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
+│   ├── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
+│   └── E2E.md              # Browser-Tests, Referenzbilder aktualisieren
+├── e2e/                    # Playwright: Überlauf-Check, Pixelvergleich, Testdaten
 ├── shared/
 │   ├── scoring.ts          # Health-Score — geteilt, damit Server und Client
 │   │                       # garantiert dasselbe rechnen
@@ -282,7 +292,7 @@ Tests liegen neben dem geprüften Code (`*.test.ts`).
 - [x] Subdomain-Lookups & Apex-Auflösung für Mail/WHOIS
 - [x] Domain-Validierung & Normalisierung
 - [x] Health-Score aus Findings
-- [x] Mail-Security-Audit (SPF, DKIM, DMARC, MTA-STS)
+- [x] Mail-Security-Audit (SPF, DKIM, DMARC, MTA-STS, TLS-RPT, BIMI)
 - [x] SSL/TLS-Check
 - [x] WHOIS/RDAP-Lookup
 - [x] PageSpeed-Integration

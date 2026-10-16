@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   AlertCircle,
   Building2,
+  Check,
   Clock,
   Compass,
   Copy,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { IpDetails } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { CardHeader } from '@/components/ui/CardHeader';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { formatIpOwnerLabel, useIpDetails } from './useIpDetails';
 
@@ -32,7 +34,7 @@ export function IpOwnerLabel({ ip, className }: { ip: string; className?: string
 
   if (loading) {
     return (
-      <span className={cn('text-xs text-ink-900/30 dark:text-ink-50/30', className)} aria-hidden>
+      <span className={cn('text-xs text-fg-subtle', className)} aria-hidden>
         …
       </span>
     );
@@ -43,10 +45,7 @@ export function IpOwnerLabel({ ip, className }: { ip: string; className?: string
 
   return (
     <span
-      className={cn(
-        'min-w-0 truncate font-sans text-sm text-ink-900/55 dark:text-ink-50/55',
-        className
-      )}
+      className={cn('min-w-0 truncate font-sans text-sm text-fg-subtle', className)}
       title={label}
     >
       {label}
@@ -77,15 +76,14 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
         type="button"
         onClick={handleOpen}
         className={cn(
-          'group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md text-left font-mono text-xs transition-colors',
-          'hover:text-ink-950 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:hover:text-white dark:focus-visible:outline-ink-50',
+          'group inline-flex max-w-full min-w-0 items-center gap-1.5 text-left font-mono text-[13px] underline-offset-4 transition-colors hover:text-fg hover:underline',
           className
         )}
         aria-label={`Details zu ${ip} anzeigen`}
         title={`Details zu ${ip}`}
       >
         <span className="truncate">{ip}</span>
-        <Link2 className="h-3.5 w-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
+        <Link2 className="size-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
       </button>
 
       {/*
@@ -167,7 +165,7 @@ function IpDetailsOverlay({
     <AnimatePresence onExitComplete={onExited}>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/45 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -179,62 +177,67 @@ function IpDetailsOverlay({
             role="dialog"
             aria-modal="true"
             aria-labelledby="ip-details-title"
-            className="surface w-full max-w-[540px] overflow-hidden rounded-xl p-5 shadow-2xl shadow-ink-950/25 dark:bg-[#151515] dark:border-white/10"
+            className="overlay max-h-full w-full max-w-[540px] overflow-y-auto p-5 sm:p-6"
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
             transition={{ duration: 0.18 }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-5 flex items-start gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <h2
-                    id="ip-details-title"
-                    className="truncate font-mono text-lg font-semibold text-ink-900 dark:text-ink-50"
-                  >
-                    {ip}
-                  </h2>
+            {/* Kopieren steht vor Schließen: so landet der erste Fokus wie
+                bisher auf „IP kopieren“. */}
+            <CardHeader
+              icon={<Network className="size-4" />}
+              title={
+                <span id="ip-details-title" className="min-w-0 break-all font-mono">
+                  {ip}
+                </span>
+              }
+              subtitle="IP-, Netzwerk- und Geolocation-Details"
+              aside={
+                <div className="-mt-1 flex items-center gap-1">
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="rounded-md p-1 text-ink-900/45 transition-colors hover:text-ink-950 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/45 dark:hover:text-white dark:focus-visible:outline-ink-50"
+                    className="btn btn-secondary btn-sm"
                     aria-label={copied ? 'IP kopiert' : 'IP kopieren'}
                     title={copied ? 'IP kopiert' : 'IP kopieren'}
                   >
-                    <Copy className="h-4 w-4" />
+                    {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                    <span className="hidden sm:inline">{copied ? 'IP kopiert' : 'IP kopieren'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="btn btn-ghost btn-sm btn-icon"
+                    aria-label="Details schließen"
+                    title="Schließen"
+                  >
+                    <X className="size-4" />
                   </button>
                 </div>
-                <p className="mt-1 text-sm text-ink-900/55 dark:text-ink-50/55">
-                  IP-, Netzwerk- und Geolocation-Details
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full bg-ink-100 p-2 text-ink-900/65 transition-colors hover:text-ink-900 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:bg-white/10 dark:text-ink-50/75 dark:hover:text-white dark:focus-visible:outline-ink-50"
-                aria-label="Details schließen"
-                title="Schließen"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              }
+            />
+
+            <div className="mt-4">
+              {loading && (
+                <div role="status" className="panel flex items-center gap-2 text-sm text-fg-muted">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>IP-Details werden geladen...</span>
+                </div>
+              )}
+
+              {error && !loading && (
+                <div className="panel flex items-center gap-3">
+                  <span className="icon-tile icon-tile-danger">
+                    <AlertCircle className="size-4" />
+                  </span>
+                  <span className="text-sm text-fg">{error}</span>
+                </div>
+              )}
+
+              {details && !loading && !error && <IpDetailsRows details={details} />}
             </div>
-
-            {loading && (
-              <div className="flex items-center gap-2 rounded-lg bg-ink-100 px-4 py-5 text-sm text-ink-900/60 dark:bg-white/4 dark:text-ink-50/60">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>IP-Details werden geladen...</span>
-              </div>
-            )}
-
-            {error && !loading && (
-              <div className="flex items-start gap-2 rounded-lg bg-red-500/10 px-4 py-4 text-sm text-red-600 dark:text-red-400">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {details && !loading && !error && <IpDetailsRows details={details} />}
           </motion.div>
         </motion.div>
       )}
@@ -245,64 +248,68 @@ function IpDetailsOverlay({
 export function IpDetailsRows({ details }: { details: IpDetails }) {
   const ptrHosts = details.ptr && details.ptr.length > 0 ? details.ptr : details.reverse ? [details.reverse] : [];
 
+  // Label/Wert-Raster: Labels links in einer festen Spalte, Werte bündig
+  // daneben. Auf schmalen Bildschirmen steht der Wert unter seinem Label.
   return (
-    <div className="space-y-2.5">
-      <DetailRow icon={<Network className="h-4 w-4" />} label="IP" value={details.ip} mono />
-      <DetailRow
-        icon={<Server className="h-4 w-4" />}
-        label="PTR (Reverse)"
-        value={
-          ptrHosts.length > 0 ? (
-            <span className="flex flex-col items-end gap-0.5 font-mono text-xs">
-              {ptrHosts.map((host) => (
-                <span key={host} className="break-all">
-                  {host}
-                </span>
-              ))}
-            </span>
-          ) : (
-            <MissingValue>nicht konfiguriert</MissingValue>
-          )
-        }
-      />
-      <DetailRow
-        icon={<Building2 className="h-4 w-4" />}
-        label="Organisation"
-        value={details.organization ?? <MissingValue />}
-      />
-      <DetailRow icon={<Wifi className="h-4 w-4" />} label="ISP" value={details.isp ?? <MissingValue />} />
-      <DetailRow
-        icon={<Hash className="h-4 w-4" />}
-        label="ASN"
-        value={formatAsn(details) ?? <MissingValue />}
-        mono={Boolean(details.asn)}
-      />
-      <DetailRow
-        icon={<Globe2 className="h-4 w-4" />}
-        label="Netzwerk"
-        value={details.network ?? <MissingValue />}
-        mono={Boolean(details.network)}
-      />
-      <DetailRow
-        icon={<MapPin className="h-4 w-4" />}
-        label="Standort"
-        value={formatLocation(details) ?? <MissingValue />}
-      />
-      <DetailRow
-        icon={<Compass className="h-4 w-4" />}
-        label="Koordinaten"
-        value={formatCoordinates(details) ?? <MissingValue />}
-      />
-      <DetailRow
-        icon={<Clock className="h-4 w-4" />}
-        label="Zeitzone"
-        value={details.timezone ?? <MissingValue />}
-        mono={Boolean(details.timezone)}
-      />
+    <div>
+      <dl className="space-y-3">
+        <DetailRow icon={<Network className="size-3.5" />} label="IP" value={details.ip} mono />
+        <DetailRow
+          icon={<Server className="size-3.5" />}
+          label="PTR (Reverse)"
+          value={
+            ptrHosts.length > 0 ? (
+              <span className="flex flex-col gap-0.5 font-mono text-[13px]">
+                {ptrHosts.map((host) => (
+                  <span key={host} className="break-all">
+                    {host}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <MissingValue>nicht konfiguriert</MissingValue>
+            )
+          }
+        />
+        <DetailRow
+          icon={<Building2 className="size-3.5" />}
+          label="Organisation"
+          value={details.organization ?? <MissingValue />}
+        />
+        <DetailRow icon={<Wifi className="size-3.5" />} label="ISP" value={details.isp ?? <MissingValue />} />
+        <DetailRow
+          icon={<Hash className="size-3.5" />}
+          label="ASN"
+          value={formatAsn(details) ?? <MissingValue />}
+          mono={Boolean(details.asn)}
+        />
+        <DetailRow
+          icon={<Globe2 className="size-3.5" />}
+          label="Netzwerk"
+          value={details.network ?? <MissingValue />}
+          mono={Boolean(details.network)}
+        />
+        <DetailRow
+          icon={<MapPin className="size-3.5" />}
+          label="Standort"
+          value={formatLocation(details) ?? <MissingValue />}
+        />
+        <DetailRow
+          icon={<Compass className="size-3.5" />}
+          label="Koordinaten"
+          value={formatCoordinates(details) ?? <MissingValue />}
+        />
+        <DetailRow
+          icon={<Clock className="size-3.5" />}
+          label="Zeitzone"
+          value={details.timezone ?? <MissingValue />}
+          mono={Boolean(details.timezone)}
+        />
+      </dl>
       {details.source && (
-        <div className="pt-1 text-right text-[10px] uppercase tracking-wider text-ink-900/35 dark:text-ink-50/30">
+        <p className="mt-4 text-right text-xs text-fg-subtle">
           {details.source}
-        </div>
+        </p>
       )}
     </div>
   );
@@ -320,25 +327,20 @@ function DetailRow({
   mono?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(104px,0.42fr)_1fr] items-start gap-3 rounded-lg bg-ink-100 px-4 py-3 text-sm dark:bg-white/4">
-      <div className="flex min-w-0 items-center gap-2 text-ink-900/60 dark:text-ink-50/60">
-        <span className="shrink-0 text-ink-900/45 dark:text-ink-50/45">{icon}</span>
+    <div className="grid gap-0.5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4">
+      <dt className="flex h-5 min-w-0 items-center gap-2 text-xs text-fg-subtle">
+        <span className="shrink-0">{icon}</span>
         <span className="truncate">{label}</span>
-      </div>
-      <div
-        className={cn(
-          'min-w-0 text-right font-medium text-ink-900 dark:text-white',
-          mono && 'font-mono text-xs'
-        )}
-      >
-        <span className="wrap-break-word">{value}</span>
-      </div>
+      </dt>
+      <dd className={cn('min-w-0 text-sm leading-5 text-fg wrap-break-word', mono && 'font-mono text-[13px]')}>
+        {value}
+      </dd>
     </div>
   );
 }
 
 function MissingValue({ children = 'nicht verfügbar' }: { children?: ReactNode }) {
-  return <span className="font-normal italic text-ink-900/45 dark:text-ink-50/45">{children}</span>;
+  return <span className="text-fg-subtle">{children}</span>;
 }
 
 function formatAsn(details: IpDetails): string | undefined {

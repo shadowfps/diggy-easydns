@@ -1,9 +1,10 @@
 import { motion } from 'motion/react';
 import { useState, useMemo } from 'react';
 import type { DnsRecord, RecordType } from '@/types/dns';
-import { cn } from '@/lib/cn';
 import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
+import { InfoButton } from '@/components/ui/InfoButton';
+import { explainRecordType } from '@/lib/explanations';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface RecordsListProps {
@@ -23,27 +24,43 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
 
   const filtered = filter === 'ALL' ? records : records.filter((r) => r.type === filter);
 
+  // Das „?“ zur Erklärung steht nur in der ersten Zeile je Typ. An jeder
+  // Zeile wären es bei vielen TXT- oder NS-Records ein Dutzend gleiche
+  // Fragezeichen untereinander — und ebenso viele Tab-Stopps.
+  const explainedRows = new Set<number>();
+  const seenTypes = new Set<RecordType>();
+  filtered.forEach((record, i) => {
+    if (seenTypes.has(record.type)) return;
+    seenTypes.add(record.type);
+    explainedRows.add(i);
+  });
+
   return (
     <div>
-      <div className="flex items-center gap-1.5 flex-wrap mb-4">
-        <FilterPill active={filter === 'ALL'} onClick={() => setFilter('ALL')}>
-          Alle <span className="opacity-60">· {records.length}</span>
-        </FilterPill>
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <FilterChip active={filter === 'ALL'} onClick={() => setFilter('ALL')}>
+          Alle <span className="tabular-nums opacity-60">· {records.length}</span>
+        </FilterChip>
         {types.map(([type, count]) => (
-          <FilterPill
+          <FilterChip
             key={type}
             active={filter === type}
             onClick={() => setFilter(type)}
           >
-            {type} <span className="opacity-60">· {count}</span>
-          </FilterPill>
+            {type} <span className="tabular-nums opacity-60">· {count}</span>
+          </FilterChip>
         ))}
       </div>
 
-      <div className="surface rounded-xl overflow-hidden">
+      {/* `overflow-visible`: die Erklärung hängt als Popover an der Typ-Spalte
+          und reicht bei kurzen Listen über den Kartenrand. Mit dem
+          `overflow-hidden` aus card-flush wäre sie dort abgeschnitten; die
+          Zeilen haben keinen Hintergrund, die Rundung braucht es hier nicht. */}
+      <div className="card-flush divide-y divide-line-subtle overflow-visible">
         {filtered.map((record, i) => {
           const hasIpDetails =
             (record.type === 'A' || record.type === 'AAAA') && isInspectableIp(record.value);
+          const explanation = explainedRows.has(i) ? explainRecordType(record.type) : undefined;
 
           return (
             <motion.div
@@ -51,24 +68,22 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3, delay: staggerDelay(i, 0.03, reduced) }}
-              className={cn(
-                'grid grid-cols-[60px_minmax(0,1fr)_auto] gap-3 px-4 py-3 items-center',
-                i !== filtered.length - 1 && 'border-b border-ink-100 dark:border-ink-900/80'
-              )}
+              className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 sm:px-6"
             >
-              <span className="text-xs font-mono font-medium text-ink-700 dark:text-ink-300">
+              <span className="flex items-center gap-1 font-mono text-xs font-semibold text-fg-muted">
                 {record.type}
+                {explanation && <InfoButton term={record.type} explanation={explanation} />}
               </span>
-              <span className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-xs text-ink-900/80 dark:text-ink-50/80">
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[13px] text-fg">
                 {record.priority !== undefined && (
-                  <span className="text-ink-900/40 dark:text-ink-50/40 mr-2 shrink-0">
+                  <span className="mr-2 shrink-0 tabular-nums text-fg-subtle">
                     {record.priority}
                   </span>
                 )}
                 {hasIpDetails ? (
                   <>
-                    <IpAddressLink ip={record.value} className="text-ink-900/80 dark:text-ink-50/80" />
-                    <IpOwnerLabel ip={record.value} />
+                    <IpAddressLink ip={record.value} className="text-[13px] text-fg" />
+                    <IpOwnerLabel ip={record.value} className="text-xs text-fg-subtle" />
                   </>
                 ) : record.type === 'NS' && onUseDomain ? (
                   <NameserverButton value={record.value} onClick={() => onUseDomain(record.value)} />
@@ -82,9 +97,7 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
                   </span>
                 )}
               </span>
-              <span className="text-[11px] text-ink-900/40 dark:text-ink-50/40 font-mono tabular-nums">
-                {record.ttl}s
-              </span>
+              <Ttl ttl={record.ttl} />
             </motion.div>
           );
         })}
@@ -93,12 +106,31 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
   );
 }
 
+/**
+ * TTL in Sekunden — oder „—“, wenn der Server sie nicht ermitteln konnte
+ * (`null`, #76). Eine `0s` wäre dort falsch: 0 ist eine echte TTL und hieße
+ * „nicht cachen“. Der Strich ist für Screenreader ausgeblendet und durch
+ * „TTL unbekannt“ ersetzt, sonst würde nur „Gedankenstrich“ vorgelesen.
+ */
+function Ttl({ ttl }: { ttl: number | null }) {
+  if (ttl === null) {
+    return (
+      <span className="text-xs text-fg-subtle" title="TTL unbekannt">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">TTL unbekannt</span>
+      </span>
+    );
+  }
+
+  return <span className="text-xs tabular-nums text-fg-subtle">{ttl}s</span>;
+}
+
 function NameserverButton({ value, onClick }: { value: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="min-w-0 truncate rounded-md text-left font-mono text-xs text-ink-900/80 transition-colors hover:text-ink-950 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900 dark:text-ink-50/80 dark:hover:text-white dark:focus-visible:outline-ink-50"
+      className="min-w-0 truncate text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
       title={`${value} in die Suche übernehmen`}
     >
       {value}
@@ -106,7 +138,7 @@ function NameserverButton({ value, onClick }: { value: string; onClick: () => vo
   );
 }
 
-function FilterPill({
+function FilterChip({
   children,
   active,
   onClick,
@@ -116,15 +148,7 @@ function FilterPill({
   onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'px-3 py-1 rounded-full text-xs font-medium transition-all',
-        active
-          ? 'bg-ink-950 text-white dark:bg-ink-50 dark:text-ink-950'
-          : 'bg-ink-100 dark:bg-ink-900 text-ink-900/70 dark:text-ink-50/70 hover:bg-ink-200/70 dark:hover:bg-ink-800/80'
-      )}
-    >
+    <button type="button" aria-pressed={active} onClick={onClick} className="chip">
       {children}
     </button>
   );

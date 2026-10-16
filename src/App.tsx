@@ -7,29 +7,29 @@ import { QuickFacts } from '@/modules/score/QuickFacts';
 import { RecordsList } from '@/modules/records/RecordsList';
 import { PropagationView } from '@/modules/propagation/PropagationView';
 import { FindingsList } from '@/modules/findings/FindingsList';
-import { SecurityView } from '@/modules/security/SecurityView';
-import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
-import { ImpressumView } from '@/modules/impressum/ImpressumView';
-import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
+import { CheckOverview } from '@/modules/home/CheckOverview';
+import { usePreviousCheck } from '@/modules/changes/usePreviousCheck';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
-import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';
+import { PageErrorFallback, SectionErrorFallback } from '@/components/errors/AppErrorFallback';
 import {
   ScoreCardSkeleton,
   SectionCardsSkeleton,
   PropagationSkeleton,
   WhoisSkeleton,
   ListSkeleton,
+  SinceLastCheckSkeleton,
 } from '@/components/ui/Skeleton';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Check, Download, Link2, Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 
 /*
@@ -59,10 +59,59 @@ const PageSpeedView = lazy(() =>
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
 );
+// Der Vergleich ist eine eigene Seite, die man bewusst aufruft — sein Code
+// muss nicht im Bundle stecken, das den ersten Report blockiert.
+const CompareView = lazy(() =>
+  import('@/modules/compare/CompareView').then((m) => ({ default: m.CompareView }))
+);
+
+/*
+ * Der Mail-Tab: Seine Daten lädt der Report sofort, die Ansicht braucht aber
+ * erst der Klick auf den Tab. Mit BIMI und TLS-RPT (#83) wäre index.js sonst
+ * über sein Budget gewachsen (47,05 → 48,31 kB gzip bei 48 kB Grenze);
+ * nachgeladen sind es 3,6 kB, die niemanden beim ersten Report aufhalten.
+ * Vorgeladen wird, sobald die Mail-Daten da sind (siehe App) — dann steht die
+ * Ansicht beim Klick schon bereit, statt erst ein Skeleton zu zeigen.
+ */
+const loadMailView = () => import('@/modules/mail/MailView');
+const MailView = lazy(() => loadMailView().then((m) => ({ default: m.MailView })));
+
+/*
+ * „Seit dem letzten Check“ erscheint nur bei einem erneuten Check derselben
+ * Domain und erst nach dem Report — Vergleichslogik und Texte (rund 3 kB
+ * gzip) müssen den ersten Report nicht aufhalten.
+ */
+const SinceLastCheck = lazy(() =>
+  import('@/modules/changes/SinceLastCheck').then((m) => ({ default: m.SinceLastCheck }))
+);
+
+/*
+ * Bundle-Budget (index.js ≤ 48 kB gzip, scripts/check-bundle-size.mjs): mit
+ * „Seit dem letzten Check“ (#79) und dem Kalender (#84) lag index.js bei
+ * 48,5 kB. Statt
+ * die Grenze anzuheben, kommen zwei Dinge aus dem kritischen Pfad, die den
+ * ersten Report nicht aufhalten müssen:
+ *
+ * - Der Sicherheits-Tab: SSL und DNSSEC lädt der Report sofort, die Ansicht
+ *   braucht erst der Klick auf den Tab. Vorgeladen wird, sobald einer der
+ *   beiden Checks fertig ist (siehe App) — dann steht sie beim Klick bereit.
+ * - Impressum und Datenschutz: reiner Text auf eigenen Seiten, zusammen rund
+ *   5 kB gzip, die bisher jeder Aufruf mitlud.
+ */
+const loadSecurityView = () => import('@/modules/security/SecurityView');
+const SecurityView = lazy(() => loadSecurityView().then((m) => ({ default: m.SecurityView })));
+const ImpressumView = lazy(() =>
+  import('@/modules/impressum/ImpressumView').then((m) => ({ default: m.ImpressumView }))
+);
+const DatenschutzView = lazy(() =>
+  import('@/modules/datenschutz/DatenschutzView').then((m) => ({ default: m.DatenschutzView }))
+);
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/cn';
 import { isDnsOnlyName } from '@/lib/dnsName';
+import { propagationTypes } from '@/lib/propagation';
 import {
   buildDocumentTitle,
   formatExportTimestamp,
@@ -74,13 +123,17 @@ import {
   type AppView,
 } from '@/lib/lookupPath';
 import {
+  compareDocumentTitle,
+  comparePathFor,
+  getComparePairFromPath,
+  type ComparePair,
+} from '@/lib/comparePath';
+import {
   clearLookupHistory,
   saveLookupToHistory,
   useLookupHistory,
 } from '@/lib/lookupHistory';
-import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
-
-const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+import type { PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
@@ -98,6 +151,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('records');
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
+  const [comparePair, setComparePair] = useState<ComparePair>({ left: '', right: '' });
   const initialPathHandledRef = useRef(false);
   // applyPath schließt über aktuellen State. Der popstate-Listener wird nur
   // einmal gebunden, greift die Funktion aber über diese Ref ab, damit er
@@ -107,8 +161,13 @@ export default function App() {
   // damit man ohne Klick per Strg+V einfügen und suchen kann. Bei Deep-Links
   // (Permalink oder Unterseite) übernimmt der Routing-Effekt.
   const [autoFocusSearch] = useState(() => window.location.pathname === '/');
+  // „Bewegung reduzieren“: springen statt gleiten. Das sanfte Scrollen per JS
+  // erreicht weder MotionConfig noch die CSS-Regel in globals.css.
+  const smoothScroll: ScrollBehavior = useReducedMotion() ? 'auto' : 'smooth';
 
   const report = lookup.report;
+  // Muss vor dem Speichern unten gelesen werden — siehe usePreviousCheck.
+  const previousCheck = usePreviousCheck(report);
   const records = lookup.records;
   const recordsLoading = lookup.recordsStatus === 'loading';
   const recordsErrored = lookup.recordsStatus === 'error';
@@ -153,7 +212,7 @@ export default function App() {
   };
 
   const handleSearch = (domain: string) => {
-    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
+    window.scrollTo({ top: 0, behavior: records || ipQuery ? smoothScroll : 'auto' });
     /*
      * Eintrag nur anlegen, wenn wir NICHT schon auf einem Lookup-Pfad sind.
      *
@@ -182,11 +241,12 @@ export default function App() {
   }, [lookup.recordsStatus, lookup.domain]);
 
   // Alle Sektionen fertig → vollständigen Report in die History schreiben.
+  // Fehlgeschlagene Sektionen mit, damit der nächste Vergleich sie auslässt.
   useEffect(() => {
     if (lookup.allSettled && lookup.report) {
-      saveLookupToHistory(lookup.report);
+      saveLookupToHistory(lookup.report, lookup.failed);
     }
-  }, [lookup.allSettled, lookup.report]);
+  }, [lookup.allSettled, lookup.report, lookup.failed]);
 
   const handleRunVirusScan = async () => {
     if (!lookup.domain || virusScanLoading) return;
@@ -224,6 +284,17 @@ export default function App() {
    * Zurück-Button nur die URL geändert und die Ansicht stehen gelassen.
    */
   const applyPath = (pathname: string) => {
+    // Vergleich: beide Domains stehen im Pfad, die Ansicht lädt sie selbst.
+    const pair = getComparePairFromPath(pathname);
+    if (pair) {
+      clearLookup();
+      setView('compare');
+      setComparePair(pair);
+      setSearchValue('');
+      setActiveTab('records');
+      return;
+    }
+
     const staticView = STATIC_ROUTES[pathname];
     if (staticView) {
       clearLookup();
@@ -272,7 +343,14 @@ export default function App() {
       window.history.pushState(null, '', pathname);
     }
     applyPath(pathname);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: smoothScroll });
+  };
+
+  // Aus der Score-Karte: Tab wechseln und die Tab-Leiste in Sicht holen — auf
+  // dem Handy liegt sie sonst unter der Schnellübersicht außer Sicht.
+  const handleShowFindings = () => {
+    setActiveTab('findings');
+    document.getElementById('tab-findings')?.scrollIntoView({ behavior: smoothScroll, block: 'nearest' });
   };
 
   const handleHome = () => navigate('/');
@@ -281,6 +359,8 @@ export default function App() {
   const handleAvailability = () => navigate('/availability');
   const handleImpressum = () => navigate('/impressum');
   const handleDatenschutz = () => navigate('/datenschutz');
+  const handleCompare = (left = '', right = '') => navigate(comparePathFor(left, right));
+  const handleOpenReport = (domain: string) => navigate(lookupPathFor(domain));
 
   const handleClearHistory = () => {
     clearLookupHistory();
@@ -295,7 +375,7 @@ export default function App() {
     if (!records && window.location.pathname !== '/') {
       window.history.pushState(null, '', '/');
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: smoothScroll });
   };
 
   // Erstes Laden: Deep-Link/Permalink anwenden.
@@ -314,8 +394,11 @@ export default function App() {
    * nicht unterscheidbar, ebenso Lesezeichen und Browser-History.
    */
   useEffect(() => {
-    document.title = buildDocumentTitle(view, lookup.domain, ipQuery);
-  }, [view, lookup.domain, ipQuery]);
+    document.title =
+      view === 'compare'
+        ? compareDocumentTitle(comparePair)
+        : buildDocumentTitle(view, lookup.domain, ipQuery);
+  }, [view, lookup.domain, ipQuery, comparePair]);
 
   // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
   useEffect(() => {
@@ -362,10 +445,24 @@ export default function App() {
     ? (mailData.spf.present ? 1 : 0) +
         (mailData.dmarc.present ? 1 : 0) +
         mailData.dkim.selectors.length +
-        (mailData.mtaSts.present ? 1 : 0) || undefined
+        (mailData.mtaSts.present ? 1 : 0) +
+        (mailData.tlsRpt?.present ? 1 : 0) +
+        (mailData.bimi?.present ? 1 : 0) || undefined
     : undefined;
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
   const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
+
+  // Sicherheits- und Mail-Tab vorladen, sobald es etwas zu zeigen gibt — nach
+  // dem ersten Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein
+  // Chunk von vor dem letzten Deploy), meldet sich der Tab über seine Boundary.
+  const hasSecurityData = ssl.status === 'done' || dnssec.status === 'done';
+  useEffect(() => {
+    if (hasSecurityData) loadSecurityView().catch(() => {});
+  }, [hasSecurityData]);
+  const hasMailData = Boolean(mailData);
+  useEffect(() => {
+    if (hasMailData) loadMailView().catch(() => {});
+  }, [hasMailData]);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -373,7 +470,22 @@ export default function App() {
         onHome={handleHome}
         onHistory={handleHistory}
         onAvailability={handleAvailability}
+        onCompare={() => handleCompare()}
         onAbout={handleAbout}
+        // Auf Report-Seiten wandert die Suche in die Kopfzeile: der Report
+        // beginnt oben, und die Suche bleibt beim Scrollen erreichbar.
+        search={
+          lookupHasOutput ? (
+            <SearchBar
+              variant="compact"
+              value={searchValue}
+              onValueChange={setSearchValue}
+              focusSignal={searchFocusSignal}
+              onSearch={handleSearch}
+              loading={recordsLoading}
+            />
+          ) : undefined
+        }
       />
 
       <main
@@ -395,9 +507,36 @@ export default function App() {
 
         {view === 'availability' && <AvailabilityView />}
 
-        {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
+        {(view === 'impressum' || view === 'datenschutz') && (
+          // Nachgeladen (siehe oben). Scheitert der Chunk, bleibt die App
+          // drumherum bedienbar, statt ganz in den Fehler zu fallen.
+          <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
+            <Suspense fallback={null}>
+              {view === 'impressum' ? (
+                <ImpressumView onOpenDatenschutz={handleDatenschutz} />
+              ) : (
+                <DatenschutzView onOpenImpressum={handleImpressum} />
+              )}
+            </Suspense>
+          </ErrorBoundary>
+        )}
 
-        {view === 'datenschutz' && <DatenschutzView onOpenImpressum={handleImpressum} />}
+        {view === 'compare' && (
+          <Suspense
+            fallback={
+              <div className="mx-auto w-full max-w-6xl">
+                <SectionCardsSkeleton count={2} />
+              </div>
+            }
+          >
+            <CompareView
+              left={comparePair.left}
+              right={comparePair.right}
+              onCompare={handleCompare}
+              onOpenReport={handleOpenReport}
+            />
+          </Suspense>
+        )}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -420,7 +559,7 @@ export default function App() {
               >
                 <Suspense
                   fallback={
-                    <span className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase text-ink-950 dark:text-ink-50">
+                    <span className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase text-fg">
                       diggy
                     </span>
                   }
@@ -463,14 +602,14 @@ export default function App() {
               <div className="mb-10 max-w-md mx-auto">
                 <Suspense
                   fallback={
-                    <p className="text-base text-ink-900/60 dark:text-ink-50/60">
+                    <p className="text-base text-fg-muted">
                       DNS, SSL, Mail-Security und Propagation auf einen Blick.
                     </p>
                   }
                 >
                   <TextType
                     as="p"
-                    className="text-base text-ink-900/60 dark:text-ink-50/60"
+                    className="text-base text-fg-muted"
                     text={[
                       'DNS, SSL, Mail-Security und Propagation auf einen Blick.',
                       'Ohne Fachchinesisch, mit Empfehlungen.',
@@ -480,7 +619,7 @@ export default function App() {
                     pauseDuration={2200}
                     deletingSpeed={25}
                     cursorCharacter="▍"
-                    cursorClassName="text-ink-900 dark:text-ink-50"
+                    cursorClassName="text-fg"
                     cursorBlinkDuration={0.6}
                     initialDelay={500}
                   />
@@ -490,7 +629,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {view === 'lookup' && (
+        {view === 'lookup' && !lookupHasOutput && (
           <SearchBar
             value={searchValue}
             onValueChange={setSearchValue}
@@ -498,28 +637,36 @@ export default function App() {
             autoFocus={autoFocusSearch}
             onSearch={handleSearch}
             loading={recordsLoading}
+            recent={historyEntries}
           />
         )}
 
-        {/* Promo für das Schwester-Tool — nur auf der Landing-Page (Idle) */}
+        {/* Was diggy prüft + Promo für das Schwester-Tool — nur auf der
+            Landing-Page (Idle) */}
         <AnimatePresence>
+          {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
+            <CheckOverview key="check-overview" />
+          )}
           {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
             <ConverterPromo key="converter-promo" />
           )}
         </AnimatePresence>
 
         {/* Loading State — nur bis die Records da sind. Danach übernimmt der
-            Report mit Skeletons für die noch ladenden Sektionen. */}
+            Report mit Skeletons für die noch ladenden Sektionen. role="status",
+            damit der Text angesagt wird: bei „Bewegung reduzieren“ steht der
+            Spinner still und trägt den Ladezustand nicht mehr mit. */}
         <AnimatePresence>
           {view === 'lookup' && recordsLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              role="status"
               className="mx-auto mt-10 max-w-2xl text-center"
             >
-              <Loader2 className="w-6 h-6 mx-auto animate-spin text-ink-900 dark:text-ink-50" />
-              <p className="mt-3 text-sm text-ink-900/60 dark:text-ink-50/60">
+              <Loader2 className="mx-auto size-6 animate-spin text-fg" />
+              <p className="mt-3 text-sm text-fg-muted">
                 Records werden geholt…
               </p>
             </motion.div>
@@ -531,8 +678,8 @@ export default function App() {
 
         {/* Error */}
         {view === 'lookup' && recordsErrored && (
-          <div className="mx-auto mt-8 max-w-2xl rounded-xl bg-red-500/10 p-4 text-center text-sm text-red-600 dark:text-red-400">
-            {lookup.recordsError}
+          <div className="mx-auto mt-10 max-w-2xl">
+            <SectionError message={lookup.recordsError ?? undefined} />
           </div>
         )}
 
@@ -543,26 +690,98 @@ export default function App() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.24 }}
-            className="mx-auto mt-6 w-full max-w-[110rem] md:mt-8"
+            // Ab xl zwei Spalten: links die Zusammenfassung, die beim Scrollen
+            // mitläuft, rechts die Tabs. Darunter ist die rechte Spalte zu
+            // schmal für die zweispaltigen Tab-Inhalte — dort wird gestapelt.
+            className="mx-auto w-full max-w-[110rem] xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-start xl:gap-8"
           >
-              <div className="text-center mb-5">
-                <span className="font-mono text-base text-ink-900/60 dark:text-ink-50/60">
-                  {report.domain}
-                </span>
+            <aside
+              aria-label="Zusammenfassung"
+              className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:sticky xl:top-20 xl:grid-cols-1"
+            >
+              {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann.
+                  Export und Permalink standen vorher unter allen Tabs am
+                  Seitenende — wer sie suchte, musste erst durchscrollen. */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:col-span-2 xl:col-span-1 xl:flex-col xl:items-start xl:justify-start">
+                <div className="min-w-0">
+                  <p className="eyebrow">DNS-Report</p>
+                  <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
+                    {report.domain}
+                  </h1>
+                  <p className="mt-1.5 text-sm text-fg-muted">
+                    Geprüft am {formatCheckedAt(report.timestamp)}
+                  </p>
+                </div>
+                {/* Kurze Beschriftungen, damit die drei Aktionen in der
+                    24rem-Spalte und auf dem Handy ab 360 px in eine Zeile
+                    passen — mit „Export JSON“ und „Permalink kopieren“ brach
+                    „Vergleichen“ um und nahm der Seitenspalte die letzte Luft
+                    bei 1440×900. Die ausführliche Fassung steht im Tooltip;
+                    gap-x-1.5 holt die letzten Pixel für 360 px. */}
+                <div className="flex shrink-0 flex-wrap gap-x-1.5 gap-y-2">
+                  <ActionButton
+                    onClick={handleExportJson}
+                    label="JSON herunterladen"
+                    title="Report als JSON herunterladen"
+                  >
+                    <Download className="size-3.5" />
+                    JSON
+                  </ActionButton>
+                  <ActionButton onClick={handleCopyPermalink} title="Permalink zu diesem Report kopieren">
+                    {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
+                    {permalinkCopied ? 'Link kopiert' : 'Link kopieren'}
+                  </ActionButton>
+                  <ActionButton
+                    onClick={() => handleCompare(report.domain)}
+                    title="Mit einer zweiten Domain vergleichen"
+                  >
+                    <ArrowLeftRight className="size-3.5" />
+                    Vergleichen
+                  </ActionButton>
+                </div>
               </div>
 
               {/* Score + Quick Facts */}
-              <div className="grid md:grid-cols-2 gap-4 mb-8">
-                {lookup.allSettled ? <ScoreCard score={lookup.healthScore} /> : <ScoreCardSkeleton />}
-                <QuickFacts
-                  records={report.records}
-                  ssl={ssl}
-                  dnssec={dnssec}
-                  mail={mail}
-                  techStack={techStack}
-                  onUseDomain={handleUseDomainInSearch}
+              {lookup.allSettled ? (
+                <ScoreCard
+                  score={lookup.healthScore}
+                  findings={lookup.findings}
+                  failed={lookup.failed}
+                  onShowFindings={handleShowFindings}
                 />
-              </div>
+              ) : (
+                <ScoreCardSkeleton />
+              )}
+              <QuickFacts
+                records={report.records}
+                ssl={ssl}
+                dnssec={dnssec}
+                mail={mail}
+                techStack={techStack}
+                onUseDomain={handleUseDomainInSearch}
+              />
+            </aside>
+
+            <div className="mt-8 min-w-0 xl:mt-0">
+              {/* Über den Tabs statt in der Seitenspalte: die soll flach
+                  bleiben (docs/DESIGN.md), und hier ist Platz für die Liste.
+                  Beim ersten Lookup einer Domain gibt es nichts zu zeigen. */}
+              {previousCheck && (
+                // Eigene Boundary: scheitert das Nachladen (alter Chunk nach
+                // einem Deploy) oder der Vergleich an kaputten History-Daten,
+                // fehlt nur diese Karte — nicht der ganze Report.
+                <ErrorBoundary key={report.timestamp} fallback={() => null}>
+                  <Suspense fallback={<SinceLastCheckSkeleton className="mb-6" />}>
+                    <SinceLastCheck
+                      previous={previousCheck}
+                      report={report}
+                      failed={lookup.failed}
+                      settled={lookup.allSettled}
+                      className="mb-6"
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              )}
 
               {/* Tabs */}
               <Tabs
@@ -570,18 +789,11 @@ export default function App() {
                 onChange={setActiveTab}
                 tabs={[
                   { id: 'records', label: 'Records', count: report.records.length },
-                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten
-                  // Propagation (vergleicht A/AAAA), Speed und Virus Scan
-                  // (brauchen eine Website) nichts zu zeigen.
-                  ...(dnsOnly
-                    ? []
-                    : [
-                        {
-                          id: 'propagation' as const,
-                          label: 'Propagation',
-                          count: propagation.data?.length || undefined,
-                        },
-                      ]),
+                  {
+                    id: 'propagation',
+                    label: 'Propagation',
+                    count: propagation.data?.length || undefined,
+                  },
                   { id: 'security', label: 'Security' },
                   { id: 'mail', label: 'Mail', count: mailCount },
                   {
@@ -594,6 +806,8 @@ export default function App() {
                     label: 'WHOIS',
                     count: whois.status === 'done' && whois.data ? 1 : undefined,
                   },
+                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten Speed und
+                  // Virus Scan (brauchen eine Website) nichts zu zeigen.
                   ...(dnsOnly
                     ? []
                     : [
@@ -653,7 +867,11 @@ export default function App() {
                       ) : propagation.status === 'error' ? (
                         <SectionError message={propagation.error} />
                       ) : propagation.data && propagation.data.length > 0 ? (
-                        <PropagationView key={report.domain} results={propagation.data} />
+                        <PropagationView
+                          key={report.domain}
+                          results={propagation.data}
+                          types={propagationTypes(report.domain)}
+                        />
                       ) : (
                         <Placeholder
                           title="Multi-Resolver-Propagation"
@@ -670,11 +888,14 @@ export default function App() {
                       (securityLoading ? (
                         <SectionCardsSkeleton count={2} />
                       ) : (
-                        <SecurityView
-                          ssl={ssl.data ?? undefined}
-                          sslApplicable={!dnsOnly}
-                          dnssec={dnssec.data ?? NO_DNSSEC}
-                        />
+                        <Suspense fallback={<SectionCardsSkeleton count={2} />}>
+                          <SecurityView
+                            domain={report.domain}
+                            ssl={ssl}
+                            sslApplicable={!dnsOnly}
+                            dnssec={dnssec}
+                          />
+                        </Suspense>
                       ))}
                     {activeTab === 'mail' &&
                       (mail.status === 'loading' ? (
@@ -682,7 +903,9 @@ export default function App() {
                       ) : mail.status === 'error' ? (
                         <SectionError message={mail.error} />
                       ) : mailData ? (
-                        <MailView mail={mailData} />
+                        <Suspense fallback={<SectionCardsSkeleton count={4} />}>
+                          <MailView mail={mailData} />
+                        </Suspense>
                       ) : (
                         <SectionCardsSkeleton count={4} />
                       ))}
@@ -692,7 +915,11 @@ export default function App() {
                       ) : whois.status === 'error' ? (
                         <SectionError message={whois.error} />
                       ) : (
-                        <WhoisView whois={whois.data ?? undefined} onUseDomain={handleUseDomainInSearch} />
+                        <WhoisView
+                          domain={report.domain}
+                          whois={whois.data ?? undefined}
+                          onUseDomain={handleUseDomainInSearch}
+                        />
                       ))}
                     {activeTab === 'speed' && (
                       <Suspense fallback={<SectionCardsSkeleton count={2} />}>
@@ -720,43 +947,32 @@ export default function App() {
                 </AnimatePresence>
               </div>
               </ErrorBoundary>
-
-              {/* Footer-Actions */}
-              <div className="mt-12 flex justify-end gap-2">
-                <ActionButton onClick={handleExportJson}>Export JSON</ActionButton>
-                <ActionButton onClick={handleCopyPermalink}>
-                  {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
-                </ActionButton>
-                {/* "Watch 🔔" war hier ein Button ohne Handler — sah aus wie
-                    die anderen, tat aber nichts. Das Feature steht in der
-                    Roadmap als offen; bis dahin ist kein Button ehrlicher als
-                    ein wirkungsloser. */}
-              </div>
+            </div>
           </motion.div>
         )}
       </main>
 
-      <footer className="border-t border-ink-100 px-6 py-8 dark:border-ink-900 md:px-8">
-        <div className="flex flex-col gap-3 text-xs text-ink-900/40 dark:text-ink-50/40 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="mt-16 border-t border-line-subtle px-4 py-8 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 text-xs text-fg-subtle sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>diggy · DNS made friendly</span>
-            <span className="hidden text-ink-900/20 dark:text-ink-50/20 sm:inline" aria-hidden>
+            <span className="hidden text-line sm:inline" aria-hidden>
               ·
             </span>
             <button
               type="button"
               onClick={handleImpressum}
-              className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
+              className="transition-colors hover:text-fg"
             >
               Impressum
             </button>
-            <span className="hidden text-ink-900/20 dark:text-ink-50/20 sm:inline" aria-hidden>
+            <span className="hidden text-line sm:inline" aria-hidden>
               ·
             </span>
             <button
               type="button"
               onClick={handleDatenschutz}
-              className="transition-colors hover:text-ink-900/70 dark:hover:text-ink-50/70"
+              className="transition-colors hover:text-fg"
             >
               Datenschutz
             </button>
@@ -769,19 +985,14 @@ export default function App() {
 }
 
 function Placeholder({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="surface rounded-xl p-12 text-center">
-      <h3 className="text-base font-medium mb-1">{title}</h3>
-      <p className="text-sm text-ink-900/50 dark:text-ink-50/50">{subtitle}</p>
-    </div>
-  );
+  return <EmptyState title={title}>{subtitle}</EmptyState>;
 }
 
 function SectionError({ message }: { message?: string }) {
   return (
-    <div className="surface rounded-xl p-8 text-center text-sm text-red-600 dark:text-red-400">
+    <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
       {message ?? 'Dieser Check ist fehlgeschlagen.'}
-    </div>
+    </EmptyState>
   );
 }
 
@@ -792,19 +1003,30 @@ function SectionError({ message }: { message?: string }) {
 function ActionButton({
   children,
   onClick,
+  label,
+  title,
 }: {
   children: React.ReactNode;
   onClick: () => void | Promise<void>;
+  /** Zugänglicher Name, wenn die sichtbare Beschriftung allein zu knapp ist. */
+  label?: string;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="px-3.5 py-2 text-xs font-medium rounded-lg border border-ink-100 dark:border-ink-900/80 hover:bg-ink-100/60 dark:hover:bg-ink-900 transition-colors"
+      aria-label={label}
+      title={title}
+      className="btn btn-secondary btn-sm"
     >
       {children}
     </button>
   );
+}
+
+function formatCheckedAt(timestamp: string): string {
+  return new Date(timestamp).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function getLookupUrl(domain: string): string {

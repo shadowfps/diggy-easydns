@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 
 /**
  * Gemeinsames Setup für die Frontend-Tests.
@@ -19,6 +19,17 @@ import { cleanup } from '@testing-library/react';
 afterEach(() => {
   cleanup();
 });
+
+/*
+ * Nachgeladene Ansichten (Mail, Security, Impressum, Datenschutz, …) sind in
+ * den Tests ein echtes `import()`: Vite transformiert das Modul samt
+ * Abhängigkeiten beim ersten Zugriff. Auf einem kalten CI-Runner dauerte das
+ * für den Mail-Tab 1,24 s — länger als die 1 s, die `findBy*`/`waitFor`
+ * standardmäßig warten. 3 s lassen Luft und bleiben unter dem Test-Timeout
+ * von Vitest (5 s), damit ein echter Fehler weiter als Fehlschlag der
+ * Assertion erscheint und nicht als Timeout.
+ */
+configure({ asyncUtilTimeout: 3000 });
 
 /** Vollständiges MediaQueryList — Framer Motion nutzt noch das Legacy-API. */
 function mediaQueryList(query: string, matches: boolean): MediaQueryList {
