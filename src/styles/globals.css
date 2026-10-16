@@ -442,8 +442,9 @@
 
 /*
  * „Bewegung reduzieren“ (prefers-reduced-motion) für alles, was CSS bewegt.
- * Framer Motion regelt `MotionConfig` in main.tsx, GSAP und die
- * rAF-Komponenten `useReducedMotion` — die erreicht diese Regel nicht.
+ * Framer Motion regelt `MotionConfig` in main.tsx, GSAP, die rAF-Komponenten
+ * und das Scrollen in App.tsx `useReducedMotion` — die erreicht diese Regel
+ * nicht.
  *
  * - Endlosschleifen stehen still: Spinner, Skeleton-Puls, Lade-Balken,
  *   Punkte im Such-Button. Den Ladezustand tragen dann Text, das stehende

@@ -59,9 +59,10 @@ export function IpResultView({ ip }: IpResultViewProps) {
           </div>
         </div>
 
-        {/* Details */}
+        {/* Details — ohne role="status": derselbe Ladevorgang wie beim PTR
+            oben, der ihn schon ansagt. Zwei Status hießen zwei Ansagen. */}
         {loading && (
-          <div role="status" className="card flex items-center gap-2 text-sm text-fg-muted">
+          <div className="card flex items-center gap-2 text-sm text-fg-muted">
             <Loader2 className="size-4 animate-spin" />
             <span>IP-Details werden geladen…</span>
           </div>

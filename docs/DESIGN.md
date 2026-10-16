@@ -152,14 +152,15 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
   Animation.** Dann bewegt sich nichts mehr: Spinner und Skeletons stehen
   still, nichts verschiebt oder skaliert sich, Einblendungen blenden nur noch
   ein.
-  - Framer Motion: `MotionConfig` in `main.tsx`. GSAP und eigene
-    rAF-Schleifen: `useReducedMotion`.
+  - Framer Motion: `MotionConfig` in `main.tsx`. GSAP, eigene rAF-Schleifen
+    und Scrollen per JS (`behavior: 'smooth'`): `useReducedMotion`.
   - CSS: eine Regel am Ende von `globals.css`. Eine neue Animation kommt als
     Token in `@theme` (`--animate-…`) und in diese Regel; Versatz beim Hover
     direkt mit `motion-safe:` schreiben. Nie per `style={{ animation }}` —
     gegen einen Inline-Style kommt die Regel nicht an.
 - Ein Ladezustand hängt nie allein an der Bewegung: Text oder Icon dazu, und
   der Text steht in `role="status"`, damit ihn auch ein Screenreader ansagt.
+  Ein Status je Ladevorgang, auch wenn mehrere Platzhalter auf ihn warten.
 
 ## Zugänglichkeit
 
