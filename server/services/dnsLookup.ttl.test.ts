@@ -165,23 +165,30 @@ describe('lookupStandardRecords — TTL-Zuordnung', () => {
     );
   });
 
-  it('nimmt bei einem Alias die TTL des Ziel-RRsets, nicht die des CNAME', async () => {
-    dns.resolveCname.mockResolvedValue(['example.com']);
-    // Wie Cloudflare antwortet: erst der CNAME des Alias, dann das RRset des
-    // Ziels. Die CNAME-TTL ist bewusst die kleinere — ohne Filter nach Typ
-    // würde sie sonst über das Minimum durchrutschen.
-    const cname: Answer = { name: 'www.example.com.', type: 5, TTL: 60, data: 'example.com.' };
+  it('nimmt bei einem Alias das Minimum aus CNAME-Kette und Ziel-RRset', async () => {
+    dns.resolveCname.mockResolvedValue(['edge.example.net']);
+    // Wie Cloudflare antwortet: erst die CNAME-Kette des Alias, dann das
+    // RRset des Ziels. Das mittlere Glied läuft am frühesten ab — danach kann
+    // die Kette woanders hinzeigen, also gilt die Antwort nur so lange. Bei
+    // TXT ist dagegen das RRset selbst das kürzeste Glied.
+    const chain: Answer[] = [
+      { name: 'www.example.com.', type: 5, TTL: 3600, data: 'cdn.example.net.' },
+      { name: 'cdn.example.net.', type: 5, TTL: 60, data: 'edge.example.net.' },
+    ];
     stubDoh({
-      CNAME: [cname],
-      TXT: [cname, { name: 'example.com.', type: 16, TTL: 120, data: '"v=spf1 -all"' }],
-      MX: [cname, { name: 'example.com.', type: 15, TTL: 3600, data: '10 mx1.example.com.' }],
+      CNAME: [chain[0]],
+      TXT: [...chain, { name: 'edge.example.net.', type: 16, TTL: 30, data: '"v=spf1 -all"' }],
+      MX: [...chain, { name: 'edge.example.net.', type: 15, TTL: 900, data: '10 mx1.example.com.' }],
+      // Nur die Kette, kein RRset des Ziels: daraus lässt sich keine TTL ablesen.
+      CAA: [...chain],
     });
 
     const ttls = ttlsByType(await lookupStandardRecords('www.example.com'));
 
-    expect(ttls.CNAME).toEqual([60]);
-    expect(ttls.TXT).toEqual([120]);
-    expect(ttls.MX).toEqual([3600, 3600]);
+    expect(ttls.CNAME).toEqual([3600]);
+    expect(ttls.MX).toEqual([60, 60]);
+    expect(ttls.TXT).toEqual([30]);
+    expect(ttls.CAA).toEqual([null]);
   });
 
   it('nimmt die kleinste TTL, wenn ein RRset uneinheitlich ankommt', async () => {

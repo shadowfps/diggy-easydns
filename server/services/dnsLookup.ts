@@ -263,14 +263,22 @@ async function lookupRrsetTtl(domain: string, type: RecordType): Promise<number 
  * das spart den fehleranfälligen Abgleich der Darstellungen (TXT-Quoting,
  * Groß-/Kleinschreibung, CAA-Format) zwischen node:dns und DoH.
  *
- * Gefiltert wird nach Typ, nicht nach Name: bei einem Alias steht zuerst
- * der CNAME in der Antwort, dann das RRset des Ziels — dessen TTL gehört zu
- * den Daten, die node:dns für den Alias liefert. Weichen TTLs im RRset
- * doch voneinander ab, nehmen wir die kleinste: so lange sind alle gültig.
+ * Bei einem Alias steht vor dem RRset des Ziels die CNAME-Kette. Die Antwort
+ * für den gefragten Namen gilt nur, solange jedes Glied gilt — läuft ein
+ * CNAME ab, kann er danach auf ein anderes Ziel zeigen. Deshalb zählt das
+ * Minimum aus Kette und RRset. Genauso rechnet node:dns (c-ares) die TTL für
+ * A/AAAA; ein Alias steht so nicht mit zwei Maßstäben in der Liste. Fehlt das
+ * RRset in der Antwort, ist die TTL unbekannt: die Kette allein sagt nichts
+ * über die Daten, die node:dns geliefert hat.
+ *
+ * Weichen TTLs im RRset doch voneinander ab, gilt ebenfalls die kleinste:
+ * so lange sind alle gültig.
  */
 function rrsetTtl(records: DnsRecord[], type: RecordType): number | null {
+  if (!records.some((r) => r.type === type)) return null;
+
   const ttls = records
-    .filter((r) => r.type === type)
+    .filter((r) => r.type === type || r.type === 'CNAME')
     .map((r) => r.ttl)
     .filter((ttl): ttl is number => typeof ttl === 'number' && Number.isFinite(ttl) && ttl >= 0);
   return ttls.length > 0 ? Math.min(...ttls) : null;
