@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   Check,
+  CircleHelp,
   Equal,
   EqualApproximately,
   EqualNot,
@@ -444,7 +445,9 @@ function certCells(lookup: ProgressiveLookup | null): SideCells {
   if (!lookup) return {};
   const { ssl } = lookup.sections;
   // `skipped` heißt: DNS-Eintrag mit Unterstrich, dort gibt es keinen Host.
-  return sectionCells(CERT_ROWS, ssl, (data) => certFacts(data, ssl.status !== 'skipped'));
+  return sectionCells(CERT_ROWS, ssl, (data) =>
+    certFacts(data, ssl.status !== 'skipped', ssl.lookupFailed)
+  );
 }
 
 function dnsCells(lookup: ProgressiveLookup | null): SideCells {
@@ -770,7 +773,8 @@ function FactValue({ cell }: { cell: FactCell }) {
     );
   }
   const { fact } = cell;
-  const Icon = TONE_ICON[fact.tone];
+  // „nicht prüfbar“ mit Fragezeichen wie im Report — die Form trägt den Status.
+  const Icon = fact.unchecked ? CircleHelp : TONE_ICON[fact.tone];
   return (
     <div className="min-w-0">
       <span

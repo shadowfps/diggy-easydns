@@ -50,6 +50,7 @@ function stubApi() {
       dkim: { selectors: [] },
       mtaSts: { present: false },
       hasMx: false,
+      nullMx: false,
     },
     findings: [],
   });

@@ -7,7 +7,15 @@
  * und „Unterschied“ auch „lädt noch“ und „nicht vergleichbar“.
  */
 import type { LoadStatus } from '@/hooks/useProgressiveLookup';
-import type { DnsRecord, DnssecInfo, MailSecurity, RecordType, SslInfo } from '@/types/dns';
+import type {
+  DnsRecord,
+  DnssecInfo,
+  LookupFailure,
+  MailSecurity,
+  RecordType,
+  SslInfo,
+} from '@/types/dns';
+import { dmarcPolicyFlawText, effectiveDmarcPolicy } from '@/lib/dmarc';
 
 /**
  * - `same`: identisch.
@@ -155,6 +163,11 @@ export interface Fact {
   /** Rohwert unter dem Wert, z. B. der SPF-Record. */
   detail?: string;
   mono?: boolean;
+  /**
+   * Der Check selbst scheiterte (Timeout, SERVFAIL …, #101): „nicht
+   * prüfbar“. Wie eine gescheiterte Sektion gibt es dann kein Urteil.
+   */
+  unchecked?: boolean;
 }
 
 export type FactCell =
@@ -178,6 +191,9 @@ export interface FactRow extends FactRowSpec {
 
 const LOADING: FactCell = { state: 'loading' };
 
+/** „nicht prüfbar“ — der Grund steht im Report, hier zählt nur, dass es keine Antwort gab. */
+const UNCHECKED: Fact = { value: 'nicht prüfbar', tone: 'neutral', key: 'unchecked', unchecked: true };
+
 export function compareFacts(
   rows: readonly FactRowSpec[],
   left: SideCells,
@@ -189,6 +205,8 @@ export function compareFacts(
     let status: DiffStatus;
     if (l.state === 'error' || r.state === 'error') status = 'unknown';
     else if (l.state === 'loading' || r.state === 'loading') status = 'pending';
+    // Ein gescheiterter Check in einer fertigen Sektion (#101): ebenso kein Urteil.
+    else if (l.fact.unchecked || r.fact.unchecked) status = 'unknown';
     else if (l.fact.key !== r.fact.key) status = 'different';
     else if (l.fact.value !== r.fact.value || l.fact.detail !== r.fact.detail) status = 'equivalent';
     else status = 'same';
@@ -216,7 +234,11 @@ export function sectionCells<T>(
   return Object.fromEntries(rows.map((r) => [r.id, { state: 'done', fact: facts[r.id] }]));
 }
 
-/* Mail-Schutz — Töne wie in MailView: ohne MX ist Fehlendes nur ein Hinweis. */
+/*
+ * Mail-Schutz — Töne wie in MailView: ohne MX ist Fehlendes nur ein Hinweis,
+ * und ein Null-MX zählt dabei wie kein MX (#77). DMARC nach der wirksamen
+ * Policy (#107), gescheiterte Abfragen als „nicht prüfbar“ (#101).
+ */
 
 export const MAIL_ROWS: readonly FactRowSpec[] = [
   { id: 'spf', label: 'SPF' },
@@ -226,14 +248,17 @@ export const MAIL_ROWS: readonly FactRowSpec[] = [
 ];
 
 export function mailFacts(mail: MailSecurity | undefined): Record<string, Fact> {
-  const hasMx = mail?.hasMx ?? false;
-  const missingTone: FactTone = hasMx ? 'warning' : 'neutral';
+  const receivesMail = Boolean(mail?.hasMx && !mail.nullMx);
+  const noMail = mail?.nullMx ?? false;
+  const missingTone: FactTone = receivesMail ? 'warning' : 'neutral';
 
   const spf = mail?.spf;
   // Der Record gehört in den Vergleich: zwei gültige SPF-Records mit
   // verschiedenen includes sind beim Umzug genau der Unterschied, um den es geht.
   const spfRecord = spf?.record?.replace(/\s+/g, ' ').trim();
-  const spfFact: Fact = !spf?.present
+  const spfFact: Fact = spf?.lookupFailed
+    ? UNCHECKED
+    : !spf?.present
     ? { value: 'fehlt', tone: missingTone, key: 'missing' }
     : !spf.valid
       ? { value: 'problematisch', tone: 'danger', key: `invalid|${spfRecord}`, detail: spfRecord }
@@ -243,32 +268,54 @@ export function mailFacts(mail: MailSecurity | undefined): Record<string, Fact> 
 
   // Nur die Policy: die rua-Adresse enthält fast immer die eigene Domain und
   // wäre damit bei jedem Vergleich verschieden.
-  const dmarc = mail?.dmarc;
-  const dmarcFact: Fact = !dmarc?.present
-    ? { value: 'fehlt', tone: missingTone, key: 'missing' }
-    : dmarc.policy
-      ? {
-          value: dmarc.policy,
-          tone: dmarc.policy === 'none' ? 'warning' : 'success',
-          key: dmarc.policy,
-          mono: true,
-        }
-      : { value: 'ohne Policy', tone: 'warning', key: 'unset' };
+  const dmarcFact = mail?.dmarc.lookupFailed ? UNCHECKED : dmarcPolicyFact(mail?.dmarc, missingTone);
 
   const selectors = (mail?.dkim.selectors ?? [])
     .filter((s) => s.present)
     .map((s) => s.selector)
     .sort();
+  // Ohne Mail (Null-MX) sind DKIM und MTA-STS nicht nötig — gleichwertig mit
+  // „keine gefunden“ bzw. „nicht eingerichtet“, nur anders begründet.
   const dkimFact: Fact =
     selectors.length > 0
       ? { value: selectors.join(', '), tone: 'success', key: selectors.join(','), mono: true }
+      : noMail
+      ? { value: 'nicht nötig', tone: 'neutral', key: 'none' }
+      : mail?.dkim.lookupFailed
+      ? UNCHECKED
       : { value: 'keine gefunden', tone: 'neutral', key: 'none' };
 
   const mtaStsFact: Fact = mail?.mtaSts.present
     ? { value: 'aktiv', tone: 'success', key: 'on' }
+    : noMail
+    ? { value: 'nicht nötig', tone: 'neutral', key: 'off' }
+    : mail?.mtaSts.lookupFailed
+    ? UNCHECKED
     : { value: 'nicht eingerichtet', tone: 'neutral', key: 'off' };
 
   return { spf: spfFact, dmarc: dmarcFact, dkim: dkimFact, mtaSts: mtaStsFact };
+}
+
+/**
+ * Verglichen wird die Policy, nach der Empfänger handeln: ein Record ohne
+ * gültiges p= wirkt mit rua= wie none, ohne wie keiner. Der Schlüssel ist
+ * dann derselbe wie beim Gegenstück — „gleichwertig“, der Mangel steht darunter.
+ */
+function dmarcPolicyFact(dmarc: MailSecurity['dmarc'] | undefined, missingTone: FactTone): Fact {
+  const { policy, flaw } = effectiveDmarcPolicy(dmarc);
+  const detail = flaw && dmarcPolicyFlawText(flaw);
+  if (policy === null) {
+    return flaw
+      ? { value: 'unwirksam', tone: missingTone, key: 'missing', detail }
+      : { value: 'fehlt', tone: missingTone, key: 'missing' };
+  }
+  return {
+    value: flaw ? `wie ${policy}` : policy,
+    tone: policy === 'none' ? 'warning' : 'success',
+    key: policy,
+    detail,
+    mono: true,
+  };
 }
 
 /* Zertifikat — Schwellen wie in SecurityView und den SSL-Findings. */
@@ -286,7 +333,12 @@ function expiryText(d: number): string {
   return `noch ${d === 1 ? '1 Tag' : `${d} Tage`}`;
 }
 
-export function certFacts(ssl: SslInfo | null | undefined, applicable = true): Record<string, Fact> {
+export function certFacts(
+  ssl: SslInfo | null | undefined,
+  applicable = true,
+  /** Der TLS-Check scheiterte (#101) — dann heißt `ssl: null` nicht „kein TLS“. */
+  lookupFailed?: LookupFailure
+): Record<string, Fact> {
   const dash = (key: string): Fact => ({ value: '—', tone: 'neutral', key });
 
   if (!applicable) {
@@ -296,6 +348,9 @@ export function certFacts(ssl: SslInfo | null | undefined, applicable = true): R
       expiry: dash('n/a'),
       issuer: dash('n/a'),
     };
+  }
+  if (!ssl && lookupFailed) {
+    return { status: UNCHECKED, expiry: UNCHECKED, issuer: UNCHECKED };
   }
   if (!ssl) {
     return {
@@ -381,6 +436,11 @@ export function nameserverFact(records: DnsRecord[]): Fact {
 }
 
 export function dnssecFacts(dnssec: DnssecInfo | undefined): Record<string, Fact> {
+  // Ein gefundener Schlüssel ist ein Ergebnis, auch wenn die zweite Abfrage
+  // scheiterte — wie in der Security-Ansicht.
+  if (dnssec && !dnssec.enabled && dnssec.lookupFailed) {
+    return { dnssec: UNCHECKED, algorithm: UNCHECKED };
+  }
   let status: Fact = { value: 'nicht aktiviert', tone: 'neutral', key: 'off' };
   if (dnssec?.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
     status = { value: 'aktiv & valide', tone: 'success', key: 'valid' };

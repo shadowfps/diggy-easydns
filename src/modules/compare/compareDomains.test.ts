@@ -108,6 +108,7 @@ const MAIL: MailSecurity = {
   dkim: { selectors: [{ selector: 'google', present: true }] },
   mtaSts: { present: false },
   hasMx: true,
+  nullMx: false,
 };
 
 describe('mailFacts', () => {
@@ -134,6 +135,57 @@ describe('mailFacts', () => {
     );
     expect(rows.find((r) => r.id === 'spf')!.status).toBe('different');
     expect(rows.find((r) => r.id === 'dmarc')!.status).toBe('same');
+  });
+});
+
+/** Mit Report-Semantik: nicht prüfbar (#101), Null-MX (#77), wirksame DMARC-Policy (#107). */
+describe('mailFacts — wie im Report', () => {
+  const statusOf = (left: MailSecurity, right: MailSecurity, id: string) =>
+    compareFacts(MAIL_ROWS, cells(mailFacts(left)), cells(mailFacts(right))).find((r) => r.id === id)!
+      .status;
+
+  it('zeigt gescheiterte Abfragen als „nicht prüfbar“ und urteilt nicht über sie', () => {
+    const failed: MailSecurity = {
+      ...MAIL,
+      spf: { present: false, valid: false, issues: [], lookupFailed: 'timeout' },
+      dmarc: { present: false, lookupFailed: 'servfail' },
+      dkim: { selectors: [], lookupFailed: 'timeout' },
+      mtaSts: { present: false, lookupFailed: 'network' },
+    };
+    const facts = mailFacts(failed);
+    for (const id of ['spf', 'dmarc', 'dkim', 'mtaSts']) {
+      expect(facts[id]).toMatchObject({ value: 'nicht prüfbar', tone: 'neutral', unchecked: true });
+      expect(statusOf(failed, MAIL, id)).toBe('unknown');
+    }
+  });
+
+  it('nennt DKIM und MTA-STS bei einem Null-MX „nicht nötig“ und Fehlendes nur neutral', () => {
+    const noMail: MailSecurity = {
+      ...MAIL,
+      spf: { present: false, valid: false, issues: [] },
+      dkim: { selectors: [] },
+      nullMx: true,
+    };
+    const facts = mailFacts(noMail);
+    expect(facts.spf).toMatchObject({ value: 'fehlt', tone: 'neutral' });
+    expect(facts.dkim).toMatchObject({ value: 'nicht nötig', key: 'none' });
+    expect(facts.mtaSts).toMatchObject({ value: 'nicht nötig', key: 'off' });
+    // Gegen eine Domain ohne DKIM: gleichwertig, nur anders begründet.
+    expect(statusOf(noMail, { ...MAIL, dkim: { selectors: [] } }, 'dkim')).toBe('equivalent');
+  });
+
+  it('vergleicht DMARC nach der wirksamen Policy', () => {
+    const ruaOnly: MailSecurity = {
+      ...MAIL,
+      dmarc: { present: true, record: 'v=DMARC1; rua=mailto:d@example.com', rua: 'mailto:d@example.com' },
+    };
+    expect(mailFacts(ruaOnly).dmarc).toMatchObject({ value: 'wie none', tone: 'warning', detail: 'p= fehlt' });
+    const none: MailSecurity = { ...MAIL, dmarc: { present: true, record: 'v=DMARC1; p=none', policy: 'none' } };
+    expect(statusOf(ruaOnly, none, 'dmarc')).toBe('equivalent');
+
+    const ignored: MailSecurity = { ...MAIL, dmarc: { present: true, record: 'v=DMARC1; sp=reject' } };
+    expect(mailFacts(ignored).dmarc).toMatchObject({ value: 'unwirksam', key: 'missing' });
+    expect(statusOf(ignored, { ...MAIL, dmarc: { present: false } }, 'dmarc')).toBe('equivalent');
   });
 });
 
@@ -186,6 +238,13 @@ describe('certFacts', () => {
     expect(certFacts(null).status).toMatchObject({ value: 'kein TLS erreichbar', tone: 'warning' });
     expect(certFacts(undefined, false).status).toMatchObject({ value: 'nicht anwendbar' });
   });
+
+  it('meldet einen gescheiterten TLS-Check als „nicht prüfbar“, nicht als „kein TLS“', () => {
+    const failed = certFacts(null, true, 'timeout');
+    expect(failed.status).toMatchObject({ value: 'nicht prüfbar', unchecked: true });
+    const rows = compareFacts(CERT_ROWS, cells(failed), cells(certFacts(SSL)));
+    expect(rows.map((r) => r.status)).toEqual(['unknown', 'unknown', 'unknown']);
+  });
 });
 
 describe('dnssecFacts', () => {
@@ -197,6 +256,12 @@ describe('dnssecFacts', () => {
       dnssec: { value: 'nicht aktiviert' },
       algorithm: { value: '—' },
     });
+  });
+
+  it('meldet eine gescheiterte Abfrage als „nicht prüfbar“ statt „nicht aktiviert“', () => {
+    expect(
+      dnssecFacts({ enabled: false, valid: false, chainOfTrust: 'none', lookupFailed: 'servfail' }).dnssec
+    ).toMatchObject({ value: 'nicht prüfbar', unchecked: true });
   });
 });
 

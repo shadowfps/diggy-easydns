@@ -38,10 +38,11 @@ const r = (type: DnsRecord['type'], name: string, value: string): DnsRecord => (
 
 const MAIL: MailSecurity = {
   spf: { present: true, valid: true, issues: [], record: 'v=spf1 -all' },
-  dmarc: { present: true, policy: 'reject' },
+  dmarc: { present: true, policy: 'reject', record: 'v=DMARC1; p=reject' },
   dkim: { selectors: [] },
   mtaSts: { present: false },
   hasMx: false,
+  nullMx: false,
 };
 
 const SSL: SslInfo = {
@@ -77,7 +78,7 @@ const FIXTURES: Record<string, Fixture> = {
       r('TXT', 'github.com', 'v=spf1 -all'),
       r('CAA', 'github.com', '0 issue "digicert.com"'),
     ],
-    mail: { ...MAIL, dmarc: { present: true, policy: 'none' } },
+    mail: { ...MAIL, dmarc: { present: true, policy: 'none', record: 'v=DMARC1; p=none' } },
     ssl: { ...SSL, issuer: 'Sectigo', daysUntilExpiry: 40 },
     dnssec: { enabled: false, valid: false, chainOfTrust: 'none' },
   },
