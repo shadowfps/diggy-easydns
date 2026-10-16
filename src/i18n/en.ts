@@ -123,6 +123,8 @@ const ui: Dictionary = {
   'Snippet kopieren': 'Copy snippet',
   'ohne Punktabzug': 'no deduction',
   'TTL unbekannt': 'TTL unknown',
+  'Null-MX': 'Null MX',
+  'Null-MX — keine Mails': 'Null MX — no email',
 
   // ─── Security ────────────────────────────────────────────────────────
   'Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.':
@@ -457,6 +459,7 @@ const ui: Dictionary = {
   'Verschlüsselung erzwingen': 'Enforce encryption',
   'Markenlogo im Postfach': 'Brand logo in the inbox',
   'Berichte über Zustellprobleme': 'Reports on delivery problems',
+  'Kein Mail-Empfang': 'No incoming email',
   'Die IPv4-Adresse des Servers hinter diesem Namen – dorthin verbinden sich Browser und Apps. Die Sekunden rechts zeigen die TTL: Sie sagt, wie lange DNS-Server die Antwort zwischenspeichern dürfen, deshalb kommen Änderungen nicht sofort überall an.':
     'The IPv4 address of the server behind this name – browsers and apps connect to it. The seconds on the right show the TTL: how long DNS servers may cache the answer, which is why changes don’t show up everywhere right away.',
   'Wie der A-Record, nur mit einer IPv6-Adresse, dem neueren Adressformat. Fehlt er, ist die Domain nur über IPv4 erreichbar.':
@@ -485,6 +488,8 @@ const ui: Dictionary = {
     'Publishes a logo that inboxes can show next to your email. This only works with DMARC set to quarantine or reject; Gmail and Apple Mail also require a brand certificate (VMC or CMC).',
   'Nennt eine Adresse, an die andere Mailserver berichten, wenn die verschlüsselte Zustellung an deine Domain scheitert. So fällt auf, wenn etwa ein abgelaufenes Zertifikat oder MTA-STS Mails aufhält.':
     'Names an address where other mail servers report when encrypted delivery to your domain fails. That way you notice when, say, an expired certificate or MTA-STS is holding up email.',
+  'Priorität 0 und als Ziel nur ein Punkt, also kein Server: So sagt eine Domain allen Mailservern, dass sie keine E-Mails annimmt (RFC 7505). Mails an sie kommen sofort als unzustellbar zurück, nicht erst nach tagelangen Zustellversuchen.':
+    'Priority 0 and just a dot as the target, meaning no server: that’s how a domain tells every mail server it doesn’t accept email (RFC 7505). Email sent to it bounces right away instead of after days of delivery attempts.',
   'Was bedeutet {term}?': 'What does {term} mean?',
 
   // ─── Seit dem letzten Check ──────────────────────────────────────────
