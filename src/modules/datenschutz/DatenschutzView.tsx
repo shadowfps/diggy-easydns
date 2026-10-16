@@ -44,10 +44,18 @@ export function DatenschutzView({ onOpenImpressum }: DatenschutzViewProps) {
   );
 }
 
-/** Platzhalter in der Form der Karte, solange der Text lädt. */
+/**
+ * Platzhalter in der Form der Karte, solange der Text lädt.
+ *
+ * Mindestens bildschirmhoch: der Text ist es sowieso, und so liegt der Footer
+ * schon vorher unter dem Rand. Mit einer Karte von vier Zeilen sprang er beim
+ * Eintreffen des Texts aus dem Bild — gemessen auf „Fast 3G“, 390 px: CLS
+ * 0,26 beim direkten Aufruf, 0,36 beim Wechsel aus dem Footer (vorher, ohne
+ * eigenen Chunk: 0 bzw. 0,01).
+ */
 function TextSkeleton() {
   return (
-    <div className="card space-y-3" aria-hidden>
+    <div className="card min-h-screen space-y-3" aria-hidden>
       <Skeleton className="h-4 w-40" />
       <Skeleton className="h-3 w-full" />
       <Skeleton className="h-3 w-5/6" />
