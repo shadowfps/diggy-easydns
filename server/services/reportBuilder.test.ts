@@ -6,6 +6,7 @@ import {
   sslFindings,
   whoisFindings,
 } from './reportBuilder.js';
+import { analyzeSpf } from './mailAudit.js';
 import { calculateScore } from '../../shared/scoring.js';
 import type { DnsRecord, Finding, MailSecurity, SslInfo, WhoisInfo } from '../types.js';
 
@@ -340,10 +341,43 @@ describe('mailFindings — Domain ohne Mail (Null-MX)', () => {
     expect(hint?.fix?.snippet).toBe('_dmarc.example.com  TXT  "v=DMARC1; p=reject"');
   });
 
+  /** pct=0: Fälschungen landen nur in Quarantäne — kein „sauber markiert“. */
+  it('nennt DMARC p=reject, das nur für einen Teil der Mails gilt', () => {
+    const findings = mailFindings(
+      mail({ dmarc: { present: true, record: 'v=DMARC1; p=reject; pct=0', policy: 'reject' } }),
+      'example.com'
+    );
+    expect(findings.find((f) => f.id === 'null-mx')?.title).not.toContain('sauber');
+    const hint = findings.find((f) => f.id === 'null-mx-incomplete');
+    expect(hint?.description).toContain('p=reject für alle Mails (jetzt pct=0)');
+    expect(hint?.fix?.snippet).toBe('_dmarc.example.com  TXT  "v=DMARC1; p=reject"');
+    expect(calculateScore(findings).score).toBe(98);
+  });
+
   it('zieht für DMARC p=none weiter die Warnung ab, aber nur einmal', () => {
     const findings = mailFindings(mail({ dmarc: dmarc('none') }), 'example.com');
     expect(summary(findings)).toContain('warning dmarc-policy-none');
     expect(calculateScore(findings).score).toBe(92);
+  });
+
+  /** Kein Umweg über quarantine: Ohne echte Mails kann nichts verloren gehen. */
+  it('rät bei DMARC p=none direkt zu p=reject', () => {
+    const findings = mailFindings(mail({ dmarc: dmarc('none') }), 'example.com');
+    const policyNone = findings.find((f) => f.id === 'dmarc-policy-none');
+    expect(policyNone?.description).toContain('direkt auf p=reject');
+    expect(policyNone?.description).not.toContain('quarantine');
+  });
+
+  /** +all ist schon critical — dass SPF -all fehlt, kostet nicht noch einmal. */
+  it('zieht für ein problematisches SPF nicht doppelt ab', () => {
+    const findings = mailFindings(mail({ spf: analyzeSpf('v=spf1 +all') }), 'example.com');
+    expect(summary(findings)).toEqual([
+      expect.stringMatching(/^critical spf-issue-/),
+      'success dmarc-present',
+      'success null-mx',
+      'info null-mx-incomplete',
+    ]);
+    expect(calculateScore(findings).score).toBe(75);
   });
 
   /** rua an die eigene Domain liefe ins Leere — sie nimmt keine Mails an. */
@@ -398,6 +432,13 @@ describe('mailFindings — Domains mit echtem MX unverändert', () => {
       'success dmarc-present',
       'success dkim-present',
     ]);
+  });
+
+  it('rät bei DMARC p=none weiter zum Schritt über quarantine', () => {
+    const findings = mailFindings(real({ dmarc: dmarc('none') }), 'example.de');
+    expect(findings.find((f) => f.id === 'dmarc-policy-none')?.description).toContain(
+      'auf quarantine wechseln'
+    );
   });
 
   /**

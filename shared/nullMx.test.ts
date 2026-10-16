@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isNullMx, noMailProtection, spfAllowsNoSender } from './nullMx.js';
+import {
+  dmarcPct,
+  isNullMx,
+  noMailProtection,
+  spfAllowsNoSender,
+  spfMechanisms,
+} from './nullMx.js';
 import type { MailSecurity } from './types/dns.js';
 
 describe('isNullMx', () => {
@@ -52,6 +58,53 @@ describe('spfAllowsNoSender', () => {
     expect(spfAllowsNoSender(undefined)).toBe(false);
     expect(spfAllowsNoSender('')).toBe(false);
   });
+
+  /** RFC 7208 §6: exp= ist nur der Ablehnungstext, redirect= gilt neben all nicht. */
+  it('lässt Modifier neben -all zu', () => {
+    expect(spfAllowsNoSender('v=spf1 -all exp=explain._spf.example.com')).toBe(true);
+    expect(spfAllowsNoSender('v=spf1 -all redirect=_spf.example.net')).toBe(true);
+  });
+
+  /** Ohne all entscheidet der Ziel-Record — und der kann Absender erlauben. */
+  it('lehnt redirect ohne -all ab', () => {
+    expect(spfAllowsNoSender('v=spf1 redirect=_spf.example.net')).toBe(false);
+  });
+
+  it('verlangt das Versions-Tag am Anfang', () => {
+    expect(spfAllowsNoSender('-all v=spf1')).toBe(false);
+    expect(spfAllowsNoSender('v=spf10 -all')).toBe(false);
+  });
+});
+
+describe('spfMechanisms', () => {
+  it('liefert nur die Mechanismen, kleingeschrieben', () => {
+    expect(spfMechanisms('v=spf1 MX include:_spf.example.net ~ALL exp=x.example.com')).toEqual([
+      'mx',
+      'include:_spf.example.net',
+      '~all',
+    ]);
+  });
+
+  it('ist ohne SPF-Version undefined', () => {
+    expect(spfMechanisms('google-site-verification=abc')).toBeUndefined();
+  });
+});
+
+describe('dmarcPct', () => {
+  it('ist ohne pct 100', () => {
+    expect(dmarcPct('v=DMARC1; p=reject')).toBe(100);
+    expect(dmarcPct(undefined)).toBe(100);
+  });
+
+  it('liest pct, auch ohne Leerzeichen und in Großbuchstaben', () => {
+    expect(dmarcPct('v=DMARC1; p=reject; pct=50')).toBe(50);
+    expect(dmarcPct('v=DMARC1;PCT=0;p=reject')).toBe(0);
+  });
+
+  /** RFC 7489 §6.3: Syntaxfehler fallen auf den Standardwert zurück. */
+  it('nimmt bei ungültigem Wert den Standard', () => {
+    expect(dmarcPct('v=DMARC1; p=reject; pct=abc')).toBe(100);
+  });
 });
 
 describe('noMailProtection', () => {
@@ -79,6 +132,20 @@ describe('noMailProtection', () => {
     );
     expect(result.spfAllowsNoSender).toBe(false);
     expect(result.complete).toBe(false);
+  });
+
+  /** pct=0 heißt: keine Fälschung wird abgelehnt, alle landen nur in Quarantäne. */
+  it('ist mit DMARC reject nur für einen Teil der Mails (pct) unvollständig', () => {
+    for (const record of ['v=DMARC1; p=reject; pct=0', 'v=DMARC1; p=reject; pct=50']) {
+      const result = noMailProtection(mail({ dmarc: { present: true, record, policy: 'reject' } }));
+      expect(result.dmarcReject).toBe(false);
+      expect(result.complete).toBe(false);
+    }
+    expect(
+      noMailProtection(
+        mail({ dmarc: { present: true, record: 'v=DMARC1; p=reject; pct=100', policy: 'reject' } })
+      ).complete
+    ).toBe(true);
   });
 
   it('ist mit DMARC quarantine unvollständig', () => {

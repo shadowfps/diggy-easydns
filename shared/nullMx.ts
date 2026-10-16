@@ -47,23 +47,55 @@ export function isNullMx(mx: readonly MxEntry[]): boolean {
   return only.priority === 0 && (only.value === '' || only.value === '.');
 }
 
+/** Modifier haben die Form `name=wert` (RFC 7208 §4.6.1), Mechanismen nie. */
+const SPF_MODIFIER = /^[a-z][a-z0-9._-]*=/;
+
 /**
- * `v=spf1 -all` und sonst nichts: niemand darf im Namen der Domain senden.
+ * Die Mechanismen eines SPF-Records, kleingeschrieben, ohne Versions-Tag und
+ * Modifier (`exp=`, `redirect=` …). `undefined`, wenn es kein SPF-Record ist.
+ */
+export function spfMechanisms(record: string): string[] | undefined {
+  const [version, ...terms] = record.trim().toLowerCase().split(/\s+/);
+  if (version !== 'v=spf1') return undefined;
+  return terms.filter((term) => !SPF_MODIFIER.test(term));
+}
+
+/**
+ * `-all` als einziger Mechanismus: niemand darf im Namen der Domain senden.
  *
  * Bewusst so streng. Ein `~all` markiert Fälschungen nur als verdächtig
  * (Softfail), und jeder weitere Mechanismus (`include:`, `a`, `ip4:` …)
  * erlaubt Absender — beides passt nicht zu einer Domain ohne Mail.
+ *
+ * Modifier ändern daran nichts: `exp=` liefert nur den Text zur Ablehnung,
+ * und `redirect=` wird neben `all` ignoriert (RFC 7208 §6.1). Ohne `all`
+ * dagegen gibt `redirect=` die Entscheidung an einen anderen Record ab —
+ * `v=spf1 redirect=…` zählt deshalb nicht.
  */
 export function spfAllowsNoSender(record?: string): boolean {
   if (!record) return false;
-  const terms = record.trim().toLowerCase().split(/\s+/);
-  return terms.length === 2 && terms[0] === 'v=spf1' && terms[1] === '-all';
+  const mechanisms = spfMechanisms(record);
+  return mechanisms?.length === 1 && mechanisms[0] === '-all';
+}
+
+/**
+ * Anteil der Mails in Prozent, auf den die DMARC-Policy angewendet wird
+ * (`pct`, RFC 7489 §6.3); ohne Tag oder bei ungültigem Wert 100. Für den Rest
+ * gilt die nächstschwächere Policy (§6.6.4): `p=reject; pct=0` lehnt also
+ * nichts ab, sondern stellt Fälschungen nur unter Quarantäne.
+ */
+export function dmarcPct(record?: string): number {
+  const value = record?.match(/(?:^|;)\s*pct\s*=\s*(\d+)\s*(?:;|$)/i)?.[1];
+  return value === undefined ? 100 : Math.min(Number(value), 100);
 }
 
 export interface NoMailProtection {
   /** SPF erlaubt niemanden (`v=spf1 -all`). */
   spfAllowsNoSender: boolean;
-  /** DMARC `p=reject`: Empfänger weisen Mails ab, die sich als die Domain ausgeben. */
+  /**
+   * DMARC `p=reject` für alle Mails (kein `pct` unter 100): Empfänger weisen
+   * Mails ab, die sich als die Domain ausgeben.
+   */
   dmarcReject: boolean;
   /** Null-MX, SPF -all und DMARC reject — die vollständige Markierung. */
   complete: boolean;
@@ -72,7 +104,8 @@ export interface NoMailProtection {
 /** Wie gut eine Domain mit Null-MX gegen Fälschungen in ihrem Namen geschützt ist. */
 export function noMailProtection(mail: Pick<MailSecurity, 'spf' | 'dmarc' | 'nullMx'>): NoMailProtection {
   const spf = spfAllowsNoSender(mail.spf.record);
-  const dmarc = mail.dmarc.present && mail.dmarc.policy === 'reject';
+  const dmarc =
+    mail.dmarc.present && mail.dmarc.policy === 'reject' && dmarcPct(mail.dmarc.record) === 100;
   return {
     spfAllowsNoSender: spf,
     dmarcReject: dmarc,

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
-import { noMailProtection } from '@/lib/nullMx';
+import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 
 interface MailViewProps {
@@ -77,13 +77,7 @@ function NoMailCard({ mail }: { mail: MailSecurity }) {
         />
         <Stat
           label="DMARC"
-          value={
-            protection.dmarcReject
-              ? 'reject'
-              : mail.dmarc.present && mail.dmarc.policy
-              ? mail.dmarc.policy
-              : 'fehlt'
-          }
+          value={noMailDmarcLabel(mail.dmarc, protection.dmarcReject)}
           tone={protection.dmarcReject ? 'success' : 'neutral'}
         />
       </div>
@@ -92,14 +86,25 @@ function NoMailCard({ mail }: { mail: MailSecurity }) {
 }
 
 /**
- * Was am SPF fehlt, in einem Wort: `~all` steht für sich (Fälschungen nur
- * verdächtig statt abgelehnt), jeder weitere Mechanismus erlaubt Absender.
+ * Was am SPF fehlt, in einem Wort: Steht nur `all` drin, sagt dessen
+ * Qualifier alles (`~all`: Fälschungen nur verdächtig statt abgelehnt); jeder
+ * weitere Mechanismus erlaubt Absender.
  */
 function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): string {
   if (allowsNoSender) return '-all';
   if (!spf.present || !spf.record) return 'fehlt';
-  const terms = spf.record.trim().split(/\s+/).slice(1);
-  return terms.length === 1 ? terms[0] : 'erlaubt Absender';
+  const mechanisms = spfMechanisms(spf.record) ?? [];
+  return mechanisms.length === 1 && /^[+~?]?all$/.test(mechanisms[0])
+    ? mechanisms[0]
+    : 'erlaubt Absender';
+}
+
+/** `reject` gilt erst ohne `pct` unter 100 — sonst steht der Anteil dabei. */
+function noMailDmarcLabel(dmarc: MailSecurity['dmarc'], reject: boolean): string {
+  if (reject) return 'reject';
+  if (!dmarc.present || !dmarc.policy) return 'fehlt';
+  if (dmarc.policy === 'reject') return `reject, pct=${dmarcPct(dmarc.record)}`;
+  return dmarc.policy;
 }
 
 /* ─── SPF ─────────────────────────────────────────────────────────────── */

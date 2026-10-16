@@ -46,6 +46,38 @@ describe('MailView — Domain ohne Mail (Null-MX)', () => {
     expect(screen.getByText('~all')).toBeInTheDocument();
     expect(screen.getByText('fehlt')).toBeInTheDocument();
   });
+
+  /** Ein einzelner Mechanismus wie include: ist kein Wort für den Status. */
+  it('fasst erlaubte Absender zusammen statt den Mechanismus zu zeigen', () => {
+    render(
+      <MailView
+        mail={{
+          ...exampleCom,
+          spf: {
+            present: true,
+            record: 'v=spf1 include:_spf.example.net',
+            lookupCount: 1,
+            valid: true,
+            issues: [],
+          },
+        }}
+      />
+    );
+    expect(screen.getByText('erlaubt Absender')).toBeInTheDocument();
+  });
+
+  it('zeigt DMARC reject mit pct unter 100 nicht als erledigt', () => {
+    render(
+      <MailView
+        mail={{
+          ...exampleCom,
+          dmarc: { present: true, record: 'v=DMARC1; p=reject; pct=0', policy: 'reject' },
+        }}
+      />
+    );
+    expect(screen.getByText('reject, pct=0')).toBeInTheDocument();
+    expect(screen.getByText(/gehören SPF -all und DMARC p=reject dazu/)).toBeInTheDocument();
+  });
 });
 
 describe('MailView — Domain mit echtem MX', () => {

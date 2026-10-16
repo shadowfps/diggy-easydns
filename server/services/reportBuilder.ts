@@ -8,7 +8,7 @@ import type {
   WhoisInfo,
 } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
-import { noMailProtection } from '../../shared/nullMx.js';
+import { dmarcPct, noMailProtection } from '../../shared/nullMx.js';
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
@@ -154,7 +154,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   } else {
     for (const issue of mail.spf.issues) {
       findings.push({
-        id: `spf-issue-${slug(issue)}`,
+        id: spfIssueId(issue),
         severity: issue.includes('+all') ? 'critical' : 'warning',
         title: 'SPF-Record problematisch',
         description: issue,
@@ -200,7 +200,12 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
         id: 'dmarc-policy-none',
         severity: 'warning',
         title: 'DMARC-Policy ist p=none (nur Reporting)',
-        description: 'Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. Sobald Reports stabil aussehen: auf quarantine wechseln.',
+        // Bei einem Null-MX gibt es keine echten Mails, die beim Ablehnen
+        // verloren gehen könnten — der Zwischenschritt über quarantine
+        // widerspräche dem Hinweis null-mx-incomplete (p=reject).
+        description: mail.nullMx
+          ? 'Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. Ohne echte Mails geht beim Ablehnen nichts verloren: direkt auf p=reject wechseln.'
+          : 'Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. Sobald Reports stabil aussehen: auf quarantine wechseln.',
         category: 'mail',
       });
     } else {
@@ -288,9 +293,12 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
     snippets.push(`${apexDomain}  TXT  "v=spf1 -all"`);
   }
   if (!protection.dmarcReject) {
+    const policy = mail.dmarc.present ? mail.dmarc.policy : undefined;
     missing.push(
-      mail.dmarc.present && mail.dmarc.policy
-        ? `DMARC mit p=reject (jetzt p=${mail.dmarc.policy})`
+      policy === 'reject'
+        ? `DMARC mit p=reject für alle Mails (jetzt pct=${dmarcPct(mail.dmarc.record)})`
+        : policy
+        ? `DMARC mit p=reject (jetzt p=${policy})`
         : 'DMARC mit p=reject'
     );
     snippets.push(`_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`);
@@ -308,7 +316,9 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
         snippet: snippets.join('\n'),
       },
       category: 'mail',
-      causedBy: ['no-spf', 'no-dmarc', 'dmarc-policy-none'],
+      // Auch ein problematisches SPF (+all, zu viele Lookups) ist schon
+      // gemeldet und abgezogen — der Fix hier (v=spf1 -all) behebt es mit.
+      causedBy: ['no-spf', 'no-dmarc', 'dmarc-policy-none', ...mail.spf.issues.map(spfIssueId)],
     },
   ];
 }
@@ -606,4 +616,8 @@ function getStatusExplanation(status: string): string {
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+}
+
+function spfIssueId(issue: string): string {
+  return `spf-issue-${slug(issue)}`;
 }
