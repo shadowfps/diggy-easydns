@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, AlertTriangle, ArrowRight, Check, Info } from 'lucide-react';
 import type { Finding, HealthScore } from '@/types/dns';
 import { cn } from '@/lib/cn';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface ScoreCardProps {
   score: HealthScore;
@@ -26,6 +27,7 @@ function scoreTone(s: number) {
 }
 
 export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
+  const reducedMotion = useReducedMotion();
   const tone = scoreTone(score.score);
   const top = PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
   const count = useMotionValue(0);
@@ -33,13 +35,25 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
+    // `MotionConfig reducedMotion="user"` (main.tsx) erfasst nur
+    // motion-Komponenten, nicht dieses imperative animate() auf einem
+    // MotionValue: die Zahl zählte trotz „Bewegung reduzieren“ hoch (#103).
+    // Bei reduzierter Bewegung startet deshalb gar kein Zähler. Schaltet
+    // jemand die Präferenz mitten im Hochzählen ein, stoppt ihn das Cleanup.
+    if (reducedMotion) return;
+
     const controls = animate(count, score.score, { duration: 1.2, ease: 'easeOut' });
     const unsub = rounded.on('change', (v) => setDisplayValue(v));
     return () => {
       controls.stop();
       unsub();
     };
-  }, [score.score, count, rounded]);
+  }, [score.score, count, rounded, reducedMotion]);
+
+  // Direkt aus dem Score, statt displayValue im Effect nachzuziehen: das käme
+  // erst nach dem ersten Render, der dann kurz 0 bzw. bei einem neuen Lookup
+  // den alten Score zeigte.
+  const shownValue = reducedMotion ? score.score : displayValue;
 
   return (
     <motion.div
@@ -56,18 +70,29 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
       <div className="mt-4">
         <div className="flex items-baseline gap-1.5">
           <span className={cn('text-6xl font-semibold tabular-nums tracking-tight', tone.text)}>
-            {displayValue}
+            {shownValue}
           </span>
           <span className="text-base text-fg-subtle">/ 100</span>
         </div>
 
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface-muted">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${score.score}%` }}
-            transition={{ duration: 1.2, ease: 'easeOut' }}
-            className={cn('h-full rounded-full', tone.bar)}
-          />
+          {/* Bei reduzierter Bewegung ein schlichtes div mit fester Breite.
+              MotionConfig schaltet die Breitenanimation zwar auf „sofort“, der
+              motion.div rendert aber trotzdem erst `initial` (0) und springt
+              einen Frame später — ebenso bei einem neuen Score. */}
+          {reducedMotion ? (
+            <div
+              style={{ width: `${score.score}%` }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          ) : (
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${score.score}%` }}
+              transition={{ duration: 1.2, ease: 'easeOut' }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
