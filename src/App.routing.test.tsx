@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /**
@@ -32,6 +32,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 const api = await import('@/lib/api');
+const { clearLookupHistory } = await import('@/lib/lookupHistory');
 const App = (await import('./App')).default;
 
 const EMPTY_SECTION = { findings: [] };
@@ -248,6 +249,38 @@ describe('Suche und History-Einträge', () => {
 
     await waitFor(() => expect(screen.getByText(/PTR \/ Reverse DNS/)).toBeInTheDocument());
     expect(api.lookupRecords).not.toHaveBeenCalled();
+  });
+});
+
+describe('Layout', () => {
+  it('setzt die Suche auf Report-Seiten in die Kopfzeile', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    await screen.findByText('Health Score');
+    expect(within(screen.getByRole('banner')).getByPlaceholderText(/Anfrage starten/)).toBeInTheDocument();
+    // Nur eine Suche auf der Seite — die große über dem Report entfällt.
+    expect(screen.getAllByPlaceholderText(/Anfrage starten/)).toHaveLength(1);
+  });
+
+  it('navigiert über die Links im Header', async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('link', { name: 'About' }));
+    expect(window.location.pathname).toBe('/about');
+    expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('bietet zuletzt geprüfte Domains auf der Startseite an', async () => {
+    clearLookupHistory();
+    render(<App />);
+    await userEvent.type(searchField(), 'example.com{Enter}');
+    await screen.findByText('Health Score');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zur Startseite' }));
+    const recent = await screen.findByRole('button', { name: /example\.com/ });
+    vi.mocked(api.lookupRecords).mockClear();
+    await userEvent.click(recent);
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledWith('example.com'));
   });
 });
 

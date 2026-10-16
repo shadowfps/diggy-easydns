@@ -43,7 +43,7 @@ function TechIcon({ tech }: TechIconProps) {
   return (
     <div
       title={label}
-      className="icon-tile cursor-default"
+      className="icon-tile size-8 cursor-default"
     >
       {svg ?? (
         <span className="text-[10px] font-semibold leading-none">
@@ -403,7 +403,9 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
     >
       <h2 className="card-title">Schnellübersicht</h2>
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3.5 text-sm">
+      {/* Einspaltig, wo die Karte schmal ist: mobil, halbe Breite ab md und
+          in der Seitenspalte ab xl. */}
+      <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3.5 text-sm sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-1">
         {items.map((item) => (
           <div key={item.label} className="flex min-w-0 items-center gap-3">
             <dt className="w-14 shrink-0 text-xs text-fg-subtle">{item.label}</dt>
@@ -428,18 +430,20 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
             </dd>
           </div>
         ))}
-      </dl>
 
-      {(techLoading || sortedTech.length > 0) && (
-        <div className="mt-5 border-t border-line-subtle pt-5">
-          <h3 className="text-xs text-fg-subtle">Tech-Stack</h3>
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            {techLoading
-              ? [0, 1, 2, 3].map((i) => <Skeleton key={i} className="size-9 rounded-panel" />)
-              : sortedTech.map((tech) => <TechIcon key={tech.name} tech={tech} />)}
+        {/* Eine Zeile wie die anderen statt eines eigenen Abschnitts — hält
+            die Karte flach genug für die mitlaufende Seitenspalte. */}
+        {(techLoading || sortedTech.length > 0) && (
+          <div className="col-span-full flex min-w-0 items-center gap-3">
+            <dt className="w-14 shrink-0 text-xs text-fg-subtle">Stack</dt>
+            <dd className="flex min-w-0 flex-wrap gap-1.5">
+              {techLoading
+                ? [0, 1, 2].map((i) => <Skeleton key={i} className="size-8 rounded-panel" />)
+                : sortedTech.map((tech) => <TechIcon key={tech.name} tech={tech} />)}
+            </dd>
           </div>
-        </div>
-      )}
+        )}
+      </dl>
     </motion.div>
   );
 }

@@ -18,6 +18,7 @@ import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
+import { CheckOverview } from '@/modules/home/CheckOverview';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -382,6 +383,21 @@ export default function App() {
         onHistory={handleHistory}
         onAvailability={handleAvailability}
         onAbout={handleAbout}
+        current={view === 'history' || view === 'availability' || view === 'about' ? view : null}
+        // Auf Report-Seiten wandert die Suche in die Kopfzeile: der Report
+        // beginnt oben, und die Suche bleibt beim Scrollen erreichbar.
+        search={
+          lookupHasOutput ? (
+            <SearchBar
+              variant="compact"
+              value={searchValue}
+              onValueChange={setSearchValue}
+              focusSignal={searchFocusSignal}
+              onSearch={handleSearch}
+              loading={recordsLoading}
+            />
+          ) : undefined
+        }
       />
 
       <main
@@ -498,7 +514,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {view === 'lookup' && (
+        {view === 'lookup' && !lookupHasOutput && (
           <SearchBar
             value={searchValue}
             onValueChange={setSearchValue}
@@ -506,11 +522,16 @@ export default function App() {
             autoFocus={autoFocusSearch}
             onSearch={handleSearch}
             loading={recordsLoading}
+            recent={historyEntries}
           />
         )}
 
-        {/* Promo für das Schwester-Tool — nur auf der Landing-Page (Idle) */}
+        {/* Was diggy prüft + Promo für das Schwester-Tool — nur auf der
+            Landing-Page (Idle) */}
         <AnimatePresence>
+          {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
+            <CheckOverview key="check-overview" />
+          )}
           {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
             <ConverterPromo key="converter-promo" />
           )}
@@ -551,12 +572,19 @@ export default function App() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.24 }}
-            className="mx-auto mt-6 w-full max-w-[110rem] md:mt-8"
+            // Ab xl zwei Spalten: links die Zusammenfassung, die beim Scrollen
+            // mitläuft, rechts die Tabs. Darunter ist die rechte Spalte zu
+            // schmal für die zweispaltigen Tab-Inhalte — dort wird gestapelt.
+            className="mx-auto w-full max-w-[110rem] xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-start xl:gap-8"
           >
+            <aside
+              aria-label="Zusammenfassung"
+              className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:sticky xl:top-20 xl:grid-cols-1"
+            >
               {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann.
                   Export und Permalink standen vorher unter allen Tabs am
                   Seitenende — wer sie suchte, musste erst durchscrollen. */}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:col-span-2 xl:col-span-1 xl:flex-col xl:items-start xl:justify-start">
                 <div className="min-w-0">
                   <p className="eyebrow">DNS-Report</p>
                   <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
@@ -579,72 +607,70 @@ export default function App() {
               </div>
 
               {/* Score + Quick Facts */}
-              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                {lookup.allSettled ? (
-                  <ScoreCard
-                    score={lookup.healthScore}
-                    findings={lookup.findings}
-                    onShowFindings={handleShowFindings}
-                  />
-                ) : (
-                  <ScoreCardSkeleton />
-                )}
-                <QuickFacts
-                  records={report.records}
-                  ssl={ssl}
-                  dnssec={dnssec}
-                  mail={mail}
-                  techStack={techStack}
-                  onUseDomain={handleUseDomainInSearch}
+              {lookup.allSettled ? (
+                <ScoreCard
+                  score={lookup.healthScore}
+                  findings={lookup.findings}
+                  onShowFindings={handleShowFindings}
                 />
-              </div>
+              ) : (
+                <ScoreCardSkeleton />
+              )}
+              <QuickFacts
+                records={report.records}
+                ssl={ssl}
+                dnssec={dnssec}
+                mail={mail}
+                techStack={techStack}
+                onUseDomain={handleUseDomainInSearch}
+              />
+            </aside>
 
+            <div className="mt-8 min-w-0 xl:mt-0">
               {/* Tabs */}
-              <div className="mt-8">
-                <Tabs
-                  active={activeTab}
-                  onChange={setActiveTab}
-                  tabs={[
-                    { id: 'records', label: 'Records', count: report.records.length },
-                    // Bei DNS-Einträgen wie `_dmarc.example.com` hätten
-                    // Propagation (vergleicht A/AAAA), Speed und Virus Scan
-                    // (brauchen eine Website) nichts zu zeigen.
-                    ...(dnsOnly
-                      ? []
-                      : [
-                          {
-                            id: 'propagation' as const,
-                            label: 'Propagation',
-                            count: propagation.data?.length || undefined,
-                          },
-                        ]),
-                    { id: 'security', label: 'Security' },
-                    { id: 'mail', label: 'Mail', count: mailCount },
-                    {
-                      id: 'findings',
-                      label: 'Findings',
-                      count: lookup.allSettled ? lookup.findings.length : undefined,
-                    },
-                    {
-                      id: 'whois',
-                      label: 'WHOIS',
-                      count: whois.status === 'done' && whois.data ? 1 : undefined,
-                    },
-                    ...(dnsOnly
-                      ? []
-                      : [
-                          { id: 'speed' as const, label: 'Speed', count: pageSpeed ? 1 : undefined },
-                          {
-                            id: 'virusscan' as const,
-                            label: 'Virus Scan',
-                            count: virusScan
-                              ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
-                              : undefined,
-                          },
-                        ]),
-                  ]}
-                />
-              </div>
+              <Tabs
+                active={activeTab}
+                onChange={setActiveTab}
+                tabs={[
+                  { id: 'records', label: 'Records', count: report.records.length },
+                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten
+                  // Propagation (vergleicht A/AAAA), Speed und Virus Scan
+                  // (brauchen eine Website) nichts zu zeigen.
+                  ...(dnsOnly
+                    ? []
+                    : [
+                        {
+                          id: 'propagation' as const,
+                          label: 'Propagation',
+                          count: propagation.data?.length || undefined,
+                        },
+                      ]),
+                  { id: 'security', label: 'Security' },
+                  { id: 'mail', label: 'Mail', count: mailCount },
+                  {
+                    id: 'findings',
+                    label: 'Findings',
+                    count: lookup.allSettled ? lookup.findings.length : undefined,
+                  },
+                  {
+                    id: 'whois',
+                    label: 'WHOIS',
+                    count: whois.status === 'done' && whois.data ? 1 : undefined,
+                  },
+                  ...(dnsOnly
+                    ? []
+                    : [
+                        { id: 'speed' as const, label: 'Speed', count: pageSpeed ? 1 : undefined },
+                        {
+                          id: 'virusscan' as const,
+                          label: 'Virus Scan',
+                          count: virusScan
+                            ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
+                            : undefined,
+                        },
+                      ]),
+                ]}
+              />
 
               {/* Zweite, feinere Boundary: reißt ein Sektions-Renderer ab,
                   bleiben Score, QuickFacts und die anderen Tabs nutzbar.
@@ -757,7 +783,7 @@ export default function App() {
                 </AnimatePresence>
               </div>
               </ErrorBoundary>
-
+            </div>
           </motion.div>
         )}
       </main>

@@ -76,6 +76,23 @@ ein abgeschnittener Titel schiebt die Seite dann seitlich über den Rand.
 Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
 `max-w-3xl`, Suche `max-w-2xl`.
 
+## Seitenaufbau
+
+- **Header**: Wortmarke links, Navigation (History, Available Check, About),
+  Theme und GitHub rechts. Die Navigation sind echte Links und ab `lg`
+  sichtbar, darunter stecken sie im Menü. Auf Seiten mit Ergebnis (Report,
+  IP-Lookup) steht die Suche kompakt im Header — sie bleibt beim Scrollen
+  erreichbar, und der Inhalt beginnt oben.
+- **Startseite**: Wortmarke, Frage, große Suche, darunter „Zuletzt geprüft“
+  (oder Beispiele beim ersten Besuch), „Was diggy prüft“, Converter-Hinweis.
+- **Report**: ab `xl` zwei Spalten. Links (24rem) die Zusammenfassung — Kopf
+  mit Domain und Aktionen, Score, Schnellübersicht — die beim Scrollen
+  mitläuft; rechts Tabs und Inhalt. Darunter gestapelt: Kopf, Score und
+  Schnellübersicht nebeneinander, dann die Tabs. Die Seitenspalte bleibt
+  flach genug für 1440×900 — Neues kommt in die Tabs, nicht in die Spalte.
+- **Textseiten**: `max-w-3xl`, Überzeile, `page-title`, optional Lead, dann
+  Karten.
+
 ## Typografie
 
 Geist für Text, Geist Mono für alles, was man abtippt (Domains, IPs, Records),
