@@ -51,11 +51,15 @@ export class ApiError extends Error {
 async function getJson<T>(url: string, fallback: LookupError): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
-    let payload = fallback;
+    let payload: LookupError;
     try {
       payload = await res.json();
     } catch {
-      // JSON-parse fehlgeschlagen — Fallback-Message reicht
+      // Keine JSON-Antwort (Fehlerseite eines Proxys, Timeout): die eigene,
+      // schon übersetzte Meldung — ohne Code. Der Code steht für die Meldung
+      // des Servers, und deren englische Fassung kann enger sein als „ging
+      // nicht“: `domain_check_failed` meint eine ungültige Eingabe.
+      throw new Error(fallback.message);
     }
     // ApiError statt Error: der Code reist mit, die Oberfläche kann daran
     // übersetzen (#86). `message` bleibt dieselbe wie bisher.

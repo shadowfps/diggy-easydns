@@ -239,6 +239,36 @@ describe('Ansichten auf Englisch', () => {
 });
 
 describe('Fehlermeldungen', () => {
+  /**
+   * Fehlercodes schreibt der Server als String-Literal in die JSON-Antwort —
+   * dort prüft sie kein Compiler gegen `ApiErrorCode`. Deshalb hier aus dem
+   * Quelltext gelesen: jeder Code des Servers hat eine englische Meldung,
+   * und jede Meldung gehört zu einem Code, den der Server noch schickt.
+   */
+  it('kennt jeden Fehlercode des Servers', () => {
+    const sources = Object.values(
+      import.meta.glob<string>(['../../server/**/*.ts', '!../../server/**/*.test.ts'], {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      })
+    );
+    const codes = new Set(
+      sources.flatMap((code) =>
+        [
+          ...code.matchAll(
+            /\berror: '([a-z_]+)'|\bcode: '([a-z_]+)'|\bcode \?\? '([a-z_]+)'|sectionError\(res, '([a-z_]+)'/g
+          ),
+        ].map((match) => match.slice(1).find(Boolean)!)
+      )
+    );
+    const known = Object.keys(english.apiErrors);
+
+    expect(codes.size).toBeGreaterThan(20);
+    expect([...codes].filter((code) => !known.includes(code))).toEqual([]);
+    expect(known.filter((code) => !codes.has(code))).toEqual([]);
+  });
+
   it('übersetzt nach Code und setzt Werte ein', () => {
     const error = new ApiError({
       error: 'invalid_domain',
