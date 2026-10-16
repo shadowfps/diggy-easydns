@@ -145,6 +145,9 @@ const checks = [
   ['/', (res, body) => res.status === 200 && body === indexHtml],
   ['/lookup/example.com', hasPreviewTags],
   ['/lookup/Example.COM/', hasPreviewTags],
+  // Zwei Pfadsegmente nach dem Präfix — der Wildcard muss auch die tragen.
+  // Der Vergleich hat (noch) keine eigene Vorschau: das gebaute HTML.
+  ['/compare/example.com/github.com', (res, body) => res.status === 200 && body === indexHtml],
   ['/impressum', (res, body) => res.status === 200 && body === indexHtml],
   [
     hostilePath,

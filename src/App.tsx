@@ -29,7 +29,7 @@ import {
   ListSkeleton,
   SinceLastCheckSkeleton,
 } from '@/components/ui/Skeleton';
-import { AlertTriangle, Check, Download, Link2, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Check, Download, Link2, Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 
 /*
@@ -59,6 +59,11 @@ const PageSpeedView = lazy(() =>
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
 );
+// Der Vergleich ist eine eigene Seite, die man bewusst aufruft — sein Code
+// muss nicht im Bundle stecken, das den ersten Report blockiert.
+const CompareView = lazy(() =>
+  import('@/modules/compare/CompareView').then((m) => ({ default: m.CompareView }))
+);
 
 /*
  * Der Mail-Tab: Seine Daten lädt der Report sofort, die Ansicht braucht aber
@@ -82,7 +87,8 @@ const SinceLastCheck = lazy(() =>
 
 /*
  * Bundle-Budget (index.js ≤ 48 kB gzip, scripts/check-bundle-size.mjs): mit
- * dem Vergleich (#79) und dem Kalender (#84) lag index.js bei 48,5 kB. Statt
+ * „Seit dem letzten Check“ (#79) und dem Kalender (#84) lag index.js bei
+ * 48,5 kB. Statt
  * die Grenze anzuheben, kommen zwei Dinge aus dem kritischen Pfad, die den
  * ersten Report nicht aufhalten müssen:
  *
@@ -117,6 +123,12 @@ import {
   type AppView,
 } from '@/lib/lookupPath';
 import {
+  compareDocumentTitle,
+  comparePathFor,
+  getComparePairFromPath,
+  type ComparePair,
+} from '@/lib/comparePath';
+import {
   clearLookupHistory,
   saveLookupToHistory,
   useLookupHistory,
@@ -139,6 +151,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('records');
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
+  const [comparePair, setComparePair] = useState<ComparePair>({ left: '', right: '' });
   const initialPathHandledRef = useRef(false);
   // applyPath schließt über aktuellen State. Der popstate-Listener wird nur
   // einmal gebunden, greift die Funktion aber über diese Ref ab, damit er
@@ -271,6 +284,17 @@ export default function App() {
    * Zurück-Button nur die URL geändert und die Ansicht stehen gelassen.
    */
   const applyPath = (pathname: string) => {
+    // Vergleich: beide Domains stehen im Pfad, die Ansicht lädt sie selbst.
+    const pair = getComparePairFromPath(pathname);
+    if (pair) {
+      clearLookup();
+      setView('compare');
+      setComparePair(pair);
+      setSearchValue('');
+      setActiveTab('records');
+      return;
+    }
+
     const staticView = STATIC_ROUTES[pathname];
     if (staticView) {
       clearLookup();
@@ -335,6 +359,8 @@ export default function App() {
   const handleAvailability = () => navigate('/availability');
   const handleImpressum = () => navigate('/impressum');
   const handleDatenschutz = () => navigate('/datenschutz');
+  const handleCompare = (left = '', right = '') => navigate(comparePathFor(left, right));
+  const handleOpenReport = (domain: string) => navigate(lookupPathFor(domain));
 
   const handleClearHistory = () => {
     clearLookupHistory();
@@ -368,8 +394,11 @@ export default function App() {
    * nicht unterscheidbar, ebenso Lesezeichen und Browser-History.
    */
   useEffect(() => {
-    document.title = buildDocumentTitle(view, lookup.domain, ipQuery);
-  }, [view, lookup.domain, ipQuery]);
+    document.title =
+      view === 'compare'
+        ? compareDocumentTitle(comparePair)
+        : buildDocumentTitle(view, lookup.domain, ipQuery);
+  }, [view, lookup.domain, ipQuery, comparePair]);
 
   // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
   useEffect(() => {
@@ -441,6 +470,7 @@ export default function App() {
         onHome={handleHome}
         onHistory={handleHistory}
         onAvailability={handleAvailability}
+        onCompare={() => handleCompare()}
         onAbout={handleAbout}
         // Auf Report-Seiten wandert die Suche in die Kopfzeile: der Report
         // beginnt oben, und die Suche bleibt beim Scrollen erreichbar.
@@ -489,6 +519,23 @@ export default function App() {
               )}
             </Suspense>
           </ErrorBoundary>
+        )}
+
+        {view === 'compare' && (
+          <Suspense
+            fallback={
+              <div className="mx-auto w-full max-w-6xl">
+                <SectionCardsSkeleton count={2} />
+              </div>
+            }
+          >
+            <CompareView
+              left={comparePair.left}
+              right={comparePair.right}
+              onCompare={handleCompare}
+              onOpenReport={handleOpenReport}
+            />
+          </Suspense>
         )}
 
         {/* Hero / Search */}
@@ -665,14 +712,31 @@ export default function App() {
                     Geprüft am {formatCheckedAt(report.timestamp)}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <ActionButton onClick={handleExportJson}>
+                {/* Kurze Beschriftungen, damit die drei Aktionen in der
+                    24rem-Spalte und auf dem Handy ab 360 px in eine Zeile
+                    passen — mit „Export JSON“ und „Permalink kopieren“ brach
+                    „Vergleichen“ um und nahm der Seitenspalte die letzte Luft
+                    bei 1440×900. Die ausführliche Fassung steht im Tooltip;
+                    gap-x-1.5 holt die letzten Pixel für 360 px. */}
+                <div className="flex shrink-0 flex-wrap gap-x-1.5 gap-y-2">
+                  <ActionButton
+                    onClick={handleExportJson}
+                    label="JSON herunterladen"
+                    title="Report als JSON herunterladen"
+                  >
                     <Download className="size-3.5" />
-                    Export JSON
+                    JSON
                   </ActionButton>
-                  <ActionButton onClick={handleCopyPermalink}>
+                  <ActionButton onClick={handleCopyPermalink} title="Permalink zu diesem Report kopieren">
                     {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
-                    {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
+                    {permalinkCopied ? 'Link kopiert' : 'Link kopieren'}
+                  </ActionButton>
+                  <ActionButton
+                    onClick={() => handleCompare(report.domain)}
+                    title="Mit einer zweiten Domain vergleichen"
+                  >
+                    <ArrowLeftRight className="size-3.5" />
+                    Vergleichen
                   </ActionButton>
                 </div>
               </div>
@@ -939,14 +1003,21 @@ function SectionError({ message }: { message?: string }) {
 function ActionButton({
   children,
   onClick,
+  label,
+  title,
 }: {
   children: React.ReactNode;
   onClick: () => void | Promise<void>;
+  /** Zugänglicher Name, wenn die sichtbare Beschriftung allein zu knapp ist. */
+  label?: string;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
+      title={title}
       className="btn btn-secondary btn-sm"
     >
       {children}
