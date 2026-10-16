@@ -7,13 +7,10 @@ import { QuickFacts } from '@/modules/score/QuickFacts';
 import { RecordsList } from '@/modules/records/RecordsList';
 import { PropagationView } from '@/modules/propagation/PropagationView';
 import { FindingsList } from '@/modules/findings/FindingsList';
-import { SecurityView } from '@/modules/security/SecurityView';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
-import { ImpressumView } from '@/modules/impressum/ImpressumView';
-import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
@@ -23,7 +20,7 @@ import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
-import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';
+import { PageErrorFallback, SectionErrorFallback } from '@/components/errors/AppErrorFallback';
 import {
   ScoreCardSkeleton,
   SectionCardsSkeleton,
@@ -81,6 +78,27 @@ const MailView = lazy(() => loadMailView().then((m) => ({ default: m.MailView })
  */
 const SinceLastCheck = lazy(() =>
   import('@/modules/changes/SinceLastCheck').then((m) => ({ default: m.SinceLastCheck }))
+);
+
+/*
+ * Bundle-Budget (index.js ≤ 48 kB gzip, scripts/check-bundle-size.mjs): mit
+ * dem Vergleich (#79) und dem Kalender (#84) lag index.js bei 48,5 kB. Statt
+ * die Grenze anzuheben, kommen zwei Dinge aus dem kritischen Pfad, die den
+ * ersten Report nicht aufhalten müssen:
+ *
+ * - Der Sicherheits-Tab: SSL und DNSSEC lädt der Report sofort, die Ansicht
+ *   braucht erst der Klick auf den Tab. Vorgeladen wird, sobald einer der
+ *   beiden Checks fertig ist (siehe App) — dann steht sie beim Klick bereit.
+ * - Impressum und Datenschutz: reiner Text auf eigenen Seiten, zusammen rund
+ *   5 kB gzip, die bisher jeder Aufruf mitlud.
+ */
+const loadSecurityView = () => import('@/modules/security/SecurityView');
+const SecurityView = lazy(() => loadSecurityView().then((m) => ({ default: m.SecurityView })));
+const ImpressumView = lazy(() =>
+  import('@/modules/impressum/ImpressumView').then((m) => ({ default: m.ImpressumView }))
+);
+const DatenschutzView = lazy(() =>
+  import('@/modules/datenschutz/DatenschutzView').then((m) => ({ default: m.DatenschutzView }))
 );
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
@@ -404,9 +422,13 @@ export default function App() {
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
   const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
 
-  // Den Mail-Tab vorladen, sobald es etwas zu zeigen gibt — nach dem ersten
-  // Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein Chunk von
-  // vor dem letzten Deploy), meldet sich der Tab selbst über seine Boundary.
+  // Sicherheits- und Mail-Tab vorladen, sobald es etwas zu zeigen gibt — nach
+  // dem ersten Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein
+  // Chunk von vor dem letzten Deploy), meldet sich der Tab über seine Boundary.
+  const hasSecurityData = ssl.status === 'done' || dnssec.status === 'done';
+  useEffect(() => {
+    if (hasSecurityData) loadSecurityView().catch(() => {});
+  }, [hasSecurityData]);
   const hasMailData = Boolean(mailData);
   useEffect(() => {
     if (hasMailData) loadMailView().catch(() => {});
@@ -454,9 +476,19 @@ export default function App() {
 
         {view === 'availability' && <AvailabilityView />}
 
-        {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
-
-        {view === 'datenschutz' && <DatenschutzView onOpenImpressum={handleImpressum} />}
+        {(view === 'impressum' || view === 'datenschutz') && (
+          // Nachgeladen (siehe oben). Scheitert der Chunk, bleibt die App
+          // drumherum bedienbar, statt ganz in den Fehler zu fallen.
+          <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
+            <Suspense fallback={null}>
+              {view === 'impressum' ? (
+                <ImpressumView onOpenDatenschutz={handleDatenschutz} />
+              ) : (
+                <DatenschutzView onOpenImpressum={handleImpressum} />
+              )}
+            </Suspense>
+          </ErrorBoundary>
+        )}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -792,12 +824,14 @@ export default function App() {
                       (securityLoading ? (
                         <SectionCardsSkeleton count={2} />
                       ) : (
-                        <SecurityView
-                          domain={report.domain}
-                          ssl={ssl}
-                          sslApplicable={!dnsOnly}
-                          dnssec={dnssec}
-                        />
+                        <Suspense fallback={<SectionCardsSkeleton count={2} />}>
+                          <SecurityView
+                            domain={report.domain}
+                            ssl={ssl}
+                            sslApplicable={!dnsOnly}
+                            dnssec={dnssec}
+                          />
+                        </Suspense>
                       ))}
                     {activeTab === 'mail' &&
                       (mail.status === 'loading' ? (
