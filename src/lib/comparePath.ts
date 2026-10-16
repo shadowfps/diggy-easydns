@@ -14,9 +14,22 @@ export interface ComparePair {
   right: string;
 }
 
-/** Gleiche Normalisierung wie die Suche: ohne Leerraum, klein, ohne Schlusspunkt. */
+/**
+ * Wie die Suche: ohne Leerraum, klein, ohne Schlusspunkt. Dazu ohne Schema,
+ * Pfad und Port, wie es der Server ohnehin tut — wer eine URL aus der Adresszeile
+ * einfügt, bekäme sonst einen Permalink mit `%2F`, den manche Proxys
+ * ablehnen. Anders als im Report schreibt hier keine Server-Antwort den Pfad
+ * nachträglich glatt.
+ */
 export function normalizeCompareInput(value: string): string {
-  return value.trim().toLowerCase().replace(/\.$/, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/\/.*$/, '')
+    // Port nur bei genau einem Doppelpunkt — IPv6-Adressen haben mehrere.
+    .replace(/^([^:]+):\d+$/, '$1')
+    .replace(/\.$/, '');
 }
 
 /**

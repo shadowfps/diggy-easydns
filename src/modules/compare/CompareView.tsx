@@ -73,8 +73,12 @@ type ActiveSide = Extract<Side, { kind: 'loading' | 'ready' }>;
  * Seiten progressiv laden und jede für sich scheitern darf. Der Hook
  * verwirft Antworten überholter Anfragen selbst; ein schneller Wechsel der
  * Domain lässt also keine alten Daten durchrutschen.
+ *
+ * `attempt` zählt hoch, wenn dieselben Domains noch einmal abgeschickt
+ * werden — der Pfad ändert sich dann nicht, geladen werden soll trotzdem,
+ * etwa nach einem Timeout auf einer Seite.
  */
-function useSide(input: string): Side {
+function useSide(input: string, attempt: number): Side {
   const lookup = useProgressiveLookup();
   const { run, reset } = lookup;
 
@@ -83,7 +87,7 @@ function useSide(input: string): Side {
     // IP gibt es nicht, der Server würde die Eingabe nur ablehnen.
     if (input && !isInspectableIp(input)) run(input);
     else reset();
-  }, [input, run, reset]);
+  }, [input, attempt, run, reset]);
 
   if (!input) return { kind: 'empty' };
   if (isInspectableIp(input)) return { kind: 'ip', input };
@@ -103,8 +107,14 @@ const lookupOf = (side: ActiveSide) => (side.kind === 'ready' ? side.lookup : nu
 /* ─── Ansicht ──────────────────────────────────────────────────────────── */
 
 export function CompareView({ left, right, onCompare, onOpenReport }: CompareViewProps) {
-  const a = useSide(left);
-  const b = useSide(right);
+  const [attempt, setAttempt] = useState(0);
+  const a = useSide(left, attempt);
+  const b = useSide(right, attempt);
+
+  const handleSubmit = (nextLeft: string, nextRight: string) => {
+    if (nextLeft === left && nextRight === right) setAttempt((n) => n + 1);
+    else onCompare(nextLeft, nextRight);
+  };
 
   return (
     <motion.div
@@ -124,9 +134,7 @@ export function CompareView({ left, right, onCompare, onOpenReport }: CompareVie
         <span className="font-mono text-[15px]">www.domain.de</span>. Abweichungen sind markiert.
       </p>
 
-      {/* key: neue Props (Zurück-Button, Permalink) setzen die Felder zurück,
-          ohne dass ein Effect lokalen State überschreiben muss. */}
-      <CompareForm key={`${left}\n${right}`} left={left} right={right} onSubmit={onCompare} />
+      <CompareForm left={left} right={right} onSubmit={handleSubmit} />
 
       {a.kind === 'empty' && b.kind === 'empty' ? (
         <EmptyState
@@ -138,12 +146,16 @@ export function CompareView({ left, right, onCompare, onOpenReport }: CompareVie
         </EmptyState>
       ) : (
         <>
-          <section
-            aria-label="Domains im Vergleich"
-            className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2"
-          >
-            <SideSummary label="Domain A" side={a} other={b} onOpenReport={onOpenReport} />
-            <SideSummary label="Domain B" side={b} other={a} onOpenReport={onOpenReport} />
+          {/* Unsichtbare h2: die Seiten-Karten tragen h3 — wie die Leer- und
+              Fehlerzustände, die an ihrer Stelle stehen können. */}
+          <section aria-labelledby="compare-sides" className="mt-8">
+            <h2 id="compare-sides" className="sr-only">
+              Domains im Vergleich
+            </h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <SideSummary label="Domain A" side={a} other={b} onOpenReport={onOpenReport} />
+              <SideSummary label="Domain B" side={b} other={a} onOpenReport={onOpenReport} />
+            </div>
           </section>
 
           {isActive(a) && isActive(b) && <Comparison a={a} b={b} />}
@@ -175,6 +187,17 @@ function CompareForm({
   const [b, setB] = useState(right);
   const rightRef = useRef<HTMLInputElement>(null);
 
+  // Neue Props (Permalink, Zurück-Button) setzen die Felder zurück. Bewusst
+  // während des Renders statt per `key`: ein neu gemountetes Formular nähme
+  // dem Knopf „Vergleichen“ den Fokus, Tastatur- und Screenreader-Nutzer
+  // stünden nach dem Absenden wieder am Seitenanfang.
+  const [shown, setShown] = useState({ left, right });
+  if (shown.left !== left || shown.right !== right) {
+    setShown({ left, right });
+    setA(left);
+    setB(right);
+  }
+
   // Aus dem Report kommt man mit Domain A — dann direkt in Feld B tippen.
   useEffect(() => {
     if (left && !right && prefersAutoFocus()) rightRef.current?.focus({ preventScroll: true });
@@ -185,6 +208,9 @@ function CompareForm({
     const nextLeft = normalizeCompareInput(a);
     const nextRight = normalizeCompareInput(b);
     if (!nextLeft && !nextRight) return;
+    // Was verglichen wird, steht so im Feld — auch wenn der Pfad gleich bleibt.
+    setA(nextLeft);
+    setB(nextRight);
     onSubmit(nextLeft, nextRight);
   };
 
@@ -287,7 +313,7 @@ function SideSummary({
         {otherName ? (
           <>
             Trag oben eine zweite Domain ein, um sie mit{' '}
-            <span className="break-all font-mono text-[13px] text-fg">{otherName}</span> zu
+            <span className="wrap-anywhere font-mono text-[13px] text-fg">{otherName}</span> zu
             vergleichen.
           </>
         ) : (
@@ -308,7 +334,7 @@ function SideSummary({
           </button>
         }
       >
-        <span className="break-all font-mono text-[13px] text-fg">{side.input}</span> ist eine
+        <span className="wrap-anywhere font-mono text-[13px] text-fg">{side.input}</span> ist eine
         IP-Adresse. Records, Mail-Schutz und Zertifikat gehören zu Domains — für IPs gibt es die
         Einzelansicht mit Reverse DNS.
       </EmptyState>
@@ -320,7 +346,7 @@ function SideSummary({
       <EmptyState
         tone="danger"
         icon={<AlertTriangle className="size-5" />}
-        title={<span className="break-all font-mono">{side.input}</span>}
+        title={<span className="wrap-anywhere font-mono">{side.input}</span>}
       >
         {side.message}
       </EmptyState>
@@ -332,9 +358,9 @@ function SideSummary({
   return (
     <div className="card flex min-w-0 flex-col">
       <p className="eyebrow">{label}</p>
-      <h2 className="mt-1.5 break-all font-mono text-xl font-semibold tracking-tight text-fg sm:text-2xl">
+      <h3 className="mt-1.5 break-all font-mono text-xl font-semibold tracking-tight text-fg sm:text-2xl">
         {name}
-      </h2>
+      </h3>
 
       {lookup?.allSettled ? <ScoreLine lookup={lookup} /> : <ScoreLineSkeleton />}
 
@@ -471,7 +497,11 @@ function Comparison({ a, b }: { a: ActiveSide; b: ActiveSide }) {
         <h2 id="compare-heading" className="text-lg font-semibold tracking-tight text-fg">
           Gegenüberstellung
         </h2>
-        <p className="text-sm text-fg-muted">{parts.join(' · ')}</p>
+        {/* Nach dem Absenden bleibt der Fokus im Formular — das Ergebnis
+            wird deshalb angesagt, sobald es feststeht. */}
+        <p aria-live="polite" className="text-sm text-fg-muted">
+          {parts.join(' · ')}
+        </p>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4">
@@ -662,18 +692,22 @@ function CellSkeleton() {
 /* Records */
 
 function RecordCompareRow({ row, names }: { row: RecordRow; names: Names }) {
+  // „nur hier“ hilft nur, wo sich die Seiten teilweise decken. Teilen sie gar
+  // nichts, stünde es an jedem Wert — bei zwei fremden TXT-Listen dutzendfach —
+  // und sagte nichts, was das „Unterschied“ der Zeile nicht schon sagt.
+  const markOnly = Boolean(row.left?.some((v) => v.match === 'both'));
   return (
     <CompareRow
       label={<span className="font-mono text-xs font-semibold text-fg-muted">{row.type}</span>}
       status={row.status}
       names={names}
-      left={<RecordValues values={row.left} />}
-      right={<RecordValues values={row.right} />}
+      left={<RecordValues values={row.left} markOnly={markOnly} />}
+      right={<RecordValues values={row.right} markOnly={markOnly} />}
     />
   );
 }
 
-function RecordValues({ values }: { values: RecordValue[] | null }) {
+function RecordValues({ values, markOnly }: { values: RecordValue[] | null; markOnly: boolean }) {
   if (!values) return <CellSkeleton />;
   if (values.length === 0) return <span className="text-sm text-fg-subtle">keine</span>;
   return (
@@ -688,7 +722,9 @@ function RecordValues({ values }: { values: RecordValue[] | null }) {
           >
             {v.value}
           </span>
-          {v.match === 'only' && <span className="badge badge-warning mt-px">nur hier</span>}
+          {markOnly && v.match === 'only' && (
+            <span className="badge badge-warning mt-px">nur hier</span>
+          )}
         </li>
       ))}
     </ul>

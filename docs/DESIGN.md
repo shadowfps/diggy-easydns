@@ -90,13 +90,16 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
   mitläuft; rechts Tabs und Inhalt. Darunter gestapelt: Kopf, Score und
   Schnellübersicht nebeneinander, dann die Tabs. Die Seitenspalte bleibt
   flach genug für 1440×900 — Neues kommt in die Tabs, nicht in die Spalte.
+  Die Aktionen im Kopf (JSON, Link kopieren, Vergleichen) stehen in einer
+  Zeile, auch bei 390 px: Beschriftungen kurz, die Langfassung im Tooltip.
 - **Vergleich** (`/compare/<a>/<b>`): `max-w-6xl`, Seitenkopf wie eine
   Textseite, darunter die beiden Eingabefelder, dann je Domain eine Karte mit
   Score (ab `md` nebeneinander) und eine Karte je Bereich. In den Karten ab
   `md` drei Spalten — Bezeichnung, Domain A, Domain B —, darunter steht jede
   Zeile untereinander. Abweichungen tragen `badge-warning` mit Wort
   („Unterschied“, „nur hier“): beim Vergleich ist die Abweichung das, was man
-  ansehen muss.
+  ansehen muss. „nur hier“ steht nur, wo sich die Werte einer Zeile teilweise
+  decken — teilen sie nichts, sagt das „Unterschied“ der Zeile genug.
 - **Textseiten**: `max-w-3xl`, Überzeile, `page-title`, optional Lead, dann
   Karten.
 

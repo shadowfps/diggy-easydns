@@ -88,6 +88,8 @@ const checks = [
   // Express 5 gescheitert wäre.
   ['/', (res, body) => res.status === 200 && body.includes('id="root"')],
   ['/lookup/example.com', (res, body) => res.status === 200 && body.includes('id="root"')],
+  // Zwei Pfadsegmente nach dem Präfix — der Wildcard muss auch die tragen.
+  ['/compare/example.com/github.com', (res, body) => res.status === 200 && body.includes('id="root"')],
   ['/impressum', (res, body) => res.status === 200 && body.includes('id="root"')],
   // Unbekannte API-Pfade dürfen NICHT im Fallback landen.
   ['/api/gibt-es-nicht', (res) => res.status === 404],

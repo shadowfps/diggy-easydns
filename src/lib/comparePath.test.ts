@@ -73,7 +73,22 @@ describe('comparePathFor', () => {
   });
 
   it('kodiert Zeichen, die den Pfad sprengen würden', () => {
-    expect(comparePathFor('a/b', 'c?d')).toBe('/compare/a%2Fb/c%3Fd');
+    expect(comparePathFor('a?b', 'c#d')).toBe('/compare/a%3Fb/c%23d');
+  });
+
+  it('macht aus eingefügten URLs Domains — ohne %2F im Permalink', () => {
+    expect(comparePathFor('https://www.Example.com/pfad?x=1', 'http://github.com:8080/')).toBe(
+      '/compare/www.example.com/github.com'
+    );
+    // Alte Links mit kodiertem Schema landen bei derselben Domain.
+    expect(getComparePairFromPath('/compare/https%3A%2F%2Fexample.com%2F/github.com')).toEqual({
+      left: 'example.com',
+      right: 'github.com',
+    });
+  });
+
+  it('lässt IPv6-Adressen ganz', () => {
+    expect(comparePathFor('2001:db8::1')).toBe('/compare/2001%3Adb8%3A%3A1');
   });
 
   it('lässt leere Teile weg und rückt die zweite Domain nach vorn', () => {

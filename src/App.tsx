@@ -639,16 +639,29 @@ export default function App() {
                     Geprüft am {formatCheckedAt(report.timestamp)}
                   </p>
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <ActionButton onClick={handleExportJson}>
+                {/* Kurze Beschriftungen, damit die drei Aktionen in der
+                    24rem-Spalte und auf dem Handy ab 360 px in eine Zeile
+                    passen — mit „Export JSON“ und „Permalink kopieren“ brach
+                    „Vergleichen“ um und nahm der Seitenspalte die letzte Luft
+                    bei 1440×900. Die ausführliche Fassung steht im Tooltip;
+                    gap-x-1.5 holt die letzten Pixel für 360 px. */}
+                <div className="flex shrink-0 flex-wrap gap-x-1.5 gap-y-2">
+                  <ActionButton
+                    onClick={handleExportJson}
+                    label="JSON herunterladen"
+                    title="Report als JSON herunterladen"
+                  >
                     <Download className="size-3.5" />
-                    Export JSON
+                    JSON
                   </ActionButton>
-                  <ActionButton onClick={handleCopyPermalink}>
+                  <ActionButton onClick={handleCopyPermalink} title="Permalink zu diesem Report kopieren">
                     {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
-                    {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
+                    {permalinkCopied ? 'Link kopiert' : 'Link kopieren'}
                   </ActionButton>
-                  <ActionButton onClick={() => handleCompare(report.domain)}>
+                  <ActionButton
+                    onClick={() => handleCompare(report.domain)}
+                    title="Mit einer zweiten Domain vergleichen"
+                  >
                     <ArrowLeftRight className="size-3.5" />
                     Vergleichen
                   </ActionButton>
@@ -888,14 +901,21 @@ function SectionError({ message }: { message?: string }) {
 function ActionButton({
   children,
   onClick,
+  label,
+  title,
 }: {
   children: React.ReactNode;
   onClick: () => void | Promise<void>;
+  /** Zugänglicher Name, wenn die sichtbare Beschriftung allein zu knapp ist. */
+  label?: string;
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
+      title={title}
       className="btn btn-secondary btn-sm"
     >
       {children}

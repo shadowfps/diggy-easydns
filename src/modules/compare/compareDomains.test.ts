@@ -8,6 +8,7 @@ import {
   compareScores,
   diffRecords,
   dnssecFacts,
+  issuerOrganization,
   mailFacts,
   nameserverFact,
   nameserverProvider,
@@ -166,6 +167,19 @@ describe('certFacts', () => {
       cells(certFacts({ ...SSL, daysUntilExpiry: 80 }))
     );
     expect(rows.map((r) => r.status)).toEqual(['same', 'equivalent', 'same']);
+  });
+
+  it('vergleicht beim Aussteller die CA, nicht das Zwischenzertifikat', () => {
+    expect(issuerOrganization("R11 (Let's Encrypt)")).toBe("Let's Encrypt");
+    expect(issuerOrganization('DigiCert')).toBe('DigiCert');
+
+    const le = (issuer: string) => cells(certFacts({ ...SSL, issuer }));
+    const issuer = (l: string, r: string) =>
+      compareFacts(CERT_ROWS, le(l), le(r)).find((row) => row.id === 'issuer')!.status;
+    // Let's Encrypt wechselt die Zwischenzertifikate — dieselbe CA bleibt gleichwertig.
+    expect(issuer("R10 (Let's Encrypt)", "E6 (Let's Encrypt)")).toBe('equivalent');
+    expect(issuer("R11 (Let's Encrypt)", "R11 (Let's Encrypt)")).toBe('same');
+    expect(issuer("R11 (Let's Encrypt)", 'Sectigo RSA DV CA (Sectigo Limited)')).toBe('different');
   });
 
   it('unterscheidet fehlendes TLS und DNS-Einträge ohne Host', () => {

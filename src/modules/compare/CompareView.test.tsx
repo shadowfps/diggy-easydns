@@ -61,6 +61,7 @@ const FIXTURES: Record<string, Fixture> = {
   'example.com': {
     records: [
       r('A', 'example.com', '93.184.216.34'),
+      r('A', 'example.com', '192.0.2.10'),
       r('NS', 'example.com', 'a.iana-servers.net'),
       r('TXT', 'example.com', 'v=spf1 -all'),
     ],
@@ -71,8 +72,10 @@ const FIXTURES: Record<string, Fixture> = {
   'github.com': {
     records: [
       r('A', 'github.com', '140.82.121.3'),
+      r('A', 'github.com', '192.0.2.10'),
       r('NS', 'github.com', 'a.iana-servers.net'),
       r('TXT', 'github.com', 'v=spf1 -all'),
+      r('CAA', 'github.com', '0 issue "digicert.com"'),
     ],
     mail: { ...MAIL, dmarc: { present: true, policy: 'none' } },
     ssl: { ...SSL, issuer: 'Sectigo', daysUntilExpiry: 40 },
@@ -129,13 +132,26 @@ describe('CompareView', () => {
     expect(api.lookupRecords).toHaveBeenCalledWith('example.com');
     expect(api.lookupRecords).toHaveBeenCalledWith('github.com');
 
-    // Abweichende A-Records: je Seite als „nur hier“ markiert.
+    // Abweichende A-Records: je Seite als „nur hier“ markiert, der gemeinsame nicht.
     expect(within(valueItem('93.184.216.34')).getByText('nur hier')).toBeInTheDocument();
     expect(within(valueItem('140.82.121.3')).getByText('nur hier')).toBeInTheDocument();
+    for (const item of screen.getAllByText('192.0.2.10')) {
+      expect(within(item.closest('li')!).queryByText('nur hier')).toBeNull();
+    }
     // Gleicher TXT-Record: ohne Markierung.
     for (const item of screen.getAllByText('v=spf1 -all', { selector: 'li span' })) {
       expect(within(item.closest('li')!).queryByText('nur hier')).toBeNull();
     }
+  });
+
+  it('markiert „nur hier“ nur, wo sich die Seiten teilweise decken', async () => {
+    renderView('example.com', 'github.com');
+
+    // CAA gibt es nur rechts: die Zeile heißt „Unterschied“, der Wert bleibt
+    // ohne eigenes Badge — sonst stünde es bei fremden Listen an jedem Eintrag.
+    const caa = await screen.findByText('0 issue "digicert.com"');
+    expect(within(caa.closest('li')!).queryByText('nur hier')).toBeNull();
+    expect(screen.getAllByText('nur hier')).toHaveLength(2);
   });
 
   it('nennt Unterschiede mit Wort, nicht nur mit Farbe', async () => {
@@ -177,6 +193,18 @@ describe('CompareView', () => {
     expect(screen.queryByRole('heading', { name: 'Gegenüberstellung' })).toBeNull();
   });
 
+  it('lädt neu, wenn dieselben Domains noch einmal abgeschickt werden', async () => {
+    const { onCompare } = renderView('example.com', 'gibt-es-nicht.example');
+    await screen.findByText(/keine DNS-Antwort/);
+    expect(api.lookupRecords).toHaveBeenCalledTimes(2);
+
+    // Der Pfad bliebe gleich — ohne eigenen Neustart passierte gar nichts.
+    await userEvent.click(screen.getByRole('button', { name: 'Vergleichen' }));
+
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledTimes(4));
+    expect(onCompare).not.toHaveBeenCalled();
+  });
+
   it('fragt eine IP nicht ab und verweist auf die IP-Ansicht', async () => {
     const { onOpenReport } = renderView('example.com', '8.8.8.8');
 
@@ -205,6 +233,27 @@ describe('Eingabe', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Vergleichen' }));
 
     expect(onCompare).toHaveBeenCalledWith('example.com', 'github.com');
+  });
+
+  it('übernimmt neue Domains aus den Props, ohne den Fokus zu verlieren', async () => {
+    const onCompare = vi.fn();
+    const props = { onCompare, onOpenReport: vi.fn() };
+    const { rerender } = render(<CompareView left="example.com" right="" {...props} />);
+
+    await userEvent.type(screen.getByLabelText('Domain B'), 'github.com');
+    const submit = screen.getByRole('button', { name: 'Vergleichen' });
+    await userEvent.click(submit);
+    expect(onCompare).toHaveBeenCalledWith('example.com', 'github.com');
+
+    // So kommt der neue Permalink zurück: dasselbe Formular, Fokus bleibt am Knopf.
+    rerender(<CompareView left="example.com" right="github.com" {...props} />);
+    expect(screen.getByRole('button', { name: 'Vergleichen' })).toBe(submit);
+    expect(submit).toHaveFocus();
+
+    // Zurück-Button: die Felder folgen dem Pfad.
+    rerender(<CompareView left="a.example" right="b.example" {...props} />);
+    expect(screen.getByLabelText('Domain A')).toHaveValue('a.example');
+    expect(screen.getByLabelText('Domain B')).toHaveValue('b.example');
   });
 
   it('tauscht die beiden Felder', async () => {

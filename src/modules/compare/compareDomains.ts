@@ -315,8 +315,24 @@ export function certFacts(ssl: SslInfo | null | undefined, applicable = true): R
       ? { value: 'gültig', tone: 'success', key: 'valid' }
       : { value: 'nicht vertrauenswürdig', tone: 'danger', key: 'invalid' },
     expiry,
-    issuer: { value: ssl.issuer || '—', tone: 'neutral', key: ssl.issuer || '—' },
+    issuer: {
+      value: ssl.issuer || '—',
+      tone: 'neutral',
+      key: ssl.issuer ? issuerOrganization(ssl.issuer) : '—',
+    },
   };
+}
+
+/**
+ * Die Organisation aus „CN (O)“ — so formatiert der Server den Aussteller.
+ *
+ * Verglichen wird die CA, nicht das Zwischenzertifikat: Let's Encrypt stellt
+ * abwechselnd über R10, R11, E5, E6 … aus, Google über WR1, WE1 … Nach dem
+ * vollen Namen stünde bei zwei Domains derselben CA fast immer „Unterschied“.
+ * Gleiche CA, anderes Zwischenzertifikat heißt dann „gleichwertig“.
+ */
+export function issuerOrganization(issuer: string): string {
+  return issuer.match(/\(([^()]+)\)\s*$/)?.[1].trim() || issuer.trim();
 }
 
 /* Nameserver und DNSSEC */
