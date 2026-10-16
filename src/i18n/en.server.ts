@@ -23,8 +23,24 @@ export interface FindingText {
 }
 
 const SPF_ISSUE = 'SPF record has a problem';
+const NO_DMARC = 'No DMARC record at _dmarc.<domain>';
+const NO_DMARC_TEXT = 'Without DMARC, attackers can more easily send email in your name (spoofing).';
+const AS_NONE = 'DMARC acts as p=none: {flaw}';
+const TLS_RPT_FIX =
+  'Add a TXT record with an address for the reports. Separate multiple destinations with commas; https: URLs work too.';
 
+/*
+ * Werte wie `{flaw}`, `{effect}`, `{reason}` sind Satzbausteine (Phrase, #86):
+ * der Client übersetzt sie über das Wörterbuch der Oberfläche (en.ts,
+ * Abschnitt „Satzbausteine“), bevor er sie hier einsetzt.
+ */
 export const findings: Record<FindingKey, FindingText> = {
+  // ─── Gescheiterte Checks ─────────────────────────────────────────────
+  unchecked: {
+    title: '{check} couldn’t be checked — {reason}',
+    description: '{detail} Without an answer, there’s no rating and no deduction — check again later.',
+  },
+
   // ─── DNS-Basics ──────────────────────────────────────────────────────
   'no-records': {
     title: 'No entry under this name',
@@ -103,21 +119,36 @@ export const findings: Record<FindingKey, FindingText> = {
     },
   },
   'no-dmarc': {
-    title: 'No DMARC record at _dmarc.<domain>',
-    description: 'Without DMARC, attackers can more easily send email in your name (spoofing).',
+    title: NO_DMARC,
+    description: NO_DMARC_TEXT,
     fix: 'Add a DMARC record. With p=none you only get reports at first — nothing is rejected yet.',
+  },
+  'no-dmarc-null-mx': {
+    title: NO_DMARC,
+    description: NO_DMARC_TEXT,
+    fix: 'Add a DMARC record with p=reject — with no real email, nothing gets lost. Send reports (rua) only to an address on another domain: this one doesn’t accept email.',
+  },
+  'dmarc-ignored': {
+    title: 'DMARC has no effect: {flaw}',
+    description: '{effect} That makes it easier for attackers to send email in your name (spoofing).',
+    fix: '{fix}',
   },
   'dmarc-policy-none': {
     title: 'DMARC policy is p=none (reporting only)',
-    description:
-      'With p=none, spoofing attempts are reported but not rejected. Once the reports look stable, switch to quarantine.',
+    description: 'With p=none, spoofing attempts are reported but not rejected. {next}',
+  },
+  'dmarc-as-none': {
+    title: AS_NONE,
+    description: '{effect} {next}',
+    fix: '{fix}',
+  },
+  'dmarc-sp-invalid': {
+    title: AS_NONE,
+    description: '{effect}',
+    fix: '{fix}',
   },
   'dmarc-present': {
     title: 'DMARC policy: {policy}',
-    description: 'DMARC record present — protection against email spoofing is active.',
-  },
-  'dmarc-present-no-policy': {
-    title: 'DMARC policy: set',
     description: 'DMARC record present — protection against email spoofing is active.',
   },
   'no-dkim-found': {
@@ -133,6 +164,71 @@ export const findings: Record<FindingKey, FindingText> = {
     title: 'No MTA-STS',
     description:
       'MTA-STS enforces TLS for incoming email. Without it, attackers can force a downgrade to unencrypted SMTP.',
+  },
+  'no-tls-rpt': {
+    title: 'No TLS-RPT',
+    description:
+      'With TLS-RPT (RFC 8460), senders report when encrypted delivery to your mail servers fails — for example because of an expired certificate or a downgrade attack.',
+    fix: TLS_RPT_FIX,
+  },
+  'no-tls-rpt-mta-sts': {
+    title: 'No TLS-RPT',
+    description:
+      'With TLS-RPT (RFC 8460), senders report when encrypted delivery to your mail servers fails. It belongs with MTA-STS: without reports, you won’t notice when the policy holds up email — say, after a certificate expires.',
+    fix: TLS_RPT_FIX,
+  },
+  'tls-rpt-invalid': {
+    title: 'TLS-RPT record invalid',
+    description: '{reason}. Senders then don’t send any reports (RFC 8460 §3).',
+  },
+  'tls-rpt-present': {
+    title: 'TLS-RPT active',
+    description: 'Reports about problems with encrypted delivery go to {rua}.',
+  },
+  'bimi-needs-dmarc': {
+    title: 'BIMI needs a stricter DMARC policy first',
+    description:
+      'With BIMI, inboxes show your brand logo next to your email — but only with DMARC at p=quarantine or p=reject. Currently: {gap}. Tighten DMARC first — then BIMI is worth it.',
+  },
+  'no-bimi': {
+    title: 'No BIMI record',
+    description:
+      'With BIMI, inboxes show your brand logo next to your email. Your DMARC policy already meets the requirement. Gmail and Apple Mail only show the logo with a brand certificate (VMC or CMC).',
+    fix: 'Publish the logo as an SVG (SVG Tiny PS profile) over https and add the record; a brand certificate goes in with a=https://….',
+  },
+  'bimi-invalid': {
+    title: 'BIMI record invalid',
+    description: '{reason}. Recipients then show no logo.',
+  },
+  'bimi-dmarc-weak': {
+    title: 'BIMI record not effective yet',
+    description:
+      'The record is there, but inboxes only show the logo with DMARC at p=quarantine or p=reject. Currently: {gap}.',
+  },
+  'bimi-present': {
+    title: 'BIMI record present',
+    description: 'Brand logo with certificate (VMC/CMC) on file — inboxes can show it next to your email.',
+  },
+  'bimi-present-no-vmc': {
+    title: 'BIMI record present',
+    description:
+      'Brand logo on file, but without a brand certificate: Gmail and Apple Mail won’t show it like this, though some other inboxes will.',
+  },
+  'null-mx': {
+    title: 'No email: null MX set',
+    description:
+      'The null MX (RFC 7505) tells every sender that this domain accepts no email. So it doesn’t need DKIM or MTA-STS.',
+  },
+  'null-mx-complete': {
+    title: 'No email: domain cleanly marked as mail-free',
+    description:
+      'Null MX (RFC 7505), SPF -all and DMARC p=reject: the domain accepts no email, and recipients reject email pretending to come from it. So it doesn’t need DKIM or MTA-STS.',
+  },
+  'null-mx-incomplete': {
+    title: 'No email, but spoofing protection incomplete',
+    description:
+      'The null MX only covers receiving. For recipients to reject email pretending to come from {domain}, you still need {missing}.',
+    fix: 'A domain without email lets no one send and has spoofed email rejected.',
   },
 
   // ─── DNSSEC ──────────────────────────────────────────────────────────
@@ -198,9 +294,21 @@ export const findings: Record<FindingKey, FindingText> = {
     description:
       '{count} resolvers return {answers} different answers — either not propagated yet, or GeoDNS / Anycast.',
   },
+  'propagation-mismatch-entry': {
+    title: 'Propagation mismatch detected',
+    description: {
+      one: '{count} of {compared} resolvers differs from the majority on the {type} record — a change hasn’t reached everywhere yet. Resolvers keep serving the old state until their cache expires (TTL).',
+      other:
+        '{count} of {compared} resolvers differ from the majority on the {type} record — a change hasn’t reached everywhere yet. Resolvers keep serving the old state until their cache expires (TTL).',
+    },
+  },
   'propagation-consistent': {
     title: 'Consistent propagation',
     description: 'All {count} resolvers return the same result.',
+  },
+  'propagation-consistent-entry': {
+    title: 'Consistent propagation',
+    description: 'All {count} resolvers return the same {type} record.',
   },
 
   // ─── WHOIS ───────────────────────────────────────────────────────────

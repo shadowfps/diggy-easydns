@@ -287,7 +287,11 @@ describe('compareFacts und sectionCells', () => {
   it('wartet auf die ladende Seite und urteilt nicht über eine gescheiterte', () => {
     const done = cells(mailFacts(MAIL));
     const loading = sectionCells(MAIL_ROWS, { status: 'loading', data: undefined }, mailFacts);
-    const failed = sectionCells(MAIL_ROWS, { status: 'error', data: undefined, error: 'Timeout' }, mailFacts);
+    const failed = sectionCells(
+      MAIL_ROWS,
+      { status: 'error', data: undefined, error: new Error('Timeout') },
+      mailFacts
+    );
 
     expect(compareFacts(MAIL_ROWS, done, loading).every((r) => r.status === 'pending')).toBe(true);
     const rows = compareFacts(MAIL_ROWS, failed, done);

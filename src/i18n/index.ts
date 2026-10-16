@@ -1,7 +1,8 @@
 import { createElement, Fragment, useSyncExternalStore, type ReactNode } from 'react';
 import { DE_PLURALS, type DeKey, type Message } from './de';
 import type { EnglishPack } from './en';
-import type { Finding, FindingKey, SpfIssueKey, TextParams, TextRef } from '@/types/dns';
+import type { Finding, FindingKey, Phrase, SpfIssueKey, TextParams, TextRef } from '@/types/dns';
+import { germanText } from '@shared/phrase';
 
 /**
  * Übersetzungsmodul (#86) — Deutsch ist die Quelle, Englisch wird nachgeladen.
@@ -213,12 +214,48 @@ export function tRich(key: DeKey, values: Record<string, ReactNode>): ReactNode[
 /* ─── Texte des Servers ───────────────────────────────────────────────── */
 
 /**
+ * Ein Satzbaustein aus shared/ oder vom Server in der aktiven Sprache —
+ * `null`, wenn er oder ein Baustein in seinen Werten kein Englisch hat.
+ */
+function phraseOrNull(value: Phrase): string | null {
+  if (language === 'en' && english?.ui[value.text as DeKey] === undefined) return null;
+  const params = resolveParams(value.params);
+  return params && t(value.text as DeKey, params);
+}
+
+/**
+ * Bausteine in den Werten in die aktive Sprache bringen. `null`, wenn einer
+ * kein Englisch hat — dann bleibt der ganze Satz deutsch, statt mitten im
+ * englischen Satz ein deutsches Stück zu zeigen.
+ */
+function resolveParams(params: TextParams | undefined): Params | null {
+  const resolved: Params = {};
+  for (const [name, value] of Object.entries(params ?? {})) {
+    if (typeof value !== 'object') resolved[name] = value;
+    else {
+      const text = phraseOrNull(value);
+      if (text === null) return null;
+      resolved[name] = text;
+    }
+  }
+  return resolved;
+}
+
+/**
+ * Satzbaustein (`Phrase`) in der aktiven Sprache. Fehlt das Englisch, gilt
+ * der deutsche Text — wie bei `t()`.
+ */
+export function phraseText(value: Phrase): string {
+  return phraseOrNull(value) ?? germanText(value);
+}
+
+/**
  * Lässt sich der Text vollständig füllen? Sonst bleibt es beim deutschen
  * Original: ein englischer Satz mit `{count}` darin wäre schlechter als ein
  * deutscher Satz, der stimmt. Passiert bei alten History-Einträgen oder einem
  * Server, der noch keine Werte mitschickt.
  */
-function fillable(message: Message | undefined, params: TextParams): message is Message {
+function fillable(message: Message | undefined, params: Params): message is Message {
   if (message === undefined) return false;
   const forms = typeof message === 'string' ? [message] : [message.one, message.other];
   return forms.every((form) =>
@@ -248,9 +285,10 @@ export function findingText(finding: Finding): FindingTexts {
   const entry = language === 'en' ? english?.findings[(finding.key ?? finding.id) as FindingKey] : undefined;
   if (!entry) return german;
 
-  const params = finding.params ?? {};
+  const params = resolveParams(finding.params);
   const fix = german.fixExplanation === undefined ? undefined : entry.fix;
   if (
+    !params ||
     !fillable(entry.title, params) ||
     !fillable(entry.description, params) ||
     (german.fixExplanation !== undefined && !fillable(fix, params))
@@ -267,8 +305,8 @@ export function findingText(finding: Finding): FindingTexts {
 /** Ein Problem des SPF-Records (Mail-Ansicht) — gleiche Regeln wie oben. */
 export function spfIssueText(german: string, detail?: TextRef<SpfIssueKey>): string {
   const entry = language === 'en' && detail ? english?.findings[detail.key] : undefined;
-  const params = detail?.params ?? {};
-  return entry && fillable(entry.description, params) ? format(entry.description, params) : german;
+  const params = resolveParams(detail?.params);
+  return entry && params && fillable(entry.description, params) ? format(entry.description, params) : german;
 }
 
 /**
@@ -283,9 +321,9 @@ export function spfIssueText(german: string, detail?: TextRef<SpfIssueKey>): str
 export function errorText(error: unknown, fallback: DeKey): string {
   if (language === 'en' && english && error instanceof Error && 'code' in error) {
     const code = String(error.code) as keyof EnglishPack['apiErrors'];
-    const params = ('params' in error ? (error.params as TextParams | undefined) : undefined) ?? {};
+    const params = resolveParams('params' in error ? (error.params as TextParams | undefined) : undefined);
     const message = english.apiErrors[code];
-    if (fillable(message, params)) return format(message, params);
+    if (params && fillable(message, params)) return format(message, params);
   }
   if (error instanceof Error && error.message) return error.message;
   return t(fallback);

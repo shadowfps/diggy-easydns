@@ -84,7 +84,7 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
             {/* Ein „Hinweis“ kostet sonst Punkte — hier sieht man, warum der
                 Score trotzdem bleibt. In derselben Zeile wie die Kategorie,
                 damit der Zusatz auf schmalen Schirmen nicht allein umbricht. */}
-            {finding.advisory && ' · ohne Punktabzug'}
+            {finding.advisory && <> · {t('ohne Punktabzug')}</>}
           </span>
         </div>
         <p className="mt-1 text-sm leading-relaxed text-fg-muted">{text.description}</p>

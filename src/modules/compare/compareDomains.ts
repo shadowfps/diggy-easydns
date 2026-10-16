@@ -15,7 +15,15 @@ import type {
   RecordType,
   SslInfo,
 } from '@/types/dns';
-import { dmarcPolicyFlawText, effectiveDmarcPolicy } from '@/lib/dmarc';
+import { dmarcPolicyFlawPhrase, effectiveDmarcPolicy } from '@/lib/dmarc';
+import { errorText, phraseText, t } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
+
+/*
+ * Texte (#86): Werte und Bezeichnungen entstehen beim Aufruf mit `t()` —
+ * die Ansicht ruft diese Funktionen beim Rendern auf, sie folgen also einem
+ * Sprachwechsel. Verglichen wird nach `key`, der bleibt sprachneutral.
+ */
 
 /**
  * - `same`: identisch.
@@ -178,9 +186,18 @@ export type FactCell =
 /** Zellen einer Seite je Zeilen-ID. Fehlt eine ID, gilt sie als ladend. */
 export type SideCells = Record<string, FactCell>;
 
+/** Fachbegriffe heißen in beiden Sprachen gleich und laufen nicht durch `t()`. */
+type Term = 'SPF' | 'DKIM' | 'MTA-STS' | 'DNSSEC' | 'Status';
+const TERMS: ReadonlySet<string> = new Set<Term>(['SPF', 'DKIM', 'MTA-STS', 'DNSSEC', 'Status']);
+
 export interface FactRowSpec {
   id: string;
-  label: string;
+  /** Schlüssel — übersetzt beim Rendern über `rowLabel()`. */
+  label: DeKey | Term;
+}
+
+export function rowLabel(label: FactRowSpec['label']): string {
+  return TERMS.has(label) ? label : t(label as DeKey);
 }
 
 export interface FactRow extends FactRowSpec {
@@ -192,7 +209,9 @@ export interface FactRow extends FactRowSpec {
 const LOADING: FactCell = { state: 'loading' };
 
 /** „nicht prüfbar“ — der Grund steht im Report, hier zählt nur, dass es keine Antwort gab. */
-const UNCHECKED: Fact = { value: 'nicht prüfbar', tone: 'neutral', key: 'unchecked', unchecked: true };
+function unchecked(): Fact {
+  return { value: t('nicht prüfbar'), tone: 'neutral', key: 'unchecked', unchecked: true };
+}
 
 export function compareFacts(
   rows: readonly FactRowSpec[],
@@ -221,11 +240,13 @@ export function compareFacts(
  */
 export function sectionCells<T>(
   rows: readonly FactRowSpec[],
-  slice: { status: LoadStatus; data: T | undefined; error?: string },
+  slice: { status: LoadStatus; data: T | undefined; error?: unknown },
   build: (data: T | undefined) => Record<string, Fact>
 ): SideCells {
   if (slice.status === 'error') {
-    return Object.fromEntries(rows.map((r) => [r.id, { state: 'error', message: slice.error }]));
+    // Der geworfene Fehler, übersetzt nach dem Code des Servers (#86).
+    const message = slice.error === undefined ? undefined : errorText(slice.error, 'Check fehlgeschlagen');
+    return Object.fromEntries(rows.map((r) => [r.id, { state: 'error', message }]));
   }
   if (slice.status !== 'done' && slice.status !== 'skipped') {
     return Object.fromEntries(rows.map((r) => [r.id, LOADING]));
@@ -257,18 +278,18 @@ export function mailFacts(mail: MailSecurity | undefined): Record<string, Fact> 
   // verschiedenen includes sind beim Umzug genau der Unterschied, um den es geht.
   const spfRecord = spf?.record?.replace(/\s+/g, ' ').trim();
   const spfFact: Fact = spf?.lookupFailed
-    ? UNCHECKED
+    ? unchecked()
     : !spf?.present
-    ? { value: 'fehlt', tone: missingTone, key: 'missing' }
+    ? { value: t('fehlt'), tone: missingTone, key: 'missing' }
     : !spf.valid
-      ? { value: 'problematisch', tone: 'danger', key: `invalid|${spfRecord}`, detail: spfRecord }
+      ? { value: t('problematisch'), tone: 'danger', key: `invalid|${spfRecord}`, detail: spfRecord }
       : spf.issues.length > 0
-        ? { value: 'gültig, mit Hinweisen', tone: 'warning', key: `issues|${spfRecord}`, detail: spfRecord }
-        : { value: 'gültig', tone: 'success', key: `valid|${spfRecord}`, detail: spfRecord };
+        ? { value: t('gültig, mit Hinweisen'), tone: 'warning', key: `issues|${spfRecord}`, detail: spfRecord }
+        : { value: t('gültig'), tone: 'success', key: `valid|${spfRecord}`, detail: spfRecord };
 
   // Nur die Policy: die rua-Adresse enthält fast immer die eigene Domain und
   // wäre damit bei jedem Vergleich verschieden.
-  const dmarcFact = mail?.dmarc.lookupFailed ? UNCHECKED : dmarcPolicyFact(mail?.dmarc, missingTone);
+  const dmarcFact = mail?.dmarc.lookupFailed ? unchecked() : dmarcPolicyFact(mail?.dmarc, missingTone);
 
   const selectors = (mail?.dkim.selectors ?? [])
     .filter((s) => s.present)
@@ -280,18 +301,18 @@ export function mailFacts(mail: MailSecurity | undefined): Record<string, Fact> 
     selectors.length > 0
       ? { value: selectors.join(', '), tone: 'success', key: selectors.join(','), mono: true }
       : noMail
-      ? { value: 'nicht nötig', tone: 'neutral', key: 'none' }
+      ? { value: t('nicht nötig'), tone: 'neutral', key: 'none' }
       : mail?.dkim.lookupFailed
-      ? UNCHECKED
-      : { value: 'keine gefunden', tone: 'neutral', key: 'none' };
+      ? unchecked()
+      : { value: t('keine gefunden'), tone: 'neutral', key: 'none' };
 
   const mtaStsFact: Fact = mail?.mtaSts.present
-    ? { value: 'aktiv', tone: 'success', key: 'on' }
+    ? { value: t('aktiv'), tone: 'success', key: 'on' }
     : noMail
-    ? { value: 'nicht nötig', tone: 'neutral', key: 'off' }
+    ? { value: t('nicht nötig'), tone: 'neutral', key: 'off' }
     : mail?.mtaSts.lookupFailed
-    ? UNCHECKED
-    : { value: 'nicht eingerichtet', tone: 'neutral', key: 'off' };
+    ? unchecked()
+    : { value: t('nicht eingerichtet'), tone: 'neutral', key: 'off' };
 
   return { spf: spfFact, dmarc: dmarcFact, dkim: dkimFact, mtaSts: mtaStsFact };
 }
@@ -303,14 +324,14 @@ export function mailFacts(mail: MailSecurity | undefined): Record<string, Fact> 
  */
 function dmarcPolicyFact(dmarc: MailSecurity['dmarc'] | undefined, missingTone: FactTone): Fact {
   const { policy, flaw } = effectiveDmarcPolicy(dmarc);
-  const detail = flaw && dmarcPolicyFlawText(flaw);
+  const detail = flaw && phraseText(dmarcPolicyFlawPhrase(flaw));
   if (policy === null) {
     return flaw
-      ? { value: 'unwirksam', tone: missingTone, key: 'missing', detail }
-      : { value: 'fehlt', tone: missingTone, key: 'missing' };
+      ? { value: t('unwirksam'), tone: missingTone, key: 'missing', detail }
+      : { value: t('fehlt'), tone: missingTone, key: 'missing' };
   }
   return {
-    value: flaw ? `wie ${policy}` : policy,
+    value: flaw ? t('wie {policy}', { policy }) : policy,
     tone: policy === 'none' ? 'warning' : 'success',
     key: policy,
     detail,
@@ -328,9 +349,9 @@ export const CERT_ROWS: readonly FactRowSpec[] = [
 
 /** „noch 1 Tag“ / „noch 12 Tage“ / „seit 3 Tagen abgelaufen“. */
 function expiryText(d: number): string {
-  if (d < 0) return `seit ${d === -1 ? '1 Tag' : `${-d} Tagen`} abgelaufen`;
-  if (d === 0) return 'läuft heute ab';
-  return `noch ${d === 1 ? '1 Tag' : `${d} Tage`}`;
+  if (d < 0) return t('seit {count} Tagen abgelaufen', { count: -d });
+  if (d === 0) return t('läuft heute ab');
+  return t('noch {count} Tage', { count: d });
 }
 
 export function certFacts(
@@ -344,17 +365,17 @@ export function certFacts(
   if (!applicable) {
     // DNS-Einträge wie `_dmarc.…` haben keinen Webserver und damit kein Zertifikat.
     return {
-      status: { value: 'nicht anwendbar', tone: 'neutral', key: 'n/a' },
+      status: { value: t('nicht anwendbar'), tone: 'neutral', key: 'n/a' },
       expiry: dash('n/a'),
       issuer: dash('n/a'),
     };
   }
   if (!ssl && lookupFailed) {
-    return { status: UNCHECKED, expiry: UNCHECKED, issuer: UNCHECKED };
+    return { status: unchecked(), expiry: unchecked(), issuer: unchecked() };
   }
   if (!ssl) {
     return {
-      status: { value: 'kein TLS erreichbar', tone: 'warning', key: 'none' },
+      status: { value: t('kein TLS erreichbar'), tone: 'warning', key: 'none' },
       expiry: dash('none'),
       issuer: dash('none'),
     };
@@ -367,8 +388,8 @@ export function certFacts(
 
   return {
     status: ssl.valid
-      ? { value: 'gültig', tone: 'success', key: 'valid' }
-      : { value: 'nicht vertrauenswürdig', tone: 'danger', key: 'invalid' },
+      ? { value: t('gültig'), tone: 'success', key: 'valid' }
+      : { value: t('nicht vertrauenswürdig'), tone: 'danger', key: 'invalid' },
     expiry,
     issuer: {
       value: ssl.issuer || '—',
@@ -431,7 +452,7 @@ export function nameserverFact(records: DnsRecord[]): Fact {
     ...new Set(records.filter((r) => r.type === 'NS').map((r) => nameserverProvider(r.value))),
   ].sort();
   // Ohne NS ist der Name meist ein CNAME-Alias — er hat keine eigene Zone.
-  if (providers.length === 0) return { value: 'keine eigenen', tone: 'neutral', key: 'none' };
+  if (providers.length === 0) return { value: t('keine eigenen'), tone: 'neutral', key: 'none' };
   return { value: providers.join(', '), tone: 'neutral', key: providers.join(','), mono: true };
 }
 
@@ -439,15 +460,15 @@ export function dnssecFacts(dnssec: DnssecInfo | undefined): Record<string, Fact
   // Ein gefundener Schlüssel ist ein Ergebnis, auch wenn die zweite Abfrage
   // scheiterte — wie in der Security-Ansicht.
   if (dnssec && !dnssec.enabled && dnssec.lookupFailed) {
-    return { dnssec: UNCHECKED, algorithm: UNCHECKED };
+    return { dnssec: unchecked(), algorithm: unchecked() };
   }
-  let status: Fact = { value: 'nicht aktiviert', tone: 'neutral', key: 'off' };
+  let status: Fact = { value: t('nicht aktiviert'), tone: 'neutral', key: 'off' };
   if (dnssec?.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
-    status = { value: 'aktiv & valide', tone: 'success', key: 'valid' };
+    status = { value: t('aktiv & valide'), tone: 'success', key: 'valid' };
   } else if (dnssec?.enabled && dnssec.chainOfTrust === 'incomplete') {
-    status = { value: 'Chain unterbrochen', tone: 'danger', key: 'incomplete' };
+    status = { value: t('Chain unterbrochen'), tone: 'danger', key: 'incomplete' };
   } else if (dnssec?.enabled && dnssec.chainOfTrust === 'invalid') {
-    status = { value: 'Validierung fehlgeschlagen', tone: 'danger', key: 'invalid' };
+    status = { value: t('Validierung fehlgeschlagen'), tone: 'danger', key: 'invalid' };
   }
   const algorithm = dnssec?.enabled && dnssec.algorithm ? dnssec.algorithm : '—';
   return {

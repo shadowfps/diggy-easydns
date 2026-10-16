@@ -37,6 +37,7 @@ const NO_MAIL = {
   dkim: { selectors: [] },
   mtaSts: { present: false },
   hasMx: true,
+  nullMx: false,
 };
 
 function stubReport(domain = 'example.com') {
@@ -123,10 +124,11 @@ describe('App auf Englisch', () => {
     expect(await screen.findByText('The domain "nix.example" couldn’t be resolved.')).toBeInTheDocument();
   });
 
-  it('lässt das Impressum deutsch und sagt das oben', () => {
+  // Impressum und Datenschutz sind nachgeladen (App.tsx): erst findBy.
+  it('lässt das Impressum deutsch und sagt das oben', async () => {
     setPath('/impressum');
     render(<App />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Legal notice' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Legal notice' })).toBeInTheDocument();
     expect(
       screen.getByText('The legal information on this page is only available in German.')
     ).toBeInTheDocument();
@@ -140,7 +142,7 @@ describe('App auf Englisch', () => {
   it('lädt den Datenschutztext deutsch nach', async () => {
     setPath('/datenschutz');
     render(<App />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Privacy policy' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Privacy policy' })).toBeInTheDocument();
     expect(
       screen.getByText('The legal information on this page is only available in German.')
     ).toBeInTheDocument();
@@ -152,7 +154,7 @@ describe('App auf Englisch', () => {
     await setLanguage('de', { persist: false });
     setPath('/impressum');
     render(<App />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Impressum' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Impressum' })).toBeInTheDocument();
     expect(screen.queryByText(/only available in German/)).toBeNull();
   });
 });

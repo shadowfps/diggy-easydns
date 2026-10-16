@@ -91,7 +91,7 @@ describe('PropagationView — TXT', () => {
     expect(within(deviating).getByText('weicht ab')).toBeInTheDocument();
     expect(deviating).toHaveTextContent('ALTESENDEwIDAQAB');
 
-    expect(screen.getByText(/1 von 3 Resolvern weichen ab/)).toBeInTheDocument();
+    expect(screen.getByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
   });
 
   it('zählt einen Resolver ohne den neuen Eintrag als abweichend', () => {
@@ -106,7 +106,7 @@ describe('PropagationView — TXT', () => {
     // Ein Fehler ist keine Abweichung, sondern ein Fehler — und zählt wie im
     // Befund nicht mit.
     expect(screen.getByText('Timeout')).toBeInTheDocument();
-    expect(screen.getByText(/1 von 3 Resolvern weichen ab/)).toBeInTheDocument();
+    expect(screen.getByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
   });
 
   it('bietet keine IP-Details für TXT und CNAME an', async () => {

@@ -267,9 +267,13 @@ function main() {
     }
   }
 
-  // Schlüssel, die nur in shared/ vorkommen (Urteil zum Score), zählen mit.
-  for (const file of sourceFiles(path.join(ROOT, 'shared'))) {
-    checkSource(file, readFileSync(file, 'utf8'), catalog, used);
+  // Schlüssel, die nur in shared/ oder server/ vorkommen (Urteil zum Score,
+  // Satzbausteine der Findings), zählen mit. Geprüft wird dort nichts: der
+  // Server schreibt bewusst deutsch.
+  for (const dir of ['shared', 'server']) {
+    for (const file of sourceFiles(path.join(ROOT, dir))) {
+      checkSource(file, readFileSync(file, 'utf8'), catalog, used);
+    }
   }
   const orphaned = [...catalog].filter((key) => !used.has(key));
   for (const key of orphaned) {

@@ -17,15 +17,15 @@ import {
 import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
-import { bimiDmarcGap, isHttpsUrl } from '@/lib/bimiTlsRpt';
+import { bimiDmarcGapPhrase, isHttpsUrl } from '@/lib/bimiTlsRpt';
 import {
-  dmarcFlawEffect,
-  dmarcPolicyFlawLabel,
+  dmarcFlawEffectPhrase,
+  dmarcPolicyFlawLabelPhrase,
   effectiveDmarcPolicy,
   hasDmarcReportUri,
 } from '@/lib/dmarc';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
-import { spfIssueText, useI18n } from '@/i18n';
+import { phraseText, spfIssueText, t, useI18n, type DeKey } from '@/i18n';
 import { InfoButton } from '@/components/ui/InfoButton';
 import { explainMailTerm } from '@/lib/explanations';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
@@ -70,27 +70,29 @@ export function MailView({ mail }: MailViewProps) {
  * für den Versand absichern (Regel: shared/nullMx.ts).
  */
 function NoMailCard({ mail }: { mail: MailSecurity }) {
+  const { t, tRich } = useI18n();
   const protection = noMailProtection(mail);
 
   return (
     <Card
       icon={<MailX className="size-4" />}
-      title="Keine Mails (Null-MX)"
-      subtitle="Die Domain nimmt bewusst keine Mails an"
+      title={t('Keine Mails (Null-MX)')}
+      subtitle={t('Die Domain nimmt bewusst keine Mails an')}
       tone={protection.complete ? 'success' : 'neutral'}
       delay={0}
       className="md:col-span-2"
     >
       <p className="text-sm leading-relaxed text-fg-muted">
-        Der Null-MX <code className="font-mono text-[13px] text-fg">MX 0 .</code> (RFC 7505)
-        sagt jedem Absender: Hier kommt keine Mail an. DKIM und MTA-STS braucht die Domain
-        deshalb nicht.{' '}
+        {tRich(
+          'Der Null-MX {record} (RFC 7505) sagt jedem Absender: Hier kommt keine Mail an. DKIM und MTA-STS braucht die Domain deshalb nicht.',
+          { record: <code className="font-mono text-[13px] text-fg">MX 0 .</code> }
+        )}{' '}
         {protection.complete
-          ? 'SPF und DMARC sorgen dafür, dass Empfänger Mails in ihrem Namen abweisen.'
-          : 'Damit Empfänger auch Mails in ihrem Namen abweisen, gehören SPF -all und DMARC p=reject dazu.'}
+          ? t('SPF und DMARC sorgen dafür, dass Empfänger Mails in ihrem Namen abweisen.')
+          : t('Damit Empfänger auch Mails in ihrem Namen abweisen, gehören SPF -all und DMARC p=reject dazu.')}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-        <Stat label="Null-MX" value="gesetzt" tone="success" />
+        <Stat label="Null-MX" value={t('gesetzt')} tone="success" />
         <Stat
           label="SPF"
           value={noMailSpfLabel(mail.spf, protection.spfAllowsNoSender)}
@@ -113,12 +115,12 @@ function NoMailCard({ mail }: { mail: MailSecurity }) {
  */
 function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): string {
   if (allowsNoSender) return '-all';
-  if (spf.lookupFailed) return 'nicht prüfbar';
-  if (!spf.present || !spf.record) return 'fehlt';
+  if (spf.lookupFailed) return t('nicht prüfbar');
+  if (!spf.present || !spf.record) return t('fehlt');
   const mechanisms = spfMechanisms(spf.record) ?? [];
   return mechanisms.length === 1 && /^[+~?]?all$/.test(mechanisms[0])
     ? mechanisms[0]
-    : 'erlaubt Absender';
+    : t('erlaubt Absender');
 }
 
 /**
@@ -128,11 +130,14 @@ function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): stri
  */
 function noMailDmarcLabel(dmarc: MailSecurity['dmarc'], reject: boolean): string {
   if (reject) return 'reject';
-  if (dmarc.lookupFailed) return 'nicht prüfbar';
-  if (!dmarc.present) return 'fehlt';
+  if (dmarc.lookupFailed) return t('nicht prüfbar');
+  if (!dmarc.present) return t('fehlt');
   const { policy, flaw } = effectiveDmarcPolicy(dmarc);
-  if (flaw) return `${policy ? 'wie none' : 'unwirksam'}, ${dmarcPolicyFlawLabel(flaw)}`;
-  if (!policy) return 'fehlt';
+  if (flaw) {
+    const label = phraseText(dmarcPolicyFlawLabelPhrase(flaw));
+    return policy ? t('wie none, {flaw}', { flaw: label }) : t('unwirksam, {flaw}', { flaw: label });
+  }
+  if (!policy) return t('fehlt');
   if (policy === 'reject') return `reject, pct=${dmarcPct(dmarc.record)}`;
   return policy;
 }
@@ -220,7 +225,7 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
         flaw && (
           <span className={cn('badge', tone === 'warning' && 'badge-warning')}>
             <AlertTriangle className="size-3 shrink-0" />
-            {dmarcPolicyFlawLabel(flaw)}
+            {phraseText(dmarcPolicyFlawLabelPhrase(flaw))}
           </span>
         )
       }
@@ -238,7 +243,7 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Stat
               label="Policy"
-              value={policy === null ? 'keine' : flaw ? `wie ${policy}` : policy}
+              value={policy === null ? t('keine') : flaw ? t('wie {policy}', { policy }) : policy}
               tone={policyTone}
             />
             {/* Bei mehreren Records gilt keiner — auch keine Report-Adresse. */}
@@ -247,10 +252,10 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
               (hasDmarcReportUri(dmarc.record) ? (
                 <Stat label="Reports" value={t('rua gesetzt')} tone="success" />
               ) : (
-                <Stat label="Reports" value="rua ungültig" />
+                <Stat label="Reports" value={t('rua ungültig')} />
               ))}
           </div>
-          {flaw && <Issue text={dmarcFlawEffect(policy, flaw)} />}
+          {flaw && <Issue text={phraseText(dmarcFlawEffectPhrase(policy, flaw))} />}
         </div>
       )}
     </Card>
@@ -276,7 +281,7 @@ function DkimCard({ dkim, noMail }: { dkim: MailSecurity['dkim']; noMail: boolea
     >
       {!found && noMail ? (
         <StatusLine
-          text="Nicht nötig: Eine Domain ohne Mails (Null-MX) hat nichts zu signieren."
+          text={t('Nicht nötig: Eine Domain ohne Mails (Null-MX) hat nichts zu signieren.')}
           tone="not-needed"
         />
       ) : !found ? (
@@ -327,7 +332,7 @@ function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail
         ) : noMail ? (
           <>
             <CircleMinus className="size-4 shrink-0 text-fg-subtle" />
-            <span className="text-fg-muted">nicht nötig</span>
+            <span className="text-fg-muted">{t('nicht nötig')}</span>
           </>
         ) : (
           <>
@@ -339,7 +344,7 @@ function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail
       {!mtaSts.present && (
         <p className="mt-3 text-sm leading-relaxed text-fg-muted">
           {noMail
-            ? 'MTA-STS schützt den Weg eingehender Mails. Diese Domain nimmt per Null-MX keine an — es gibt nichts zu schützen.'
+            ? t('MTA-STS schützt den Weg eingehender Mails. Diese Domain nimmt per Null-MX keine an — es gibt nichts zu schützen.')
             : t('MTA-STS verhindert Downgrade-Angriffe, bei denen sich Angreifer zwischen Sender und Empfänger setzen und TLS abschalten.')}
         </p>
       )}
@@ -363,10 +368,12 @@ function BimiCard({
   dmarc: MailSecurity['dmarc'];
   noMail: boolean;
 }) {
+  const { t } = useI18n();
   // Ob BIMI wirkt, hängt an DMARC — ist dessen Abfrage gescheitert (#101),
   // bleibt das offen: „unbekannt“ statt „wirkt nicht“ oder „aktiv“.
   const dmarcUnknown = Boolean(dmarc.lookupFailed);
-  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGap(dmarc);
+  const gap = dmarcUnknown ? undefined : bimiDmarcGapPhrase(dmarc);
+  const dmarcGap = gap && phraseText(gap);
   const status: PolicyStatus = !bimi.present
     ? noMail
       ? 'not-needed'
@@ -385,7 +392,7 @@ function BimiCard({
     <Card
       icon={<ImageIcon className="size-4" />}
       title="BIMI"
-      subtitle="Markenlogo neben deinen Mails"
+      subtitle={t('Markenlogo neben deinen Mails')}
       tone={status === 'active' ? 'success' : 'neutral'}
       aside={<PolicyBadge status={status} />}
       delay={0.2}
@@ -394,45 +401,45 @@ function BimiCard({
     >
       {status === 'not-needed' ? (
         <StatusLine
-          text="Nicht nötig: Eine Domain ohne Mails (Null-MX) verschickt nichts, neben dem ein Logo stünde."
+          text={t('Nicht nötig: Eine Domain ohne Mails (Null-MX) verschickt nichts, neben dem ein Logo stünde.')}
           tone="not-needed"
         />
       ) : status === 'missing' ? (
         <div className="space-y-3">
-          <StatusLine text="Kein BIMI-Record auf default._bimi.<domain>" tone="neutral" />
+          <StatusLine text={t('Kein BIMI-Record auf default._bimi.<domain>')} tone="neutral" />
           <p className="text-sm leading-relaxed text-fg-muted">
             {dmarcUnknown
-              ? 'Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails — vorausgesetzt, DMARC steht auf p=quarantine oder p=reject. Das ließ sich gerade nicht prüfen.'
+              ? t('Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails — vorausgesetzt, DMARC steht auf p=quarantine oder p=reject. Das ließ sich gerade nicht prüfen.')
               : dmarcGap
-              ? `BIMI setzt DMARC mit p=quarantine oder p=reject voraus, jetzt: ${dmarcGap}. Erst DMARC verschärfen, dann lohnt sich BIMI.`
-              : 'Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails. Die DMARC-Voraussetzung ist erfüllt.'}
+              ? t('BIMI setzt DMARC mit p=quarantine oder p=reject voraus, jetzt: {gap}. Erst DMARC verschärfen, dann lohnt sich BIMI.', { gap: dmarcGap })
+              : t('Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails. Die DMARC-Voraussetzung ist erfüllt.')}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           <Records records={bimi.records} />
           {bimi.invalid ? (
-            <Issue text={bimi.invalid} />
+            <Issue text={invalidText(bimi)} />
           ) : bimi.declined ? (
             <p className="text-sm leading-relaxed text-fg-muted">
-              l= und a= sind leer: Die Domain verzichtet ausdrücklich auf ein Logo.
+              {t('l= und a= sind leer: Die Domain verzichtet ausdrücklich auf ein Logo.')}
             </p>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 {bimi.logoUrl && isHttpsUrl(bimi.logoUrl) && <LogoLink url={bimi.logoUrl} />}
                 <Stat
-                  label="Zertifikat (VMC/CMC)"
-                  value={bimi.evidenceUrl ? 'hinterlegt' : 'keins'}
+                  label={t('Zertifikat (VMC/CMC)')}
+                  value={bimi.evidenceUrl ? t('hinterlegt') : t('keins')}
                   tone={bimi.evidenceUrl ? 'success' : 'neutral'}
                 />
               </div>
               {dmarcUnknown && (
-                <Issue text="Ob Postfächer das Logo zeigen, hängt an DMARC — dessen Abfrage ist gescheitert." />
+                <Issue text={t('Ob Postfächer das Logo zeigen, hängt an DMARC — dessen Abfrage ist gescheitert.')} />
               )}
               {dmarcGap && (
                 <Issue
-                  text={`Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject, jetzt: ${dmarcGap}.`}
+                  text={t('Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject, jetzt: {gap}.', { gap: dmarcGap })}
                 />
               )}
             </>
@@ -473,6 +480,7 @@ function LogoLink({ url }: { url: string }) {
 /* ─── TLS-RPT ────────────────────────────────────────────────────────── */
 
 function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean }) {
+  const { t } = useI18n();
   const status: PolicyStatus = !tlsRpt.present
     ? noMail
       ? 'not-needed'
@@ -485,7 +493,7 @@ function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean })
     <Card
       icon={<FileText className="size-4" />}
       title="TLS-RPT"
-      subtitle="Berichte über gescheiterte TLS-Zustellung"
+      subtitle={t('Berichte über gescheiterte TLS-Zustellung')}
       tone={status === 'active' ? 'success' : 'neutral'}
       aside={<PolicyBadge status={status} />}
       delay={0.25}
@@ -493,25 +501,24 @@ function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean })
     >
       {status === 'not-needed' ? (
         <StatusLine
-          text="Nicht nötig: Eine Domain ohne Mails (Null-MX) bekommt keine Zustellungen, über die jemand berichten könnte."
+          text={t('Nicht nötig: Eine Domain ohne Mails (Null-MX) bekommt keine Zustellungen, über die jemand berichten könnte.')}
           tone="not-needed"
         />
       ) : status === 'missing' ? (
         <div className="space-y-3">
-          <StatusLine text="Kein TLS-RPT-Record auf _smtp._tls.<domain>" tone="neutral" />
+          <StatusLine text={t('Kein TLS-RPT-Record auf _smtp._tls.<domain>')} tone="neutral" />
           <p className="text-sm leading-relaxed text-fg-muted">
-            Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine
-            Mailserver scheitert — die Rückmeldung zu MTA-STS.
+            {t('Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine Mailserver scheitert — die Rückmeldung zu MTA-STS.')}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           <Records records={tlsRpt.records} />
           {tlsRpt.invalid ? (
-            <Issue text={tlsRpt.invalid} />
+            <Issue text={invalidText(tlsRpt)} />
           ) : (
             <div className="space-y-1.5">
-              <span className="text-xs text-fg-subtle">Berichte an</span>
+              <span className="text-xs text-fg-subtle">{t('Berichte an')}</span>
               <ul className="space-y-1">
                 {tlsRpt.rua?.map((uri, i) => (
                   <li key={i} className="break-all font-mono text-[13px] text-fg">
@@ -543,7 +550,7 @@ type PolicyStatus =
  * nur, wenn der Record wirkt; alles andere ist ein Hinweis und bleibt
  * neutral — die Form des Icons trägt den Unterschied.
  */
-const POLICY_BADGE: Record<PolicyStatus, { label: string; icon: ReactNode; className?: string }> = {
+const POLICY_BADGE: Record<PolicyStatus, { label: DeKey; icon: ReactNode; className?: string }> = {
   active: { label: 'aktiv', icon: <Check className="size-3 shrink-0" />, className: 'badge-success' },
   missing: { label: 'fehlt', icon: <X className="size-3 shrink-0" /> },
   invalid: { label: 'ungültig', icon: <AlertTriangle className="size-3 shrink-0" /> },
@@ -554,13 +561,19 @@ const POLICY_BADGE: Record<PolicyStatus, { label: string; icon: ReactNode; class
 };
 
 function PolicyBadge({ status }: { status: PolicyStatus }) {
+  const { t } = useI18n();
   const badge = POLICY_BADGE[status];
   return (
     <span className={cn('badge', badge.className)}>
       {badge.icon}
-      {badge.label}
+      {t(badge.label)}
     </span>
   );
+}
+
+/** Warum der Record nicht wirkt — übersetzt, wo der Server den Grund als Baustein mitschickt. */
+function invalidText(record: MailBimi | MailTlsRpt): string {
+  return record.invalidDetail ? phraseText(record.invalidDetail) : (record.invalid ?? '');
 }
 
 function Records({ records = [] }: { records?: string[] }) {

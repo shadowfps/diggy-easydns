@@ -150,7 +150,7 @@ export function Header({ onHome, onHistory, onAvailability, onCompare, onAbout, 
                   className="overlay absolute right-0 top-full mt-2 w-72 origin-top-right p-2"
                 >
                   <MenuItem onClick={handleHistory} label="History" />
-                  <MenuItem onClick={handleCompare} label="Vergleichen" />
+                  <MenuItem onClick={handleCompare} label={t('Vergleichen')} />
                   <MenuItem onClick={handleAvailability} label={t('Available Check')} />
                   <MenuItem onClick={handleAbout} label="About" />
 

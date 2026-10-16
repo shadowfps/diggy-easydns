@@ -11,6 +11,8 @@
  */
 
 import { lookupPathFor, sanitizeFilename } from '@/lib/lookupPath';
+import { formatDate as formatLocalDate, getLanguage, t } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 
 export type ExpiryKind = 'certificate' | 'domain';
 
@@ -46,10 +48,10 @@ const CRLF = '\r\n';
  * Zwei Stufen: 14 Tage reichen, um eine Verlängerung anzustoßen; der Vortag
  * fängt ab, wenn die erste Erinnerung untergegangen ist.
  */
-const ALARMS = [
-  { trigger: '-P13DT15H', when: 'in 14 Tagen' },
-  { trigger: '-PT15H', when: 'morgen' },
-] as const;
+const ALARMS: readonly { trigger: string; text: DeKey }[] = [
+  { trigger: '-P13DT15H', text: '{label} läuft in 14 Tagen ab' },
+  { trigger: '-PT15H', text: '{label} läuft morgen ab' },
+];
 
 /** Kurzform der Art für UID und Dateinamen. */
 const KIND_SLUG: Record<ExpiryKind, string> = {
@@ -92,7 +94,9 @@ export function buildExpiryCalendar(
 function eventLines(reminder: ExpiryReminder, { now, origin }: { now: Date; origin: string }) {
   const expires = new Date(reminder.expiresAt);
   if (Number.isNaN(expires.getTime())) {
-    throw new RangeError(`Ungültiges Ablaufdatum: ${reminder.expiresAt}`);
+    // Erreicht nie die Oberfläche: der Button prüft das Datum vorher und
+    // zeigt bei jedem Fehler seine eigene Meldung. Daher englisch, ohne t().
+    throw new RangeError(`Invalid expiry date: ${reminder.expiresAt}`);
   }
 
   const start = formatDate(expires);
@@ -122,7 +126,7 @@ function eventLines(reminder: ExpiryReminder, { now, origin }: { now: Date; orig
     ...ALARMS.flatMap((alarm) => [
       'BEGIN:VALARM',
       'ACTION:DISPLAY',
-      `DESCRIPTION:${escapeText(`${subjectLabel(reminder)} läuft ${alarm.when} ab`)}`,
+      `DESCRIPTION:${escapeText(t(alarm.text, { label: subjectLabel(reminder) }))}`,
       `TRIGGER:${alarm.trigger}`,
       'END:VALARM',
     ]),
@@ -130,21 +134,32 @@ function eventLines(reminder: ExpiryReminder, { now, origin }: { now: Date; orig
   ];
 }
 
+/*
+ * Die Termintexte stehen in der Sprache, in der die Datei erzeugt wurde
+ * (#86) — der Kalender übersetzt sie später nicht mehr.
+ */
+
 function subjectLabel(reminder: ExpiryReminder): string {
   return reminder.kind === 'certificate'
-    ? `Zertifikat von ${reminder.subject}`
+    ? t('Zertifikat von {subject}', { subject: reminder.subject })
     : `Domain ${reminder.subject}`;
 }
 
 function texts(reminder: ExpiryReminder, expires: Date, reportUrl: string) {
-  const when = `am ${formatWhen(expires)}`;
+  const values = { subject: reminder.subject, date: formatWhen(expires) };
   const reason =
     reminder.kind === 'certificate'
-      ? `Das TLS-Zertifikat von ${reminder.subject} läuft ${when} ab. Danach zeigen Browser eine Sicherheitswarnung. Prüfen, ob die automatische Erneuerung greift.`
-      : `Die Registrierung von ${reminder.subject} läuft ${when} ab. Ohne Verlängerung kann die Domain abgeschaltet und neu vergeben werden. Prüfen, ob die automatische Verlängerung beim Registrar aktiv ist.`;
+      ? t(
+          'Das TLS-Zertifikat von {subject} läuft am {date} ab. Danach zeigen Browser eine Sicherheitswarnung. Prüfen, ob die automatische Erneuerung greift.',
+          values
+        )
+      : t(
+          'Die Registrierung von {subject} läuft am {date} ab. Ohne Verlängerung kann die Domain abgeschaltet und neu vergeben werden. Prüfen, ob die automatische Verlängerung beim Registrar aktiv ist.',
+          values
+        );
   return {
-    summary: `${subjectLabel(reminder)} läuft ab`,
-    description: `${reason}\n\nAktueller Stand im Report: ${reportUrl}`,
+    summary: t('{label} läuft ab', { label: subjectLabel(reminder) }),
+    description: `${reason}\n\n${t('Aktueller Stand im Report: {url}', { url: reportUrl })}`,
   };
 }
 
@@ -229,15 +244,16 @@ function formatTimestamp(date: Date): string {
 }
 
 /**
- * „30.11.2026 um 00:59 MEZ“ — mit Zone, weil die Datei auch noch gelesen
- * wird, wenn der Nutzer gerade woanders ist.
+ * „30.11.2026 um 00:59 MEZ“ / „Nov 30, 2026 at 12:59 AM CET“ — mit Zone,
+ * weil die Datei auch noch gelesen wird, wenn der Nutzer gerade woanders ist.
  */
 function formatWhen(date: Date): string {
-  const day = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const time = date.toLocaleTimeString('de-DE', {
-    hour: '2-digit',
+  const day = formatLocalDate(date, { dateStyle: 'medium' });
+  const time = formatLocalDate(date, {
+    // Deutsch zweistellig („09:00“), Englisch mit AM/PM ohne führende Null.
+    hour: getLanguage() === 'de' ? '2-digit' : 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
   });
-  return `${day} um ${time}`;
+  return t('{day} um {time}', { day, time });
 }

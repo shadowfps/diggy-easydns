@@ -70,6 +70,7 @@ describe('parseBimi', () => {
       present: true,
       records,
       invalid: '2 BIMI-Records — es darf nur einen geben',
+      invalidDetail: { text: '{count} BIMI-Records — es darf nur einen geben', params: { count: 2 } },
     });
   });
 
@@ -136,6 +137,7 @@ describe('parseTlsRpt', () => {
       present: true,
       records,
       invalid: '2 TLS-RPT-Records — RFC 8460 verlangt genau einen',
+      invalidDetail: { text: '{count} TLS-RPT-Records — RFC 8460 verlangt genau einen', params: { count: 2 } },
     });
   });
 

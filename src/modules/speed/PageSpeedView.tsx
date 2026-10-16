@@ -262,7 +262,7 @@ function PageSpeedLoader() {
   // wieder false ist“ — das wurde es nie, die Anzeige verschwand einfach.
   return (
     <div className="mx-auto mt-8 max-w-md">
-      <LoadingAnnouncement>PageSpeed-Analyse läuft…</LoadingAnnouncement>
+      <LoadingAnnouncement>{t('PageSpeed-Analyse läuft…')}</LoadingAnnouncement>
       <div className="panel px-6 py-6 text-center" aria-hidden="true">
         <Loader2 className="mx-auto size-5 animate-spin text-fg" />
 

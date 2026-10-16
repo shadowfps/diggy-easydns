@@ -37,7 +37,7 @@ function scoreTone(s: number) {
 }
 
 export function ScoreCard({ score, findings, failed = [], onShowFindings }: ScoreCardProps) {
-  const { t } = useI18n();
+  const { t, tRich } = useI18n();
   const reducedMotion = useReducedMotion();
   const tone = scoreTone(score.score);
   // „Nicht prüfbar“ zieht nichts ab (#101). Ohne diesen Hinweis sähe ein
@@ -123,8 +123,10 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
         {unchecked > 0 && (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted">
             <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
-            <span className="font-medium text-fg">Unvollständig:</span>
-            {unchecked} {unchecked > 1 ? 'Checks' : 'Check'} nicht prüfbar
+            {tRich('{label} {count} Checks nicht prüfbar', {
+              label: <span className="font-medium text-fg">{t('Unvollständig:')}</span>,
+              count: unchecked,
+            })}
           </p>
         )}
       </div>

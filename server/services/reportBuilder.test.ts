@@ -403,16 +403,45 @@ describe('Kennung und Werte für die Übersetzung', () => {
     const findings = mailFindings(
       {
         spf: { ...analyzeSpf('v=spf1 include:x.de'), present: true },
-        dmarc: { present: true, policy: 'reject' },
+        dmarc: { present: true, record: 'v=DMARC1; p=reject', policy: 'reject' },
         dkim: { selectors: [] },
         mtaSts: { present: true },
         hasMx: false,
+        nullMx: false,
       },
       'example.com'
     );
     const issue = findings.find((f) => f.id.startsWith('spf-issue-'));
     expect(issue).toMatchObject({ key: 'spf-no-all', description: expect.stringContaining('Kein "all"') });
     expect(findings.find((f) => f.id === 'dmarc-present')).toMatchObject({ params: { policy: 'reject' } });
+  });
+
+  it('gibt zusammengesetzte Sätze als Bausteine mit, der deutsche Text bleibt', () => {
+    const [unchecked] = sslFindings(null, 'timeout');
+    expect(unchecked).toMatchObject({
+      id: 'ssl-unchecked',
+      key: 'unchecked',
+      title: 'SSL konnte nicht geprüft werden — Zeitüberschreitung',
+      params: { check: 'SSL', reason: { text: 'Zeitüberschreitung' } },
+    });
+    expect(unchecked.description).toMatch(/^Port 443 hat den TLS-Handshake nicht rechtzeitig abgeschlossen/);
+
+    const ignored = mailFindings(
+      {
+        spf: { present: false, valid: false, issues: [] },
+        dmarc: { present: true, record: 'v=DMARC1; p=foo' },
+        dkim: { selectors: [] },
+        mtaSts: { present: false },
+        hasMx: true,
+        nullMx: false,
+      },
+      'example.com'
+    ).find((f) => f.id === 'no-dmarc');
+    expect(ignored).toMatchObject({
+      key: 'dmarc-ignored',
+      title: 'DMARC wirkt nicht: p=foo ist ungültig',
+      params: { flaw: { text: '{tag}={value} ist ungültig', params: { tag: 'p', value: 'foo' } } },
+    });
   });
 
   it('meldet den Status-Code roh als Wert', () => {

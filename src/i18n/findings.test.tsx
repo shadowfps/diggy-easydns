@@ -1,11 +1,23 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import { errorText, findingText, setLanguage, spfIssueText } from '@/i18n';
+import { errorText, findingText, phraseText, setLanguage, spfIssueText } from '@/i18n';
 import english from '@/i18n/en';
 import { ApiError } from '@/lib/api';
 import { FindingsList } from '@/modules/findings/FindingsList';
 import { MailView } from '@/modules/mail/MailView';
-import type { Finding, MailSecurity, SpfIssueKey, SslInfo, TextParams } from '@/types/dns';
+import type {
+  Finding,
+  LookupFailure,
+  MailSecurity,
+  Phrase,
+  RecordType,
+  SpfIssueKey,
+  SslInfo,
+  TextParams,
+} from '@/types/dns';
+import { parseBimi, parseTlsRpt } from '@shared/bimiTlsRpt';
+import { dmarcFlawEffectPhrase, dmarcPolicyFlawLabelPhrase, type DmarcPolicyFlaw } from '@shared/dmarc';
+import { lookupFailurePhrase } from '@shared/lookupFailure';
 import {
   dnsFindings,
   dnssecFindings,
@@ -53,9 +65,27 @@ function mail(overrides: Partial<MailSecurity>): MailSecurity {
     dkim: { selectors: [] },
     mtaSts: { present: false },
     hasMx: true,
+    nullMx: false,
     ...overrides,
   };
 }
+
+/** DMARC-Ergebnis wie vom Mail-Audit: Record plus gültiges `p=`. */
+function dmarc(record: string, records?: string[]): MailSecurity['dmarc'] {
+  const policy = /\bp=(none|quarantine|reject)\b/.exec(record)?.[1] as MailSecurity['dmarc']['policy'];
+  return { present: true, record, policy, ...(records && { records }) };
+}
+
+const REASONS: LookupFailure[] = ['timeout', 'servfail', 'network'];
+
+/** SPF, das niemanden senden lässt — gehört zur vollständigen Null-MX-Markierung. */
+const SPF_NONE: MailSecurity['spf'] = {
+  present: true,
+  record: 'v=spf1 -all',
+  lookupCount: 0,
+  valid: true,
+  issues: [],
+};
 
 /** SPF-Ergebnis wie von analyzeSpf(): deutscher Satz plus Kennung. */
 function spf(...issues: [text: string, key: SpfIssueKey, params?: TextParams][]): MailSecurity['spf'] {
@@ -69,9 +99,9 @@ function spf(...issues: [text: string, key: SpfIssueKey, params?: TextParams][])
   };
 }
 
-const resolver = (id: string, values: string[]) => ({
+const resolver = (id: string, values: string[], type: RecordType = 'A') => ({
   resolver: { id, name: id, ip: '1.1.1.1', country: 'DE', flag: '', provider: id },
-  records: values.map((value) => ({ type: 'A' as const, name: 'example.com', value, ttl: 60 })),
+  records: values.map((value) => ({ type, name: 'example.com', value, ttl: 60 })),
   responseTimeMs: 10,
 });
 
@@ -95,7 +125,7 @@ function everyFinding(): Finding[] {
           ['11 DNS-Lookups — RFC-Limit ist 10, SPF schlägt fehl.', 'spf-lookups-over-limit', { count: 11 }],
           ['+all erlaubt jeden Sender — bietet effektiv keinen Schutz.', 'spf-plus-all']
         ),
-        dmarc: { present: true, policy: 'none' },
+        dmarc: dmarc('v=DMARC1; p=none'),
       }),
       'example.com'
     ),
@@ -105,19 +135,99 @@ function everyFinding(): Finding[] {
           ['9 DNS-Lookups — knapp am 10er-Limit.', 'spf-lookups-near-limit', { count: 9 }],
           ['Kein "all"-Mechanismus am Ende — ungewöhnlich, prüfe Policy.', 'spf-no-all']
         ),
-        dmarc: { present: true },
+        // p= fehlt, rua= nennt eine Adresse: wirkt wie p=none.
+        dmarc: dmarc('v=DMARC1; rua=mailto:d@example.com'),
+        mtaSts: { present: true },
+        tlsRpt: parseTlsRpt(['v=TLSRPTv1; rua=ftp://example.com']),
+        bimi: parseBimi(['v=BIMI1; l=https://example.com/logo.png']),
       }),
       'example.com'
     ),
     ...mailFindings(
       mail({
         spf: spf(),
-        dmarc: { present: true, policy: 'reject' },
+        dmarc: dmarc('v=DMARC1; p=reject'),
         dkim: { selectors: [{ selector: 'google', present: true }] },
         mtaSts: { present: true },
+        tlsRpt: parseTlsRpt(['v=TLSRPTv1; rua=mailto:tls@example.com']),
+        bimi: parseBimi(['v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem']),
       }),
       'example.com'
     ),
+    ...mailFindings(
+      mail({
+        spf: spf(),
+        dmarc: dmarc('v=DMARC1; p=quarantine'),
+        tlsRpt: parseTlsRpt([]),
+        bimi: parseBimi(['v=BIMI1; l=https://example.com/logo.svg']),
+      }),
+      'example.com'
+    ),
+    // Kein BIMI bei ausreichender Policy, BIMI vermisst bei zu schwacher;
+    // TLS-RPT fehlt neben MTA-STS.
+    ...mailFindings(
+      mail({
+        spf: spf(),
+        dmarc: dmarc('v=DMARC1; p=reject'),
+        mtaSts: { present: true },
+        tlsRpt: parseTlsRpt([]),
+        bimi: parseBimi([]),
+      }),
+      'example.com'
+    ),
+    ...mailFindings(
+      mail({ spf: spf(), dmarc: dmarc('v=DMARC1; p=quarantine; pct=50'), bimi: parseBimi([]) }),
+      'example.com'
+    ),
+    // BIMI da, DMARC noch zu schwach — und gleich mehrere Mängel des Records.
+    ...mailFindings(
+      mail({
+        dmarc: dmarc('v=DMARC1; p=reject; sp=foo; rua=mailto:d@example.com'),
+        bimi: parseBimi(['v=BIMI1; l=https://example.com/logo.svg']),
+      }),
+      'example.com'
+    ),
+    // Ignoriert: kein gültiges p=, keine Report-Adresse — bzw. zwei Records.
+    ...mailFindings(mail({ dmarc: dmarc('v=DMARC1; p=foo') }), 'example.com'),
+    ...mailFindings(
+      mail({ dmarc: dmarc('v=DMARC1; p=reject', ['v=DMARC1; p=reject', 'v=DMARC1; p=none']) }),
+      'example.com'
+    ),
+    // Null-MX: vollständig, unvollständig (beides fehlt), DMARC-Mangel, ohne DMARC.
+    ...mailFindings(
+      mail({ spf: SPF_NONE, dmarc: dmarc('v=DMARC1; p=reject'), hasMx: true, nullMx: true }),
+      'example.com'
+    ),
+    ...mailFindings(
+      mail({ spf: spf(), dmarc: dmarc('v=DMARC1; p=quarantine'), hasMx: true, nullMx: true }),
+      'example.com'
+    ),
+    ...mailFindings(
+      mail({ dmarc: dmarc('v=DMARC1; p=reject; pct=20'), hasMx: true, nullMx: true }),
+      'example.com'
+    ),
+    ...mailFindings(mail({ dmarc: dmarc('v=DMARC1; p=bar'), hasMx: true, nullMx: true }), 'example.com'),
+    ...mailFindings(
+      mail({ dmarc: dmarc('v=DMARC1; sp=foo; p=none; rua=mailto:d@other.example'), hasMx: true, nullMx: true }),
+      'example.com'
+    ),
+    ...mailFindings(mail({ hasMx: true, nullMx: true }), 'example.com'),
+    // Gescheiterte Abfragen, je Grund einmal.
+    ...REASONS.flatMap((reason) =>
+      mailFindings(
+        mail({
+          spf: { present: false, valid: false, issues: [], lookupFailed: reason },
+          dmarc: { present: false, lookupFailed: reason },
+          dkim: { selectors: [], lookupFailed: reason },
+          mtaSts: { present: false, lookupFailed: reason },
+        }),
+        'example.com'
+      )
+    ),
+    ...REASONS.flatMap((reason) => [
+      ...dnssecFindings({ enabled: false, valid: false, chainOfTrust: 'none', lookupFailed: reason }),
+      ...sslFindings(null, reason),
+    ]),
     // Gecachte Daten ohne Kennung: fällt auf die allgemeine zurück.
     ...mailFindings(mail({ spf: { present: true, valid: false, issues: ['Altes Problem'] } }), 'example.com'),
     ...dnssecFindings({ enabled: false, valid: false, chainOfTrust: 'none' }),
@@ -130,8 +240,13 @@ function everyFinding(): Finding[] {
     ...sslFindings(ssl({ valid: false, daysUntilExpiry: -3 })),
     ...sslFindings(ssl({ daysUntilExpiry: 1, tlsVersion: 'TLSv1' })),
     ...sslFindings(ssl({})),
-    ...propagationFindings([resolver('a', ['1.1.1.1']), resolver('b', ['2.2.2.2'])]),
-    ...propagationFindings([resolver('a', ['1.1.1.1']), resolver('b', ['1.1.1.1'])]),
+    ...propagationFindings([resolver('a', ['1.1.1.1']), resolver('b', ['2.2.2.2'])], ['A', 'AAAA']),
+    ...propagationFindings([resolver('a', ['1.1.1.1']), resolver('b', ['1.1.1.1'])], ['A', 'AAAA']),
+    ...propagationFindings(
+      [resolver('a', ['k1'], 'TXT'), resolver('b', ['k1'], 'TXT'), resolver('c', ['k2'], 'TXT')],
+      ['TXT', 'CNAME']
+    ),
+    ...propagationFindings([resolver('a', ['k1'], 'TXT'), resolver('b', ['k1'], 'TXT')], ['TXT', 'CNAME']),
     ...whoisFindings({ expiresAt: iso(-10) }),
     ...whoisFindings({ status: ['client hold', 'serverHold'] }),
     ...whoisFindings({ expiresAt: iso(3.5), createdAt: iso(-5), status: ['pendingDelete'] }),
@@ -235,6 +350,79 @@ describe('Ansichten auf Englisch', () => {
     expect(within(card).getByText('+all allows any sender — it offers effectively no protection.')).toBeInTheDocument();
     expect(within(card).getByText('has issues')).toBeInTheDocument();
     expect(spfIssueText('Altes Problem')).toBe('Altes Problem');
+  });
+});
+
+describe('Satzbausteine aus shared/', () => {
+  /** Bausteine ohne englischen Eintrag, verschachtelte eingeschlossen. */
+  function untranslated(value: Phrase): string[] {
+    const nested = Object.values(value.params ?? {}).filter((v): v is Phrase => typeof v === 'object');
+    return [...(value.text in english.ui ? [] : [value.text]), ...nested.flatMap(untranslated)];
+  }
+
+  const flaws: DmarcPolicyFlaw[] = [
+    { kind: 'p-missing' },
+    { kind: 'p-invalid', value: '' },
+    { kind: 'p-invalid', value: 'foo' },
+    { kind: 'sp-invalid', value: 'foo', declared: 'reject' },
+    { kind: 'multiple', count: 2 },
+  ];
+  const bimi = (...records: string[]) => parseBimi(records).invalidDetail;
+  const tlsRpt = (...records: string[]) => parseTlsRpt(records).invalidDetail;
+  const logo = 'l=https://example.com/logo.svg';
+
+  /*
+   * Was die Findings oben nicht schon abdecken: Bausteine, die nur der
+   * Mail-Tab und die Schnellübersicht zeigen, und jeder Grund der Parser.
+   */
+  const phrases = [
+    ...REASONS.map(lookupFailurePhrase),
+    lookupFailurePhrase(true),
+    ...flaws.flatMap((flaw) => [
+      dmarcPolicyFlawLabelPhrase(flaw),
+      dmarcFlawEffectPhrase('none', flaw),
+      dmarcFlawEffectPhrase(null, flaw),
+    ]),
+    bimi('v=BIMI1'),
+    bimi('v=BIMI1; l=; a=https://example.com/vmc.pem'),
+    bimi('v=BIMI1; l=http://example.com/logo.svg'),
+    bimi('v=BIMI1; l=https://example.com/logo.png'),
+    bimi(`v=BIMI1; ${logo}; a=http://example.com/vmc.pem`),
+    bimi(`v=bimi1; ${logo}`),
+    bimi(`${logo}; v=BIMI1`),
+    bimi(logo),
+    bimi(`v=BIMI1; ${logo}`, `v=BIMI1; ${logo}`),
+    tlsRpt('v=TLSRPTv1'),
+    tlsRpt('v=TLSRPTv1; rua=ftp://example.com'),
+    tlsRpt('v=tlsrptv1; rua=mailto:tls@example.com'),
+    tlsRpt('v=TLSRPTv1; rua=mailto:a@example.com', 'v=TLSRPTv1; rua=mailto:b@example.com'),
+  ];
+
+  it('haben alle eine englische Fassung', () => {
+    expect(phrases.every(Boolean)).toBe(true);
+    expect(phrases.flatMap((value) => untranslated(value!))).toEqual([]);
+  });
+
+  it('setzen auch verschachtelte Bausteine übersetzt ein', () => {
+    const [ignored] = mailFindings(mail({ spf: SPF_NONE, dmarc: dmarc('v=DMARC1; p=foo') }), 'example.com').filter(
+      (f) => f.id === 'no-dmarc'
+    );
+    expect(findingText(ignored).title).toBe('DMARC has no effect: p=foo is invalid');
+    expect(phraseText(lookupFailurePhrase('servfail'))).toBe('SERVFAIL');
+    expect(phraseText(dmarcPolicyFlawLabelPhrase({ kind: 'multiple', count: 3 }))).toBe('3 records');
+  });
+
+  it('bleiben deutsch, wenn ein Baustein kein Englisch hat', () => {
+    const finding: Finding = {
+      id: 'tls-rpt-invalid',
+      severity: 'info',
+      title: 'TLS-RPT-Record ungültig',
+      description: 'Neuer Grund. Absender schicken dann keine Berichte (RFC 8460 §3).',
+      category: 'mail',
+      params: { reason: { text: 'Neuer Grund' } },
+    };
+    expect(findingText(finding).description).toBe(finding.description);
+    expect(phraseText({ text: 'Neuer Grund' })).toBe('Neuer Grund');
   });
 });
 

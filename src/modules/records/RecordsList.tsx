@@ -115,11 +115,12 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
  * „TTL unbekannt“ ersetzt, sonst würde nur „Gedankenstrich“ vorgelesen.
  */
 function Ttl({ ttl }: { ttl: number | null }) {
+  const { t } = useI18n();
   if (ttl === null) {
     return (
-      <span className="text-xs text-fg-subtle" title="TTL unbekannt">
+      <span className="text-xs text-fg-subtle" title={t('TTL unbekannt')}>
         <span aria-hidden="true">—</span>
-        <span className="sr-only">TTL unbekannt</span>
+        <span className="sr-only">{t('TTL unbekannt')}</span>
       </span>
     );
   }

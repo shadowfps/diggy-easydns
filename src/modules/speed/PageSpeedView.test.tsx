@@ -56,9 +56,9 @@ describe('PageSpeedView — Ladezustand', () => {
     const status = screen.getByRole('status');
     const announced = status.textContent;
 
-    expect(screen.getByText('Verbinde mit PageSpeed Insights...').closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByText('Verbinde mit PageSpeed Insights…').closest('[aria-hidden="true"]')).not.toBeNull();
     act(() => vi.advanceTimersByTime(2500));
-    expect(screen.getByText('Starte Lighthouse Runner...')).toBeInTheDocument();
+    expect(screen.getByText('Starte Lighthouse Runner…')).toBeInTheDocument();
     expect(status.textContent).toBe(announced);
     expect(screen.getAllByRole('status')).toHaveLength(1);
   });
@@ -69,7 +69,7 @@ describe('PageSpeedView — Ladezustand', () => {
    */
   it('animiert über die Klassen, die die Reduced-Motion-Regel erreicht', () => {
     const { container } = renderView(true);
-    expect(screen.getByText('Verbinde mit PageSpeed Insights...')).toHaveClass('animate-fade-in-up');
+    expect(screen.getByText('Verbinde mit PageSpeed Insights…')).toHaveClass('animate-fade-in-up');
     expect(container.querySelectorAll('.animate-scan-bar')).toHaveLength(5);
   });
 

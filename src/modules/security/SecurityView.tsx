@@ -26,6 +26,7 @@ const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'non
  * ist die Zeile, warum; ohne sie hat der Check ein Ergebnis.
  */
 export function SecurityView({ domain, ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
+  const { t } = useI18n();
   const dnssecInfo = dnssec.data ?? NO_DNSSEC;
 
   const sslUnchecked = (ssl.status === 'error' || ssl.lookupFailed) && (
@@ -39,7 +40,7 @@ export function SecurityView({ domain, ssl, sslApplicable = true, dnssec }: Secu
     <UncheckedLine name="DNSSEC" reason={dnssecFailed}>
       {/* Validierende Resolver weisen eine kaputte Signatur mit SERVFAIL ab. */}
       {dnssecFailed === 'servfail' &&
-        'Bleibt es bei SERVFAIL, steckt meist eine fehlerhafte Signatur dahinter.'}
+        t('Bleibt es bei SERVFAIL, steckt meist eine fehlerhafte Signatur dahinter.')}
     </UncheckedLine>
   );
 

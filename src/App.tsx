@@ -731,22 +731,25 @@ export default function App() {
                 <div className="flex shrink-0 flex-wrap gap-x-1.5 gap-y-2">
                   <ActionButton
                     onClick={handleExportJson}
-                    label="JSON herunterladen"
-                    title="Report als JSON herunterladen"
+                    label={t('JSON herunterladen')}
+                    title={t('Report als JSON herunterladen')}
                   >
                     <Download className="size-3.5" />
                     JSON
                   </ActionButton>
-                  <ActionButton onClick={handleCopyPermalink} title="Permalink zu diesem Report kopieren">
+                  <ActionButton
+                    onClick={handleCopyPermalink}
+                    title={t('Permalink zu diesem Report kopieren')}
+                  >
                     {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
-                    {permalinkCopied ? t('Link kopiert') : 'Link kopieren'}
+                    {permalinkCopied ? t('Link kopiert') : t('Link kopieren')}
                   </ActionButton>
                   <ActionButton
                     onClick={() => handleCompare(report.domain)}
-                    title="Mit einer zweiten Domain vergleichen"
+                    title={t('Mit einer zweiten Domain vergleichen')}
                   >
                     <ArrowLeftRight className="size-3.5" />
-                    Vergleichen
+                    {t('Vergleichen')}
                   </ActionButton>
                 </div>
               </div>

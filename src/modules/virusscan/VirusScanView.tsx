@@ -308,7 +308,7 @@ function ScanLoader() {
   // PageSpeedLoader.
   return (
     <div className="mx-auto mt-8 max-w-md">
-      <LoadingAnnouncement>VirusTotal-Scan läuft…</LoadingAnnouncement>
+      <LoadingAnnouncement>{t('VirusTotal-Scan läuft…')}</LoadingAnnouncement>
       <div className="panel px-6 py-6 text-center" aria-hidden="true">
         <Loader2 className="mx-auto size-5 animate-spin text-fg" />
         <div className="eyebrow mt-4">{t('Scan läuft')}</div>

@@ -1,8 +1,8 @@
 /** Shared DNS/API types used by frontend and backend. */
 
-import type { FindingKey, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
+import type { FindingKey, Phrase, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
 
-export type { ApiErrorCode, FindingKey, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
+export type { ApiErrorCode, FindingKey, Phrase, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
 
 export type RecordType =
   | 'A'
@@ -225,6 +225,8 @@ export interface MailPolicyRecord {
   records?: string[];
   /** Warum Empfänger den Record nicht auswerten; fehlt bei einem gültigen. */
   invalid?: string;
+  /** Derselbe Grund als Satzbaustein, für die Übersetzung (#86). */
+  invalidDetail?: Phrase;
   /**
    * Die DNS-Abfrage ist gescheitert (Timeout, SERVFAIL); der Wert nennt den
    * Grund. Dann wissen wir nicht, ob der Record existiert — das ist kein

@@ -9,7 +9,7 @@ import {
   type ResolverAnswer,
 } from '@/lib/propagation';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
-import { useI18n } from '@/i18n';
+import { t, useI18n, type Language } from '@/i18n';
 
 interface PropagationViewProps {
   results: ResolverResult[];
@@ -45,7 +45,7 @@ export function PropagationView({ results, types }: PropagationViewProps) {
   }, [results, types]);
 
   const [activeType, setActiveType] = useState<RecordType>(availableTypes[0] ?? types[0]);
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   const comparison = useMemo(
     () => comparePropagation(results, activeType),
@@ -142,10 +142,15 @@ export function PropagationView({ results, types }: PropagationViewProps) {
           >
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
             <span>
-              {deviating} von {compared} Resolvern weichen ab —{' '}
               {entry
-                ? 'eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).'
-                : 'möglicherweise noch nicht propagiert, oder absichtlich GeoDNS / Anycast.'}
+                ? t(
+                    '{count} von {total} Resolvern weichen ab — eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).',
+                    { count: deviating, total: compared }
+                  )
+                : t(
+                    '{count} von {total} Resolvern weichen ab — möglicherweise noch nicht propagiert, oder absichtlich GeoDNS / Anycast.',
+                    { count: deviating, total: compared }
+                  )}
             </span>
           </motion.div>
         )}
@@ -160,8 +165,8 @@ export function PropagationView({ results, types }: PropagationViewProps) {
             <Check className="mt-0.5 size-4 shrink-0 text-success" />
             <span>
               {entry
-                ? `Alle Resolver liefern denselben ${activeType}-Record — sauber propagiert.`
-                : 'Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.'}
+                ? t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type: activeType })
+                : t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')}
             </span>
           </motion.div>
         )}
@@ -169,7 +174,11 @@ export function PropagationView({ results, types }: PropagationViewProps) {
         {consensusKey === undefined && answeredWithoutError && (
           <div className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted">
             <Minus className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-            <span>Kein Resolver liefert einen {typeList(types)} unter diesem Namen.</span>
+            <span>
+              {t('Kein Resolver liefert einen {types} unter diesem Namen.', {
+                types: typeList(types, language),
+              })}
+            </span>
           </div>
         )}
       </div>
@@ -177,10 +186,12 @@ export function PropagationView({ results, types }: PropagationViewProps) {
   );
 }
 
-/** „TXT- oder CNAME-Record“, „A- oder AAAA-Record“. */
-function typeList(types: RecordType[]): string {
-  if (types.length < 2) return `${types[0]}-Record`;
-  return `${types.slice(0, -1).join('-, ')}- oder ${types[types.length - 1]}-Record`;
+/** „TXT- oder CNAME-Record“, „A- oder AAAA-Record“ — englisch „TXT or CNAME record“. */
+function typeList(types: RecordType[], language: Language): string {
+  const last = types[types.length - 1];
+  if (types.length < 2) return t('{type}-Record', { type: last });
+  const rest = types.slice(0, -1).join(language === 'de' ? '-, ' : ', ');
+  return t('{types}- oder {last}-Record', { types: rest, last });
 }
 
 function ResolverRow({
@@ -238,6 +249,7 @@ function InlineValues({
   status: ResolverAnswer['status'];
   type: RecordType;
 }) {
+  const { t } = useI18n();
   const isMismatch = status === 'mismatch';
   return (
     <span
@@ -255,7 +267,7 @@ function InlineValues({
       {result.error && <AlertCircle className="size-3.5 shrink-0" />}
       {!result.error && isMismatch && <AlertTriangle className="size-3.5 shrink-0" />}
       {result.error || values.length === 0 ? (
-        <span className="truncate">{result.error ?? '— kein Eintrag'}</span>
+        <span className="truncate">{result.error ?? t('— kein Eintrag')}</span>
       ) : (
         <span className="flex min-w-0 flex-wrap justify-end gap-x-2 gap-y-1">
           {values.map((value) =>
@@ -283,16 +295,17 @@ function AnswerBadge({
   letter: string | undefined;
   status: ResolverAnswer['status'];
 }) {
-  const label = letter ? `Antwort ${letter}` : 'kein Eintrag';
+  const { t } = useI18n();
+  const label = letter ? t('Antwort {letter}', { letter }) : t('kein Eintrag');
   if (status === 'mismatch') {
     return (
       <span className="badge badge-warning">
         <AlertTriangle className="size-3" />
-        {label} · weicht ab
+        {t('{label} · weicht ab', { label })}
       </span>
     );
   }
-  if (!letter) return <span className="text-[13px] text-fg-subtle">— kein Eintrag</span>;
+  if (!letter) return <span className="text-[13px] text-fg-subtle">{t('— kein Eintrag')}</span>;
   return <span className="badge">{label}</span>;
 }
 
@@ -307,16 +320,17 @@ function AnswerGroup({
   resolvers: string[];
   status: 'consensus' | 'deviating' | undefined;
 }) {
+  const { t } = useI18n();
   return (
-    <section aria-label={`Antwort ${letter}`}>
+    <section aria-label={t('Antwort {letter}', { letter })}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-xs font-semibold text-fg">Antwort {letter}</span>
+        <span className="text-xs font-semibold text-fg">{t('Antwort {letter}', { letter })}</span>
         <span className="text-xs text-fg-subtle">{resolvers.join(', ')}</span>
-        {status === 'consensus' && <span className="badge">Mehrheit</span>}
+        {status === 'consensus' && <span className="badge">{t('Mehrheit')}</span>}
         {status === 'deviating' && (
           <span className="badge badge-warning">
             <AlertTriangle className="size-3" />
-            weicht ab
+            {t('weicht ab')}
           </span>
         )}
       </div>
@@ -337,6 +351,7 @@ function AnswerGroup({
  * Handy und per Tastatur.
  */
 function AnswerValue({ value }: { value: string }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const long = value.length > LONG_VALUE;
 
@@ -363,7 +378,9 @@ function AnswerValue({ value }: { value: string }) {
           <ChevronDown
             className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
           />
-          {expanded ? 'Gekürzt zeigen' : `Ganzen Wert zeigen (${value.length} Zeichen)`}
+          {expanded
+            ? t('Gekürzt zeigen')
+            : t('Ganzen Wert zeigen ({count} Zeichen)', { count: value.length })}
         </button>
       )}
     </div>

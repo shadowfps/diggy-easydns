@@ -52,23 +52,24 @@ export function AppErrorFallback({ error }: { error: Error }) {
  * oder eine abgebrochene Verbindung. Neu laden holt den aktuellen.
  */
 export function PageErrorFallback() {
+  const { t } = useI18n();
   return (
     <EmptyState
       tone="danger"
       icon={<AlertTriangle className="size-5" />}
-      title="Diese Seite konnte nicht geladen werden"
+      title={t('Diese Seite konnte nicht geladen werden')}
       action={
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="btn btn-secondary btn-sm"
         >
-          Neu laden
+          {t('Neu laden')}
         </button>
       }
       className="mx-auto max-w-2xl"
     >
-      Meist hilft ein Neuladen, etwa nach einem Update von diggy.
+      {t('Meist hilft ein Neuladen, etwa nach einem Update von diggy.')}
     </EmptyState>
   );
 }

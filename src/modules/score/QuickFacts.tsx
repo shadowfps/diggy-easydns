@@ -12,11 +12,11 @@ import type {
 import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { isNullMx } from '@/lib/nullMx';
-import { dmarcPolicyFlawLabel, effectiveDmarcPolicy } from '@/lib/dmarc';
+import { dmarcPolicyFlawLabelPhrase, effectiveDmarcPolicy } from '@/lib/dmarc';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
-import { useI18n } from '@/i18n';
+import { phraseText, useI18n } from '@/i18n';
 
 /* ─── Tech-Stack SVG logos ───────────────────────────────────────────────── */
 
@@ -336,7 +336,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // den Records des gefragten Namens, die sofort da sind; der Mail-Check
   // läuft auf der Apex-Domain und kommt später.
   const mxItem: QuickFactItem = isNullMx(mxRecords)
-    ? { label: 'MX', value: 'keine Mails (Null-MX)' }
+    ? { label: 'MX', value: t('keine Mails (Null-MX)') }
     : { label: 'MX', value: mxRecord?.value ?? '—', mono: true, muted: !mxRecord };
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
@@ -373,7 +373,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
     status === 'loading'
       ? { label, loading: true }
       : status === 'error' || (status === 'done' && failed)
-        ? { label, value: 'nicht prüfbar', unchecked: true }
+        ? { label, value: t('nicht prüfbar'), unchecked: true }
         : status !== 'done'
           ? { label, value: '—', muted: true }
           : null;
@@ -403,9 +403,9 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   const dmarcItem: QuickFactItem =
     placeholder('DMARC', mail.status, mail.data?.dmarc.lookupFailed) ??
     (dmarcPolicy === null
-      ? { label: 'DMARC', value: dmarcFlaw ? 'unwirksam' : t('fehlt'), bad: true }
+      ? { label: 'DMARC', value: dmarcFlaw ? t('unwirksam') : t('fehlt'), bad: true }
       : dmarcFlaw
-        ? { label: 'DMARC', value: dmarcPolicyFlawLabel(dmarcFlaw) }
+        ? { label: 'DMARC', value: phraseText(dmarcPolicyFlawLabelPhrase(dmarcFlaw)) }
         : { label: 'DMARC', value: t('gesetzt'), ok: true });
 
   const items: QuickFactItem[] = [

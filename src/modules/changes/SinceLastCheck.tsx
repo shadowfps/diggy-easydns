@@ -22,6 +22,8 @@ import {
 } from '@/lib/lookupHistory';
 import { changeTone, diffChecks, type ChangeTone, type CheckChange } from '@/lib/checkChanges';
 import { cn } from '@/lib/cn';
+import { formatDate, locale, t, tRich, useI18n } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 
 interface SinceLastCheckProps {
   /** Der letzte Check dieser Domain, bevor der laufende ihn überschrieben hat. */
@@ -46,6 +48,8 @@ interface SinceLastCheckProps {
  * man schon in den Records liest. Die Zahl der Änderungen steht im Kopf.
  */
 export function SinceLastCheck({ previous, report, failed, settled, className }: SinceLastCheckProps) {
+  // Abonniert den Sprachwechsel; die Helfer unten lesen die Sprache selbst.
+  useI18n();
   const [open, setOpen] = useState(false);
   const titleId = useId();
   const listId = useId();
@@ -61,10 +65,10 @@ export function SinceLastCheck({ previous, report, failed, settled, className }:
   const checkedAt = formatDateTime(previous.lookedUpAt);
   const status =
     changes === null
-      ? 'Wird verglichen, sobald alle Checks fertig sind …'
+      ? t('Wird verglichen, sobald alle Checks fertig sind …')
       : changes.length === 0
-        ? `Keine Änderungen seit ${checkedAt}`
-        : `${changes.length} ${changes.length === 1 ? 'Änderung' : 'Änderungen'} seit ${checkedAt}`;
+        ? t('Keine Änderungen seit {date}', { date: checkedAt })
+        : t('{count} Änderungen seit {date}', { count: changes.length, date: checkedAt });
   const expandable = changes !== null && changes.length > 0;
 
   const head = (
@@ -76,7 +80,7 @@ export function SinceLastCheck({ previous, report, failed, settled, className }:
       </span>
       <span className="min-w-0 flex-1">
         <span id={titleId} className="block text-sm font-semibold text-fg">
-          Seit dem letzten Check{' '}
+          {t('Seit dem letzten Check')}{' '}
           <span className="whitespace-nowrap font-normal text-fg-muted">
             ({formatTimeAgo(previous.lookedUpAt)})
           </span>
@@ -107,7 +111,7 @@ export function SinceLastCheck({ previous, report, failed, settled, className }:
           >
             {head}
             <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-fg-muted transition-colors group-hover:text-fg">
-              <span className="hidden sm:inline">{open ? 'Ausblenden' : 'Anzeigen'}</span>
+              <span className="hidden sm:inline">{open ? t('Ausblenden') : t('Anzeigen')}</span>
               <ChevronDown
                 className={cn('size-4 transition-transform', open && 'rotate-180')}
                 aria-hidden
@@ -143,8 +147,11 @@ const TONE_BADGE: Record<ChangeTone, string> = {
   danger: 'badge-danger',
 };
 
-/** Wort und Form je Änderung — nie nur Farbe (siehe docs/DESIGN.md). */
-function marker(change: CheckChange): { word: string; Icon: LucideIcon } {
+/**
+ * Wort und Form je Änderung — nie nur Farbe (siehe docs/DESIGN.md). Das Wort
+ * ist der Schlüssel, übersetzt wird in ChangeRow.
+ */
+function marker(change: CheckChange): { word: DeKey; Icon: LucideIcon } {
   switch (change.kind) {
     case 'score':
       return change.to > change.from
@@ -185,36 +192,29 @@ function describe(change: CheckChange): ReactNode {
         </>
       );
     case 'ssl-renewed':
-      return `Zertifikat gilt jetzt bis ${formatDate(change.validTo)}`;
+      return t('Zertifikat gilt jetzt bis {date}', { date: formatDay(change.validTo) });
     case 'ssl-replaced':
-      return `Zertifikat getauscht, gilt nur noch bis ${formatDate(change.validTo)}`;
+      return t('Zertifikat getauscht, gilt nur noch bis {date}', { date: formatDay(change.validTo) });
     case 'ssl-invalid':
-      return 'Zertifikat ungültig oder abgelaufen';
+      return t('Zertifikat ungültig oder abgelaufen');
     case 'ssl-valid':
-      return `Zertifikat jetzt gültig bis ${formatDate(change.validTo)}`;
+      return t('Zertifikat jetzt gültig bis {date}', { date: formatDay(change.validTo) });
     case 'dnssec':
-      return change.enabled ? 'DNSSEC ist jetzt aktiv' : 'DNSSEC ist nicht mehr aktiv';
+      return change.enabled ? t('DNSSEC ist jetzt aktiv') : t('DNSSEC ist nicht mehr aktiv');
     case 'dmarc':
-      if (!change.present) return 'DMARC-Record entfernt';
-      return change.policy ? (
-        <>
-          DMARC-Record gesetzt, Policy <Mono>{change.policy}</Mono>
-        </>
-      ) : (
-        'DMARC-Record gesetzt'
-      );
+      if (!change.present) return t('DMARC-Record entfernt');
+      return change.policy
+        ? tRich('DMARC-Record gesetzt, Policy {policy}', { policy: <Mono>{change.policy}</Mono> })
+        : t('DMARC-Record gesetzt');
     case 'dmarc-policy':
-      return (
-        <>
-          DMARC-Policy <Mono>{change.from}</Mono> → <Mono>{change.to}</Mono>
-        </>
-      );
+      return tRich('DMARC-Policy {from} → {to}', {
+        from: <Mono>{change.from}</Mono>,
+        to: <Mono>{change.to}</Mono>,
+      });
     case 'records':
       return (
         <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <span>
-            {change.type}-{change.values.length === 1 ? 'Record' : 'Records'}
-          </span>
+          <span>{t('{type}-Records', { count: change.values.length, type: change.type })}</span>
           {/* wrap-anywhere statt break-all: ein Name rückt als Ganzes in
               die nächste Zeile und wird nur zerteilt, wenn er allein nicht
               passt (lange IPv6-Adressen). */}
@@ -238,7 +238,7 @@ function ChangeRow({ change }: { change: CheckChange }) {
       <span className="flex shrink-0 sm:w-28">
         <span className={cn('badge', TONE_BADGE[changeTone(change)])}>
           <Icon className="size-3" aria-hidden />
-          {word}
+          {t(word)}
         </span>
       </span>
       <span className="min-w-0 text-sm text-fg">{describe(change)}</span>
@@ -259,29 +259,31 @@ function Mono({ children, className }: { children: ReactNode; className?: string
   return <span className={cn('font-mono text-[13px]', className)}>{children}</span>;
 }
 
-const RELATIVE_TIME = new Intl.RelativeTimeFormat('de-DE', { numeric: 'auto' });
-
-/** „vor 5 Minuten“, „gestern“, „vor 3 Tagen“ — für den Kopf der Karte. */
+/**
+ * „vor 5 Minuten“, „gestern“, „vor 3 Tagen“ — für den Kopf der Karte. Die
+ * Wörter liefert Intl in der Sprache der Oberfläche (#86).
+ */
 function formatTimeAgo(iso: string): string {
   const then = Date.parse(iso);
-  if (!Number.isFinite(then)) return 'Zeitpunkt unbekannt';
+  if (!Number.isFinite(then)) return t('Zeitpunkt unbekannt');
   const minutes = Math.max(0, Math.floor((Date.now() - then) / 60_000));
-  if (minutes < 1) return 'gerade eben';
-  if (minutes < 60) return RELATIVE_TIME.format(-minutes, 'minute');
+  if (minutes < 1) return t('gerade eben');
+  const relative = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });
+  if (minutes < 60) return relative.format(-minutes, 'minute');
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return RELATIVE_TIME.format(-hours, 'hour');
+  if (hours < 24) return relative.format(-hours, 'hour');
   const days = Math.floor(hours / 24);
-  if (days < 30) return RELATIVE_TIME.format(-days, 'day');
-  if (days < 365) return RELATIVE_TIME.format(-Math.floor(days / 30), 'month');
-  return RELATIVE_TIME.format(-Math.floor(days / 365), 'year');
+  if (days < 30) return relative.format(-days, 'day');
+  if (days < 365) return relative.format(-Math.floor(days / 30), 'month');
+  return relative.format(-Math.floor(days / 365), 'year');
 }
 
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return 'dem letzten Check';
-  return date.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  if (!Number.isFinite(date.getTime())) return t('dem letzten Check');
+  return formatDate(date, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('de-DE', { dateStyle: 'medium' });
+function formatDay(iso: string): string {
+  return formatDate(iso, { dateStyle: 'medium' });
 }

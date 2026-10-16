@@ -12,8 +12,26 @@
  * sie hier steht, und dann am englischen Wörterbuch, bis sie übersetzt ist.
  */
 
-/** Werte, die in einen Text eingesetzt werden: `{count}` → `params.count`. */
-export type TextParams = Record<string, string | number>;
+/**
+ * Werte, die in einen Text eingesetzt werden: `{count}` → `params.count`.
+ * Ein Wert kann selbst ein Satzbaustein sein (siehe `Phrase`).
+ */
+export type TextParams = Record<string, string | number | Phrase>;
+
+/**
+ * Ein Satzbaustein aus shared/ oder dem Server: „p=foo ist ungültig“,
+ * „Zeitüberschreitung“. Server und Client setzen ihn in längere Sätze ein
+ * (Findings, Mail-Tab), deshalb reist er als Text plus Werte statt fertig.
+ *
+ * `text` ist der deutsche Satz mit Platzhaltern und zugleich sein Schlüssel
+ * im Wörterbuch der Oberfläche (src/i18n/de.ts), wie bei `t()`. Auf Deutsch
+ * setzt `germanText()` (shared/phrase.ts) die Werte ein, im Client
+ * übersetzt `phraseText()`.
+ */
+export interface Phrase {
+  text: string;
+  params?: TextParams;
+}
 
 /**
  * Text-Kennung eines Findings. Meist gleich der `id`; abweichend, wenn eine
@@ -21,6 +39,8 @@ export type TextParams = Record<string, string | number>;
  * dynamisch ist (`spf-issue-…`).
  */
 export type FindingKey =
+  // Gescheiterte Checks (#101), für alle Bereiche gleich
+  | 'unchecked'
   // DNS-Basics
   | 'no-records'
   | 'no-address'
@@ -37,12 +57,28 @@ export type FindingKey =
   | 'spf-issue'
   | 'spf-ok'
   | 'no-dmarc'
+  | 'no-dmarc-null-mx'
+  | 'dmarc-ignored'
   | 'dmarc-policy-none'
+  | 'dmarc-as-none'
+  | 'dmarc-sp-invalid'
   | 'dmarc-present'
-  | 'dmarc-present-no-policy'
   | 'no-dkim-found'
   | 'dkim-present'
   | 'no-mta-sts'
+  | 'no-tls-rpt'
+  | 'no-tls-rpt-mta-sts'
+  | 'tls-rpt-invalid'
+  | 'tls-rpt-present'
+  | 'bimi-needs-dmarc'
+  | 'no-bimi'
+  | 'bimi-invalid'
+  | 'bimi-dmarc-weak'
+  | 'bimi-present'
+  | 'bimi-present-no-vmc'
+  | 'null-mx'
+  | 'null-mx-complete'
+  | 'null-mx-incomplete'
   // DNSSEC
   | 'dnssec-off'
   | 'dnssec-incomplete'
@@ -58,7 +94,9 @@ export type FindingKey =
   | 'ssl-old-tls'
   // Propagation
   | 'propagation-mismatch'
+  | 'propagation-mismatch-entry'
   | 'propagation-consistent'
+  | 'propagation-consistent-entry'
   // WHOIS
   | 'domain-expired'
   | 'domain-expiring-critical'
