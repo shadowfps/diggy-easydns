@@ -43,8 +43,9 @@ export function calculateScore(findings: Finding[]): HealthScore {
     // ein zweites Mal abziehen nein.
     if (f.causedBy?.some((cause) => presentIds.has(cause))) continue;
 
-    // „Konnte nicht geprüft werden“ sagt nichts über die Domain (#101).
-    if (f.unchecked) continue;
+    // Gezählt ja, abgezogen nein: „konnte nicht geprüft werden“ sagt nichts
+    // über die Domain (#101), und eine reine Empfehlung ist keine Lücke (#83).
+    if (f.unchecked || f.advisory) continue;
 
     if (f.severity === 'info') {
       infoPenalty += SEVERITY_PENALTY.info;

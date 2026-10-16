@@ -18,7 +18,7 @@ Diggy ist ein webbasiertes DNS-Audit-Tool. Domain eingeben, fertig: Records, Mai
 - **IP-Owner** — Anzeige des Netz-Betreibers hinter A/AAAA-Records
 - **Health-Score** — automatisch berechnet aus Findings und Konfigurationslücken
 - **Findings & Empfehlungen** — konkrete Hinweise zu fehlenden oder fehlerhaften Einträgen
-- **Mail Security** — SPF, DKIM (Selector-Scan), DMARC, MTA-STS
+- **Mail Security** — SPF, DKIM (Selector-Scan), DMARC, MTA-STS, TLS-RPT, BIMI
 - **SSL / TLS** — Zertifikats-Details, Ablaufdatum, Chain-Check
 - **DNSSEC** — Validierungsstatus
 - **Propagation** — Vergleich über mehrere DNS-over-HTTPS-Resolver weltweit
@@ -282,7 +282,7 @@ Tests liegen neben dem geprüften Code (`*.test.ts`).
 - [x] Subdomain-Lookups & Apex-Auflösung für Mail/WHOIS
 - [x] Domain-Validierung & Normalisierung
 - [x] Health-Score aus Findings
-- [x] Mail-Security-Audit (SPF, DKIM, DMARC, MTA-STS)
+- [x] Mail-Security-Audit (SPF, DKIM, DMARC, MTA-STS, TLS-RPT, BIMI)
 - [x] SSL/TLS-Check
 - [x] WHOIS/RDAP-Lookup
 - [x] PageSpeed-Integration

@@ -728,7 +728,13 @@ app.get('/api/lookup/mail', async (req: Request, res: Response) => {
       `mail:${apexDomain}`,
       LOOKUP_TTL_MS,
       async () => auditMail(apexDomain, await lookupSpfRecord(apexDomain)),
-      { failed: hasMailLookupFailure }
+      // BIMI und TLS-RPT zählen für den Score nicht (hasMailLookupFailure),
+      // ein Ausfall soll aber genauso schnell neu geprüft werden.
+      {
+        failed: (mail) =>
+          hasMailLookupFailure(mail) ||
+          Boolean(mail.bimi?.lookupFailed || mail.tlsRpt?.lookupFailed),
+      }
     );
     res.json({ mail, findings: mailFindings(mail, apexDomain) });
   } catch (error) {

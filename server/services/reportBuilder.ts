@@ -11,6 +11,7 @@ import type {
 import { isDnsOnlyName } from '../../shared/dnsName.js';
 import { lookupFailureLabel } from '../../shared/lookupFailure.js';
 import { dmarcPct, noMailProtection } from '../../shared/nullMx.js';
+import { bimiDmarcGap } from '../../shared/bimiTlsRpt.js';
 
 /* ─── Gescheiterte Checks ─────────────────────────────────────────────── */
 
@@ -300,9 +301,149 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     });
   }
 
+  // Eine Domain ohne Mail (Null-MX) verschickt keine Logos und bekommt keine
+  // Zustellungen, über die berichtet werden könnte: dort gar keine Aussage.
+  if (!mail.nullMx) {
+    findings.push(...tlsRptFindings(mail, apexDomain, receivesMail));
+    findings.push(...bimiFindings(mail, apexDomain, receivesMail));
+  }
+
   if (mail.nullMx) findings.push(...noMailFindings(mail, apexDomain));
 
   return findings;
+}
+
+/*
+ * BIMI und TLS-RPT (#83) ergänzen eine gute Mail-Konfiguration, ihr Fehlen
+ * ist aber keine Lücke: Ohne TLS-RPT ist die Zustellung nicht unsicherer, man
+ * erfährt nur nichts über Probleme; ohne BIMI fehlt ein Logo. Deshalb sind
+ * alle Hinweise dazu `advisory` — auch zu ungültigen Records, denn die
+ * werten Empfänger schlicht nicht aus, sie wirken also wie keiner.
+ *
+ * Das Fehlen melden wir nur bei Domains, die Mail empfangen — wie bei DKIM
+ * und MTA-STS. Ein vorhandener Record wird immer bewertet (außer beim
+ * Null-MX), und ist die Abfrage gescheitert, sagen wir nichts: Wir wissen
+ * dann nicht, ob er fehlt.
+ */
+
+function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding[] {
+  const tlsRpt = mail.tlsRpt;
+  if (!tlsRpt || tlsRpt.lookupFailed) return [];
+
+  if (!tlsRpt.present) {
+    if (!receivesMail) return [];
+    return [{
+      id: 'no-tls-rpt',
+      severity: 'info',
+      title: 'Kein TLS-RPT',
+      description: mail.mtaSts.present
+        ? 'Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine Mailserver scheitert. Zu MTA-STS gehört es dazu: Ohne Berichte merkst du nicht, wenn die Policy Mails aufhält — etwa nach einem abgelaufenen Zertifikat.'
+        : 'Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine Mailserver scheitert — etwa an einem abgelaufenen Zertifikat oder einem Downgrade-Angriff.',
+      fix: {
+        explanation: 'Lege einen TXT-Record mit einer Adresse für die Berichte an. Mehrere Ziele kommagetrennt, auch https:-URLs sind möglich.',
+        snippet: `_smtp._tls.${apexDomain}  TXT  "v=TLSRPTv1; rua=mailto:tls-reports@${apexDomain}"`,
+      },
+      category: 'mail',
+      advisory: true,
+    }];
+  }
+
+  if (tlsRpt.invalid) {
+    return [{
+      id: 'tls-rpt-invalid',
+      severity: 'info',
+      title: 'TLS-RPT-Record ungültig',
+      description: `${tlsRpt.invalid}. Absender schicken dann keine Berichte (RFC 8460 §3).`,
+      category: 'mail',
+      advisory: true,
+    }];
+  }
+
+  return [{
+    id: 'tls-rpt-present',
+    severity: 'success',
+    title: 'TLS-RPT aktiv',
+    description: `Berichte über Probleme bei der verschlüsselten Zustellung gehen an ${tlsRpt.rua?.join(', ')}.`,
+    category: 'mail',
+  }];
+}
+
+/**
+ * BIMI hängt an DMARC: Ein Logo zeigen Empfänger nur, wenn Fälschungen
+ * abgewiesen werden (Regel: bimiDmarcGap). Bei zu schwacher Policy ist
+ * deshalb DMARC der nächste Schritt — BIMI zu empfehlen hieße, etwas
+ * einzurichten, das nicht wirkt.
+ */
+function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding[] {
+  const bimi = mail.bimi;
+  if (!bimi || bimi.lookupFailed) return [];
+  // Ob BIMI wirkt, hängt an DMARC. Ist DMARC nicht prüfbar (#101), bleibt
+  // auch das offen — dann weder „erst DMARC verschärfen“ noch „wirkt“.
+  const dmarcUnknown = Boolean(mail.dmarc.lookupFailed);
+  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGap(mail.dmarc);
+
+  if (!bimi.present) {
+    if (!receivesMail || dmarcUnknown) return [];
+    if (dmarcGap) {
+      return [{
+        id: 'bimi-needs-dmarc',
+        severity: 'info',
+        title: 'BIMI erst mit strengerer DMARC-Policy',
+        description: `Mit BIMI zeigen Postfächer dein Markenlogo neben deinen Mails — aber nur bei DMARC mit p=quarantine oder p=reject. Jetzt: ${dmarcGap}. Erst DMARC verschärfen, dann lohnt sich BIMI.`,
+        category: 'mail',
+        advisory: true,
+      }];
+    }
+    return [{
+      id: 'no-bimi',
+      severity: 'info',
+      title: 'Kein BIMI-Record',
+      description: 'Mit BIMI zeigen Postfächer dein Markenlogo neben deinen Mails. Deine DMARC-Policy erfüllt die Voraussetzung schon. Gmail und Apple Mail zeigen das Logo nur mit Markenzertifikat (VMC oder CMC).',
+      fix: {
+        explanation: 'Das Logo als SVG (Profil SVG Tiny PS) per https veröffentlichen und den Record anlegen; ein Markenzertifikat kommt mit a=https://… dazu.',
+        snippet: `default._bimi.${apexDomain}  TXT  "v=BIMI1; l=https://${apexDomain}/bimi/logo.svg"`,
+      },
+      category: 'mail',
+      advisory: true,
+    }];
+  }
+
+  // Ausdrücklicher Verzicht (l= und a= leer): eine Entscheidung, kein Befund.
+  if (bimi.declined) return [];
+
+  if (bimi.invalid) {
+    return [{
+      id: 'bimi-invalid',
+      severity: 'info',
+      title: 'BIMI-Record ungültig',
+      description: `${bimi.invalid}. Empfänger zeigen dann kein Logo.`,
+      category: 'mail',
+      advisory: true,
+    }];
+  }
+
+  if (dmarcUnknown) return [];
+
+  if (dmarcGap) {
+    return [{
+      id: 'bimi-dmarc-weak',
+      severity: 'info',
+      title: 'BIMI-Record wirkt noch nicht',
+      description: `Der Record ist da, aber Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject. Jetzt: ${dmarcGap}.`,
+      category: 'mail',
+      advisory: true,
+    }];
+  }
+
+  return [{
+    id: 'bimi-present',
+    severity: 'success',
+    title: 'BIMI-Record vorhanden',
+    description: bimi.evidenceUrl
+      ? 'Markenlogo mit Zertifikat (VMC/CMC) hinterlegt — Postfächer können es neben deinen Mails zeigen.'
+      : 'Markenlogo hinterlegt, aber ohne Markenzertifikat: Gmail und Apple Mail zeigen es so nicht, manche andere Postfächer schon.',
+    category: 'mail',
+  }];
 }
 
 /**

@@ -91,6 +91,15 @@ describe('calculateScore', () => {
     expect(calculateScore([cause, consequence]).score).toBe(98);
   });
 
+  /** #83: Kein BIMI oder TLS-RPT ist eine Empfehlung, kein Mangel. */
+  it('zieht für reine Empfehlungen nichts ab, zählt sie aber mit', () => {
+    const hint: Finding = { ...finding('info', 'no-bimi'), advisory: true };
+    expect(calculateScore([hint]).score).toBe(100);
+    expect(calculateScore([hint]).counts.info).toBe(1);
+    // Neben einem gewerteten Hinweis bleibt es bei dessen 2 Punkten.
+    expect(calculateScore([hint, finding('info', 'no-caa')]).score).toBe(98);
+  });
+
   /**
    * „Konnte nicht geprüft werden“ (#101): ein Timeout beim Resolver sagt
    * nichts über die Domain. Angezeigt und gezählt ja, abgezogen nein — auch

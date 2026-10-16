@@ -7,7 +7,6 @@ import { QuickFacts } from '@/modules/score/QuickFacts';
 import { RecordsList } from '@/modules/records/RecordsList';
 import { PropagationView } from '@/modules/propagation/PropagationView';
 import { FindingsList } from '@/modules/findings/FindingsList';
-import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
 import { HistoryView } from '@/modules/history/HistoryView';
@@ -60,6 +59,17 @@ const PageSpeedView = lazy(() =>
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
 );
+
+/*
+ * Der Mail-Tab: Seine Daten lädt der Report sofort, die Ansicht braucht aber
+ * erst der Klick auf den Tab. Mit BIMI und TLS-RPT (#83) wäre index.js sonst
+ * über sein Budget gewachsen (47,05 → 48,31 kB gzip bei 48 kB Grenze);
+ * nachgeladen sind es 3,6 kB, die niemanden beim ersten Report aufhalten.
+ * Vorgeladen wird, sobald die Mail-Daten da sind (siehe App) — dann steht die
+ * Ansicht beim Klick schon bereit, statt erst ein Skeleton zu zeigen.
+ */
+const loadMailView = () => import('@/modules/mail/MailView');
+const MailView = lazy(() => loadMailView().then((m) => ({ default: m.MailView })));
 
 /*
  * „Seit dem letzten Check“ erscheint nur bei einem erneuten Check derselben
@@ -405,18 +415,24 @@ export default function App() {
     ? (mailData.spf.present ? 1 : 0) +
         (mailData.dmarc.present ? 1 : 0) +
         mailData.dkim.selectors.length +
-        (mailData.mtaSts.present ? 1 : 0) || undefined
+        (mailData.mtaSts.present ? 1 : 0) +
+        (mailData.tlsRpt?.present ? 1 : 0) +
+        (mailData.bimi?.present ? 1 : 0) || undefined
     : undefined;
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
   const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
 
-  // Den Sicherheits-Tab vorladen, sobald es etwas zu zeigen gibt — nach dem
-  // ersten Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein
+  // Sicherheits- und Mail-Tab vorladen, sobald es etwas zu zeigen gibt — nach
+  // dem ersten Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein
   // Chunk von vor dem letzten Deploy), meldet sich der Tab über seine Boundary.
   const hasSecurityData = ssl.status === 'done' || dnssec.status === 'done';
   useEffect(() => {
     if (hasSecurityData) loadSecurityView().catch(() => {});
   }, [hasSecurityData]);
+  const hasMailData = Boolean(mailData);
+  useEffect(() => {
+    if (hasMailData) loadMailView().catch(() => {});
+  }, [hasMailData]);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -823,7 +839,9 @@ export default function App() {
                       ) : mail.status === 'error' ? (
                         <SectionError message={mail.error} />
                       ) : mailData ? (
-                        <MailView mail={mailData} />
+                        <Suspense fallback={<SectionCardsSkeleton count={4} />}>
+                          <MailView mail={mailData} />
+                        </Suspense>
                       ) : (
                         <SectionCardsSkeleton count={4} />
                       ))}

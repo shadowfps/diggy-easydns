@@ -44,6 +44,10 @@ function txt(overrides: Record<string, string | Error> = {}) {
     [`_dmarc.${DOMAIN}`]: 'v=DMARC1; p=reject',
     [`default._domainkey.${DOMAIN}`]: 'v=DKIM1; k=rsa; p=MIIBIjANBgkq',
     [`_mta-sts.${DOMAIN}`]: 'v=STSv1; id=1',
+    // BIMI und TLS-RPT (#83) kosten zwar keine Punkte, gehören aber zu einer
+    // einwandfreien Mail-Domain — ohne sie stünden ihre Hinweise in der Liste.
+    [`_smtp._tls.${DOMAIN}`]: `v=TLSRPTv1; rua=mailto:tls@${DOMAIN}`,
+    [`default._bimi.${DOMAIN}`]: `v=BIMI1; l=https://${DOMAIN}/bimi/logo.svg`,
     ...overrides,
   };
   dns.resolveTxt.mockImplementation(async (name: string) => {
@@ -70,7 +74,13 @@ describe('Ausgangslage', () => {
   it('meldet die einwandfreie Mail-Domain ohne Abzug', async () => {
     txt();
     const { ids: found, score } = await mailCheck();
-    expect(found).toEqual(['spf-ok', 'dmarc-present', 'dkim-present']);
+    expect(found).toEqual([
+      'spf-ok',
+      'dmarc-present',
+      'dkim-present',
+      'tls-rpt-present',
+      'bimi-present',
+    ]);
     expect(score).toBe(100);
   });
 });

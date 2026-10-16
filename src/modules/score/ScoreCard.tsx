@@ -16,6 +16,10 @@ interface ScoreCardProps {
 
 const PRIORITY: Finding['severity'][] = ['critical', 'warning', 'info'];
 
+function mostSevere(findings: Finding[]): Finding | undefined {
+  return PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
+}
+
 const TOP_TONE = {
   critical: { icon: AlertCircle, tile: 'icon-tile-danger' },
   warning: { icon: AlertTriangle, tile: 'icon-tile-warning' },
@@ -38,7 +42,8 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
   // Tech-Stack liefert keine Findings; fällt er aus, fehlt dem Score nichts.
   const unchecked =
     findings.filter((f) => f.unchecked).length + failed.filter((key) => key !== 'techStack').length;
-  const top = PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
+  // Reine Empfehlungen (`advisory`, etwa BIMI) erst, wenn sonst nichts offen ist.
+  const top = mostSevere(findings.filter((f) => !f.advisory)) ?? mostSevere(findings);
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
   const [displayValue, setDisplayValue] = useState(0);

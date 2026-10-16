@@ -71,6 +71,68 @@ describe('auditMail: Mail-TXT-Tags', () => {
   });
 });
 
+/** So wirft node:dns: Fehlercode am Error-Objekt. */
+const dnsError = (code: string) => Object.assign(new Error(code), { code });
+
+describe('auditMail: BIMI und TLS-RPT (#83)', () => {
+  beforeEach(() => {
+    vi.spyOn(dnsPromises.Resolver.prototype, 'resolveTxt').mockResolvedValue([]);
+    vi.spyOn(dnsPromises.Resolver.prototype, 'resolveMx').mockResolvedValue([]);
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('fragt default._bimi und _smtp._tls ab und setzt geteilte TXT-Strings zusammen', async () => {
+    vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) => {
+      if (name === 'default._bimi.example.com') {
+        return [['v=BIMI1; l=https://example.com/', 'logo.svg']];
+      }
+      if (name === '_smtp._tls.example.com') return [['v=TLSRPTv1; rua=mailto:tls@example.com']];
+      return [];
+    });
+    const mail = await auditMail('example.com');
+    expect(mail.bimi).toEqual({
+      present: true,
+      records: ['v=BIMI1; l=https://example.com/logo.svg'],
+      logoUrl: 'https://example.com/logo.svg',
+    });
+    expect(mail.tlsRpt).toEqual({
+      present: true,
+      records: ['v=TLSRPTv1; rua=mailto:tls@example.com'],
+      rua: ['mailto:tls@example.com'],
+    });
+  });
+
+  it.each(['ENOTFOUND', 'ENODATA'])('meldet bei %s „fehlt“', async (code) => {
+    vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockRejectedValue(dnsError(code));
+    const mail = await auditMail('example.com');
+    expect(mail.bimi).toEqual({ present: false });
+    expect(mail.tlsRpt).toEqual({ present: false });
+  });
+
+  /** Ein Timeout sagt nichts darüber, ob der Record existiert. */
+  it.each([
+    ['ETIMEOUT', 'timeout'],
+    ['ESERVFAIL', 'servfail'],
+    ['ECONNREFUSED', 'network'],
+  ] as const)(
+    'meldet bei %s „nicht prüfbar“ (%s) statt „fehlt“ — und der Rest des Reports bleibt',
+    async (code, reason) => {
+      const dmarc = 'v=DMARC1; p=reject';
+      vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) => {
+        if (name === 'default._bimi.example.com' || name === '_smtp._tls.example.com') {
+          throw dnsError(code);
+        }
+        return name === '_dmarc.example.com' ? [[dmarc]] : [];
+      });
+      const mail = await auditMail('example.com');
+      expect(mail.bimi).toEqual({ present: false, lookupFailed: reason });
+      expect(mail.tlsRpt).toEqual({ present: false, lookupFailed: reason });
+      expect(mail.dmarc).toEqual({ present: true, record: dmarc, policy: 'reject', rua: undefined });
+    }
+  );
+});
+
 /**
  * Der Lookup-Zähler entscheidet über ein critical-Finding mit -25 Score-
  * Punkten. Die alte Regex verlangte einen Doppelpunkt und hat die blanken

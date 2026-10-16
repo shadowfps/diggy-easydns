@@ -6,13 +6,18 @@ import {
   Check,
   X,
   AlertTriangle,
+  ArrowUpRight,
+  CircleHelp,
   CircleMinus,
   FileSignature,
+  FileText,
+  Image as ImageIcon,
   Send,
 } from 'lucide-react';
-import type { LookupFailure, MailSecurity } from '@/types/dns';
+import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
+import { bimiDmarcGap, isHttpsUrl } from '@/lib/bimiTlsRpt';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 
@@ -31,6 +36,9 @@ export function MailView({ mail }: MailViewProps) {
       <DmarcCard dmarc={mail.dmarc} hasMx={receivesMail} />
       <DkimCard dkim={mail.dkim} noMail={mail.nullMx} />
       <MtaStsCard mtaSts={mail.mtaSts} noMail={mail.nullMx} />
+      {/* Ältere Antworten kennen BIMI und TLS-RPT nicht — dann keine Karte statt „fehlt“. */}
+      {mail.bimi && <BimiCard bimi={mail.bimi} dmarc={mail.dmarc} noMail={mail.nullMx} />}
+      {mail.tlsRpt && <TlsRptCard tlsRpt={mail.tlsRpt} noMail={mail.nullMx} />}
     </div>
   );
 }
@@ -39,7 +47,8 @@ export function MailView({ mail }: MailViewProps) {
  * Die Töne der Kartenköpfe folgen den Mail-Findings (reportBuilder): ein
  * fehlender SPF-/DMARC-Record ist mit MX eine Warnung, ohne MX nur ein
  * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis — und bei einer
- * Domain ohne Mail (Null-MX) gar nicht. Scheiterte die Abfrage
+ * Domain ohne Mail (Null-MX) gar nicht. BIMI und TLS-RPT sind nur
+ * Empfehlungen: grün, wenn sie wirken, sonst neutral. Scheiterte die Abfrage
  * (`lookupFailed`), ist nichts bewertet: neutral und „nicht prüfbar“ statt
  * „fehlt“ (#101).
  */
@@ -298,6 +307,242 @@ function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail
   );
 }
 
+/* ─── BIMI ───────────────────────────────────────────────────────────── */
+
+/**
+ * Das Logo erscheint nur als Link, nie als Bild: Ein `<img>` lüde beim
+ * Öffnen des Tabs eine Datei von einem fremden Server — das verriete dessen
+ * Betreiber, wer gerade nachschaut, und bräuchte eine Ausnahme in der CSP.
+ */
+function BimiCard({
+  bimi,
+  dmarc,
+  noMail,
+}: {
+  bimi: MailBimi;
+  dmarc: MailSecurity['dmarc'];
+  noMail: boolean;
+}) {
+  // Ob BIMI wirkt, hängt an DMARC — ist dessen Abfrage gescheitert (#101),
+  // bleibt das offen: „unbekannt“ statt „wirkt nicht“ oder „aktiv“.
+  const dmarcUnknown = Boolean(dmarc.lookupFailed);
+  const dmarcGap = dmarcUnknown ? undefined : bimiDmarcGap(dmarc);
+  const status: PolicyStatus = !bimi.present
+    ? noMail
+      ? 'not-needed'
+      : 'missing'
+    : bimi.declined
+    ? 'declined'
+    : bimi.invalid
+    ? 'invalid'
+    : dmarcUnknown
+    ? 'unknown'
+    : dmarcGap
+    ? 'ineffective'
+    : 'active';
+
+  return (
+    <Card
+      icon={<ImageIcon className="size-4" />}
+      title="BIMI"
+      subtitle="Markenlogo neben deinen Mails"
+      tone={status === 'active' ? 'success' : 'neutral'}
+      aside={<PolicyBadge status={status} />}
+      delay={0.2}
+      // Ohne Mail (Null-MX) ist BIMI nicht nötig — dann zählt keine Abfrage.
+      unchecked={!noMail && bimi.lookupFailed}
+    >
+      {status === 'not-needed' ? (
+        <StatusLine
+          text="Nicht nötig: Eine Domain ohne Mails (Null-MX) verschickt nichts, neben dem ein Logo stünde."
+          tone="not-needed"
+        />
+      ) : status === 'missing' ? (
+        <div className="space-y-3">
+          <StatusLine text="Kein BIMI-Record auf default._bimi.<domain>" tone="neutral" />
+          <p className="text-sm leading-relaxed text-fg-muted">
+            {dmarcUnknown
+              ? 'Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails — vorausgesetzt, DMARC steht auf p=quarantine oder p=reject. Das ließ sich gerade nicht prüfen.'
+              : dmarcGap
+              ? `BIMI setzt DMARC mit p=quarantine oder p=reject voraus, jetzt: ${dmarcGap}. Erst DMARC verschärfen, dann lohnt sich BIMI.`
+              : 'Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails. Die DMARC-Voraussetzung ist erfüllt.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <Records records={bimi.records} />
+          {bimi.invalid ? (
+            <Issue text={bimi.invalid} />
+          ) : bimi.declined ? (
+            <p className="text-sm leading-relaxed text-fg-muted">
+              l= und a= sind leer: Die Domain verzichtet ausdrücklich auf ein Logo.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                {bimi.logoUrl && isHttpsUrl(bimi.logoUrl) && <LogoLink url={bimi.logoUrl} />}
+                <Stat
+                  label="Zertifikat (VMC/CMC)"
+                  value={bimi.evidenceUrl ? 'hinterlegt' : 'keins'}
+                  tone={bimi.evidenceUrl ? 'success' : 'neutral'}
+                />
+              </div>
+              {dmarcUnknown && (
+                <Issue text="Ob Postfächer das Logo zeigen, hängt an DMARC — dessen Abfrage ist gescheitert." />
+              )}
+              {dmarcGap && (
+                <Issue
+                  text={`Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject, jetzt: ${dmarcGap}.`}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Der Dateiname als Linktext, die volle URL steht im Record darüber.
+ * `isHttpsUrl` prüft der Aufrufer noch einmal, obwohl der Server nur
+ * https-URLs durchlässt: Aus diesem Wert wird ein `href`, und ein
+ * `javascript:` darf dort auch bei einer veränderten Antwort nie landen.
+ */
+function LogoLink({ url }: { url: string }) {
+  const { hostname, pathname } = new URL(url);
+  const file = pathname.split('/').pop() || hostname;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="text-xs text-fg-subtle">Logo</span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={url}
+        className="link inline-flex min-w-0 items-center gap-1 text-sm"
+      >
+        <span className="truncate">{file}</span>
+        <ArrowUpRight className="size-3.5 shrink-0" />
+      </a>
+    </div>
+  );
+}
+
+/* ─── TLS-RPT ────────────────────────────────────────────────────────── */
+
+function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean }) {
+  const status: PolicyStatus = !tlsRpt.present
+    ? noMail
+      ? 'not-needed'
+      : 'missing'
+    : tlsRpt.invalid
+    ? 'invalid'
+    : 'active';
+
+  return (
+    <Card
+      icon={<FileText className="size-4" />}
+      title="TLS-RPT"
+      subtitle="Berichte über gescheiterte TLS-Zustellung"
+      tone={status === 'active' ? 'success' : 'neutral'}
+      aside={<PolicyBadge status={status} />}
+      delay={0.25}
+      unchecked={!noMail && tlsRpt.lookupFailed}
+    >
+      {status === 'not-needed' ? (
+        <StatusLine
+          text="Nicht nötig: Eine Domain ohne Mails (Null-MX) bekommt keine Zustellungen, über die jemand berichten könnte."
+          tone="not-needed"
+        />
+      ) : status === 'missing' ? (
+        <div className="space-y-3">
+          <StatusLine text="Kein TLS-RPT-Record auf _smtp._tls.<domain>" tone="neutral" />
+          <p className="text-sm leading-relaxed text-fg-muted">
+            Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine
+            Mailserver scheitert — die Rückmeldung zu MTA-STS.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <Records records={tlsRpt.records} />
+          {tlsRpt.invalid ? (
+            <Issue text={tlsRpt.invalid} />
+          ) : (
+            <div className="space-y-1.5">
+              <span className="text-xs text-fg-subtle">Berichte an</span>
+              <ul className="space-y-1">
+                {tlsRpt.rua?.map((uri, i) => (
+                  <li key={i} className="break-all font-mono text-[13px] text-fg">
+                    {uri}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ─── Status von BIMI und TLS-RPT ────────────────────────────────────── */
+
+type PolicyStatus =
+  | 'active'
+  | 'missing'
+  | 'invalid'
+  | 'ineffective'
+  | 'declined'
+  | 'not-needed'
+  | 'unknown';
+
+/**
+ * Badge mit Icon und Wort, damit der Status nicht an der Farbe hängt. Grün
+ * nur, wenn der Record wirkt; alles andere ist ein Hinweis und bleibt
+ * neutral — die Form des Icons trägt den Unterschied.
+ */
+const POLICY_BADGE: Record<PolicyStatus, { label: string; icon: ReactNode; className?: string }> = {
+  active: { label: 'aktiv', icon: <Check className="size-3 shrink-0" />, className: 'badge-success' },
+  missing: { label: 'fehlt', icon: <X className="size-3 shrink-0" /> },
+  invalid: { label: 'ungültig', icon: <AlertTriangle className="size-3 shrink-0" /> },
+  ineffective: { label: 'wirkt nicht', icon: <AlertTriangle className="size-3 shrink-0" /> },
+  declined: { label: 'abgemeldet', icon: <CircleMinus className="size-3 shrink-0" /> },
+  'not-needed': { label: 'nicht nötig', icon: <CircleMinus className="size-3 shrink-0" /> },
+  unknown: { label: 'unbekannt', icon: <CircleHelp className="size-3 shrink-0" /> },
+};
+
+function PolicyBadge({ status }: { status: PolicyStatus }) {
+  const badge = POLICY_BADGE[status];
+  return (
+    <span className={cn('badge', badge.className)}>
+      {badge.icon}
+      {badge.label}
+    </span>
+  );
+}
+
+function Records({ records = [] }: { records?: string[] }) {
+  return (
+    <>
+      {records.map((record, i) => (
+        <CodeBlock key={i}>{record}</CodeBlock>
+      ))}
+    </>
+  );
+}
+
+/** Warum ein Record nicht wirkt — ein Hinweis, deshalb ohne Warnfarbe. */
+function Issue({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2 text-sm text-fg-muted">
+      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-fg-subtle" />
+      <span>{text}</span>
+    </div>
+  );
+}
+
 /* ─── Bausteine ──────────────────────────────────────────────────────── */
 
 /**
@@ -310,6 +555,7 @@ function Card({
   title,
   subtitle,
   tone,
+  aside,
   delay,
   unchecked,
   className,
@@ -319,6 +565,7 @@ function Card({
   title: string;
   subtitle: string;
   tone: Tone;
+  aside?: ReactNode;
   delay: number;
   unchecked?: LookupFailure | false;
   className?: string;
@@ -336,7 +583,7 @@ function Card({
         title={title}
         subtitle={subtitle}
         tone={unchecked ? 'neutral' : tone}
-        aside={unchecked && <UncheckedBadge />}
+        aside={unchecked ? <UncheckedBadge /> : aside}
       />
       <div className="mt-4">
         {unchecked ? <UncheckedLine name={title} reason={unchecked} /> : children}
@@ -365,8 +612,16 @@ function CodeBlock({ children, truncate }: { children: ReactNode; truncate?: boo
  * `not-needed`: Der Record fehlt, und das ist richtig so (Domain ohne Mail).
  * Ein eigenes Icon statt des Kreuzes, weil das Kreuz „fehlt“ heißt; die Farbe
  * kann den Unterschied nicht tragen, beide Zeilen sind neutral.
+ *
+ * Eine gescheiterte Abfrage zeigt die Karte selbst (`unchecked`, #101).
  */
-function StatusLine({ text, tone }: { text: string; tone: 'warning' | 'neutral' | 'not-needed' }) {
+function StatusLine({
+  text,
+  tone,
+}: {
+  text: string;
+  tone: 'warning' | 'neutral' | 'not-needed';
+}) {
   return (
     <div
       className={cn(
