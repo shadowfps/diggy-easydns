@@ -48,7 +48,13 @@ const BUDGETS_KB = {
   // schafft das Nachladen von Sicherheits-Tab, Impressum und Datenschutz
   // (#79) — die Grenze bleibt bei 48 kB.
   'index.js': 48, // 43,73 · 42,40 vor, 44,66 mit #80
-  'icons.js': 9, // 7,78
+  // lucide-react 1.x (#119, 16.10.2026): +1,85 kB bei gleichen 76 Icons
+  // (8,67 → 10,52). Jedes Icon trägt jetzt Name und Alias-Liste mit (daraus
+  // entstehen die Klassen `lucide-<name>`), dazu Kontext-Provider und das
+  // standardmäßige `aria-hidden`. Abschalten lässt sich davon nichts, und die
+  // letzte 0.x kam im März 2026. Hinweis: rolldown legt auch das Paket `react`
+  // (rund 3 kB) in diesen Chunk — schon vor dem Update.
+  'icons.js': 11.5, // 7,78 · 8,67 vor, 10,52 mit #119
   // Tailwind 4 (15.10.2026): +2,3 kB für `@property`-Deklarationen, ihren
   // Fallback-Block und die modernere Preflight. Lässt sich nicht abschalten.
   'index.css': 11, // 10,20

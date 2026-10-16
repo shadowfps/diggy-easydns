@@ -35,7 +35,7 @@
     "express": "^5.3.0",
     "gsap": "^3.15.0",
     "helmet": "^8.3.0",
-    "lucide-react": "^0.460.0",
+    "lucide-react": "^1.56.0",
     "motion": "^14.2.0",
     "nodemailer": "^10.1.0",
     "react": "^19.3.0",
