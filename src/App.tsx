@@ -7,29 +7,28 @@ import { QuickFacts } from '@/modules/score/QuickFacts';
 import { RecordsList } from '@/modules/records/RecordsList';
 import { PropagationView } from '@/modules/propagation/PropagationView';
 import { FindingsList } from '@/modules/findings/FindingsList';
-import { SecurityView } from '@/modules/security/SecurityView';
 import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
-import { ImpressumView } from '@/modules/impressum/ImpressumView';
-import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { CheckOverview } from '@/modules/home/CheckOverview';
+import { usePreviousCheck } from '@/modules/changes/usePreviousCheck';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
-import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';
+import { PageErrorFallback, SectionErrorFallback } from '@/components/errors/AppErrorFallback';
 import {
   ScoreCardSkeleton,
   SectionCardsSkeleton,
   PropagationSkeleton,
   WhoisSkeleton,
   ListSkeleton,
+  SinceLastCheckSkeleton,
 } from '@/components/ui/Skeleton';
 import { AlertTriangle, Check, Download, Link2, Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
@@ -60,6 +59,36 @@ const PageSpeedView = lazy(() =>
 );
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
+);
+
+/*
+ * „Seit dem letzten Check“ erscheint nur bei einem erneuten Check derselben
+ * Domain und erst nach dem Report — Vergleichslogik und Texte (rund 3 kB
+ * gzip) müssen den ersten Report nicht aufhalten.
+ */
+const SinceLastCheck = lazy(() =>
+  import('@/modules/changes/SinceLastCheck').then((m) => ({ default: m.SinceLastCheck }))
+);
+
+/*
+ * Bundle-Budget (index.js ≤ 48 kB gzip, scripts/check-bundle-size.mjs): mit
+ * dem Vergleich (#79) und dem Kalender (#84) lag index.js bei 48,5 kB. Statt
+ * die Grenze anzuheben, kommen zwei Dinge aus dem kritischen Pfad, die den
+ * ersten Report nicht aufhalten müssen:
+ *
+ * - Der Sicherheits-Tab: SSL und DNSSEC lädt der Report sofort, die Ansicht
+ *   braucht erst der Klick auf den Tab. Vorgeladen wird, sobald einer der
+ *   beiden Checks fertig ist (siehe App) — dann steht sie beim Klick bereit.
+ * - Impressum und Datenschutz: reiner Text auf eigenen Seiten, zusammen rund
+ *   5 kB gzip, die bisher jeder Aufruf mitlud.
+ */
+const loadSecurityView = () => import('@/modules/security/SecurityView');
+const SecurityView = lazy(() => loadSecurityView().then((m) => ({ default: m.SecurityView })));
+const ImpressumView = lazy(() =>
+  import('@/modules/impressum/ImpressumView').then((m) => ({ default: m.ImpressumView }))
+);
+const DatenschutzView = lazy(() =>
+  import('@/modules/datenschutz/DatenschutzView').then((m) => ({ default: m.DatenschutzView }))
 );
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
@@ -115,6 +144,8 @@ export default function App() {
   const smoothScroll: ScrollBehavior = useReducedMotion() ? 'auto' : 'smooth';
 
   const report = lookup.report;
+  // Muss vor dem Speichern unten gelesen werden — siehe usePreviousCheck.
+  const previousCheck = usePreviousCheck(report);
   const records = lookup.records;
   const recordsLoading = lookup.recordsStatus === 'loading';
   const recordsErrored = lookup.recordsStatus === 'error';
@@ -188,11 +219,12 @@ export default function App() {
   }, [lookup.recordsStatus, lookup.domain]);
 
   // Alle Sektionen fertig → vollständigen Report in die History schreiben.
+  // Fehlgeschlagene Sektionen mit, damit der nächste Vergleich sie auslässt.
   useEffect(() => {
     if (lookup.allSettled && lookup.report) {
-      saveLookupToHistory(lookup.report);
+      saveLookupToHistory(lookup.report, lookup.failed);
     }
-  }, [lookup.allSettled, lookup.report]);
+  }, [lookup.allSettled, lookup.report, lookup.failed]);
 
   const handleRunVirusScan = async () => {
     if (!lookup.domain || virusScanLoading) return;
@@ -380,6 +412,14 @@ export default function App() {
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
   const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
 
+  // Den Sicherheits-Tab vorladen, sobald es etwas zu zeigen gibt — nach dem
+  // ersten Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein
+  // Chunk von vor dem letzten Deploy), meldet sich der Tab über seine Boundary.
+  const hasSecurityData = ssl.status === 'done' || dnssec.status === 'done';
+  useEffect(() => {
+    if (hasSecurityData) loadSecurityView().catch(() => {});
+  }, [hasSecurityData]);
+
   return (
     <div className="min-h-screen flex flex-col relative z-10">
       <Header
@@ -422,9 +462,19 @@ export default function App() {
 
         {view === 'availability' && <AvailabilityView />}
 
-        {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
-
-        {view === 'datenschutz' && <DatenschutzView onOpenImpressum={handleImpressum} />}
+        {(view === 'impressum' || view === 'datenschutz') && (
+          // Nachgeladen (siehe oben). Scheitert der Chunk, bleibt die App
+          // drumherum bedienbar, statt ganz in den Fehler zu fallen.
+          <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
+            <Suspense fallback={null}>
+              {view === 'impressum' ? (
+                <ImpressumView onOpenDatenschutz={handleDatenschutz} />
+              ) : (
+                <DatenschutzView onOpenImpressum={handleImpressum} />
+              )}
+            </Suspense>
+          </ErrorBoundary>
+        )}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -633,6 +683,26 @@ export default function App() {
             </aside>
 
             <div className="mt-8 min-w-0 xl:mt-0">
+              {/* Über den Tabs statt in der Seitenspalte: die soll flach
+                  bleiben (docs/DESIGN.md), und hier ist Platz für die Liste.
+                  Beim ersten Lookup einer Domain gibt es nichts zu zeigen. */}
+              {previousCheck && (
+                // Eigene Boundary: scheitert das Nachladen (alter Chunk nach
+                // einem Deploy) oder der Vergleich an kaputten History-Daten,
+                // fehlt nur diese Karte — nicht der ganze Report.
+                <ErrorBoundary key={report.timestamp} fallback={() => null}>
+                  <Suspense fallback={<SinceLastCheckSkeleton className="mb-6" />}>
+                    <SinceLastCheck
+                      previous={previousCheck}
+                      report={report}
+                      failed={lookup.failed}
+                      settled={lookup.allSettled}
+                      className="mb-6"
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              )}
+
               {/* Tabs */}
               <Tabs
                 active={activeTab}
@@ -739,12 +809,14 @@ export default function App() {
                       (securityLoading ? (
                         <SectionCardsSkeleton count={2} />
                       ) : (
-                        <SecurityView
-                          domain={report.domain}
-                          ssl={ssl.data ?? undefined}
-                          sslApplicable={!dnsOnly}
-                          dnssec={dnssec.data ?? NO_DNSSEC}
-                        />
+                        <Suspense fallback={<SectionCardsSkeleton count={2} />}>
+                          <SecurityView
+                            domain={report.domain}
+                            ssl={ssl.data ?? undefined}
+                            sslApplicable={!dnsOnly}
+                            dnssec={dnssec.data ?? NO_DNSSEC}
+                          />
+                        </Suspense>
                       ))}
                     {activeTab === 'mail' &&
                       (mail.status === 'loading' ? (

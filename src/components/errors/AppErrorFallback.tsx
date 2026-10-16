@@ -45,6 +45,33 @@ export function AppErrorFallback({ error }: { error: Error }) {
 }
 
 /**
+ * Fallback für eine nachgeladene Unterseite (Impressum, Datenschutz). Scheitert
+ * dort etwas, ist es fast immer der Chunk — einer von vor dem letzten Deploy
+ * oder eine abgebrochene Verbindung. Neu laden holt den aktuellen.
+ */
+export function PageErrorFallback() {
+  return (
+    <EmptyState
+      tone="danger"
+      icon={<AlertTriangle className="size-5" />}
+      title="Diese Seite konnte nicht geladen werden"
+      action={
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="btn btn-secondary btn-sm"
+        >
+          Neu laden
+        </button>
+      }
+      className="mx-auto max-w-2xl"
+    >
+      Meist hilft ein Neuladen, etwa nach einem Update von diggy.
+    </EmptyState>
+  );
+}
+
+/**
  * Fallback für einen einzelnen Report-Tab.
  *
  * Passt zur progressiven Ladearchitektur: im Netzwerk-Pfad darf eine Sektion

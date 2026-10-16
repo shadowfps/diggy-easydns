@@ -8,6 +8,7 @@ import type {
   MailSecurity,
   PageSpeedReport,
   PageSpeedStrategy,
+  RecordType,
   ResolverResult,
   SslInfo,
   VirusScanReport,
@@ -66,6 +67,8 @@ export interface LookupCore {
   timestamp: string;
   records: DnsRecord[];
   findings: Finding[];
+  /** Nur gesetzt, wenn einzelne Typen scheiterten (siehe LookupReport). */
+  failedRecordTypes?: RecordType[];
 }
 
 export interface SslSection {

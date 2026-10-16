@@ -61,6 +61,16 @@ interface LookupOptions {
   includeCommonSubdomains?: boolean;
 }
 
+export interface StandardRecords {
+  records: DnsRecord[];
+  /**
+   * Typen, deren Abfrage unerwartet scheiterte (Timeout, SERVFAIL …). Anders
+   * als bei ENODATA heißt ihr Fehlen in `records` dann nicht „keine Records“ —
+   * der Vergleich mit dem letzten Check (#79) darf sie nicht als entfallen melden.
+   */
+  failedTypes: RecordType[];
+}
+
 /**
  * Holt alle Standard-DNS-Records für eine Domain.
  * Fehler bei einzelnen Record-Typen sind okay — nicht jede Domain hat z.B. MX-Records.
@@ -68,8 +78,9 @@ interface LookupOptions {
 export async function lookupStandardRecords(
   domain: string,
   options: LookupOptions = {}
-): Promise<DnsRecord[]> {
+): Promise<StandardRecords> {
   const records: DnsRecord[] = [];
+  const failedTypes: RecordType[] = [];
 
   // CNAME parallel mitziehen — das Ergebnis entscheidet, ob NS/SOA wirklich dem
   // gefragten Namen gehören oder nur vom CNAME-Ziel durchgereicht wurden.
@@ -90,6 +101,7 @@ export async function lookupStandardRecords(
       const err = result.reason as NodeJS.ErrnoException;
       if (!EXPECTED_DNS_ERRORS.has(err.code ?? '')) {
         console.warn(`[dns] ${type} lookup failed for ${domain}:`, err.code ?? err.message);
+        failedTypes.push(type);
       }
     }
   });
@@ -101,7 +113,7 @@ export async function lookupStandardRecords(
     records.push(...wwwCnames);
   }
 
-  return records;
+  return { records, failedTypes };
 }
 
 /**

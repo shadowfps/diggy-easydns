@@ -80,10 +80,14 @@ export async function checkDnssec(domain: string): Promise<DnssecInfo> {
     }
   }
 
+  // Ohne DS- oder DNSKEY-Antwort hieße `enabled: false` nur „nicht gesehen“.
+  const lookupFailed = dnskeyCf.status === 'rejected' || dsCf.status === 'rejected';
+
   return {
     enabled,
     valid,
     algorithm,
     chainOfTrust,
+    ...(lookupFailed && { lookupFailed }),
   };
 }

@@ -629,7 +629,7 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
     const start = Date.now();
     const apexDomain = getApexDomain(domain);
 
-    const records = await cached(`records:${domain}`, LOOKUP_TTL_MS, () =>
+    const { records, failedTypes } = await cached(`records:${domain}`, LOOKUP_TTL_MS, () =>
       lookupStandardRecords(domain)
     );
     const findings = dnsFindings(records, domain, apexDomain);
@@ -640,6 +640,8 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
       records,
       findings,
+      // Nur wenn etwas scheiterte — der Normalfall bleibt unverändert.
+      ...(failedTypes.length > 0 && { failedRecordTypes: failedTypes }),
     });
   } catch (error) {
     const err = error as NodeJS.ErrnoException;

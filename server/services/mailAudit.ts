@@ -175,8 +175,13 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
       policy: isValidPolicy(policy) ? policy : undefined,
       rua,
     };
-  } catch {
-    return { present: false };
+  } catch (error) {
+    // NXDOMAIN/NODATA heißt: kein DMARC-Record. Alles andere (Timeout,
+    // SERVFAIL) nur, dass die Antwort fehlt — das muss der Client wissen,
+    // sonst meldet der Vergleich mit dem letzten Check „DMARC entfernt“.
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOTFOUND' || code === 'ENODATA') return { present: false };
+    return { present: false, lookupFailed: true };
   }
 }
 

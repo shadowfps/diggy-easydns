@@ -41,6 +41,27 @@ export function ScoreCardSkeleton() {
   );
 }
 
+/**
+ * Platzhalter für „Seit dem letzten Check“, solange deren Code nachlädt.
+ * Zeilenhöhen wie Titel (20 px) und Status (16 px) der eingeklappten Karte —
+ * sonst schöbe ihr Einblenden die Tabs darunter.
+ */
+export function SinceLastCheckSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn('card flex items-center gap-3', className)}>
+      <Skeleton className="hidden size-9 rounded-panel sm:block" />
+      <div className="min-w-0 flex-1">
+        <div className="flex h-5 items-center">
+          <Skeleton className="h-3.5 w-64 max-w-full" />
+        </div>
+        <div className="mt-0.5 flex h-4 items-center">
+          <Skeleton className="h-3 w-44 max-w-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** N Karten im 2-Spalten-Grid — für Security (2) und Mail (4). */
 export function SectionCardsSkeleton({ count = 2 }: { count?: number }) {
   return (
