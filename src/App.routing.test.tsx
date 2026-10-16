@@ -58,6 +58,7 @@ function stubApi(domain = 'example.com') {
       dkim: { selectors: [] },
       mtaSts: { present: false },
       hasMx: false,
+      nullMx: false,
     },
     ...EMPTY_SECTION,
   });

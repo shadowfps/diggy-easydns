@@ -6,9 +6,10 @@ import { useEffect, useState } from 'react';
  * Framer Motion bringt für seine eigenen Komponenten `MotionConfig
  * reducedMotion="user"` mit (siehe main.tsx), CSS-Animationen regelt eine
  * Regel am Ende von globals.css. Alles daneben — GSAP-Tweens, der
- * Typewriter-Effekt, die von Hand gesetzten Stagger-Delays und sanftes
- * Scrollen per JS — muss die Präferenz selbst abfragen. Genau dafür ist
- * dieser Hook.
+ * Typewriter-Effekt, die von Hand gesetzten Stagger-Delays, sanftes Scrollen
+ * per JS und auch Framer Motions eigenes imperatives `animate()` auf einem
+ * MotionValue (Score-Karte, #103) — muss die Präferenz selbst abfragen. Genau
+ * dafür ist dieser Hook.
  */
 export function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(() => {

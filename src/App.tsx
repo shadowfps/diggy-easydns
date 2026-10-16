@@ -740,6 +740,7 @@ export default function App() {
                         <SectionCardsSkeleton count={2} />
                       ) : (
                         <SecurityView
+                          domain={report.domain}
                           ssl={ssl.data ?? undefined}
                           sslApplicable={!dnsOnly}
                           dnssec={dnssec.data ?? NO_DNSSEC}
@@ -761,7 +762,11 @@ export default function App() {
                       ) : whois.status === 'error' ? (
                         <SectionError message={whois.error} />
                       ) : (
-                        <WhoisView whois={whois.data ?? undefined} onUseDomain={handleUseDomainInSearch} />
+                        <WhoisView
+                          domain={report.domain}
+                          whois={whois.data ?? undefined}
+                          onUseDomain={handleUseDomainInSearch}
+                        />
                       ))}
                     {activeTab === 'speed' && (
                       <Suspense fallback={<SectionCardsSkeleton count={2} />}>

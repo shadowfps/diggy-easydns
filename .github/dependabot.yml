@@ -30,9 +30,10 @@ updates:
     # vite-8-Versuch aus #32 ist das Beispiel — er wechselt den Bundler auf
     # Rolldown und bricht den Build.
     ignore:
-      # Die Typen müssen zur Laufzeit passen, und die ist Node 22 (Dockerfile,
+      # Die Typen müssen zur Laufzeit passen, und die ist Node 24 (Dockerfile,
       # CI). @types/node 26 (#61) hätte APIs angeboten, die es dort nicht
-      # gibt. Hochziehen zusammen mit dem Node-Image, nicht vorher.
+      # gibt. Hochziehen zusammen mit dem Node-Image, nicht vorher — so wie
+      # beim Wechsel von 22 auf 24 (#88).
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
       # typescript-eslint verlangt `typescript <6.1.0`, TS 7 scheitert schon
