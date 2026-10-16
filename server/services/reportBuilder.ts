@@ -264,7 +264,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
  * BIMI und TLS-RPT (#83) ergänzen eine gute Mail-Konfiguration, ihr Fehlen
  * ist aber keine Lücke: Ohne TLS-RPT ist die Zustellung nicht unsicherer, man
  * erfährt nur nichts über Probleme; ohne BIMI fehlt ein Logo. Deshalb sind
- * alle Hinweise dazu `scored: false` — auch zu ungültigen Records, denn die
+ * alle Hinweise dazu `advisory` — auch zu ungültigen Records, denn die
  * werten Empfänger schlicht nicht aus, sie wirken also wie keiner.
  *
  * Das Fehlen melden wir nur bei Domains, die Mail empfangen — wie bei DKIM
@@ -291,7 +291,7 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
         snippet: `_smtp._tls.${apexDomain}  TXT  "v=TLSRPTv1; rua=mailto:tls-reports@${apexDomain}"`,
       },
       category: 'mail',
-      scored: false,
+      advisory: true,
     }];
   }
 
@@ -302,7 +302,7 @@ function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: bo
       title: 'TLS-RPT-Record ungültig',
       description: `${tlsRpt.invalid}. Absender schicken dann keine Berichte (RFC 8460 §3).`,
       category: 'mail',
-      scored: false,
+      advisory: true,
     }];
   }
 
@@ -335,7 +335,7 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
         title: 'BIMI erst mit strengerer DMARC-Policy',
         description: `Mit BIMI zeigen Postfächer dein Markenlogo neben deinen Mails — aber nur bei DMARC mit p=quarantine oder p=reject. Jetzt: ${dmarcGap}. Erst DMARC verschärfen, dann lohnt sich BIMI.`,
         category: 'mail',
-        scored: false,
+        advisory: true,
       }];
     }
     return [{
@@ -348,7 +348,7 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
         snippet: `default._bimi.${apexDomain}  TXT  "v=BIMI1; l=https://${apexDomain}/bimi/logo.svg"`,
       },
       category: 'mail',
-      scored: false,
+      advisory: true,
     }];
   }
 
@@ -362,7 +362,7 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
       title: 'BIMI-Record ungültig',
       description: `${bimi.invalid}. Empfänger zeigen dann kein Logo.`,
       category: 'mail',
-      scored: false,
+      advisory: true,
     }];
   }
 
@@ -373,7 +373,7 @@ function bimiFindings(mail: MailSecurity, apexDomain: string, receivesMail: bool
       title: 'BIMI-Record wirkt noch nicht',
       description: `Der Record ist da, aber Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject. Jetzt: ${dmarcGap}.`,
       category: 'mail',
-      scored: false,
+      advisory: true,
     }];
   }
 

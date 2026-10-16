@@ -287,6 +287,19 @@ describe('Report', () => {
     await userEvent.click(button);
     expect(screen.getByRole('tab', { name: /Findings/ })).toHaveAttribute('aria-selected', 'true');
   });
+
+  /** #83: Die Mail-Ansicht ist ein eigener Chunk — der Tab muss sie trotzdem zeigen. */
+  it('zeigt den nachgeladenen Mail-Tab', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    const tab = await screen.findByRole('tab', { name: /Mail/ });
+    await waitFor(() => expect(api.lookupMail).toHaveBeenCalled());
+    await userEvent.click(tab);
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'SPF' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'MTA-STS' })).toBeInTheDocument();
+  });
 });
 
 /**

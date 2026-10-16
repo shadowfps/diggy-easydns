@@ -369,7 +369,7 @@ function BimiCard({
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 {bimi.logoUrl && isHttpsUrl(bimi.logoUrl) && <LogoLink url={bimi.logoUrl} />}
                 <Stat
-                  label="Zertifikat (VMC)"
+                  label="Zertifikat (VMC/CMC)"
                   value={bimi.evidenceUrl ? 'hinterlegt' : 'keins'}
                   tone={bimi.evidenceUrl ? 'success' : 'neutral'}
                 />
@@ -463,8 +463,8 @@ function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean })
             <div className="space-y-1.5">
               <span className="text-xs text-fg-subtle">Berichte an</span>
               <ul className="space-y-1">
-                {tlsRpt.rua?.map((uri) => (
-                  <li key={uri} className="break-all font-mono text-[13px] text-fg">
+                {tlsRpt.rua?.map((uri, i) => (
+                  <li key={i} className="break-all font-mono text-[13px] text-fg">
                     {uri}
                   </li>
                 ))}

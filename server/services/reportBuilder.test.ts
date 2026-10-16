@@ -466,7 +466,7 @@ describe('mailFindings — BIMI und TLS-RPT', () => {
     const findings = mailFindings(real(), 'example.de');
     expect(newIds(findings)).toEqual(['info no-tls-rpt', 'info no-bimi']);
     expect(
-      findings.filter((f) => /bimi|tls-rpt/.test(f.id)).every((f) => f.scored === false)
+      findings.filter((f) => /bimi|tls-rpt/.test(f.id)).every((f) => f.advisory)
     ).toBe(true);
     expect(findings.find((f) => f.id === 'no-tls-rpt')?.fix?.snippet).toBe(
       '_smtp._tls.example.de  TXT  "v=TLSRPTv1; rua=mailto:tls-reports@example.de"'
@@ -508,7 +508,7 @@ describe('mailFindings — BIMI und TLS-RPT', () => {
     const hint = findings.find((f) => f.id === 'bimi-needs-dmarc');
     expect(hint?.description).toContain('Jetzt: DMARC p=none');
     expect(hint?.fix).toBeUndefined();
-    expect(hint?.scored).toBe(false);
+    expect(hint?.advisory).toBe(true);
   });
 
   it('nennt auch ein fehlendes DMARC als Voraussetzung', () => {
@@ -527,7 +527,7 @@ describe('mailFindings — BIMI und TLS-RPT', () => {
       'example.de'
     );
     expect(newIds(findings)).toContain('info bimi-dmarc-weak');
-    expect(findings.find((f) => f.id === 'bimi-dmarc-weak')?.scored).toBe(false);
+    expect(findings.find((f) => f.id === 'bimi-dmarc-weak')?.advisory).toBe(true);
   });
 
   it('meldet vorhandene Records positiv', () => {

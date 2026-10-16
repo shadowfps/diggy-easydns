@@ -43,8 +43,8 @@ export function calculateScore(findings: Finding[]): HealthScore {
     // ein zweites Mal abziehen nein.
     if (f.causedBy?.some((cause) => presentIds.has(cause))) continue;
 
-    // Reine Empfehlung (BIMI, TLS-RPT): steht in der Liste, kostet nichts.
-    if (f.scored === false) continue;
+    // Reine Empfehlung: ihr Fehlen ist keine Lücke (#83).
+    if (f.advisory) continue;
 
     if (f.severity === 'info') {
       infoPenalty += SEVERITY_PENALTY.info;

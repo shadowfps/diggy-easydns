@@ -4,13 +4,17 @@ import type { Finding } from '@/types/dns';
 import { calculateScore } from '@/lib/scoring';
 import { ScoreCard } from './ScoreCard';
 
-const info = (id: string, title: string, scored?: false): Finding => ({
+const finding = (
+  id: string,
+  title: string,
+  options: Partial<Pick<Finding, 'severity' | 'advisory'>> = {}
+): Finding => ({
   id,
   severity: 'info',
   title,
   description: '',
   category: 'mail',
-  ...(scored === false ? { scored } : {}),
+  ...options,
 });
 
 function renderTop(findings: Finding[]) {
@@ -23,14 +27,24 @@ function renderTop(findings: Finding[]) {
  * „wichtigster Punkt“ sollen sie erst erscheinen, wenn sonst nichts offen ist.
  */
 describe('ScoreCard — wichtigster Punkt', () => {
+  const bimi = finding('no-bimi', 'Kein BIMI-Record', { advisory: true });
+
   it('zeigt einen gewerteten Hinweis vor einer reinen Empfehlung', () => {
-    const top = renderTop([info('no-bimi', 'Kein BIMI-Record', false), info('no-caa', 'Kein CAA-Record')]);
+    const top = renderTop([bimi, finding('no-caa', 'Kein CAA-Record')]);
     expect(top).toHaveTextContent('Kein CAA-Record');
   });
 
   it('zeigt die Empfehlung, wenn sonst nichts offen ist', () => {
-    expect(renderTop([info('no-bimi', 'Kein BIMI-Record', false)])).toHaveTextContent(
-      'Kein BIMI-Record'
-    );
+    const ok = finding('dmarc-present', 'DMARC-Policy: reject', { severity: 'success' });
+    expect(renderTop([ok, bimi])).toHaveTextContent('Kein BIMI-Record');
+  });
+
+  it('bleibt bei der Reihenfolge kritisch, Warnung, Hinweis', () => {
+    const top = renderTop([
+      bimi,
+      finding('no-caa', 'Kein CAA-Record'),
+      finding('no-dmarc', 'Kein DMARC-Record', { severity: 'warning' }),
+    ]);
+    expect(top).toHaveTextContent('Kein DMARC-Record');
   });
 });

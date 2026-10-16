@@ -66,10 +66,11 @@ const VirusScanView = lazy(() =>
  * erst der Klick auf den Tab. Mit BIMI und TLS-RPT (#83) wäre index.js sonst
  * über sein Budget gewachsen (47,05 → 48,31 kB gzip bei 48 kB Grenze);
  * nachgeladen sind es 3,6 kB, die niemanden beim ersten Report aufhalten.
+ * Vorgeladen wird, sobald die Mail-Daten da sind (siehe App) — dann steht die
+ * Ansicht beim Klick schon bereit, statt erst ein Skeleton zu zeigen.
  */
-const MailView = lazy(() =>
-  import('@/modules/mail/MailView').then((m) => ({ default: m.MailView }))
-);
+const loadMailView = () => import('@/modules/mail/MailView');
+const MailView = lazy(() => loadMailView().then((m) => ({ default: m.MailView })));
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
@@ -386,6 +387,14 @@ export default function App() {
     : undefined;
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
   const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
+
+  // Den Mail-Tab vorladen, sobald es etwas zu zeigen gibt — nach dem ersten
+  // Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein Chunk von
+  // vor dem letzten Deploy), meldet sich der Tab selbst über seine Boundary.
+  const hasMailData = Boolean(mailData);
+  useEffect(() => {
+    if (hasMailData) loadMailView().catch(() => {});
+  }, [hasMailData]);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">

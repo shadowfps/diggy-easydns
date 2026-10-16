@@ -93,7 +93,7 @@ describe('calculateScore', () => {
 
   /** #83: Kein BIMI oder TLS-RPT ist eine Empfehlung, kein Mangel. */
   it('zieht für reine Empfehlungen nichts ab, zählt sie aber mit', () => {
-    const hint: Finding = { ...finding('info', 'no-bimi'), scored: false };
+    const hint: Finding = { ...finding('info', 'no-bimi'), advisory: true };
     expect(calculateScore([hint]).score).toBe(100);
     expect(calculateScore([hint]).counts.info).toBe(1);
     // Neben einem gewerteten Hinweis bleibt es bei dessen 2 Punkten.

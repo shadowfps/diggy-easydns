@@ -49,13 +49,12 @@ export interface Finding {
    */
   causedBy?: string[];
   /**
-   * `false`: nur eine Empfehlung, die angezeigt und gezählt wird, aber keine
-   * Score-Punkte kostet. Für Standards, die eine gute Mail-Konfiguration
-   * ergänzen, ohne dass ihr Fehlen eine Lücke wäre (BIMI, TLS-RPT, #83) —
-   * sonst sänke der Score fast jeder Domain, ohne dass sich an ihr etwas
-   * geändert hat.
+   * Nur eine Empfehlung: angezeigt und gezählt, aber ohne Score-Abzug. Für
+   * Standards, die eine gute Mail-Konfiguration ergänzen, ohne dass ihr
+   * Fehlen eine Lücke wäre (BIMI, TLS-RPT, #83) — sonst sänke der Score fast
+   * jeder Domain, ohne dass sich an ihr etwas geändert hat.
    */
-  scored?: false;
+  advisory?: boolean;
 }
 
 export interface HealthScore {
