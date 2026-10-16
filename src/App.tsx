@@ -31,7 +31,7 @@ import {
   WhoisSkeleton,
   ListSkeleton,
 } from '@/components/ui/Skeleton';
-import { AlertTriangle, Check, Download, Link2, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Check, Download, Link2, Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 
 /*
@@ -61,6 +61,11 @@ const PageSpeedView = lazy(() =>
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
 );
+// Der Vergleich ist eine eigene Seite, die man bewusst aufruft — sein Code
+// muss nicht im Bundle stecken, das den ersten Report blockiert.
+const CompareView = lazy(() =>
+  import('@/modules/compare/CompareView').then((m) => ({ default: m.CompareView }))
+);
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
@@ -75,6 +80,12 @@ import {
   STATIC_ROUTES,
   type AppView,
 } from '@/lib/lookupPath';
+import {
+  compareDocumentTitle,
+  comparePathFor,
+  getComparePairFromPath,
+  type ComparePair,
+} from '@/lib/comparePath';
 import {
   clearLookupHistory,
   saveLookupToHistory,
@@ -100,6 +111,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('records');
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
+  const [comparePair, setComparePair] = useState<ComparePair>({ left: '', right: '' });
   const initialPathHandledRef = useRef(false);
   // applyPath schließt über aktuellen State. Der popstate-Listener wird nur
   // einmal gebunden, greift die Funktion aber über diese Ref ab, damit er
@@ -226,6 +238,17 @@ export default function App() {
    * Zurück-Button nur die URL geändert und die Ansicht stehen gelassen.
    */
   const applyPath = (pathname: string) => {
+    // Vergleich: beide Domains stehen im Pfad, die Ansicht lädt sie selbst.
+    const pair = getComparePairFromPath(pathname);
+    if (pair) {
+      clearLookup();
+      setView('compare');
+      setComparePair(pair);
+      setSearchValue('');
+      setActiveTab('records');
+      return;
+    }
+
     const staticView = STATIC_ROUTES[pathname];
     if (staticView) {
       clearLookup();
@@ -290,6 +313,8 @@ export default function App() {
   const handleAvailability = () => navigate('/availability');
   const handleImpressum = () => navigate('/impressum');
   const handleDatenschutz = () => navigate('/datenschutz');
+  const handleCompare = (left = '', right = '') => navigate(comparePathFor(left, right));
+  const handleOpenReport = (domain: string) => navigate(lookupPathFor(domain));
 
   const handleClearHistory = () => {
     clearLookupHistory();
@@ -323,8 +348,11 @@ export default function App() {
    * nicht unterscheidbar, ebenso Lesezeichen und Browser-History.
    */
   useEffect(() => {
-    document.title = buildDocumentTitle(view, lookup.domain, ipQuery);
-  }, [view, lookup.domain, ipQuery]);
+    document.title =
+      view === 'compare'
+        ? compareDocumentTitle(comparePair)
+        : buildDocumentTitle(view, lookup.domain, ipQuery);
+  }, [view, lookup.domain, ipQuery, comparePair]);
 
   // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
   useEffect(() => {
@@ -382,6 +410,7 @@ export default function App() {
         onHome={handleHome}
         onHistory={handleHistory}
         onAvailability={handleAvailability}
+        onCompare={() => handleCompare()}
         onAbout={handleAbout}
         // Auf Report-Seiten wandert die Suche in die Kopfzeile: der Report
         // beginnt oben, und die Suche bleibt beim Scrollen erreichbar.
@@ -421,6 +450,23 @@ export default function App() {
         {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
 
         {view === 'datenschutz' && <DatenschutzView onOpenImpressum={handleImpressum} />}
+
+        {view === 'compare' && (
+          <Suspense
+            fallback={
+              <div className="mx-auto w-full max-w-6xl">
+                <SectionCardsSkeleton count={2} />
+              </div>
+            }
+          >
+            <CompareView
+              left={comparePair.left}
+              right={comparePair.right}
+              onCompare={handleCompare}
+              onOpenReport={handleOpenReport}
+            />
+          </Suspense>
+        )}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -593,7 +639,7 @@ export default function App() {
                     Geprüft am {formatCheckedAt(report.timestamp)}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 flex-wrap gap-2">
                   <ActionButton onClick={handleExportJson}>
                     <Download className="size-3.5" />
                     Export JSON
@@ -601,6 +647,10 @@ export default function App() {
                   <ActionButton onClick={handleCopyPermalink}>
                     {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
                     {permalinkCopied ? 'Link kopiert' : 'Permalink kopieren'}
+                  </ActionButton>
+                  <ActionButton onClick={() => handleCompare(report.domain)}>
+                    <ArrowLeftRight className="size-3.5" />
+                    Vergleichen
                   </ActionButton>
                 </div>
               </div>

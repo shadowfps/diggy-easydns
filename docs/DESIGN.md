@@ -79,7 +79,7 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
 ## Seitenaufbau
 
 - **Header**: Wortmarke links, rechts GitHub und das Menü (History,
-  Available Check, About, Theme). Auf Seiten mit Ergebnis (Report,
+  Vergleichen, Available Check, About, Theme). Auf Seiten mit Ergebnis (Report,
   IP-Lookup) steht die Suche kompakt in der Mitte — ab `md` genau mittig
   über ein Raster mit gleich breiten Außenspalten. Sie bleibt beim Scrollen
   erreichbar, und der Inhalt beginnt oben.
@@ -90,6 +90,13 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
   mitläuft; rechts Tabs und Inhalt. Darunter gestapelt: Kopf, Score und
   Schnellübersicht nebeneinander, dann die Tabs. Die Seitenspalte bleibt
   flach genug für 1440×900 — Neues kommt in die Tabs, nicht in die Spalte.
+- **Vergleich** (`/compare/<a>/<b>`): `max-w-6xl`, Seitenkopf wie eine
+  Textseite, darunter die beiden Eingabefelder, dann je Domain eine Karte mit
+  Score (ab `md` nebeneinander) und eine Karte je Bereich. In den Karten ab
+  `md` drei Spalten — Bezeichnung, Domain A, Domain B —, darunter steht jede
+  Zeile untereinander. Abweichungen tragen `badge-warning` mit Wort
+  („Unterschied“, „nur hier“): beim Vergleich ist die Abweichung das, was man
+  ansehen muss.
 - **Textseiten**: `max-w-3xl`, Überzeile, `page-title`, optional Lead, dann
   Karten.
 
