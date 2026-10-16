@@ -16,6 +16,7 @@
 import { promises as dnsPromises, type MxRecord } from 'node:dns';
 import type { MailSecurity } from '../types.js';
 import { isNullMx } from '../../shared/nullMx.js';
+import { matchTag } from '../../shared/mailTags.js';
 
 const resolver = new dnsPromises.Resolver({ timeout: 4000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
@@ -160,11 +161,12 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
   try {
     const records = await resolver.resolveTxt(`_dmarc.${domain}`);
     const merged = records.map((chunks) => chunks.join(''));
-    const dmarcLine = merged.find((r) => r.toLowerCase().startsWith('v=dmarc1'));
+    const dmarcLine = merged.find((r) => matchTag(r, 'v')?.toLowerCase() === 'dmarc1');
 
     if (!dmarcLine) return { present: false };
 
-    const policy = matchTag(dmarcLine, 'p');
+    // Policy-Werte sind unabhängig von der Schreibweise; Report-Adressen bleiben unverändert.
+    const policy = matchTag(dmarcLine, 'p')?.toLowerCase();
     const rua = matchTag(dmarcLine, 'rua');
 
     return {
@@ -176,11 +178,6 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
   } catch {
     return { present: false };
   }
-}
-
-function matchTag(record: string, tag: string): string | undefined {
-  const re = new RegExp(`${tag}\\s*=\\s*([^;\\s]+)`, 'i');
-  return record.match(re)?.[1];
 }
 
 function isValidPolicy(p?: string): p is 'none' | 'quarantine' | 'reject' {
@@ -225,10 +222,10 @@ async function probeDkimSelectors(
  *   "v=DKIM1; p=MIIBIj..."  → aktiv, anzeigen
  */
 function hasUsableDkimKey(record: string): boolean {
-  const match = record.match(/p\s*=\s*([^;\s]*)/i);
+  const key = matchTag(record, 'p');
   // Kein p= überhaupt → ungewöhnlich, aber nicht offensichtlich revoked
-  if (!match) return true;
-  return match[1].length > 0;
+  if (key === undefined) return true;
+  return key.length > 0;
 }
 
 /* ─── MTA-STS ─────────────────────────────────────────────────────────── */

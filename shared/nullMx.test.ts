@@ -105,6 +105,22 @@ describe('dmarcPct', () => {
   it('nimmt bei ungültigem Wert den Standard', () => {
     expect(dmarcPct('v=DMARC1; p=reject; pct=abc')).toBe(100);
   });
+
+  it.each(['', '-1', '+50', '50.5', '50abc', '5 0'])('verwirft ungültiges pct=%s', (value) => {
+    expect(dmarcPct(`v=DMARC1; pct=${value}`)).toBe(100);
+  });
+
+  it('toleriert Leerzeichen und begrenzt den Anteil weiterhin auf 100', () => {
+    expect(dmarcPct(' pct \t= 050 ; p=reject')).toBe(50);
+    expect(dmarcPct('p=reject; pct=101')).toBe(100);
+  });
+
+  it('vergleicht den Namen exakt und nimmt bei Duplikaten nur den ersten Wert', () => {
+    expect(dmarcPct('xpct=0; pct=50; pct=0')).toBe(50);
+    expect(dmarcPct('xpct=0')).toBe(100);
+    expect(dmarcPct('pct=abc; pct=0')).toBe(100);
+    expect(dmarcPct('pct=; pct=0')).toBe(100);
+  });
 });
 
 describe('noMailProtection', () => {
