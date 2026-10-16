@@ -19,6 +19,7 @@ import { promises as dnsPromises, type MxRecord } from 'node:dns';
 import type { MailBimi, MailSecurity, MailTlsRpt } from '../types.js';
 import { isNullMx } from '../../shared/nullMx.js';
 import { leadingVersion, matchTag } from '../../shared/mailTags.js';
+import { declaredDmarcPolicy } from '../../shared/dmarc.js';
 import { parseBimi, parseTlsRpt } from '../../shared/bimiTlsRpt.js';
 
 const resolver = new dnsPromises.Resolver({ timeout: 4000, tries: 2 });
@@ -172,23 +173,17 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
 
     if (!dmarcLine) return { present: false };
 
-    // Policy-Werte sind unabhängig von der Schreibweise; Report-Adressen bleiben unverändert.
-    const policy = matchTag(dmarcLine, 'p')?.toLowerCase();
-    const rua = matchTag(dmarcLine, 'rua');
-
+    // Nur das gültige p= — was Empfänger ohne eins tun, entscheidet erst
+    // effectiveDmarcPolicy (shared/dmarc.ts). Report-Adressen bleiben unverändert.
     return {
       present: true,
       record: dmarcLine,
-      policy: isValidPolicy(policy) ? policy : undefined,
-      rua,
+      policy: declaredDmarcPolicy(dmarcLine),
+      rua: matchTag(dmarcLine, 'rua'),
     };
   } catch {
     return { present: false };
   }
-}
-
-function isValidPolicy(p?: string): p is 'none' | 'quarantine' | 'reject' {
-  return p === 'none' || p === 'quarantine' || p === 'reject';
 }
 
 /* ─── DKIM ────────────────────────────────────────────────────────────── */

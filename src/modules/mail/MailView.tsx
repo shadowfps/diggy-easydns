@@ -18,6 +18,12 @@ import type { MailBimi, MailSecurity, MailTlsRpt } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
 import { bimiDmarcGap, isHttpsUrl } from '@/lib/bimiTlsRpt';
+import {
+  dmarcPolicyFlawLabel,
+  dmarcPolicyFlawText,
+  effectiveDmarcPolicy,
+  hasDmarcReportUri,
+} from '@/lib/dmarc';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 
 interface MailViewProps {
@@ -108,12 +114,19 @@ function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): stri
     : 'erlaubt Absender';
 }
 
-/** `reject` gilt erst ohne `pct` unter 100 — sonst steht der Anteil dabei. */
+/**
+ * `reject` gilt erst ohne `pct` unter 100 — sonst steht der Anteil dabei.
+ * Ohne gültiges `p=` zählt, was Empfänger daraus machen (shared/dmarc.ts),
+ * und der Mangel steht dabei.
+ */
 function noMailDmarcLabel(dmarc: MailSecurity['dmarc'], reject: boolean): string {
   if (reject) return 'reject';
-  if (!dmarc.present || !dmarc.policy) return 'fehlt';
-  if (dmarc.policy === 'reject') return `reject, pct=${dmarcPct(dmarc.record)}`;
-  return dmarc.policy;
+  if (!dmarc.present) return 'fehlt';
+  const { policy, flaw } = effectiveDmarcPolicy(dmarc.record);
+  if (flaw) return `${policy ? 'wie none' : 'unwirksam'}, ${dmarcPolicyFlawLabel(flaw)}`;
+  if (!policy) return 'fehlt';
+  if (policy === 'reject') return `reject, pct=${dmarcPct(dmarc.record)}`;
+  return policy;
 }
 
 /* ─── SPF ─────────────────────────────────────────────────────────────── */
@@ -168,23 +181,21 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
 
 /* ─── DMARC ──────────────────────────────────────────────────────────── */
 
+/**
+ * Bewertet wie der reportBuilder nach der wirksamen Policy (shared/dmarc.ts):
+ * Ein Record ohne gültiges `p=` wirkt mit Report-Adresse in `rua=` wie
+ * `p=none`, ohne wie gar keiner (RFC 7489 §6.6.3). Den Mangel zeigt ein
+ * Badge im Kopf — der Record allein sähe sonst nach „DMARC ist da“ aus.
+ */
 function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: boolean }) {
-  const policyTone: Tone =
-    dmarc.policy === 'reject'
-      ? 'success'
-      : dmarc.policy === 'quarantine'
-      ? 'success'
-      : dmarc.policy === 'none'
-      ? 'warning'
-      : 'neutral';
+  const { policy, flaw } = effectiveDmarcPolicy(dmarc.present ? dmarc.record : undefined);
 
-  const tone: Tone = !dmarc.present
-    ? hasMx
-      ? 'warning'
-      : 'neutral'
-    : dmarc.policy === 'none'
-    ? 'warning'
-    : 'success';
+  // Ein Record, den Empfänger ignorieren, zählt wie keiner.
+  const tone: Tone =
+    policy === null ? (hasMx ? 'warning' : 'neutral') : policy === 'none' ? 'warning' : 'success';
+
+  const policyTone: Tone =
+    policy === 'reject' || policy === 'quarantine' ? 'success' : policy === 'none' ? 'warning' : tone;
 
   return (
     <Card
@@ -192,6 +203,14 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
       title="DMARC"
       subtitle="Was passiert mit Spoofing-Versuchen?"
       tone={tone}
+      aside={
+        flaw && (
+          <span className={cn('badge', tone === 'warning' && 'badge-warning')}>
+            <AlertTriangle className="size-3 shrink-0" />
+            {dmarcPolicyFlawLabel(flaw)}
+          </span>
+        )
+      }
       delay={0.05}
     >
       {!dmarc.present ? (
@@ -203,9 +222,27 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
         <div className="space-y-3">
           <CodeBlock>{dmarc.record}</CodeBlock>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <Stat label="Policy" value={dmarc.policy ?? '—'} tone={policyTone} />
-            {dmarc.rua && <Stat label="Reports" value="rua gesetzt" tone="success" />}
+            <Stat
+              label="Policy"
+              value={policy === null ? 'keine' : flaw ? `wie ${policy}` : policy}
+              tone={policyTone}
+            />
+            {dmarc.rua &&
+              (hasDmarcReportUri(dmarc.record) ? (
+                <Stat label="Reports" value="rua gesetzt" tone="success" />
+              ) : (
+                <Stat label="Reports" value="rua ungültig" />
+              ))}
           </div>
+          {flaw && (
+            <Issue
+              text={
+                policy
+                  ? `${dmarcPolicyFlawText(flaw)}. Weil rua= eine Report-Adresse nennt, werten Empfänger den Record wie p=none (RFC 7489 §6.6.3): Fälschungen werden gemeldet, aber nicht abgelehnt.`
+                  : `${dmarcPolicyFlawText(flaw)}, und ohne gültige Report-Adresse in rua= ignorieren Empfänger den Record (RFC 7489 §6.6.3) — als gäbe es kein DMARC.`
+              }
+            />
+          )}
         </div>
       )}
     </Card>

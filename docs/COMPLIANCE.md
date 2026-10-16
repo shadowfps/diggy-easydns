@@ -30,7 +30,7 @@ programmierten Regeln:
 | Health-Score | Feste Abzugstabelle pro Severity, aufsummiert, gedeckelt | `shared/scoring.ts` |
 | Findings & Empfehlungen | `if`-Kaskaden über vorhandene/fehlende Records | `server/services/reportBuilder.ts` |
 | Tech-Stack-Erkennung | Abgleich gegen eine fest hinterlegte Liste von Regex-Mustern | `server/services/techstack.ts` |
-| SPF/DKIM/DMARC-Bewertung | Regeln aus RFC 7208 und RFC 6376, hart kodiert | `server/services/mailAudit.ts` |
+| SPF/DKIM/DMARC-Bewertung | Regeln aus RFC 7208, RFC 6376 und RFC 7489, hart kodiert | `server/services/mailAudit.ts`, `shared/dmarc.ts` |
 | DNSSEC-Status | Auswertung von DS-/DNSKEY-Existenz und AD-Flag | `server/services/dnssec.ts` |
 | Verfügbarkeits-Check | HTTP-Statuscode der RDAP-Antwort (404 = frei) | `server/services/domainAvailability.ts` |
 

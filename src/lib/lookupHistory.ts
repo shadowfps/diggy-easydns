@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { LookupReport, RecordType } from '@/types/dns';
+import { effectiveDmarcPolicy } from '@/lib/dmarc';
 
 export interface LookupHistoryEntry {
   domain: string;
@@ -105,7 +106,10 @@ function toHistoryEntry(report: LookupReport): LookupHistoryEntry {
     sslValid: Boolean(report.ssl?.valid),
     sslDaysUntilExpiry: report.ssl?.daysUntilExpiry,
     dnssecValid: report.dnssec.enabled && report.dnssec.valid,
-    dmarcPresent: report.mail.dmarc.present,
+    // „DMARC gesetzt“ nur, wenn Empfänger den Record auch anwenden — einer
+    // ohne gültiges p= und ohne rua= zählt wie keiner (shared/dmarc.ts).
+    dmarcPresent:
+      report.mail.dmarc.present && effectiveDmarcPolicy(report.mail.dmarc.record).policy !== null,
     findingsCount: report.findings.length,
   };
 }

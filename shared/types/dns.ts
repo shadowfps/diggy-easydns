@@ -113,8 +113,14 @@ export interface MailSecurity {
     issues: string[];
   };
   dmarc: {
+    /** Unter `_dmarc.<domain>` steht ein Record mit `v=DMARC1` — ob er wirkt, ist eine andere Frage. */
     present: boolean;
     record?: string;
+    /**
+     * `p=` aus dem Record, nur wenn gültig. Bewertet wird nicht dieses Feld,
+     * sondern die wirksame Policy (`effectiveDmarcPolicy`, shared/dmarc.ts):
+     * Ohne gültiges `p=` kann sie trotzdem `none` sein (RFC 7489 §6.6.3).
+     */
     policy?: 'none' | 'quarantine' | 'reject';
     rua?: string;
   };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { DnsRecord } from '@/types/dns';
+import type { DnsRecord, MailSecurity } from '@/types/dns';
 import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { QuickFacts } from './QuickFacts';
 
@@ -36,5 +36,47 @@ describe('QuickFacts — MX', () => {
 
   it('zeigt ohne MX einen Strich', () => {
     expect(renderWithMx([])).toHaveTextContent('—');
+  });
+});
+
+/** #107: Ein Record ohne gültiges p= ist nicht „gesetzt“. */
+describe('QuickFacts — DMARC', () => {
+  function renderWithDmarc(dmarc: MailSecurity['dmarc']) {
+    const mail: MailSecurity = {
+      spf: { present: false, valid: false, issues: [] },
+      dmarc,
+      dkim: { selectors: [] },
+      mtaSts: { present: false },
+      hasMx: true,
+      nullMx: false,
+    };
+    render(
+      <QuickFacts
+        records={[]}
+        ssl={idle()}
+        dnssec={idle()}
+        mail={{ status: 'done', data: mail }}
+        techStack={idle()}
+      />
+    );
+    return screen.getByText('DMARC').nextElementSibling as HTMLElement;
+  }
+
+  it('zeigt eine gültige Policy wie bisher als gesetzt', () => {
+    const value = renderWithDmarc({ present: true, record: 'v=DMARC1; p=none', policy: 'none' });
+    expect(value).toHaveTextContent('gesetzt');
+    expect(value.querySelector('.text-success')).not.toBeNull();
+  });
+
+  it('nennt bei rua= ohne p= den Mangel, ohne Haken', () => {
+    const value = renderWithDmarc({ present: true, record: 'v=DMARC1; rua=mailto:x@y' });
+    expect(value).toHaveTextContent('p= fehlt');
+    expect(value.querySelector('.text-success, .text-danger')).toBeNull();
+  });
+
+  it('zeigt einen ignorierten Record als unwirksam', () => {
+    const value = renderWithDmarc({ present: true, record: 'v=DMARC1; sp=reject' });
+    expect(value).toHaveTextContent('unwirksam');
+    expect(value.querySelector('.text-danger')).not.toBeNull();
   });
 });

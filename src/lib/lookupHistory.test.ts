@@ -83,3 +83,25 @@ describe('useLookupHistory', () => {
     expect(result.current).toBe(first);
   });
 });
+
+/** #107: „DMARC gesetzt“ nur für einen Record, den Empfänger auch anwenden. */
+describe('saveLookupToHistory — DMARC', () => {
+  const withDmarc = (record: string): LookupReport => {
+    const report = reportFor('example.com');
+    return { ...report, mail: { ...report.mail, dmarc: { present: true, record } } };
+  };
+
+  it.each([
+    ['v=DMARC1; p=reject', true],
+    // Wirkt wie p=none (RFC 7489 §6.6.3) — wie ein p=none gilt es als gesetzt.
+    ['v=DMARC1; rua=mailto:x@y', true],
+    // Ohne p= und ohne rua= ignorieren Empfänger den Record.
+    ['v=DMARC1; sp=reject', false],
+  ])('%s → dmarcPresent %s', (record, present) => {
+    const { result } = renderHook(() => useLookupHistory());
+    act(() => {
+      saveLookupToHistory(withDmarc(record));
+    });
+    expect(result.current[0].dmarcPresent).toBe(present);
+  });
+});

@@ -24,6 +24,7 @@
 
 import type { MailSecurity } from './types/dns.js';
 import { matchTag } from './mailTags.js';
+import { effectiveDmarcPolicy } from './dmarc.js';
 
 /** Ein MX-Eintrag, wie ihn `resolveMx` (exchange) oder ein DnsRecord (value) liefert. */
 export interface MxEntry {
@@ -102,11 +103,20 @@ export interface NoMailProtection {
   complete: boolean;
 }
 
-/** Wie gut eine Domain mit Null-MX gegen Fälschungen in ihrem Namen geschützt ist. */
+/**
+ * Wie gut eine Domain mit Null-MX gegen Fälschungen in ihrem Namen geschützt ist.
+ *
+ * DMARC zählt mit der wirksamen Policy (shared/dmarc.ts): Ohne gültiges `p=`
+ * ist sie höchstens `none` (RFC 7489 §6.6.3) — auch neben `sp=reject`.
+ * `reject` kommt also immer aus einem gültigen `p=`, und nur dann ist `pct`
+ * überhaupt von Belang.
+ */
 export function noMailProtection(mail: Pick<MailSecurity, 'spf' | 'dmarc' | 'nullMx'>): NoMailProtection {
   const spf = spfAllowsNoSender(mail.spf.record);
   const dmarc =
-    mail.dmarc.present && mail.dmarc.policy === 'reject' && dmarcPct(mail.dmarc.record) === 100;
+    mail.dmarc.present &&
+    effectiveDmarcPolicy(mail.dmarc.record).policy === 'reject' &&
+    dmarcPct(mail.dmarc.record) === 100;
   return {
     spfAllowsNoSender: spf,
     dmarcReject: dmarc,
