@@ -53,9 +53,15 @@ const BUDGETS_KB = {
   // Fallback-Block und die modernere Preflight. Lässt sich nicht abschalten.
   'index.css': 11, // 10,20
   'rolldown-runtime.js': 1, // 0,39
+  // Übersetzungsmodul (#86, 16.10.2026): `t()`, Formate und die deutschen
+  // Pluralformen. Eigener Chunk, weil index.js und die nachgeladenen Ansichten
+  // es teilen; per modulepreload trotzdem im kritischen Pfad. Den Namen
+  // vergibt rolldown — auf main hieß der gemeinsame Chunk api.js (0,77 kB),
+  // lib/api liegt seit #86 in index.js.
+  'i18n.js': 3, // 2,71
 };
 
-/** Obergrenze für die Summe. Fängt auch einen neuen, ungebudgetierten Chunk. */
+/** Obergrenze für die Summe. */
 // Angehoben mit Tailwind 4, tailwind-merge 3 und Motion 14.2 (siehe oben).
 const CRITICAL_PATH_BUDGET_KB = 183; // 175,01
 
@@ -156,12 +162,16 @@ if (lazy.length > 0) {
   }
 }
 
+/*
+ * Ein Chunk im kritischen Pfad ohne eigenes Budget wächst unbemerkt, bis die
+ * Summe anschlägt — auf main lief api.js so mit. Ein neuer Chunk (rolldown
+ * legt gemeinsame Module selbst zusammen) braucht deshalb einen Eintrag oben.
+ */
 const unbudgeted = entries.filter((entry) => entry.budget === undefined);
 if (unbudgeted.length > 0) {
-  console.log(
-    `\nHinweis: ${unbudgeted
-      .map((entry) => entry.name)
-      .join(', ')} liegt im kritischen Pfad, hat aber kein eigenes Budget.`
+  console.error(
+    `\nKein eigenes Budget: ${unbudgeted.map((entry) => entry.name).join(', ')} liegt im` +
+      ' kritischen Pfad. Grenze in scripts/check-bundle-size.mjs ergänzen (Stand plus rund 7 %).'
   );
 }
 
@@ -170,7 +180,8 @@ if (breaches.length > 0 || totalBreached) {
     '\nBundle-Budget überschritten. Wenn der Zuwachs gewollt ist: Grenze in' +
       ' scripts/check-bundle-size.mjs anheben und im Commit begründen.'
   );
-  process.exit(1);
 }
+
+if (unbudgeted.length > 0 || breaches.length > 0 || totalBreached) process.exit(1);
 
 console.log('\nBundle-Budget eingehalten.');
