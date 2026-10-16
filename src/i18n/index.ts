@@ -1,6 +1,7 @@
 import { createElement, Fragment, useSyncExternalStore, type ReactNode } from 'react';
 import { DE_PLURALS, type DeKey, type Message } from './de';
 import type { EnglishPack } from './en';
+import type { Finding, FindingKey, SpfIssueKey, TextParams, TextRef } from '@/types/dns';
 
 /**
  * Übersetzungsmodul (#86) — Deutsch ist die Quelle, Englisch wird nachgeladen.
@@ -206,12 +207,83 @@ export function tRich(key: DeKey, values: Record<string, ReactNode>): ReactNode[
     );
 }
 
+/* ─── Texte des Servers ───────────────────────────────────────────────── */
+
+/**
+ * Lässt sich der Text vollständig füllen? Sonst bleibt es beim deutschen
+ * Original: ein englischer Satz mit `{count}` darin wäre schlechter als ein
+ * deutscher Satz, der stimmt. Passiert bei alten History-Einträgen oder einem
+ * Server, der noch keine Werte mitschickt.
+ */
+function fillable(message: Message | undefined, params: TextParams): message is Message {
+  if (message === undefined) return false;
+  const forms = typeof message === 'string' ? [message] : [message.one, message.other];
+  return forms.every((form) =>
+    [...form.matchAll(/\{(\w+)\}/g)].every((match) => params[match[1]] !== undefined)
+  );
+}
+
+export interface FindingTexts {
+  title: string;
+  description: string;
+  fixExplanation?: string;
+}
+
+/**
+ * Titel, Beschreibung und Fix-Erklärung eines Findings in der aktiven Sprache.
+ *
+ * Deutsch: die Texte des Servers, wie bisher. Englisch: nach Kennung und
+ * Werten aus dem englischen Wörterbuch — unbekannte Kennung oder fehlender
+ * Wert, und es bleibt beim Server-Text.
+ */
+export function findingText(finding: Finding): FindingTexts {
+  const german: FindingTexts = {
+    title: finding.title,
+    description: finding.description,
+    fixExplanation: finding.fix?.explanation,
+  };
+  const entry = language === 'en' ? english?.findings[(finding.key ?? finding.id) as FindingKey] : undefined;
+  if (!entry) return german;
+
+  const params = finding.params ?? {};
+  const fix = german.fixExplanation === undefined ? undefined : entry.fix;
+  if (
+    !fillable(entry.title, params) ||
+    !fillable(entry.description, params) ||
+    (german.fixExplanation !== undefined && !fillable(fix, params))
+  ) {
+    return german;
+  }
+  return {
+    title: format(entry.title, params),
+    description: format(entry.description, params),
+    fixExplanation: fix === undefined ? undefined : format(fix, params),
+  };
+}
+
+/** Ein Problem des SPF-Records (Mail-Ansicht) — gleiche Regeln wie oben. */
+export function spfIssueText(german: string, detail?: TextRef<SpfIssueKey>): string {
+  const entry = language === 'en' && detail ? english?.findings[detail.key] : undefined;
+  const params = detail?.params ?? {};
+  return entry && fillable(entry.description, params) ? format(entry.description, params) : german;
+}
+
 /**
  * Meldung zu einem Fehler. Trägt er keine eigene Meldung, gilt `fallback`.
  *
  * Die Meldungen des Servers sind deutsch — für Deutsch sind sie der Text.
+ * Auf Englisch zählt der Fehlercode (`ApiError.code`); unbekannter Code oder
+ * fehlender Wert, und es bleibt bei der Meldung des Servers. Geprüft wird
+ * per Duck-Typing statt `instanceof ApiError`: lib/api.ts importiert dieses
+ * Modul, umgekehrt entstünde ein Zirkelbezug.
  */
 export function errorText(error: unknown, fallback: DeKey): string {
+  if (language === 'en' && english && error instanceof Error && 'code' in error) {
+    const code = String(error.code) as keyof EnglishPack['apiErrors'];
+    const params = ('params' in error ? (error.params as TextParams | undefined) : undefined) ?? {};
+    const message = english.apiErrors[code];
+    if (fillable(message, params)) return format(message, params);
+  }
   if (error instanceof Error && error.message) return error.message;
   return t(fallback);
 }

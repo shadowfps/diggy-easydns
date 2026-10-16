@@ -4,7 +4,7 @@ import { Mail, Check, X, AlertTriangle, FileSignature, Send } from 'lucide-react
 import type { MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
-import { useI18n } from '@/i18n';
+import { spfIssueText, useI18n } from '@/i18n';
 
 interface MailViewProps {
   mail: MailSecurity;
@@ -67,7 +67,7 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
               {spf.issues.map((issue, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-fg-muted">
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
-                  <span>{issue}</span>
+                  <span>{spfIssueText(issue, spf.issueDetails?.[i])}</span>
                 </li>
               ))}
             </ul>

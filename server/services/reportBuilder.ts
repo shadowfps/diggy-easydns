@@ -2,12 +2,28 @@ import type {
   DnsRecord,
   DnssecInfo,
   Finding,
+  FindingKey,
   MailSecurity,
   ResolverResult,
   SslInfo,
   WhoisInfo,
 } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
+
+/**
+ * Ein Finding, dessen Text der Client übersetzen kann (#86).
+ *
+ * Entweder ist die `id` selbst eine bekannte Text-Kennung, oder `key` nennt
+ * eine. So scheitert ein neues Finding am Compiler, bis seine Kennung in
+ * shared/textKeys.ts steht — und dort am englischen Wörterbuch, bis es
+ * übersetzt ist. Die deutschen Texte bleiben wie sie sind: sie sind der
+ * Rückfall für alte Clients und für alles, was der Client nicht kennt.
+ *
+ * Werte, die im Satz stehen (Tage, Domain, Version), gehen zusätzlich als
+ * `params` mit. Zahlen, die über die Mehrzahl entscheiden, heißen `count`.
+ */
+export type KeyedFinding = Omit<Finding, 'id' | 'key'> &
+  ({ id: FindingKey; key?: undefined } | { id: string; key: FindingKey });
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
@@ -35,8 +51,8 @@ const DOMAIN_LIFECYCLE_CAUSES = [
   'whois-status-pendingrestore',
 ];
 
-export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): Finding[] {
-  const findings: Finding[] = [];
+export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: string): KeyedFinding[] {
+  const findings: KeyedFinding[] = [];
 
   // `s1._domainkey.example.com` ist kein Host — fehlende A/AAAA-Records sind
   // dort der Normalfall, kein Befund. Wer so einen Namen nachschlägt, will
@@ -48,6 +64,7 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
         severity: 'critical',
         title: 'Kein Eintrag unter diesem Namen',
         description: `Unter ${domain} liegt kein DNS-Record. Steht dort ein DKIM-Schlüssel, eine DMARC-Policy oder ein Challenge-Token, ist er nicht (mehr) veröffentlicht — oder der Name ist vertippt.`,
+        params: { domain },
         category: 'dns',
         causedBy: DOMAIN_LIFECYCLE_CAUSES,
       });
@@ -61,11 +78,13 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
   if (!types.has('A') && !types.has('AAAA') && !types.has('CNAME')) {
     findings.push({
       id: 'no-address',
+      key: isApex ? 'no-address' : 'no-address-host',
       severity: 'critical',
       title: 'Keine A/AAAA/CNAME-Records gefunden',
       description: isApex
         ? 'Die Domain löst zu keiner IP auf. Besucher können die Seite nicht erreichen.'
         : `Der Hostname ${domain} löst zu keiner IP auf. Besucher können diesen Host nicht erreichen.`,
+      params: { domain },
       category: 'dns',
       causedBy: DOMAIN_LIFECYCLE_CAUSES,
     });
@@ -74,11 +93,13 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
   if (!types.has('AAAA')) {
     findings.push({
       id: 'no-ipv6',
+      key: isApex ? 'no-ipv6' : 'no-ipv6-host',
       severity: 'info',
       title: 'Kein IPv6 (AAAA-Record)',
       description: isApex
         ? 'Domain ist nur über IPv4 erreichbar. IPv6 verbessert Erreichbarkeit für moderne Netzwerke.'
         : `${domain} ist nur über IPv4 erreichbar.`,
+      params: { domain },
       category: 'dns',
     });
   }
@@ -123,8 +144,8 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
 
 /* ─── Mail ────────────────────────────────────────────────────────────── */
 
-export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
-  const findings: Finding[] = [];
+export function mailFindings(mail: MailSecurity, apexDomain: string): KeyedFinding[] {
+  const findings: KeyedFinding[] = [];
   const hasMx = mail.hasMx;
 
   // Wenn keine MX → nicht für Mail eingerichtet, aber wir prüfen trotzdem
@@ -134,6 +155,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   if (!mail.spf.present) {
     findings.push({
       id: 'no-spf',
+      key: hasMx ? 'no-spf' : 'no-spf-no-mx',
       severity: hasMx ? 'warning' : 'info',
       title: 'Kein SPF-Record gefunden',
       description: hasMx
@@ -148,21 +170,27 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
       category: 'mail',
     });
   } else {
-    for (const issue of mail.spf.issues) {
+    mail.spf.issues.forEach((issue, index) => {
+      // Ohne Kennung (gecachte Daten von vor #86, Tests mit Hand-Objekten)
+      // gilt die allgemeine — der Client zeigt dann einen allgemeinen Satz.
+      const detail = mail.spf.issueDetails?.[index];
       findings.push({
         id: `spf-issue-${slug(issue)}`,
+        key: detail?.key ?? 'spf-issue',
+        params: detail?.params,
         severity: issue.includes('+all') ? 'critical' : 'warning',
         title: 'SPF-Record problematisch',
         description: issue,
         category: 'mail',
       });
-    }
+    });
     if (mail.spf.issues.length === 0) {
       findings.push({
         id: 'spf-ok',
         severity: 'success',
         title: 'SPF-Record vorhanden und plausibel',
         description: `${mail.spf.lookupCount ?? 0} DNS-Lookups, gültiger Abschluss.`,
+        params: { count: mail.spf.lookupCount ?? 0 },
         category: 'mail',
       });
     }
@@ -193,6 +221,8 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     } else {
       findings.push({
         id: 'dmarc-present',
+        key: policy ? 'dmarc-present' : 'dmarc-present-no-policy',
+        params: policy ? { policy } : undefined,
         severity: 'success',
         title: `DMARC-Policy: ${policy ?? 'gesetzt'}`,
         description: 'DMARC-Record vorhanden — Mail-Spoofing-Schutz aktiv.',
@@ -215,6 +245,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
       severity: 'success',
       title: `DKIM-Selectors aktiv: ${mail.dkim.selectors.map((s) => s.selector).join(', ')}`,
       description: 'Ausgehende Mails werden signiert — Empfänger können die Authentizität prüfen.',
+      params: { selectors: mail.dkim.selectors.map((s) => s.selector).join(', ') },
       category: 'mail',
     });
   }
@@ -234,7 +265,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
-export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
+export function dnssecFindings(dnssec: DnssecInfo): KeyedFinding[] {
   if (!dnssec.enabled) {
     return [{
       id: 'dnssec-off',
@@ -270,6 +301,8 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
 
   return [{
     id: 'dnssec-valid',
+    key: dnssec.algorithm ? 'dnssec-valid' : 'dnssec-valid-no-algorithm',
+    params: dnssec.algorithm ? { algorithm: dnssec.algorithm } : undefined,
     severity: 'success',
     title: 'DNSSEC aktiv und valide',
     description: dnssec.algorithm
@@ -281,7 +314,7 @@ export function dnssecFindings(dnssec: DnssecInfo): Finding[] {
 
 /* ─── SSL ─────────────────────────────────────────────────────────────── */
 
-export function sslFindings(ssl: SslInfo | null): Finding[] {
+export function sslFindings(ssl: SslInfo | null): KeyedFinding[] {
   if (!ssl) {
     return [{
       id: 'no-ssl',
@@ -292,7 +325,7 @@ export function sslFindings(ssl: SslInfo | null): Finding[] {
     }];
   }
 
-  const findings: Finding[] = [];
+  const findings: KeyedFinding[] = [];
 
   const isExpired = ssl.daysUntilExpiry < 0;
 
@@ -317,6 +350,7 @@ export function sslFindings(ssl: SslInfo | null): Finding[] {
       severity: 'critical',
       title: `Zertifikat seit ${Math.abs(ssl.daysUntilExpiry)} Tagen abgelaufen`,
       description: 'Browser zeigen Sicherheitswarnungen. Sofort erneuern.',
+      params: { count: Math.abs(ssl.daysUntilExpiry) },
       category: 'ssl',
     });
   } else if (ssl.daysUntilExpiry < 14) {
@@ -325,6 +359,7 @@ export function sslFindings(ssl: SslInfo | null): Finding[] {
       severity: 'warning',
       title: `Zertifikat läuft in ${ssl.daysUntilExpiry} Tagen ab`,
       description: 'Wenn kein Auto-Renew läuft: jetzt erneuern. Let\'s Encrypt wird in der Regel 30 Tage vorher renewed.',
+      params: { count: ssl.daysUntilExpiry },
       category: 'ssl',
     });
   } else if (ssl.valid) {
@@ -333,6 +368,7 @@ export function sslFindings(ssl: SslInfo | null): Finding[] {
       severity: 'success',
       title: `SSL-Zertifikat gültig (noch ${ssl.daysUntilExpiry} Tage)`,
       description: `Ausgestellt von ${ssl.issuer} via ${ssl.tlsVersion}.`,
+      params: { count: ssl.daysUntilExpiry, issuer: ssl.issuer, tlsVersion: ssl.tlsVersion },
       category: 'ssl',
     });
   }
@@ -343,6 +379,7 @@ export function sslFindings(ssl: SslInfo | null): Finding[] {
       severity: 'warning',
       title: `Veraltete TLS-Version: ${ssl.tlsVersion}`,
       description: 'TLS 1.0/1.1 sind deprecated. Auf TLS 1.2+ aktualisieren.',
+      params: { tlsVersion: ssl.tlsVersion },
       category: 'ssl',
     });
   }
@@ -352,7 +389,7 @@ export function sslFindings(ssl: SslInfo | null): Finding[] {
 
 /* ─── Propagation ────────────────────────────────────────────────────── */
 
-export function propagationFindings(results: ResolverResult[]): Finding[] {
+export function propagationFindings(results: ResolverResult[]): KeyedFinding[] {
   if (results.length === 0) return [];
 
   // Wir vergleichen die Sets der A-Records. Sortiert + gejoint = stabiler Key.
@@ -377,6 +414,7 @@ export function propagationFindings(results: ResolverResult[]): Finding[] {
       severity: 'warning',
       title: 'Propagation-Abweichung erkannt',
       description: `${aValuesByResolver.length} Resolver liefern ${uniqueKeys.size} verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.`,
+      params: { count: aValuesByResolver.length, answers: uniqueKeys.size },
       category: 'dns',
     }];
   }
@@ -386,6 +424,7 @@ export function propagationFindings(results: ResolverResult[]): Finding[] {
     severity: 'success',
     title: 'Konsistente Propagation',
     description: `Alle ${aValuesByResolver.length} Resolver liefern dasselbe Ergebnis.`,
+    params: { count: aValuesByResolver.length },
     category: 'dns',
   }];
 }
@@ -396,7 +435,7 @@ export function propagationFindings(results: ResolverResult[]): Finding[] {
  * EPP-Status-Codes die ein klares Problem signalisieren.
  * Vollständige Liste: https://icann.org/epp
  */
-const CRITICAL_STATUS = new Set([
+const CRITICAL_STATUS = new Set<CriticalStatus>([
   'clienthold',
   'serverhold',
   'pendingdelete',
@@ -404,7 +443,13 @@ const CRITICAL_STATUS = new Set([
   'redemptionperiod',
 ]);
 
-export function whoisFindings(whois: WhoisInfo | null): Finding[] {
+type CriticalStatus = 'clienthold' | 'serverhold' | 'pendingdelete' | 'pendingrestore' | 'redemptionperiod';
+
+function isCriticalStatus(status: string): status is CriticalStatus {
+  return CRITICAL_STATUS.has(status as CriticalStatus);
+}
+
+export function whoisFindings(whois: WhoisInfo | null): KeyedFinding[] {
   if (!whois) {
     // Gar kein Finding: dass eine ccTLD kein RDAP anbietet, ist eine
     // Eigenschaft der Datenquelle und keine Schwäche der geprüften Domain.
@@ -413,7 +458,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
     return [];
   }
 
-  const findings: Finding[] = [];
+  const findings: KeyedFinding[] = [];
 
   // ── Ablauf-Check ─────────────────────────────────────────────────────
   if (whois.expiresAt) {
@@ -426,6 +471,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'critical',
         title: `Domain seit ${Math.abs(daysUntilExpiry)} Tagen abgelaufen`,
         description: 'Die Domain ist offiziell abgelaufen und kann jederzeit gelöscht oder neu vergeben werden.',
+        params: { count: Math.abs(daysUntilExpiry) },
         category: 'dns',
       });
     } else if (daysUntilExpiry < 7) {
@@ -434,6 +480,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'critical',
         title: `Domain läuft in ${daysUntilExpiry} Tagen ab`,
         description: 'Verlängerung dringend! Andernfalls geht die Domain verloren.',
+        params: { count: daysUntilExpiry },
         category: 'dns',
       });
     } else if (daysUntilExpiry < 30) {
@@ -442,6 +489,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'warning',
         title: `Domain läuft in ${daysUntilExpiry} Tagen ab`,
         description: 'Verlängerung sollte rechtzeitig erfolgen, bevor die Frist knapp wird.',
+        params: { count: daysUntilExpiry },
         category: 'dns',
       });
     }
@@ -474,12 +522,13 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
   for (const status of whois.status ?? []) {
     const norm = status.toLowerCase().replace(/\s+/g, '');
     if (alreadyReportedExpired && REDUNDANT_WHEN_EXPIRED.has(norm)) continue;
-    if (CRITICAL_STATUS.has(norm)) {
+    if (isCriticalStatus(norm)) {
       findings.push({
-        id: `whois-status-${norm}`,
+        id: `whois-status-${norm}` as const,
         severity: 'critical',
         title: `Domain-Status: ${status}`,
         description: getStatusExplanation(norm),
+        params: { status },
         category: 'dns',
       });
     }
@@ -496,6 +545,7 @@ export function whoisFindings(whois: WhoisInfo | null): Finding[] {
         severity: 'info',
         title: `Domain ist erst ${ageDays} Tage alt`,
         description: 'Frisch registrierte Domains werden von Spam-/Phishing-Filtern oft skeptischer behandelt.',
+        params: { count: ageDays },
         category: 'dns',
       });
     }

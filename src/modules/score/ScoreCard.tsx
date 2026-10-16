@@ -4,7 +4,7 @@ import { AlertCircle, AlertTriangle, ArrowRight, Check, Info } from 'lucide-reac
 import type { Finding, HealthScore } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { verdictFor } from '@/lib/scoring';
-import { useI18n } from '@/i18n';
+import { findingText, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
 
 interface ScoreCardProps {
@@ -118,7 +118,7 @@ function TopFinding({ finding }: { finding?: Finding }) {
       </span>
       <div className="min-w-0">
         <p className="text-xs text-fg-subtle">{t('Wichtigster Punkt')}</p>
-        <p className="truncate text-sm font-medium text-fg">{finding.title}</p>
+        <p className="truncate text-sm font-medium text-fg">{findingText(finding).title}</p>
       </div>
     </div>
   );

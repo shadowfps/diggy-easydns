@@ -5,6 +5,7 @@ import type {
   DomainCheckReport,
   Finding,
   IpDetails,
+  TextParams,
   MailSecurity,
   PageSpeedReport,
   PageSpeedStrategy,
@@ -18,6 +19,8 @@ import { t } from '@/i18n';
 export interface LookupError {
   error: string;
   message: string;
+  /** Werte aus `message`, damit der Client sie übersetzen kann (#86). */
+  params?: TextParams;
 }
 
 /**
@@ -30,11 +33,13 @@ export interface LookupError {
  */
 export class ApiError extends Error {
   readonly code: string;
+  readonly params?: TextParams;
 
   constructor(payload: LookupError) {
     super(payload.message);
     this.name = 'ApiError';
     this.code = payload.error;
+    this.params = payload.params;
   }
 }
 

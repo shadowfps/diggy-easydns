@@ -86,4 +86,17 @@ describe('analyzeSpf', () => {
     expect(result.valid).toBe(true);
     expect(result.lookupCount).toBe(1);
   });
+
+  // #86: jedes Problem zusätzlich als Kennung mit Werten, in derselben
+  // Reihenfolge wie der deutsche Satz.
+  it('liefert die Probleme auch als Kennung für die Übersetzung', () => {
+    const record =
+      'v=spf1 ' + Array.from({ length: 11 }, (_, i) => `include:s${i}.example.com`).join(' ') + ' +all';
+    const result = analyzeSpf(record);
+    expect(result.issueDetails).toEqual([
+      { key: 'spf-lookups-over-limit', params: { count: 11 } },
+      { key: 'spf-plus-all' },
+    ]);
+    expect(result.issues).toHaveLength(2);
+  });
 });

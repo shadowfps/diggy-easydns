@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dnsFindings, sslFindings, whoisFindings } from './reportBuilder.js';
+import { dnsFindings, mailFindings, sslFindings, whoisFindings } from './reportBuilder.js';
+import { analyzeSpf } from './mailAudit.js';
 import { calculateScore } from '../../shared/scoring.js';
 import type { DnsRecord, SslInfo, WhoisInfo } from '../types.js';
 
@@ -224,5 +225,50 @@ describe('whoisFindings', () => {
       whois({ expiresAt: new Date(Date.now() + 20 * 86_400_000).toISOString() })
     );
     expect(findings.map((f) => f.id)).toContain('domain-expiring-soon');
+  });
+});
+
+/**
+ * #86: Findings tragen zusätzlich zur deutschen Meldung eine Text-Kennung und
+ * die Werte aus dem Satz. Der Client übersetzt daraus; die deutschen Texte
+ * bleiben unverändert der Rückfall.
+ */
+describe('Kennung und Werte für die Übersetzung', () => {
+  it('unterscheidet Apex und Host über die Kennung, nicht über die id', () => {
+    const apex = dnsFindings([], 'example.com', 'example.com');
+    const host = dnsFindings([], 'www.example.com', 'example.com');
+    const noAddress = (list: typeof apex) => list.find((f) => f.id === 'no-address');
+    expect(noAddress(apex)).toMatchObject({ key: 'no-address' });
+    expect(noAddress(host)).toMatchObject({ key: 'no-address-host', params: { domain: 'www.example.com' } });
+  });
+
+  it('gibt die Tage als count mit, den deutschen Satz unverändert', () => {
+    const [finding] = sslFindings(ssl({ daysUntilExpiry: 5 }));
+    expect(finding).toMatchObject({
+      id: 'ssl-expiring-soon',
+      title: 'Zertifikat läuft in 5 Tagen ab',
+      params: { count: 5 },
+    });
+  });
+
+  it('nimmt die Kennung der SPF-Probleme in das Finding', () => {
+    const findings = mailFindings(
+      {
+        spf: { ...analyzeSpf('v=spf1 include:x.de'), present: true },
+        dmarc: { present: true, policy: 'reject' },
+        dkim: { selectors: [] },
+        mtaSts: { present: true },
+        hasMx: false,
+      },
+      'example.com'
+    );
+    const issue = findings.find((f) => f.id.startsWith('spf-issue-'));
+    expect(issue).toMatchObject({ key: 'spf-no-all', description: expect.stringContaining('Kein "all"') });
+    expect(findings.find((f) => f.id === 'dmarc-present')).toMatchObject({ params: { policy: 'reject' } });
+  });
+
+  it('meldet den Status-Code roh als Wert', () => {
+    const [finding] = whoisFindings({ status: ['client hold'] });
+    expect(finding).toMatchObject({ id: 'whois-status-clienthold', params: { status: 'client hold' } });
   });
 });

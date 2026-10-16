@@ -1,5 +1,9 @@
 /** Shared DNS/API types used by frontend and backend. */
 
+import type { FindingKey, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
+
+export type { ApiErrorCode, FindingKey, SpfIssueKey, TextParams, TextRef } from '../textKeys.js';
+
 export type RecordType =
   | 'A'
   | 'AAAA'
@@ -34,6 +38,13 @@ export interface Finding {
     snippet?: string;
   };
   category: 'dns' | 'mail' | 'security' | 'ssl' | 'dnssec';
+  /**
+   * Text-Kennung für die Übersetzung im Client (#86), wenn sie von `id`
+   * abweicht. Fehlt sie, ist die `id` selbst die Kennung.
+   */
+  key?: FindingKey;
+  /** Werte aus Titel und Beschreibung (`{count}` → `params.count`). */
+  params?: TextParams;
   /**
    * IDs von Findings, die dieses hier verursachen.
    *
@@ -104,6 +115,8 @@ export interface MailSecurity {
     lookupCount?: number;
     valid: boolean;
     issues: string[];
+    /** Dieselben Probleme als Kennung und Werte, in gleicher Reihenfolge (#86). */
+    issueDetails?: TextRef<SpfIssueKey>[];
   };
   dmarc: {
     present: boolean;

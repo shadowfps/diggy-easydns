@@ -4,7 +4,7 @@ import { AlertCircle, AlertTriangle, Info, Check, Copy } from 'lucide-react';
 import type { Finding, Severity } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
-import { useI18n } from '@/i18n';
+import { findingText, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
 
 interface FindingsListProps {
@@ -55,6 +55,7 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
   const Icon = cfg.icon;
   const [copied, setCopied] = useState(false);
   const { t } = useI18n();
+  const text = findingText(finding);
 
   const copySnippet = () => {
     if (!finding.fix?.snippet) return;
@@ -76,19 +77,17 @@ function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
 
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <h3 className="mr-1 text-sm font-semibold text-fg">{finding.title}</h3>
+          <h3 className="mr-1 text-sm font-semibold text-fg">{text.title}</h3>
           <span className={cn('badge', cfg.badge)}>{t(cfg.label)}</span>
           <span className="text-xs text-fg-subtle">
             {CATEGORY_LABEL[finding.category] ?? finding.category}
           </span>
         </div>
-        <p className="mt-1 text-sm leading-relaxed text-fg-muted">{finding.description}</p>
+        <p className="mt-1 text-sm leading-relaxed text-fg-muted">{text.description}</p>
 
         {finding.fix && (
           <div className="mt-3 space-y-2">
-            {finding.fix.explanation && (
-              <p className="text-sm text-fg-muted">{finding.fix.explanation}</p>
-            )}
+            {text.fixExplanation && <p className="text-sm text-fg-muted">{text.fixExplanation}</p>}
             {finding.fix.snippet && (
               <div className="panel flex items-start gap-3 py-3 pr-2">
                 <pre className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs text-fg">

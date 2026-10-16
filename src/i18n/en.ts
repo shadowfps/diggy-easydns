@@ -1,4 +1,6 @@
 import type { Dictionary } from './de';
+import { apiErrors, findings, type FindingText } from './en.server';
+import type { ApiErrorCode, FindingKey } from '@/types/dns';
 
 /**
  * Englisches Wörterbuch (#86).
@@ -378,8 +380,10 @@ const ui: Dictionary = {
 
 export interface EnglishPack {
   ui: Dictionary;
+  findings: Record<FindingKey, FindingText>;
+  apiErrors: Record<ApiErrorCode, string>;
 }
 
-const pack: EnglishPack = { ui };
+const pack: EnglishPack = { ui, findings, apiErrors };
 
 export default pack;
