@@ -1,4 +1,5 @@
 import type { DomainAvailabilityResult, DomainAvailabilityStatus, DomainCheckReport } from '../types.js';
+import { RDAP_HEADERS, warnRdapError } from '../lib/rdap.js';
 
 /** Gängige TLDs für Alternativ-Vorschläge (Reihenfolge wie im UI). */
 const ALT_TLDS = ['de', 'com', 'io', 'net', 'app', 'dev', 'org'] as const;
@@ -121,7 +122,8 @@ async function checkSingleDomain(domain: string, timeoutMs = 6000): Promise<Doma
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { accept: 'application/rdap+json, application/json' },
+      headers: RDAP_HEADERS,
+      redirect: 'follow',
     });
 
     if (res.status === 404) {
@@ -131,17 +133,16 @@ async function checkSingleDomain(domain: string, timeoutMs = 6000): Promise<Doma
     if (res.ok) {
       const data = (await res.json()) as { errorCode?: number; objectClassName?: string };
       if (data.errorCode || data.objectClassName !== 'domain') {
+        if (data.errorCode) warnRdapError(url, new Error(`RDAP ${data.errorCode}`));
         return { domain, status: 'unknown', source };
       }
       return { domain, status: 'taken', source };
     }
 
+    warnRdapError(url, new Error(`HTTP ${res.status}`));
     return { domain, status: 'unknown', source };
   } catch (error) {
-    const err = error as Error;
-    if (err.name === 'AbortError') {
-      return { domain, status: 'unknown', source };
-    }
+    warnRdapError(url, error, controller.signal);
     return { domain, status: 'unknown', source };
   } finally {
     clearTimeout(timer);
