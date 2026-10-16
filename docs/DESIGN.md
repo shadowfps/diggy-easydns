@@ -78,10 +78,10 @@ Inhaltsbreiten: Report `max-w-[110rem]`, Textseiten (Impressum, About …)
 
 ## Seitenaufbau
 
-- **Header**: Wortmarke links, Navigation (History, Available Check, About),
-  Theme und GitHub rechts. Die Navigation sind echte Links und ab `lg`
-  sichtbar, darunter stecken sie im Menü. Auf Seiten mit Ergebnis (Report,
-  IP-Lookup) steht die Suche kompakt im Header — sie bleibt beim Scrollen
+- **Header**: Wortmarke links, rechts GitHub und das Menü (History,
+  Available Check, About, Theme). Auf Seiten mit Ergebnis (Report,
+  IP-Lookup) steht die Suche kompakt in der Mitte — ab `md` genau mittig
+  über ein Raster mit gleich breiten Außenspalten. Sie bleibt beim Scrollen
   erreichbar, und der Inhalt beginnt oben.
 - **Startseite**: Wortmarke, Frage, große Suche, darunter „Zuletzt geprüft“
   (oder Beispiele beim ersten Besuch), „Was diggy prüft“, Converter-Hinweis.

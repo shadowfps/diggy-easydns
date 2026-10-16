@@ -263,13 +263,6 @@ describe('Layout', () => {
     expect(screen.getAllByPlaceholderText(/Anfrage starten/)).toHaveLength(1);
   });
 
-  it('navigiert über die Links im Header', async () => {
-    render(<App />);
-    await userEvent.click(screen.getByRole('link', { name: 'About' }));
-    expect(window.location.pathname).toBe('/about');
-    expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute('aria-current', 'page');
-  });
-
   it('bietet zuletzt geprüfte Domains auf der Startseite an', async () => {
     clearLookupHistory();
     render(<App />);

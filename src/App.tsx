@@ -383,7 +383,6 @@ export default function App() {
         onHistory={handleHistory}
         onAvailability={handleAvailability}
         onAbout={handleAbout}
-        current={view === 'history' || view === 'availability' || view === 'about' ? view : null}
         // Auf Report-Seiten wandert die Suche in die Kopfzeile: der Report
         // beginnt oben, und die Suche bleibt beim Scrollen erreichbar.
         search={
