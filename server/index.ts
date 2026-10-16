@@ -663,13 +663,13 @@ app.get('/api/lookup/dnssec', async (req: Request, res: Response) => {
   if (!domain) return;
   const apexDomain = getApexDomain(domain);
   try {
-    // Ein Ausfall wird nicht gecacht: „nicht prüfbar“ soll beim nächsten
-    // Aufruf neu prüfen, nicht eine Minute lang dasselbe melden (#101).
+    // Ein Ausfall bleibt nur kurz im Cache: „nicht prüfbar“ soll beim
+    // nächsten Check neu prüfen, nicht eine Minute lang dasselbe melden (#101).
     const dnssec = await cached(
       `dnssec:${apexDomain}`,
       LOOKUP_TTL_MS,
       () => checkDnssec(apexDomain),
-      { cacheIf: (result) => !result.lookupFailed }
+      { failed: (result) => Boolean(result.lookupFailed) }
     );
     res.json({ dnssec, findings: dnssecFindings(dnssec) });
   } catch (error) {
@@ -682,7 +682,7 @@ app.get('/api/lookup/ssl', async (req: Request, res: Response) => {
   if (!domain) return;
   try {
     const result = await cached(`ssl:${domain}`, LOOKUP_TTL_MS, () => checkSsl(domain), {
-      cacheIf: (check) => check.status !== 'failed',
+      failed: (check) => check.status === 'failed',
     });
     const ssl = result.status === 'ok' ? result.info : null;
     const lookupFailed = result.status === 'failed' ? result.reason : undefined;
@@ -709,7 +709,7 @@ app.get('/api/lookup/mail', async (req: Request, res: Response) => {
       `mail:${apexDomain}`,
       LOOKUP_TTL_MS,
       async () => auditMail(apexDomain, await lookupSpfRecord(apexDomain)),
-      { cacheIf: (audit) => !hasMailLookupFailure(audit) }
+      { failed: hasMailLookupFailure }
     );
     res.json({ mail, findings: mailFindings(mail, apexDomain) });
   } catch (error) {

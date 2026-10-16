@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cached, clearCache } from './cache.js';
+import { cached, clearCache, FAILED_TTL_MS } from './cache.js';
 
 describe('cached', () => {
   beforeEach(() => clearCache());
@@ -84,18 +84,31 @@ describe('cached', () => {
 
   /**
    * #101: ein Check, der einen Timeout als „nicht prüfbar“ meldet, wirft
-   * nicht. Gecacht hieße das: eine Minute lang dieselbe Meldung, auch wenn
-   * der Nutzer gleich erneut prüft.
+   * nicht. Eine Minute gecacht hieße: wer gleich erneut prüft, bekommt
+   * dieselbe Meldung. Gar nicht gecacht: jeder Reload kostet den vollen
+   * Timeout. Deshalb nur kurz.
    */
-  it('cached keine Werte, die cacheIf ablehnt', async () => {
-    let calls = 0;
-    const produce = async () => ({ failed: ++calls === 1 });
-    const cacheIf = (value: { failed: boolean }) => !value.failed;
+  it('cached einen gemeldeten Ausfall nur FAILED_TTL_MS lang', async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const produce = async () => ({ failed: ++calls === 1 });
+      const failed = (value: { failed: boolean }) => value.failed;
 
-    expect(await cached('check', 5_000, produce, { cacheIf })).toEqual({ failed: true });
-    expect(await cached('check', 5_000, produce, { cacheIf })).toEqual({ failed: false });
-    expect(await cached('check', 5_000, produce, { cacheIf })).toEqual({ failed: false });
-    expect(calls).toBe(2);
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: true });
+      // Ein Burst direkt danach: aus dem Cache.
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: true });
+      expect(calls).toBe(1);
+
+      vi.setSystemTime(Date.now() + FAILED_TTL_MS + 1);
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: false });
+      // Ein Erfolg bleibt die volle TTL.
+      vi.setSystemTime(Date.now() + 30_000);
+      expect(await cached('check', 60_000, produce, { failed })).toEqual({ failed: false });
+      expect(calls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('hält verschiedene Keys auseinander', async () => {
