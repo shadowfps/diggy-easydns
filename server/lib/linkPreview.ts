@@ -81,6 +81,9 @@ export function domainFromLookupPath(pathname: string): string | null {
  */
 const HOST_PATTERN = /^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(?::\d{1,5})?$/i;
 
+/** Längster sinnvoller Host: 253 Zeichen Hostname plus `:65535`. */
+const MAX_HOST_LENGTH = 253 + 6;
+
 /**
  * Basis für og:url und og:image. Crawler brauchen absolute URLs.
  *
@@ -90,14 +93,20 @@ const HOST_PATTERN = /^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(?::\d{1,5
  * `trust proxy` und nehmen dann die X-Forwarded-Werte des Proxys. Ein Host,
  * der nicht wie einer aussieht, ergibt null; die Vorschau kommt dann ohne
  * URL und Bild aus, statt Unsinn zu spiegeln.
+ *
+ * Das Protokoll braucht dieselbe Prüfung: mit `trust proxy` gibt Express den
+ * X-Forwarded-Proto-Header ungeprüft zurück, auch `javascript` oder Markup.
  */
 export function previewOrigin(req: Request, configuredOrigin: string | undefined): string | null {
   if (configuredOrigin) return configuredOrigin;
 
+  const protocol = req.protocol.toLowerCase();
+  if (protocol !== 'http' && protocol !== 'https') return null;
+
   // Express 5: req.host enthält den Port.
   const host = req.host;
-  if (!host || !HOST_PATTERN.test(host)) return null;
-  return `${req.protocol}://${host.toLowerCase()}`;
+  if (!host || host.length > MAX_HOST_LENGTH || !HOST_PATTERN.test(host)) return null;
+  return `${protocol}://${host.toLowerCase()}`;
 }
 
 /**

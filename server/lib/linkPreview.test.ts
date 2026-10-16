@@ -210,5 +210,20 @@ describe('previewOrigin', () => {
       .get('/origin')
       .set('X-Forwarded-Host', 'x"><script>alert(1)</script>');
     expect(res.body.origin).toBeNull();
+
+    const tooLong = await request(makeApp(undefined))
+      .get('/origin')
+      .set('Host', `${'a'.repeat(300)}.example`);
+    expect(tooLong.body.origin).toBeNull();
+  });
+
+  it('spiegelt kein Protokoll außer http und https', async () => {
+    for (const proto of ['javascript', 'ftp', '"><script>alert(1)</script>']) {
+      const res = await request(makeApp(undefined, true))
+        .get('/origin')
+        .set('Host', 'diggy.example')
+        .set('X-Forwarded-Proto', proto);
+      expect(res.body.origin).toBeNull();
+    }
   });
 });
