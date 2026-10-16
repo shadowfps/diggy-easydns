@@ -75,8 +75,8 @@ beforeEach(() => {
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 });
 
+// Den Spy auf `click` setzt `restoreMocks` (vitest.config.ts) zurück.
 afterEach(() => {
-  vi.restoreAllMocks();
   window.history.replaceState(null, '', '/');
 });
 

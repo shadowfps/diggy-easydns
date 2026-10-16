@@ -27,8 +27,7 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
   }, [records]);
 
   // Null-MX nur, wenn er der einzige MX ist (Regel: shared/nullMx.ts) —
-  // steht ein echter daneben, stellen Absender dorthin zu. Deshalb über alle
-  // Records, nicht nur die gefilterten.
+  // steht ein echter daneben, stellen Absender dorthin zu.
   const nullMx = useMemo(() => isNullMx(records.filter((r) => r.type === 'MX')), [records]);
 
   const filtered = filter === 'ALL' ? records : records.filter((r) => r.type === filter);

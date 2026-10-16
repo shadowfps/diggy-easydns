@@ -126,6 +126,13 @@ describe('RecordsList — Null-MX', () => {
     expect(nullMxBadge()).not.toBeInTheDocument();
   });
 
+  it('zeigt einen MX mit Großbuchstaben und Schlusspunkt, wie er kam — auch mit Priorität 0', () => {
+    render(<RecordsList records={[{ ...NULL_MX, value: 'MX1.Example.COM.' }]} />);
+
+    expect(within(row('MX1.Example.COM.')).getByText('0')).toBeInTheDocument();
+    expect(nullMxBadge()).not.toBeInTheDocument();
+  });
+
   it('zeigt ein leeres Ziel neben weiteren MX als „.“, nennt es aber nicht Null-MX (RFC 7505: ungültig)', () => {
     const mx1: DnsRecord = { type: 'MX', name: 'example.com', value: 'mx1.example.com', priority: 10, ttl: 3600 };
     render(<RecordsList records={[NULL_MX, mx1]} />);
