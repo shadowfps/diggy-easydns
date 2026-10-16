@@ -80,7 +80,12 @@ async function waitUntilUp() {
 
 await waitUntilUp();
 
-const stylesheet = readFileSync(INDEX, 'utf8').match(/href="\/(assets\/[^"]+\.css)"/)?.[1];
+const html = readFileSync(INDEX, 'utf8');
+const stylesheet = html.match(/href="\/(assets\/[^"]+\.css)"/)?.[1];
+// Das Inline-Script lädt das englische Wörterbuch vor (#86). Ein Pfad ins
+// Leere bricht nichts sichtbar — englische Besucher warteten nur wieder eine
+// Runde länger auf die erste Ansicht.
+const englishChunk = html.match(/link\.href = '\/(assets\/en-[^']+\.js)'/)?.[1] ?? 'englisches-woerterbuch-fehlt';
 
 const checks = [
   ['/api/health', (res, body) => res.status === 200 && JSON.parse(body).status === 'ok'],
@@ -92,6 +97,7 @@ const checks = [
   // Unbekannte API-Pfade dürfen NICHT im Fallback landen.
   ['/api/gibt-es-nicht', (res) => res.status === 404],
   [`/${stylesheet}`, (res) => res.status === 200 && res.headers.get('content-type')?.startsWith('text/css')],
+  [`/${englishChunk}`, (res) => res.status === 200 && /javascript/.test(res.headers.get('content-type') ?? '')],
 ];
 
 let failed = false;

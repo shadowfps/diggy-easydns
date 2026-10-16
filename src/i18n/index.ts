@@ -60,6 +60,9 @@ function preferredTags(): readonly string[] {
  * Die erste *unterstützte*, nicht die erste überhaupt: wer `fr, de` eingestellt
  * hat, liest Deutsch lieber als Englisch. Ohne Treffer wird es Englisch —
  * das verstehen mehr Besucher als Deutsch.
+ *
+ * index.html wiederholt diese Regel, um den englischen Chunk vorzuladen —
+ * eine Änderung hier gehört dort mit hinein (i18n.test.ts vergleicht beide).
  */
 export function detectLanguage(): Language {
   const stored = readStoredLanguage();

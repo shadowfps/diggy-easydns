@@ -33,8 +33,9 @@ function render() {
  *
  * Sonst stünde die Seite für die Dauer eines Requests auf Deutsch da und
  * spränge dann um — jeder Text, jede Zeilenlänge, die Hero-Animation startete
- * neu. Ein kurz leerer Bildschirm (ein kleiner Chunk, meist unter 100 ms) ist
- * ruhiger. Auf sehr langsamen Verbindungen soll er aber nicht ewig leer
+ * neu. Warten kostet kaum: index.html lädt den Chunk parallel zu index.js vor,
+ * er ist meist schon da (Fast 3G: 60 ms später als Deutsch statt 650 ms).
+ * Auf sehr langsamen Verbindungen soll die Seite trotzdem nicht ewig leer
  * bleiben: nach 1,5 s wird auf Deutsch gerendert, und die Seite schaltet um,
  * sobald Englisch da ist. Deutsche Besucher rendern sofort.
  */

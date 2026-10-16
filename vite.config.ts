@@ -1,10 +1,36 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 
+/**
+ * Setzt den Pfad des englischen Wörterbuchs in index.html ein (#86).
+ *
+ * Das Inline-Script dort lädt den Chunk für englische Besucher vor, kennt
+ * aber den Hash im Dateinamen nicht. Im Dev-Server ist es der Quellpfad —
+ * derselbe, den `import('./en')` dort anfragt.
+ */
+function englishPreload(): Plugin {
+  const PLACEHOLDER = '__DIGGY_EN_CHUNK__';
+  return {
+    name: 'diggy-english-preload',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (!html.includes(PLACEHOLDER)) return html;
+        if (!ctx.bundle) return html.replace(PLACEHOLDER, '/src/i18n/en.ts');
+        const chunk = Object.values(ctx.bundle).find(
+          (output) => output.type === 'chunk' && output.facadeModuleId?.endsWith('/src/i18n/en.ts')
+        );
+        if (!chunk) throw new Error('[diggy-english-preload] Chunk für src/i18n/en.ts nicht gefunden.');
+        return html.replace(PLACEHOLDER, `/${chunk.fileName}`);
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), englishPreload()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

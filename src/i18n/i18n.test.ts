@@ -13,6 +13,7 @@ import {
 import type { DeKey } from '@/i18n/de';
 import { DE_PLURALS } from '@/i18n/de';
 import english from '@/i18n/en';
+import indexHtml from '../../index.html?raw';
 
 /**
  * Das Übersetzungsmodul (#86): Platzhalter, Plural, Rückfall auf Deutsch,
@@ -131,6 +132,36 @@ describe('Spracherkennung', () => {
     browserLanguages('en-US');
     window.localStorage.setItem('diggy-language', 'de');
     expect(detectLanguage()).toBe('de');
+  });
+
+  /*
+   * index.html lädt den englischen Chunk vor, bevor die App läuft — mit einer
+   * Kopie dieser Regel in ES5. Laufen die beiden auseinander, lädt entweder
+   * jeder deutsche Besucher den Chunk umsonst, oder der englische wartet
+   * wieder eine Runde länger.
+   */
+  it.each([
+    [['en-US'], null],
+    [['de-AT', 'en'], null],
+    [['en-GB', 'de-DE'], null],
+    [['fr-FR', 'de'], null],
+    [['fr-FR', 'es'], null],
+    [[], null],
+    [['de-DE'], 'en'],
+    [['en-US'], 'de'],
+    [['de-DE'], 'klingonisch'],
+  ])('lädt in index.html genau dann vor, wenn es Englisch wird (%j, gespeichert: %s)', (tags, stored) => {
+    browserLanguages(...tags);
+    if (stored) window.localStorage.setItem('diggy-language', stored);
+    const script = [...indexHtml.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+      .map((match) => match[1])
+      .find((code) => code.includes('diggy-language'));
+    expect(script, 'Preload-Script in index.html').toBeDefined();
+
+    new Function(script!)();
+    const preload = document.head.querySelector('link[rel="modulepreload"]');
+    expect(Boolean(preload)).toBe(detectLanguage() === 'en');
+    preload?.remove();
   });
 
   it('ignoriert einen kaputten gespeicherten Wert', () => {
