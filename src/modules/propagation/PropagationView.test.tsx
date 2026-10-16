@@ -103,9 +103,10 @@ describe('PropagationView — TXT', () => {
     );
 
     expect(screen.getByText(/kein Eintrag · weicht ab/)).toBeInTheDocument();
-    // Ein Fehler ist keine Abweichung, sondern ein Fehler.
+    // Ein Fehler ist keine Abweichung, sondern ein Fehler — und zählt wie im
+    // Befund nicht mit.
     expect(screen.getByText('Timeout')).toBeInTheDocument();
-    expect(screen.getByText(/1 von 4 Resolvern weichen ab/)).toBeInTheDocument();
+    expect(screen.getByText(/1 von 3 Resolvern weichen ab/)).toBeInTheDocument();
   });
 
   it('bietet keine IP-Details für TXT und CNAME an', async () => {

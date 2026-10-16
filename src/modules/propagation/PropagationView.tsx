@@ -49,7 +49,9 @@ export function PropagationView({ results, types }: PropagationViewProps) {
     () => comparePropagation(results, activeType),
     [results, activeType]
   );
-  const { answers, consensusKey, deviating } = comparison;
+  // `compared` statt aller Resolver: Wer einen Fehler hat, zählt nicht mit —
+  // so nennen Hinweis und Befund dieselben Zahlen.
+  const { answers, consensusKey, compared, deviating } = comparison;
   // TXT und CNAME sind die Typen der DNS-Einträge. Dort geht es darum, ob
   // eine Änderung angekommen ist — nicht um GeoDNS. Das ändert die Hinweise.
   const entry = countsMissingAnswers(activeType);
@@ -138,9 +140,9 @@ export function PropagationView({ results, types }: PropagationViewProps) {
           >
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
             <span>
-              {deviating} von {answers.length} Resolvern weichen ab —{' '}
+              {deviating} von {compared} Resolvern weichen ab —{' '}
               {entry
-                ? 'die letzte Änderung ist dort noch nicht angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).'
+                ? 'eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).'
                 : 'möglicherweise noch nicht propagiert, oder absichtlich GeoDNS / Anycast.'}
             </span>
           </motion.div>

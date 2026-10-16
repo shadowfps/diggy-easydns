@@ -249,6 +249,24 @@ describe('propagationFindings', () => {
       expect(findings[0].description).not.toContain('GeoDNS');
     });
 
+    /**
+     * Direkt nach einem DKIM-Wechsel hat oft erst EIN Resolver den neuen
+     * Schlüssel. Die Mehrheit sagt nicht, wer den alten Stand hat — der Befund
+     * darf den abweichenden Resolver deshalb nicht „veraltet“ nennen.
+     */
+    it('sagt nicht, welche Seite den alten Stand hat', () => {
+      const findings = propagationFindings(
+        [
+          resolverResult('cloudflare', [['TXT', 'v=DKIM1; k=rsa; p=NEU']]),
+          resolverResult('google', [['TXT', key]]),
+          resolverResult('adguard', [['TXT', key]]),
+        ],
+        types
+      );
+      expect(findings[0].description).toContain('noch nicht überall angekommen');
+      expect(findings[0].description).not.toMatch(/dort noch nicht/);
+    });
+
     it('zählt einen Resolver, der den neuen Eintrag noch nicht kennt, als Abweichung', () => {
       const findings = propagationFindings(
         [resolverResult('cloudflare', [['TXT', key]]), resolverResult('google', []), resolverResult('adguard', [['TXT', key]])],

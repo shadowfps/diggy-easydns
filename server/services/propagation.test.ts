@@ -21,7 +21,10 @@ interface Answer {
 }
 
 /** Antwortet je nach Resolver und Typ — so, wie die echten DoH-Anbieter formatieren. */
-function stubDoh(answer: (resolverUrl: string, type: number) => Answer[]) {
+function stubDoh(
+  answer: (resolverUrl: string, type: number) => Answer[],
+  status: (resolverUrl: string) => number = () => 0
+) {
   const calls: { url: string; type: number }[] = [];
   vi.stubGlobal(
     'fetch',
@@ -30,7 +33,7 @@ function stubDoh(answer: (resolverUrl: string, type: number) => Answer[]) {
       const type = Number(url.searchParams.get('type'));
       const base = `${url.origin}${url.pathname}`;
       calls.push({ url: base, type });
-      return new Response(JSON.stringify({ Status: 0, Answer: answer(base, type) }), {
+      return new Response(JSON.stringify({ Status: status(base), Answer: answer(base, type) }), {
         headers: { 'content-type': 'application/dns-json' },
       });
     })
@@ -94,6 +97,41 @@ describe('queryAllResolvers — TXT über alle Resolver', () => {
     expect(findings.map((f) => f.id)).toEqual(['propagation-mismatch']);
     expect(findings[0].description).toContain('1 von 5 Resolvern');
     expect(findings[0].description).toContain('TXT-Record');
+  });
+
+  /**
+   * SERVFAIL kommt als HTTP 200 mit leerer Antwort. Als „kein Eintrag“
+   * gewertet, meldete die Propagation eine Abweichung, die nur ein Fehler des
+   * Resolvers ist.
+   */
+  it('wertet SERVFAIL als Fehler, nicht als fehlenden Eintrag', async () => {
+    stubDoh(
+      (url, type) =>
+        type === 16 && !url.includes('adguard')
+          ? [{ name: DKIM, type: 16, TTL: 3600, data: '"v=DKIM1; p=NEU"' }]
+          : [],
+      (url) => (url.includes('adguard') ? 2 : 0)
+    );
+
+    const types = propagationTypes(DKIM);
+    const results = await queryAllResolvers(DKIM, { types });
+    expect(results.find((r) => r.resolver.id === 'adguard')?.error).toBe('SERVFAIL');
+    expect(propagationFindings(results, types).map((f) => f.id)).toEqual(['propagation-consistent']);
+  });
+
+  it('wertet NXDOMAIN als fehlenden Eintrag', async () => {
+    stubDoh(
+      (url, type) =>
+        type === 16 && !url.includes('adguard')
+          ? [{ name: DKIM, type: 16, TTL: 3600, data: '"v=DKIM1; p=NEU"' }]
+          : [],
+      (url) => (url.includes('adguard') ? 3 : 0)
+    );
+
+    const types = propagationTypes(DKIM);
+    const results = await queryAllResolvers(DKIM, { types });
+    expect(results.find((r) => r.resolver.id === 'adguard')?.error).toBeUndefined();
+    expect(propagationFindings(results, types).map((f) => f.id)).toEqual(['propagation-mismatch']);
   });
 
   /**

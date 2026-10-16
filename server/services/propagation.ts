@@ -11,6 +11,16 @@
 import { DOH_RESOLVERS, dohQuery, type DohResolver } from './doh.js';
 import type { DnsRecord, RecordType, ResolverResult } from '../types.js';
 
+/** NOERROR und NXDOMAIN: Der Resolver hat geantwortet — mit Eintrag oder ohne. */
+const ANSWER_STATUSES = new Set([0, 3]);
+
+const DNS_STATUS_NAMES: Record<number, string> = {
+  1: 'FORMERR',
+  2: 'SERVFAIL',
+  4: 'NOTIMP',
+  5: 'REFUSED',
+};
+
 export interface PropagationOptions {
   /** Welche Record-Typen abgefragt werden sollen. Default: A */
   types?: RecordType[];
@@ -52,6 +62,12 @@ async function queryResolverSafe(
     const responses = await Promise.all(
       types.map((type) => dohQuery(resolver, domain, type, { timeoutMs }))
     );
+
+    // SERVFAIL oder REFUSED kommen als HTTP 200 mit leerer Antwort. Das ist
+    // ein Fehler des Resolvers, kein „gibt es nicht“ — bei TXT/CNAME zählt
+    // ein fehlender Eintrag als Abweichung, ein Fehler dagegen nie.
+    const failed = responses.find((r) => !ANSWER_STATUSES.has(r.status));
+    if (failed) throw new Error(DNS_STATUS_NAMES[failed.status] ?? `DNS-Status ${failed.status}`);
 
     // Folgt ein Name einem CNAME, steht der in der Antwort jeder Abfrage —
     // bei TXT + CNAME also doppelt, und so landete er auch im Export.

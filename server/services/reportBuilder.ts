@@ -375,7 +375,9 @@ export function propagationFindings(results: ResolverResult[], types: RecordType
 
   // Bei DNS-Einträgen kommen GeoDNS und Anycast als Erklärung nicht in Frage:
   // ein DKIM-Schlüssel ist überall derselbe. Abweichung heißt dort, dass eine
-  // Änderung noch nicht überall angekommen ist.
+  // Änderung noch nicht überall angekommen ist. Welche Seite den alten Stand
+  // hat, sagt die Mehrheit nicht: Direkt nach dem Wechsel kann gerade der
+  // eine abweichende Resolver schon den neuen Schlüssel liefern.
   const entry = countsMissingAnswers(type);
 
   if (deviating > 0) {
@@ -387,7 +389,7 @@ export function propagationFindings(results: ResolverResult[], types: RecordType
       severity: 'warning',
       title: 'Propagation-Abweichung erkannt',
       description: entry
-        ? `${deviating} von ${compared} Resolvern weichen beim ${type}-Record von der Mehrheit ab — die letzte Änderung ist dort noch nicht angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).`
+        ? `${deviating} von ${compared} Resolvern weichen beim ${type}-Record von der Mehrheit ab — eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).`
         : `${compared} Resolver liefern ${distinct} verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.`,
       category: 'dns',
     }];

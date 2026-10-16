@@ -75,6 +75,19 @@ describe('comparePropagation', () => {
     expect(c.compared).toBe(2);
   });
 
+  /**
+   * Ein Wert, der selbst in Anführungszeichen steht: Google liefert ihn so,
+   * wie er eingetragen ist, und der Server parst ihn wie eine gestückelte
+   * Antwort; bei den anderen bleiben die Anführungszeichen stehen.
+   */
+  it('wertet einen Wert in eigenen Anführungszeichen bei allen Resolvern gleich', () => {
+    const results = [
+      resolver('cloudflare', [['TXT', '"v=spf1 -all"']]),
+      resolver('google', [['TXT', 'v=spf1 -all']]),
+    ];
+    expect(comparePropagation(results, 'TXT').deviating).toBe(0);
+  });
+
   it('trennt Werte mit Komma nicht in mehrere', () => {
     // Mit join(',') wären ["a,b"] und ["a", "b"] derselbe Schlüssel.
     const results = [

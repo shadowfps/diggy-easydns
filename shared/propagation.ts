@@ -50,6 +50,13 @@ const QUOTED_CHUNK = /"((?:[^"\\]|\\.)*)"/g;
  * inhaltlich gleiche Antwort nie als Abweichung zählt — auch nicht, wenn ein
  * Wert ungeparst ankommt oder der Eintrag nur neu gestückelt wurde.
  *
+ * Der zweite Durchgang ist Absicht: Steht ein Wert selbst in Anführungszeichen
+ * (ein häufiger Fehler in DNS-Panels), ist Googles Antwort `"v=spf1 -all"`
+ * nicht von einer gestückelten zu unterscheiden und verliert sie beim Parsen,
+ * die der anderen behält sie. Ohne zweiten Durchgang stünde Google dauerhaft
+ * als abweichend da. Preis: Wer nur diese Anführungszeichen entfernt, sieht
+ * die Änderung hier nicht als Abweichung.
+ *
  * Hostnamen (CNAME) sind unabhängig von Groß-/Kleinschreibung und dem
  * abschließenden Punkt, IPv6-Adressen von der Schreibweise der Hex-Ziffern.
  */
