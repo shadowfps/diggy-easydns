@@ -17,6 +17,7 @@ import {
 } from './services/reportBuilder.js';
 import { cached } from './lib/cache.js';
 import { BlockedTargetError } from './lib/safeTarget.js';
+import { upstreamErrorStatus } from './lib/upstreamError.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { queryAllResolvers } from './services/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
@@ -437,8 +438,7 @@ app.get('/api/pagespeed', rejectCrossSite, pageSpeedLimiter, pageSpeedConcurrenc
   } catch (error) {
     const err = error as Error;
     const message = err.message || 'PageSpeed-Analyse fehlgeschlagen.';
-    const status = message.toLowerCase().includes('timeout') ? 504 : 502;
-    return res.status(status).json({
+    return res.status(upstreamErrorStatus(error)).json({
       error: 'pagespeed_failed',
       message,
     });
@@ -456,8 +456,7 @@ app.get('/api/virusscan', rejectCrossSite, virusScanLimiter, virusScanConcurrenc
     res.json(result);
   } catch (error) {
     const err = error as Error;
-    const status = err.name === 'AbortError' ? 504 : 502;
-    return res.status(status).json({
+    return res.status(upstreamErrorStatus(error)).json({
       error: 'virusscan_failed',
       message: err.message || 'VirusTotal-Scan fehlgeschlagen.',
     });
