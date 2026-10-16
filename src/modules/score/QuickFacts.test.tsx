@@ -1,8 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { DetectedTech, DnssecInfo, MailSecurity, SslInfo } from '@/types/dns';
+import type { DetectedTech, DnsRecord, DnssecInfo, MailSecurity, SslInfo } from '@/types/dns';
 import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { QuickFacts } from './QuickFacts';
+
+/** Alles außer den Records ist hier egal — die Sektionen laden noch nicht. */
+const idle = <T,>(): SectionSlice<T> => ({ status: 'skipped', data: undefined });
+
+function renderWithMx(mx: DnsRecord[]) {
+  render(
+    <QuickFacts
+      records={[{ type: 'NS', name: 'example.com', value: 'a.iana-servers.net', ttl: 0 }, ...mx]}
+      ssl={idle()}
+      dnssec={idle()}
+      mail={idle()}
+      techStack={idle()}
+    />
+  );
+  return screen.getByText('MX').nextElementSibling;
+}
+
+describe('QuickFacts — MX', () => {
+  /** #77: Der Null-MX hat ein leeres Ziel — vorher stand hier ein leeres Feld. */
+  it('zeigt beim Null-MX „keine Mails“ statt eines leeren Werts', () => {
+    const mx = renderWithMx([{ type: 'MX', name: 'example.com', value: '', priority: 0, ttl: 0 }]);
+    expect(mx).toHaveTextContent('keine Mails (Null-MX)');
+  });
+
+  it('zeigt einen echten MX wie bisher', () => {
+    const mx = renderWithMx([
+      { type: 'MX', name: 'example.de', value: 'mx1.example.de', priority: 10, ttl: 0 },
+    ]);
+    expect(mx).toHaveTextContent('mx1.example.de');
+  });
+
+  it('zeigt ohne MX einen Strich', () => {
+    expect(renderWithMx([])).toHaveTextContent('—');
+  });
+});
 
 /** Schnellübersicht: „nicht prüfbar“ statt „kein Cert“/„inaktiv“/„fehlt“ (#101). */
 
@@ -12,6 +47,7 @@ const MAIL: MailSecurity = {
   dkim: { selectors: [] },
   mtaSts: { present: false },
   hasMx: false,
+  nullMx: false,
 };
 const DNSSEC_OFF: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
 const TECH: SectionSlice<DetectedTech[]> = { status: 'done', data: [] };
@@ -19,7 +55,7 @@ const TECH: SectionSlice<DetectedTech[]> = { status: 'done', data: [] };
 /** Wert der Zeile mit diesem Label. */
 const fact = (label: string) => screen.getByText(label).nextElementSibling?.textContent;
 
-describe('QuickFacts', () => {
+describe('QuickFacts — nicht prüfbar', () => {
   it('zeigt gescheiterte Checks als „nicht prüfbar“', () => {
     render(
       <QuickFacts

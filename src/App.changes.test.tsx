@@ -60,6 +60,7 @@ function stubApi({ ip, timestamp, dmarc }: { ip: string; timestamp: string; dmar
       dkim: { selectors: [] },
       mtaSts: { present: false },
       hasMx: false,
+      nullMx: false,
     },
     findings: [],
   });

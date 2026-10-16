@@ -15,7 +15,11 @@ import {
 } from 'lucide-react';
 import type { LookupReport } from '@/types/dns';
 import type { SectionKey } from '@/hooks/useProgressiveLookup';
-import { createHistoryEntry, type LookupHistoryEntry } from '@/lib/lookupHistory';
+import {
+  createHistoryEntry,
+  type LookupHistoryEntry,
+  type TrackedRecordType,
+} from '@/lib/lookupHistory';
 import { changeTone, diffChecks, type ChangeTone, type CheckChange } from '@/lib/checkChanges';
 import { cn } from '@/lib/cn';
 
@@ -216,7 +220,7 @@ function describe(change: CheckChange): ReactNode {
               passt (lange IPv6-Adressen). */}
           {change.values.map((value) => (
             <Mono key={value} className="min-w-0 wrap-anywhere text-fg-muted">
-              {value}
+              {recordLabel(change.type, value)}
             </Mono>
           ))}
         </span>
@@ -240,6 +244,15 @@ function ChangeRow({ change }: { change: CheckChange }) {
       <span className="min-w-0 text-sm text-fg">{describe(change)}</span>
     </li>
   );
+}
+
+/**
+ * Ein Null-MX (`MX 0 .`, #77) hat ein leeres Ziel; vergleichbar gemacht bleibt
+ * von ihm nur die Präferenz „0“. So stünde er unkenntlich in der Liste —
+ * deshalb in Zonendatei-Schreibweise und benannt.
+ */
+function recordLabel(type: TrackedRecordType, value: string): string {
+  return type === 'MX' && value === '0' ? '0 . (Null-MX)' : value;
 }
 
 function Mono({ children, className }: { children: ReactNode; className?: string }) {

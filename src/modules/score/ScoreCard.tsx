@@ -4,6 +4,7 @@ import { AlertCircle, AlertTriangle, ArrowRight, Check, CircleHelp, Info } from 
 import type { Finding, HealthScore } from '@/types/dns';
 import type { SectionKey } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface ScoreCardProps {
   score: HealthScore;
@@ -29,6 +30,7 @@ function scoreTone(s: number) {
 }
 
 export function ScoreCard({ score, findings, failed = [], onShowFindings }: ScoreCardProps) {
+  const reducedMotion = useReducedMotion();
   const tone = scoreTone(score.score);
   // „Nicht prüfbar“ zieht nichts ab (#101). Ohne diesen Hinweis sähe ein
   // Score, dem ganze Checks fehlen, aus wie ein vollständiger — und wer
@@ -42,13 +44,25 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
+    // `MotionConfig reducedMotion="user"` (main.tsx) erfasst nur
+    // motion-Komponenten, nicht dieses imperative animate() auf einem
+    // MotionValue: die Zahl zählte trotz „Bewegung reduzieren“ hoch (#103).
+    // Bei reduzierter Bewegung startet deshalb gar kein Zähler. Schaltet
+    // jemand die Präferenz mitten im Hochzählen ein, stoppt ihn das Cleanup.
+    if (reducedMotion) return;
+
     const controls = animate(count, score.score, { duration: 1.2, ease: 'easeOut' });
     const unsub = rounded.on('change', (v) => setDisplayValue(v));
     return () => {
       controls.stop();
       unsub();
     };
-  }, [score.score, count, rounded]);
+  }, [score.score, count, rounded, reducedMotion]);
+
+  // Direkt aus dem Score, statt displayValue im Effect nachzuziehen: das käme
+  // erst nach dem ersten Render, der dann kurz 0 bzw. bei einem neuen Lookup
+  // den alten Score zeigte.
+  const shownValue = reducedMotion ? score.score : displayValue;
 
   return (
     <motion.div
@@ -65,18 +79,29 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
       <div className="mt-4">
         <div className="flex items-baseline gap-1.5">
           <span className={cn('text-6xl font-semibold tabular-nums tracking-tight', tone.text)}>
-            {displayValue}
+            {shownValue}
           </span>
           <span className="text-base text-fg-subtle">/ 100</span>
         </div>
 
         <div className="mt-5 h-2 overflow-hidden rounded-full bg-surface-muted">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${score.score}%` }}
-            transition={{ duration: 1.2, ease: 'easeOut' }}
-            className={cn('h-full rounded-full', tone.bar)}
-          />
+          {/* Bei reduzierter Bewegung ein schlichtes div mit fester Breite.
+              MotionConfig schaltet die Breitenanimation zwar auf „sofort“, der
+              motion.div rendert aber trotzdem erst `initial` (0) und springt
+              einen Frame später — ebenso bei einem neuen Score. */}
+          {reducedMotion ? (
+            <div
+              style={{ width: `${score.score}%` }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          ) : (
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${score.score}%` }}
+              transition={{ duration: 1.2, ease: 'easeOut' }}
+              className={cn('h-full rounded-full', tone.bar)}
+            />
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
@@ -102,7 +127,7 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
           <TopFinding finding={top} />
           <button type="button" onClick={onShowFindings} className="btn btn-ghost btn-sm -mr-2 group">
             Alle Findings
-            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight className="size-3.5 transition-transform motion-safe:group-hover:translate-x-0.5" />
           </button>
         </div>
       </div>

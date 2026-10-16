@@ -6,8 +6,11 @@ import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
+import { CalendarButton } from '@/components/calendar/CalendarButton';
 
 interface SecurityViewProps {
+  /** Geprüfter Host — Betreff und Report-Link der Kalender-Erinnerung. */
+  domain: string;
   ssl: SectionSlice<SslInfo | null>;
   /** false bei DNS-Einträgen wie `_dmarc.…` — dort gibt es keinen Host für TLS. */
   sslApplicable?: boolean;
@@ -21,7 +24,7 @@ const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'non
  * im Check — vorher stand dort „Kein TLS“ bzw. „nicht aktiviert“. `unchecked`
  * ist die Zeile, warum; ohne sie hat der Check ein Ergebnis.
  */
-export function SecurityView({ ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
+export function SecurityView({ domain, ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
   const dnssecInfo = dnssec.data ?? NO_DNSSEC;
 
   const sslUnchecked = (ssl.status === 'error' || ssl.lookupFailed) && (
@@ -41,7 +44,12 @@ export function SecurityView({ ssl, sslApplicable = true, dnssec }: SecurityView
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <SslCard ssl={ssl.data ?? undefined} applicable={sslApplicable} unchecked={sslUnchecked} />
+      <SslCard
+        domain={domain}
+        ssl={ssl.data ?? undefined}
+        applicable={sslApplicable}
+        unchecked={sslUnchecked}
+      />
       <DnssecCard dnssec={dnssecInfo} unchecked={dnssecUnchecked} />
     </div>
   );
@@ -57,10 +65,12 @@ function sslTone(ssl: SslInfo): Tone {
 }
 
 function SslCard({
+  domain,
   ssl,
   applicable,
   unchecked,
 }: {
+  domain: string;
   ssl?: SslInfo;
   applicable: boolean;
   unchecked?: ReactNode;
@@ -161,6 +171,20 @@ function SslCard({
         />
         <Row label="Protokoll" value={`${ssl.tlsVersion} · ${ssl.signatureAlgorithm}`} />
       </dl>
+
+      {/* Für ein abgelaufenes Zertifikat gibt es nichts mehr vorzumerken. */}
+      {ssl.daysUntilExpiry >= 0 && (
+        <div className="mt-4">
+          <CalendarButton
+            reminder={{
+              kind: 'certificate',
+              subject: domain,
+              expiresAt: ssl.validTo,
+              reportDomain: domain,
+            }}
+          />
+        </div>
+      )}
 
       {ssl.sans.length > 0 && (
         <div className="mt-5 border-t border-line-subtle pt-5">

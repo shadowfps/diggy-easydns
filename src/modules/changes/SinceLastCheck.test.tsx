@@ -26,6 +26,7 @@ const report: LookupReport = {
     dkim: { selectors: [] },
     mtaSts: { present: false },
     hasMx: false,
+    nullMx: false,
   },
   findings: [],
   healthScore: { score: 82, verdict: 'Solide', counts: { success: 1, info: 0, warning: 0, critical: 0 } },
@@ -104,6 +105,35 @@ describe('SinceLastCheck', () => {
 
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
+  });
+
+  // Vergleichbar gemacht bleibt vom Null-MX (`MX 0 .`) nur „0“ — so wäre
+  // der Wechsel auf „keine Mails“ in der Liste nicht zu erkennen.
+  it('zeigt einen neuen Null-MX lesbar an', async () => {
+    const nullMxReport: LookupReport = {
+      ...report,
+      records: [...report.records, { type: 'MX', name: 'example.com', value: '', priority: 0, ttl: 300 }],
+      mail: { ...report.mail, hasMx: true, nullMx: true },
+    };
+    render(
+      <SinceLastCheck
+        previous={{
+          ...createHistoryEntry(nullMxReport, [], threeDaysAgo()),
+          records: { A: ['203.0.113.5'], NS: ['ns1.example.net'], MX: ['10 mx.example.com'] },
+        }}
+        report={nullMxReport}
+        failed={[]}
+        settled
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /2 Änderungen seit/ }));
+
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'neuMX-Record0 . (Null-MX)',
+      'entfallenMX-Record10 mx.example.com',
+    ]);
   });
 
   it('schreibt „1 Änderung“ in der Einzahl', () => {

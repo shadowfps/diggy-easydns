@@ -10,6 +10,7 @@ import type {
 } from '../types.js';
 import { isDnsOnlyName } from '../../shared/dnsName.js';
 import { lookupFailureLabel } from '../../shared/lookupFailure.js';
+import { dmarcPct, noMailProtection } from '../../shared/nullMx.js';
 
 /* ─── Gescheiterte Checks ─────────────────────────────────────────────── */
 
@@ -160,7 +161,10 @@ export function dnsFindings(records: DnsRecord[], domain: string, apexDomain: st
 
 export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
   const findings: Finding[] = [];
-  const hasMx = mail.hasMx;
+  // Ein Null-MX ist zwar ein MX-Record, sagt aber das Gegenteil eines
+  // normalen: hier kommt keine Mail an. Für alles, was am Empfang hängt,
+  // zählt er deshalb wie gar kein MX (Regel: shared/nullMx.ts).
+  const receivesMail = mail.hasMx && !mail.nullMx;
 
   // Wenn keine MX → nicht für Mail eingerichtet, aber wir prüfen trotzdem
   // Spoofing-Schutz (jemand kann ja in deinem Namen Mails versenden, auch
@@ -171,14 +175,14 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   } else if (!mail.spf.present) {
     findings.push({
       id: 'no-spf',
-      severity: hasMx ? 'warning' : 'info',
+      severity: receivesMail ? 'warning' : 'info',
       title: 'Kein SPF-Record gefunden',
-      description: hasMx
+      description: receivesMail
         ? 'Die Domain empfängt Mails (MX vorhanden), aber ohne SPF können andere Server in deinem Namen versenden.'
         : 'Auch ohne aktive Mail-Zustellung schützt SPF (mit -all) gegen Spoofing in deinem Namen.',
       fix: {
         explanation: 'Lege einen SPF-Record als TXT-Record auf der Domain an.',
-        snippet: hasMx
+        snippet: receivesMail
           ? `${apexDomain}  TXT  "v=spf1 mx ~all"`
           : `${apexDomain}  TXT  "v=spf1 -all"`,
       },
@@ -187,7 +191,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   } else {
     for (const issue of mail.spf.issues) {
       findings.push({
-        id: `spf-issue-${slug(issue)}`,
+        id: spfIssueId(issue),
         severity: issue.includes('+all') ? 'critical' : 'warning',
         title: 'SPF-Record problematisch',
         description: issue,
@@ -210,13 +214,22 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
   } else if (!mail.dmarc.present) {
     findings.push({
       id: 'no-dmarc',
-      severity: hasMx ? 'warning' : 'info',
+      severity: receivesMail ? 'warning' : 'info',
       title: 'Kein DMARC-Record auf _dmarc.<domain>',
       description: 'Ohne DMARC können Angreifer leichter E-Mails in deinem Namen verschicken (Spoofing).',
-      fix: {
-        explanation: 'Lege einen DMARC-Record an. Mit p=none läuft erstmal nur Reporting, ohne abzulehnen.',
-        snippet: `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@${apexDomain}"`,
-      },
+      // Der übliche Vorschlag passt nicht zu einem Null-MX: die Report-Adresse
+      // läge auf der Domain selbst, die keine Mail annimmt. Und weil es keine
+      // echten Mails gibt, die verloren gehen könnten, gibt es auch keinen
+      // Grund, mit p=none oder quarantine vorsichtig anzufangen.
+      fix: mail.nullMx
+        ? {
+            explanation: 'Lege einen DMARC-Record mit p=reject an — ohne echte Mails geht dabei nichts verloren. Reports (rua) nur an eine Adresse auf einer anderen Domain: diese hier nimmt keine Mails an.',
+            snippet: `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`,
+          }
+        : {
+            explanation: 'Lege einen DMARC-Record an. Mit p=none läuft erstmal nur Reporting, ohne abzulehnen.',
+            snippet: `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@${apexDomain}"`,
+          },
       category: 'mail',
     });
   } else {
@@ -226,7 +239,12 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
         id: 'dmarc-policy-none',
         severity: 'warning',
         title: 'DMARC-Policy ist p=none (nur Reporting)',
-        description: 'Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. Sobald Reports stabil aussehen: auf quarantine wechseln.',
+        // Bei einem Null-MX gibt es keine echten Mails, die beim Ablehnen
+        // verloren gehen könnten — der Zwischenschritt über quarantine
+        // widerspräche dem Hinweis null-mx-incomplete (p=reject).
+        description: mail.nullMx
+          ? 'Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. Ohne echte Mails geht beim Ablehnen nichts verloren: direkt auf p=reject wechseln.'
+          : 'Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. Sobald Reports stabil aussehen: auf quarantine wechseln.',
         category: 'mail',
       });
     } else {
@@ -240,7 +258,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     }
   }
 
-  if (hasMx && mail.dkim.selectors.length === 0 && mail.dkim.lookupFailed) {
+  if (receivesMail && mail.dkim.selectors.length === 0 && mail.dkim.lookupFailed) {
     findings.push(
       uncheckedFinding(
         'dkim-unchecked',
@@ -250,7 +268,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
         `Nicht alle gängigen Selectors ließen sich abfragen. ${FAILURE_DETAIL[mail.dkim.lookupFailed]}`
       )
     );
-  } else if (hasMx && mail.dkim.selectors.length === 0) {
+  } else if (receivesMail && mail.dkim.selectors.length === 0) {
     findings.push({
       id: 'no-dkim-found',
       severity: 'info',
@@ -268,11 +286,11 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     });
   }
 
-  if (hasMx && mail.mtaSts.lookupFailed) {
+  if (receivesMail && mail.mtaSts.lookupFailed) {
     findings.push(
       uncheckedFinding('mta-sts-unchecked', 'mail', 'MTA-STS', mail.mtaSts.lookupFailed)
     );
-  } else if (hasMx && !mail.mtaSts.present) {
+  } else if (receivesMail && !mail.mtaSts.present) {
     findings.push({
       id: 'no-mta-sts',
       severity: 'info',
@@ -282,7 +300,80 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
     });
   }
 
+  if (mail.nullMx) findings.push(...noMailFindings(mail, apexDomain));
+
   return findings;
+}
+
+/**
+ * Statt der DKIM- und MTA-STS-Hinweise: die Bestätigung, dass die Domain
+ * sauber als „keine Mail“ markiert ist — und, wo SPF oder DMARC dafür noch
+ * fehlen, ein Hinweis darauf.
+ *
+ * Der Hinweis ist `info` wie no-spf/no-dmarc bei Domains ohne MX: Die Domain
+ * empfängt nichts, es geht um Fälschungen in ihrem Namen, und das bewertet
+ * diggy bei Domains ohne Mail schon bisher als Empfehlung, nicht als Mangel.
+ * Er nennt den Zusammenhang, den die einzelnen SPF-/DMARC-Findings nicht
+ * nennen — und deckt die Fälle ab, die dort als OK durchgehen (`~all`,
+ * `p=quarantine`). Kostet aber keine zweiten Punkte, wenn eines davon
+ * schon gemeldet ist (`causedBy`).
+ */
+function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
+  const protection = noMailProtection(mail);
+
+  const nullMxFinding: Finding = protection.complete
+    ? {
+        id: 'null-mx',
+        severity: 'success',
+        title: 'Keine Mails: Domain sauber als mail-frei markiert',
+        description: 'Null-MX (RFC 7505), SPF -all und DMARC p=reject: Die Domain nimmt keine Mails an, und Empfänger weisen Mails ab, die sich als diese Domain ausgeben. DKIM und MTA-STS braucht sie deshalb nicht.',
+        category: 'mail',
+      }
+    : {
+        id: 'null-mx',
+        severity: 'success',
+        title: 'Keine Mails: Null-MX gesetzt',
+        description: 'Der Null-MX (RFC 7505) sagt jedem Absender, dass diese Domain keine Mails annimmt. DKIM und MTA-STS braucht sie deshalb nicht.',
+        category: 'mail',
+      };
+
+  if (protection.complete) return [nullMxFinding];
+
+  const missing: string[] = [];
+  const snippets: string[] = [];
+  if (!protection.spfAllowsNoSender) {
+    missing.push('ein SPF, das niemanden senden lässt (v=spf1 -all)');
+    snippets.push(`${apexDomain}  TXT  "v=spf1 -all"`);
+  }
+  if (!protection.dmarcReject) {
+    const policy = mail.dmarc.present ? mail.dmarc.policy : undefined;
+    missing.push(
+      policy === 'reject'
+        ? `DMARC mit p=reject für alle Mails (jetzt pct=${dmarcPct(mail.dmarc.record)})`
+        : policy
+        ? `DMARC mit p=reject (jetzt p=${policy})`
+        : 'DMARC mit p=reject'
+    );
+    snippets.push(`_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`);
+  }
+
+  return [
+    nullMxFinding,
+    {
+      id: 'null-mx-incomplete',
+      severity: 'info',
+      title: 'Keine Mails, aber Schutz vor Fälschungen unvollständig',
+      description: `Der Null-MX regelt nur den Empfang. Damit Empfänger Mails abweisen, die sich als ${apexDomain} ausgeben, fehlt noch ${missing.join(' und ')}.`,
+      fix: {
+        explanation: 'Eine Domain ohne Mail erlaubt niemandem das Senden und lässt Fälschungen ablehnen.',
+        snippet: snippets.join('\n'),
+      },
+      category: 'mail',
+      // Auch ein problematisches SPF (+all, zu viele Lookups) ist schon
+      // gemeldet und abgezogen — der Fix hier (v=spf1 -all) behebt es mit.
+      causedBy: ['no-spf', 'no-dmarc', 'dmarc-policy-none', ...mail.spf.issues.map(spfIssueId)],
+    },
+  ];
 }
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
@@ -611,4 +702,8 @@ function getStatusExplanation(status: string): string {
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+}
+
+function spfIssueId(issue: string): string {
+  return `spf-issue-${slug(issue)}`;
 }

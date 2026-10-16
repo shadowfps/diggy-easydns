@@ -7,15 +7,18 @@
  *   3) DKIM — TXT auf <selector>._domainkey.<domain>
  *      mit gängigen Selectors (default, google, k1, mail, ...)
  *   4) MTA-STS — TXT auf _mta-sts.<domain> + HTTPS-Policy auf mta-sts.<domain>
+ *   5) MX — ob die Domain überhaupt Mail annimmt (Null-MX, RFC 7505)
  *
  * Alles parallel, alles per node:dns mit Cloudflare als Resolver
  * (siehe dnsLookup.ts) — günstiger als DoH für reine Existenz-Checks.
  */
 
-import { promises as dnsPromises } from 'node:dns';
+import { promises as dnsPromises, type MxRecord } from 'node:dns';
 import type { MailSecurity } from '../types.js';
 import { dnsLookupFailure } from '../lib/dnsFailure.js';
 import type { SpfLookup } from './dnsLookup.js';
+import { isNullMx } from '../../shared/nullMx.js';
+import { leadingVersion, matchTag } from '../../shared/mailTags.js';
 
 const resolver = new dnsPromises.Resolver({ timeout: 4000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
@@ -54,11 +57,11 @@ export async function auditMail(
   /** SPF aus dem Apex-TXT-Lookup (lookupSpfRecord) */
   spfLookup: SpfLookup = {}
 ): Promise<MailSecurity> {
-  const [dmarc, dkim, mtaSts, hasMx] = await Promise.all([
+  const [dmarc, dkim, mtaSts, mx] = await Promise.all([
     lookupDmarc(domain),
     probeDkimSelectors(domain),
     lookupMtaSts(domain),
-    hasMxRecords(domain),
+    lookupMx(domain),
   ]);
 
   const spf: MailSecurity['spf'] = spfLookup.lookupFailed
@@ -70,7 +73,7 @@ export async function auditMail(
     dmarc,
     dkim,
     mtaSts,
-    hasMx,
+    ...summarizeMx(mx),
   };
 }
 
@@ -162,11 +165,12 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
   try {
     const records = await resolver.resolveTxt(`_dmarc.${domain}`);
     const merged = records.map((chunks) => chunks.join(''));
-    const dmarcLine = merged.find((r) => r.toLowerCase().startsWith('v=dmarc1'));
+    const dmarcLine = merged.find((r) => leadingVersion(r)?.toLowerCase() === 'dmarc1');
 
     if (!dmarcLine) return { present: false };
 
-    const policy = matchTag(dmarcLine, 'p');
+    // Policy-Werte sind unabhängig von der Schreibweise; Report-Adressen bleiben unverändert.
+    const policy = matchTag(dmarcLine, 'p')?.toLowerCase();
     const rua = matchTag(dmarcLine, 'rua');
 
     return {
@@ -185,11 +189,6 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
   }
 }
 
-function matchTag(record: string, tag: string): string | undefined {
-  const re = new RegExp(`${tag}\\s*=\\s*([^;\\s]+)`, 'i');
-  return record.match(re)?.[1];
-}
-
 function isValidPolicy(p?: string): p is 'none' | 'quarantine' | 'reject' {
   return p === 'none' || p === 'quarantine' || p === 'reject';
 }
@@ -203,9 +202,7 @@ async function probeDkimSelectors(domain: string): Promise<MailSecurity['dkim']>
       try {
         const records = await resolver.resolveTxt(`${selector}._domainkey.${domain}`);
         const merged = records.map((chunks) => chunks.join(''));
-        const dkimRecord = merged.find(
-          (r) => r.toLowerCase().includes('v=dkim1') || r.toLowerCase().includes('k=')
-        );
+        const dkimRecord = merged.find(isDkimKeyRecord);
         if (dkimRecord && hasUsableDkimKey(dkimRecord)) {
           return { selector, present: true, record: dkimRecord };
         }
@@ -227,6 +224,17 @@ async function probeDkimSelectors(domain: string): Promise<MailSecurity['dkim']>
 }
 
 /**
+ * DKIM-Key-Record nach RFC 6376 §3.6.1: `v=DKIM1` und `k=` sind optional,
+ * ein Record aus nur `p=…` ist also vollständig. Steht vorn ein `v=` mit
+ * anderem Wert, ist es kein DKIM-Record.
+ */
+function isDkimKeyRecord(record: string): boolean {
+  const version = leadingVersion(record);
+  if (version !== undefined) return version.toLowerCase() === 'dkim1';
+  return matchTag(record, 'p') !== undefined || matchTag(record, 'k') !== undefined;
+}
+
+/**
  * RFC 6376: ein leerer p=-Wert bedeutet revoked (Schlüssel zurückgezogen).
  * Wir wollen nur Selectors zeigen, die echt signieren.
  *
@@ -236,10 +244,10 @@ async function probeDkimSelectors(domain: string): Promise<MailSecurity['dkim']>
  *   "v=DKIM1; p=MIIBIj..."  → aktiv, anzeigen
  */
 function hasUsableDkimKey(record: string): boolean {
-  const match = record.match(/p\s*=\s*([^;\s]*)/i);
+  const key = matchTag(record, 'p');
   // Kein p= überhaupt → ungewöhnlich, aber nicht offensichtlich revoked
-  if (!match) return true;
-  return match[1].length > 0;
+  if (key === undefined) return true;
+  return key.length > 0;
 }
 
 /* ─── MTA-STS ─────────────────────────────────────────────────────────── */
@@ -256,11 +264,24 @@ async function lookupMtaSts(domain: string): Promise<MailSecurity['mtaSts']> {
   }
 }
 
-async function hasMxRecords(domain: string): Promise<boolean> {
+/* ─── MX ──────────────────────────────────────────────────────────────── */
+
+async function lookupMx(domain: string): Promise<MxRecord[]> {
   try {
-    const records = await resolver.resolveMx(domain);
-    return records.length > 0;
+    return await resolver.resolveMx(domain);
   } catch {
-    return false;
+    return [];
   }
+}
+
+/**
+ * Ein Null-MX (`MX 0 .`) kommt aus `resolveMx` als `{ priority: 0, exchange: '' }`
+ * an — das leere Ziel ist die Wurzel. Er ist ein MX-Record (`hasMx`), sagt
+ * aber das Gegenteil eines normalen: hier wird keine Mail angenommen.
+ */
+export function summarizeMx(mx: readonly MxRecord[]): Pick<MailSecurity, 'hasMx' | 'nullMx'> {
+  return {
+    hasMx: mx.length > 0,
+    nullMx: isNullMx(mx.map((r) => ({ priority: r.priority, value: r.exchange }))),
+  };
 }
