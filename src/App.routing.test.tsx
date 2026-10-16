@@ -93,16 +93,17 @@ describe('Deep-Links beim ersten Laden', () => {
     expect(searchField()).toBeInTheDocument();
   });
 
-  it('öffnet /impressum direkt', () => {
+  // Beide Seiten werden nachgeladen (Bundle-Budget) — deshalb findBy.
+  it('öffnet /impressum direkt', async () => {
     setPath('/impressum');
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Impressum' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Impressum' })).toBeInTheDocument();
   });
 
-  it('öffnet /datenschutz direkt', () => {
+  it('öffnet /datenschutz direkt', async () => {
     setPath('/datenschutz');
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Datenschutz' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Datenschutz' })).toBeInTheDocument();
   });
 
   it('öffnet /history direkt', () => {
