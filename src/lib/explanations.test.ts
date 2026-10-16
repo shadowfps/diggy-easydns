@@ -3,6 +3,7 @@ import type { RecordType } from '@/types/dns';
 import {
   MAIL_EXPLANATIONS,
   RECORD_EXPLANATIONS,
+  explainMailTerm,
   explainRecordType,
   type Explanation,
 } from './explanations';
@@ -13,7 +14,7 @@ import {
  */
 
 const RECORD_TYPES: RecordType[] = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CAA', 'SOA', 'CNAME'];
-const MAIL_TERMS = ['SPF', 'DKIM', 'DMARC', 'MTA-STS'] as const;
+const MAIL_TERMS = ['SPF', 'DKIM', 'DMARC', 'MTA-STS', 'BIMI', 'TLS-RPT'] as const;
 
 function expectWellFormed(explanation: Explanation | undefined) {
   expect(explanation).toBeDefined();
@@ -44,6 +45,8 @@ describe('Erklärungen', () => {
   it('liefert für Typen ohne Text nichts statt eines leeren Popovers', () => {
     expect(explainRecordType('SRV')).toBeUndefined();
     expect(explainRecordType('DNSKEY')).toBeUndefined();
+    expect(explainMailTerm('Keine Mails (Null-MX)')).toBeUndefined();
+    expect(explainMailTerm('toString')).toBeUndefined();
   });
 
   it('erklärt die TTL beim A-Record', () => {

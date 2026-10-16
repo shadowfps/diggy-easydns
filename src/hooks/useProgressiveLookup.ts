@@ -17,8 +17,10 @@ import type {
   DnssecInfo,
   Finding,
   HealthScore,
+  LookupFailure,
   LookupReport,
   MailSecurity,
+  RecordType,
   ResolverResult,
   SslInfo,
   WhoisInfo,
@@ -33,6 +35,12 @@ export interface SectionSlice<T> {
   status: LoadStatus;
   data: T | undefined;
   error?: string;
+  /**
+   * Fertig, aber der Check kam zu keinem Ergebnis (Timeout, SERVFAIL). Nur
+   * SSL nutzt das: ohne Zertifikat gibt es kein Objekt, das den Ausfall wie
+   * bei DNSSEC und Mail selbst tragen könnte.
+   */
+  lookupFailed?: LookupFailure;
 }
 
 export type SectionKey = 'propagation' | 'dnssec' | 'ssl' | 'mail' | 'whois' | 'techStack';
@@ -46,7 +54,14 @@ export interface TypedSections {
   techStack: SectionSlice<DetectedTech[]>;
 }
 
-const SECTION_KEYS: SectionKey[] = ['propagation', 'dnssec', 'ssl', 'mail', 'whois', 'techStack'];
+export const SECTION_KEYS: readonly SectionKey[] = [
+  'propagation',
+  'dnssec',
+  'ssl',
+  'mail',
+  'whois',
+  'techStack',
+];
 
 /**
  * Was bei einem DNS-Eintrag wie `s1._domainkey.example.com` wegfällt (siehe
@@ -62,6 +77,7 @@ const DEFAULT_MAIL: MailSecurity = {
   dkim: { selectors: [] },
   mtaSts: { present: false },
   hasMx: false,
+  nullMx: false,
 };
 
 const DEFAULT_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
@@ -73,6 +89,7 @@ interface State {
   domain: string | null;
   timestamp: string | null;
   records: DnsRecord[] | null;
+  failedRecordTypes: RecordType[] | undefined;
   recordsStatus: LoadStatus;
   recordsError: string | null;
   dnsFindings: Finding[];
@@ -95,6 +112,7 @@ const INITIAL: State = {
   domain: null,
   timestamp: null,
   records: null,
+  failedRecordTypes: undefined,
   recordsStatus: 'idle',
   recordsError: null,
   dnsFindings: [],
@@ -107,7 +125,14 @@ type Action =
   | { type: 'start'; seq: number; domain: string; skipped: readonly SectionKey[] }
   | { type: 'recordsDone'; seq: number; core: LookupCore }
   | { type: 'recordsError'; seq: number; message: string }
-  | { type: 'sectionDone'; seq: number; key: SectionKey; data: unknown; findings: Finding[] }
+  | {
+      type: 'sectionDone';
+      seq: number;
+      key: SectionKey;
+      data: unknown;
+      findings: Finding[];
+      lookupFailed?: LookupFailure;
+    }
   | { type: 'sectionError'; seq: number; key: SectionKey; message: string };
 
 function reducer(state: State, action: Action): State {
@@ -127,6 +152,7 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         records: action.core.records,
+        failedRecordTypes: action.core.failedRecordTypes,
         domain: action.core.domain,
         timestamp: action.core.timestamp,
         dnsFindings: action.core.findings,
@@ -139,7 +165,14 @@ function reducer(state: State, action: Action): State {
       if (action.seq !== state.seq) return state;
       return {
         ...state,
-        sections: { ...state.sections, [action.key]: { status: 'done', data: action.data } },
+        sections: {
+          ...state.sections,
+          [action.key]: {
+            status: 'done',
+            data: action.data,
+            ...(action.lookupFailed && { lookupFailed: action.lookupFailed }),
+          },
+        },
         sectionFindings: { ...state.sectionFindings, [action.key]: action.findings },
       };
     case 'sectionError':
@@ -174,6 +207,14 @@ export interface ProgressiveLookup {
   allSettled: boolean;
   /** Progressiv befüllter Report — für History/Export, sobald Records da sind. */
   report: LookupReport | null;
+  /**
+   * Sektionen, deren Abfrage fehlschlug. Im `report` stehen für sie Defaults
+   * (DMARC fehlt, DNSSEC aus) — die History muss das wissen, sonst hält der
+   * nächste Vergleich einen Timeout für eine echte Änderung. Teilausfälle
+   * innerhalb einer Sektion trägt der Report selbst (`lookupFailed`,
+   * `failedRecordTypes`).
+   */
+  failed: readonly SectionKey[];
   run: (domain: string) => void;
   reset: () => void;
 }
@@ -203,14 +244,13 @@ export function useProgressiveLookup(): ProgressiveLookup {
         const fire = <R,>(
           key: SectionKey,
           request: () => Promise<R>,
-          pick: (r: R) => { data: unknown; findings: Finding[] }
+          pick: (r: R) => { data: unknown; findings: Finding[]; lookupFailed?: LookupFailure }
         ) => {
           if (skipped.includes(key)) return;
           request()
             .then((r) => {
               if (seq !== seqRef.current) return;
-              const { data, findings } = pick(r);
-              dispatch({ type: 'sectionDone', seq, key, data, findings });
+              dispatch({ type: 'sectionDone', seq, key, ...pick(r) });
             })
             .catch((e) => {
               if (seq !== seqRef.current) return;
@@ -224,7 +264,11 @@ export function useProgressiveLookup(): ProgressiveLookup {
           findings: r.findings,
         }));
         fire('dnssec', () => lookupDnssec(target), (r) => ({ data: r.dnssec, findings: r.findings }));
-        fire('ssl', () => lookupSsl(target), (r) => ({ data: r.ssl, findings: r.findings }));
+        fire('ssl', () => lookupSsl(target), (r) => ({
+          data: r.ssl,
+          findings: r.findings,
+          lookupFailed: r.lookupFailed,
+        }));
         fire('mail', () => lookupMail(target), (r) => ({ data: r.mail, findings: r.findings }));
         fire('whois', () => lookupWhois(target), (r) => ({ data: r.whois, findings: r.findings }));
         fire('techStack', () => lookupTechStack(target), (r) => ({ data: r.techStack, findings: [] }));
@@ -258,6 +302,11 @@ export function useProgressiveLookup(): ProgressiveLookup {
     });
   }, [state.recordsStatus, state.sections]);
 
+  const failed = useMemo(
+    () => SECTION_KEYS.filter((k) => state.sections[k].status === 'error'),
+    [state.sections]
+  );
+
   const healthScore = useMemo(() => calculateScore(findings), [findings]);
 
   const sections = state.sections as unknown as TypedSections;
@@ -278,6 +327,8 @@ export function useProgressiveLookup(): ProgressiveLookup {
       findings,
       healthScore,
       techStack: (sections.techStack.data as DetectedTech[] | undefined) ?? [],
+      failedRecordTypes: state.failedRecordTypes,
+      ...(sections.ssl.lookupFailed && { sslLookupFailed: sections.ssl.lookupFailed }),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, findings, healthScore]);
@@ -292,6 +343,7 @@ export function useProgressiveLookup(): ProgressiveLookup {
     healthScore,
     allSettled,
     report,
+    failed,
     run,
     reset,
   };

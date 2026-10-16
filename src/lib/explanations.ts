@@ -25,7 +25,7 @@ export interface Explanation {
  */
 export type ExplainedRecordType = 'A' | 'AAAA' | 'CNAME' | 'MX' | 'NS' | 'TXT' | 'CAA' | 'SOA';
 
-export type MailTerm = 'SPF' | 'DKIM' | 'DMARC' | 'MTA-STS';
+export type MailTerm = 'SPF' | 'DKIM' | 'DMARC' | 'MTA-STS' | 'BIMI' | 'TLS-RPT';
 
 export const RECORD_EXPLANATIONS: Record<ExplainedRecordType, Explanation> = {
   A: {
@@ -110,7 +110,29 @@ export const MAIL_EXPLANATIONS: Record<MailTerm, Explanation> = {
       'Verlangt von anderen Mailservern, Mails an deine Domain nur verschlüsselt und an Server mit gültigem Zertifikat zuzustellen. ' +
       'Ohne einen solchen Schutz kann ein Angreifer unterwegs die Verschlüsselung abschalten und mitlesen.',
   },
+  BIMI: {
+    title: 'Markenlogo im Postfach',
+    // Voraussetzungen wie in shared/bimiTlsRpt.ts (bimiDmarcGap) und den
+    // Findings: DMARC quarantine/reject, für Gmail und Apple ein Zertifikat.
+    text:
+      'Hinterlegt ein Logo, das Postfächer neben deinen Mails zeigen können. ' +
+      'Das klappt nur mit DMARC auf quarantine oder reject; Gmail und Apple Mail verlangen zusätzlich ein Markenzertifikat (VMC oder CMC).',
+  },
+  'TLS-RPT': {
+    title: 'Berichte über Zustellprobleme',
+    text:
+      'Nennt eine Adresse, an die andere Mailserver berichten, wenn die verschlüsselte Zustellung an deine Domain scheitert. ' +
+      'So fällt auf, wenn etwa ein abgelaufenes Zertifikat oder MTA-STS Mails aufhält.',
+  },
 };
+
+/**
+ * Erklärung zu einem Mail-Begriff, so wie er als Kartentitel steht —
+ * `undefined` für Titel ohne Text (etwa die Null-MX-Karte).
+ */
+export function explainMailTerm(term: string): Explanation | undefined {
+  return Object.hasOwn(MAIL_EXPLANATIONS, term) ? MAIL_EXPLANATIONS[term as MailTerm] : undefined;
+}
 
 /** Erklärung zu einem Record-Typ — `undefined` für Typen ohne Text. */
 export function explainRecordType(type: RecordType): Explanation | undefined {

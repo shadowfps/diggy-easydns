@@ -1,4 +1,5 @@
 import type { VirusScanReport, VirusScanVerdict, VirusScanVendorResult } from '../types.js';
+import { UpstreamTimeoutError } from '../lib/upstreamError.js';
 
 const VT_ENDPOINT = 'https://www.virustotal.com/api/v3/domains';
 const TIMEOUT_MS = 15_000;
@@ -56,7 +57,9 @@ export async function scanVirusTotal(domain: string): Promise<VirusScanReport> {
     return normalize(domain, payload);
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('VirusTotal Timeout — bitte erneut versuchen.', { cause: error });
+      // Eigene Klasse, damit die Route den Timeout als 504 erkennt — der Name
+      // AbortError geht mit dem neuen Fehler verloren.
+      throw new UpstreamTimeoutError('VirusTotal Timeout — bitte erneut versuchen.', { cause: error });
     }
     throw error;
   } finally {

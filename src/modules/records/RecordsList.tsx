@@ -97,15 +97,32 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
                   </span>
                 )}
               </span>
-              <span className="text-xs tabular-nums text-fg-subtle">
-                {record.ttl}s
-              </span>
+              <Ttl ttl={record.ttl} />
             </motion.div>
           );
         })}
       </div>
     </div>
   );
+}
+
+/**
+ * TTL in Sekunden — oder „—“, wenn der Server sie nicht ermitteln konnte
+ * (`null`, #76). Eine `0s` wäre dort falsch: 0 ist eine echte TTL und hieße
+ * „nicht cachen“. Der Strich ist für Screenreader ausgeblendet und durch
+ * „TTL unbekannt“ ersetzt, sonst würde nur „Gedankenstrich“ vorgelesen.
+ */
+function Ttl({ ttl }: { ttl: number | null }) {
+  if (ttl === null) {
+    return (
+      <span className="text-xs text-fg-subtle" title="TTL unbekannt">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">TTL unbekannt</span>
+      </span>
+    );
+  }
+
+  return <span className="text-xs tabular-nums text-fg-subtle">{ttl}s</span>;
 }
 
 function NameserverButton({ value, onClick }: { value: string; onClick: () => void }) {

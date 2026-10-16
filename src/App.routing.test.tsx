@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { setMediaQuery } from '@/test/setup';
 
 /**
  * Routing-Tests für App.tsx.
@@ -57,6 +58,7 @@ function stubApi(domain = 'example.com') {
       dkim: { selectors: [] },
       mtaSts: { present: false },
       hasMx: false,
+      nullMx: false,
     },
     ...EMPTY_SECTION,
   });
@@ -91,16 +93,17 @@ describe('Deep-Links beim ersten Laden', () => {
     expect(searchField()).toBeInTheDocument();
   });
 
-  it('öffnet /impressum direkt', () => {
+  // Beide Seiten werden nachgeladen (Bundle-Budget) — deshalb findBy.
+  it('öffnet /impressum direkt', async () => {
     setPath('/impressum');
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Impressum' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Impressum' })).toBeInTheDocument();
   });
 
-  it('öffnet /datenschutz direkt', () => {
+  it('öffnet /datenschutz direkt', async () => {
     setPath('/datenschutz');
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Datenschutz' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Datenschutz' })).toBeInTheDocument();
   });
 
   it('öffnet /history direkt', () => {
@@ -250,6 +253,18 @@ describe('Suche und History-Einträge', () => {
     await waitFor(() => expect(screen.getByText(/PTR \/ Reverse DNS/)).toBeInTheDocument());
     expect(api.lookupRecords).not.toHaveBeenCalled();
   });
+
+  /** #108: PTR und Details warten auf dieselbe Anfrage — eine Ansage, nicht zwei. */
+  it('sagt das Laden der IP-Details einmal an', async () => {
+    vi.mocked(api.lookupIpDetails).mockReturnValue(new Promise(() => {}));
+    render(<App />);
+    // Andere IP als oben: useIpDetails merkt sich Ergebnisse modulweit.
+    await userEvent.type(searchField(), '9.9.9.9{Enter}');
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Reverse-DNS wird ermittelt');
+    expect(screen.getByText(/IP-Details werden geladen/)).toBeInTheDocument();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
 });
 
 describe('Layout', () => {
@@ -285,6 +300,56 @@ describe('Report', () => {
     const button = await screen.findByRole('button', { name: /Alle Findings/ });
     await userEvent.click(button);
     expect(screen.getByRole('tab', { name: /Findings/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  /** #83: Die Mail-Ansicht ist ein eigener Chunk — der Tab muss sie trotzdem zeigen. */
+  it('zeigt den nachgeladenen Mail-Tab', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    const tab = await screen.findByRole('tab', { name: /Mail/ });
+    await waitFor(() => expect(api.lookupMail).toHaveBeenCalled());
+    await userEvent.click(tab);
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'SPF' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'MTA-STS' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * #108: Sanftes Scrollen per JS erreichen weder MotionConfig noch die
+ * CSS-Regel — bei „Bewegung reduzieren“ springt die Seite stattdessen.
+ */
+describe('Scrollen und „Bewegung reduzieren“', () => {
+  afterEach(() => setMediaQuery());
+
+  async function gotoAbout() {
+    render(<App />);
+    await openMenu();
+    await userEvent.click(screen.getByRole('button', { name: 'About' }));
+  }
+
+  it('gleitet ohne die Einstellung nach oben', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo');
+    await gotoAbout();
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'smooth' });
+  });
+
+  it('springt bei reduzierter Bewegung nach oben', async () => {
+    setMediaQuery('(prefers-reduced-motion: reduce)');
+    const scrollTo = vi.spyOn(window, 'scrollTo');
+    await gotoAbout();
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'auto' });
+  });
+
+  it('holt die Findings bei reduzierter Bewegung ohne Gleiten in Sicht', async () => {
+    setMediaQuery('(prefers-reduced-motion: reduce)');
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+    setPath('/lookup/example.com');
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Alle Findings/ }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'nearest' });
   });
 });
 

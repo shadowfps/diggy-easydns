@@ -7,29 +7,27 @@ import { QuickFacts } from '@/modules/score/QuickFacts';
 import { RecordsList } from '@/modules/records/RecordsList';
 import { PropagationView } from '@/modules/propagation/PropagationView';
 import { FindingsList } from '@/modules/findings/FindingsList';
-import { SecurityView } from '@/modules/security/SecurityView';
-import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
 import { HistoryView } from '@/modules/history/HistoryView';
 import { AboutView } from '@/modules/about/AboutView';
-import { ImpressumView } from '@/modules/impressum/ImpressumView';
-import { DatenschutzView } from '@/modules/datenschutz/DatenschutzView';
 import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { CheckOverview } from '@/modules/home/CheckOverview';
+import { usePreviousCheck } from '@/modules/changes/usePreviousCheck';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
-import { SectionErrorFallback } from '@/components/errors/AppErrorFallback';
+import { PageErrorFallback, SectionErrorFallback } from '@/components/errors/AppErrorFallback';
 import {
   ScoreCardSkeleton,
   SectionCardsSkeleton,
   PropagationSkeleton,
   WhoisSkeleton,
   ListSkeleton,
+  SinceLastCheckSkeleton,
 } from '@/components/ui/Skeleton';
 import { AlertTriangle, Check, Download, Link2, Loader2 } from 'lucide-react';
 import { lazy, Suspense } from 'react';
@@ -61,8 +59,50 @@ const PageSpeedView = lazy(() =>
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
 );
+
+/*
+ * Der Mail-Tab: Seine Daten lädt der Report sofort, die Ansicht braucht aber
+ * erst der Klick auf den Tab. Mit BIMI und TLS-RPT (#83) wäre index.js sonst
+ * über sein Budget gewachsen (47,05 → 48,31 kB gzip bei 48 kB Grenze);
+ * nachgeladen sind es 3,6 kB, die niemanden beim ersten Report aufhalten.
+ * Vorgeladen wird, sobald die Mail-Daten da sind (siehe App) — dann steht die
+ * Ansicht beim Klick schon bereit, statt erst ein Skeleton zu zeigen.
+ */
+const loadMailView = () => import('@/modules/mail/MailView');
+const MailView = lazy(() => loadMailView().then((m) => ({ default: m.MailView })));
+
+/*
+ * „Seit dem letzten Check“ erscheint nur bei einem erneuten Check derselben
+ * Domain und erst nach dem Report — Vergleichslogik und Texte (rund 3 kB
+ * gzip) müssen den ersten Report nicht aufhalten.
+ */
+const SinceLastCheck = lazy(() =>
+  import('@/modules/changes/SinceLastCheck').then((m) => ({ default: m.SinceLastCheck }))
+);
+
+/*
+ * Bundle-Budget (index.js ≤ 48 kB gzip, scripts/check-bundle-size.mjs): mit
+ * dem Vergleich (#79) und dem Kalender (#84) lag index.js bei 48,5 kB. Statt
+ * die Grenze anzuheben, kommen zwei Dinge aus dem kritischen Pfad, die den
+ * ersten Report nicht aufhalten müssen:
+ *
+ * - Der Sicherheits-Tab: SSL und DNSSEC lädt der Report sofort, die Ansicht
+ *   braucht erst der Klick auf den Tab. Vorgeladen wird, sobald einer der
+ *   beiden Checks fertig ist (siehe App) — dann steht sie beim Klick bereit.
+ * - Impressum und Datenschutz: reiner Text auf eigenen Seiten, zusammen rund
+ *   5 kB gzip, die bisher jeder Aufruf mitlud.
+ */
+const loadSecurityView = () => import('@/modules/security/SecurityView');
+const SecurityView = lazy(() => loadSecurityView().then((m) => ({ default: m.SecurityView })));
+const ImpressumView = lazy(() =>
+  import('@/modules/impressum/ImpressumView').then((m) => ({ default: m.ImpressumView }))
+);
+const DatenschutzView = lazy(() =>
+  import('@/modules/datenschutz/DatenschutzView').then((m) => ({ default: m.DatenschutzView }))
+);
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/cn';
 import { isDnsOnlyName } from '@/lib/dnsName';
 import {
@@ -80,9 +120,7 @@ import {
   saveLookupToHistory,
   useLookupHistory,
 } from '@/lib/lookupHistory';
-import type { DnssecInfo, PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
-
-const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+import type { PageSpeedReport, PageSpeedStrategy, VirusScanReport } from '@/types/dns';
 
 export default function App() {
   const [view, setView] = useState<AppView>('lookup');
@@ -109,8 +147,13 @@ export default function App() {
   // damit man ohne Klick per Strg+V einfügen und suchen kann. Bei Deep-Links
   // (Permalink oder Unterseite) übernimmt der Routing-Effekt.
   const [autoFocusSearch] = useState(() => window.location.pathname === '/');
+  // „Bewegung reduzieren“: springen statt gleiten. Das sanfte Scrollen per JS
+  // erreicht weder MotionConfig noch die CSS-Regel in globals.css.
+  const smoothScroll: ScrollBehavior = useReducedMotion() ? 'auto' : 'smooth';
 
   const report = lookup.report;
+  // Muss vor dem Speichern unten gelesen werden — siehe usePreviousCheck.
+  const previousCheck = usePreviousCheck(report);
   const records = lookup.records;
   const recordsLoading = lookup.recordsStatus === 'loading';
   const recordsErrored = lookup.recordsStatus === 'error';
@@ -155,7 +198,7 @@ export default function App() {
   };
 
   const handleSearch = (domain: string) => {
-    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
+    window.scrollTo({ top: 0, behavior: records || ipQuery ? smoothScroll : 'auto' });
     /*
      * Eintrag nur anlegen, wenn wir NICHT schon auf einem Lookup-Pfad sind.
      *
@@ -184,11 +227,12 @@ export default function App() {
   }, [lookup.recordsStatus, lookup.domain]);
 
   // Alle Sektionen fertig → vollständigen Report in die History schreiben.
+  // Fehlgeschlagene Sektionen mit, damit der nächste Vergleich sie auslässt.
   useEffect(() => {
     if (lookup.allSettled && lookup.report) {
-      saveLookupToHistory(lookup.report);
+      saveLookupToHistory(lookup.report, lookup.failed);
     }
-  }, [lookup.allSettled, lookup.report]);
+  }, [lookup.allSettled, lookup.report, lookup.failed]);
 
   const handleRunVirusScan = async () => {
     if (!lookup.domain || virusScanLoading) return;
@@ -274,14 +318,14 @@ export default function App() {
       window.history.pushState(null, '', pathname);
     }
     applyPath(pathname);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: smoothScroll });
   };
 
   // Aus der Score-Karte: Tab wechseln und die Tab-Leiste in Sicht holen — auf
   // dem Handy liegt sie sonst unter der Schnellübersicht außer Sicht.
   const handleShowFindings = () => {
     setActiveTab('findings');
-    document.getElementById('tab-findings')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('tab-findings')?.scrollIntoView({ behavior: smoothScroll, block: 'nearest' });
   };
 
   const handleHome = () => navigate('/');
@@ -304,7 +348,7 @@ export default function App() {
     if (!records && window.location.pathname !== '/') {
       window.history.pushState(null, '', '/');
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: smoothScroll });
   };
 
   // Erstes Laden: Deep-Link/Permalink anwenden.
@@ -371,10 +415,24 @@ export default function App() {
     ? (mailData.spf.present ? 1 : 0) +
         (mailData.dmarc.present ? 1 : 0) +
         mailData.dkim.selectors.length +
-        (mailData.mtaSts.present ? 1 : 0) || undefined
+        (mailData.mtaSts.present ? 1 : 0) +
+        (mailData.tlsRpt?.present ? 1 : 0) +
+        (mailData.bimi?.present ? 1 : 0) || undefined
     : undefined;
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
   const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
+
+  // Sicherheits- und Mail-Tab vorladen, sobald es etwas zu zeigen gibt — nach
+  // dem ersten Render, also ohne den Report aufzuhalten. Scheitert es (etwa ein
+  // Chunk von vor dem letzten Deploy), meldet sich der Tab über seine Boundary.
+  const hasSecurityData = ssl.status === 'done' || dnssec.status === 'done';
+  useEffect(() => {
+    if (hasSecurityData) loadSecurityView().catch(() => {});
+  }, [hasSecurityData]);
+  const hasMailData = Boolean(mailData);
+  useEffect(() => {
+    if (hasMailData) loadMailView().catch(() => {});
+  }, [hasMailData]);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -418,9 +476,19 @@ export default function App() {
 
         {view === 'availability' && <AvailabilityView />}
 
-        {view === 'impressum' && <ImpressumView onOpenDatenschutz={handleDatenschutz} />}
-
-        {view === 'datenschutz' && <DatenschutzView onOpenImpressum={handleImpressum} />}
+        {(view === 'impressum' || view === 'datenschutz') && (
+          // Nachgeladen (siehe oben). Scheitert der Chunk, bleibt die App
+          // drumherum bedienbar, statt ganz in den Fehler zu fallen.
+          <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
+            <Suspense fallback={null}>
+              {view === 'impressum' ? (
+                <ImpressumView onOpenDatenschutz={handleDatenschutz} />
+              ) : (
+                <DatenschutzView onOpenImpressum={handleImpressum} />
+              )}
+            </Suspense>
+          </ErrorBoundary>
+        )}
 
         {/* Hero / Search */}
         {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
@@ -537,13 +605,16 @@ export default function App() {
         </AnimatePresence>
 
         {/* Loading State — nur bis die Records da sind. Danach übernimmt der
-            Report mit Skeletons für die noch ladenden Sektionen. */}
+            Report mit Skeletons für die noch ladenden Sektionen. role="status",
+            damit der Text angesagt wird: bei „Bewegung reduzieren“ steht der
+            Spinner still und trägt den Ladezustand nicht mehr mit. */}
         <AnimatePresence>
           {view === 'lookup' && recordsLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              role="status"
               className="mx-auto mt-10 max-w-2xl text-center"
             >
               <Loader2 className="mx-auto size-6 animate-spin text-fg" />
@@ -610,6 +681,7 @@ export default function App() {
                 <ScoreCard
                   score={lookup.healthScore}
                   findings={lookup.findings}
+                  failed={lookup.failed}
                   onShowFindings={handleShowFindings}
                 />
               ) : (
@@ -626,6 +698,26 @@ export default function App() {
             </aside>
 
             <div className="mt-8 min-w-0 xl:mt-0">
+              {/* Über den Tabs statt in der Seitenspalte: die soll flach
+                  bleiben (docs/DESIGN.md), und hier ist Platz für die Liste.
+                  Beim ersten Lookup einer Domain gibt es nichts zu zeigen. */}
+              {previousCheck && (
+                // Eigene Boundary: scheitert das Nachladen (alter Chunk nach
+                // einem Deploy) oder der Vergleich an kaputten History-Daten,
+                // fehlt nur diese Karte — nicht der ganze Report.
+                <ErrorBoundary key={report.timestamp} fallback={() => null}>
+                  <Suspense fallback={<SinceLastCheckSkeleton className="mb-6" />}>
+                    <SinceLastCheck
+                      previous={previousCheck}
+                      report={report}
+                      failed={lookup.failed}
+                      settled={lookup.allSettled}
+                      className="mb-6"
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              )}
+
               {/* Tabs */}
               <Tabs
                 active={activeTab}
@@ -732,11 +824,14 @@ export default function App() {
                       (securityLoading ? (
                         <SectionCardsSkeleton count={2} />
                       ) : (
-                        <SecurityView
-                          ssl={ssl.data ?? undefined}
-                          sslApplicable={!dnsOnly}
-                          dnssec={dnssec.data ?? NO_DNSSEC}
-                        />
+                        <Suspense fallback={<SectionCardsSkeleton count={2} />}>
+                          <SecurityView
+                            domain={report.domain}
+                            ssl={ssl}
+                            sslApplicable={!dnsOnly}
+                            dnssec={dnssec}
+                          />
+                        </Suspense>
                       ))}
                     {activeTab === 'mail' &&
                       (mail.status === 'loading' ? (
@@ -744,7 +839,9 @@ export default function App() {
                       ) : mail.status === 'error' ? (
                         <SectionError message={mail.error} />
                       ) : mailData ? (
-                        <MailView mail={mailData} />
+                        <Suspense fallback={<SectionCardsSkeleton count={4} />}>
+                          <MailView mail={mailData} />
+                        </Suspense>
                       ) : (
                         <SectionCardsSkeleton count={4} />
                       ))}
@@ -754,7 +851,11 @@ export default function App() {
                       ) : whois.status === 'error' ? (
                         <SectionError message={whois.error} />
                       ) : (
-                        <WhoisView whois={whois.data ?? undefined} onUseDomain={handleUseDomainInSearch} />
+                        <WhoisView
+                          domain={report.domain}
+                          whois={whois.data ?? undefined}
+                          onUseDomain={handleUseDomainInSearch}
+                        />
                       ))}
                     {activeTab === 'speed' && (
                       <Suspense fallback={<SectionCardsSkeleton count={2} />}>
