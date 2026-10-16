@@ -19,6 +19,7 @@ import type {
   HealthScore,
   LookupReport,
   MailSecurity,
+  RecordType,
   ResolverResult,
   SslInfo,
   WhoisInfo,
@@ -80,6 +81,7 @@ interface State {
   domain: string | null;
   timestamp: string | null;
   records: DnsRecord[] | null;
+  failedRecordTypes: RecordType[] | undefined;
   recordsStatus: LoadStatus;
   recordsError: string | null;
   dnsFindings: Finding[];
@@ -102,6 +104,7 @@ const INITIAL: State = {
   domain: null,
   timestamp: null,
   records: null,
+  failedRecordTypes: undefined,
   recordsStatus: 'idle',
   recordsError: null,
   dnsFindings: [],
@@ -134,6 +137,7 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         records: action.core.records,
+        failedRecordTypes: action.core.failedRecordTypes,
         domain: action.core.domain,
         timestamp: action.core.timestamp,
         dnsFindings: action.core.findings,
@@ -184,7 +188,9 @@ export interface ProgressiveLookup {
   /**
    * Sektionen, deren Abfrage fehlschlug. Im `report` stehen für sie Defaults
    * (DMARC fehlt, DNSSEC aus) — die History muss das wissen, sonst hält der
-   * nächste Vergleich einen Timeout für eine echte Änderung.
+   * nächste Vergleich einen Timeout für eine echte Änderung. Teilausfälle
+   * innerhalb einer Sektion trägt der Report selbst (`lookupFailed`,
+   * `failedRecordTypes`).
    */
   failed: readonly SectionKey[];
   run: (domain: string) => void;
@@ -296,6 +302,7 @@ export function useProgressiveLookup(): ProgressiveLookup {
       findings,
       healthScore,
       techStack: (sections.techStack.data as DetectedTech[] | undefined) ?? [],
+      failedRecordTypes: state.failedRecordTypes,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, findings, healthScore]);

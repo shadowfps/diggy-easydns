@@ -187,9 +187,7 @@ function describe(change: CheckChange): ReactNode {
     case 'ssl-invalid':
       return 'Zertifikat ungültig oder abgelaufen';
     case 'ssl-valid':
-      return change.validTo
-        ? `Zertifikat jetzt gültig bis ${formatDate(change.validTo)}`
-        : 'Zertifikat jetzt gültig';
+      return `Zertifikat jetzt gültig bis ${formatDate(change.validTo)}`;
     case 'dnssec':
       return change.enabled ? 'DNSSEC ist jetzt aktiv' : 'DNSSEC ist nicht mehr aktiv';
     case 'dmarc':

@@ -644,15 +644,20 @@ export default function App() {
                   bleiben (docs/DESIGN.md), und hier ist Platz für die Liste.
                   Beim ersten Lookup einer Domain gibt es nichts zu zeigen. */}
               {previousCheck && (
-                <Suspense fallback={<SinceLastCheckSkeleton className="mb-6" />}>
-                  <SinceLastCheck
-                    previous={previousCheck}
-                    report={report}
-                    failed={lookup.failed}
-                    settled={lookup.allSettled}
-                    className="mb-6"
-                  />
-                </Suspense>
+                // Eigene Boundary: scheitert das Nachladen (alter Chunk nach
+                // einem Deploy) oder der Vergleich an kaputten History-Daten,
+                // fehlt nur diese Karte — nicht der ganze Report.
+                <ErrorBoundary key={report.timestamp} fallback={() => null}>
+                  <Suspense fallback={<SinceLastCheckSkeleton className="mb-6" />}>
+                    <SinceLastCheck
+                      previous={previousCheck}
+                      report={report}
+                      failed={lookup.failed}
+                      settled={lookup.allSettled}
+                      className="mb-6"
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               )}
 
               {/* Tabs */}

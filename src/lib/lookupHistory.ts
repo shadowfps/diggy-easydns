@@ -9,7 +9,8 @@ import { SECTION_KEYS, type SectionKey } from '@/hooks/useProgressiveLookup';
  */
 export const TRACKED_RECORD_TYPES = ['A', 'AAAA', 'MX', 'NS'] as const;
 export type TrackedRecordType = (typeof TRACKED_RECORD_TYPES)[number];
-export type TrackedRecords = Partial<Record<TrackedRecordType, string[]>>;
+/** `null`: die Abfrage des Typs scheiterte, seine Werte sind unbekannt. */
+export type TrackedRecords = Partial<Record<TrackedRecordType, string[] | null>>;
 export type DmarcPolicy = NonNullable<MailSecurity['dmarc']['policy']>;
 
 /**
@@ -41,15 +42,19 @@ export interface LookupHistoryEntry {
    * haben diese Felder nicht — alles Lesende muss mit undefined rechnen.
    */
 
-  /** Alle Werte je Typ, normalisiert. Ein fehlender Typ heißt: keine Records. */
+  /**
+   * Alle Werte je Typ, normalisiert. Ein fehlender Typ heißt: keine Records,
+   * `null`: Abfrage gescheitert, Werte unbekannt.
+   */
   records?: TrackedRecords;
   /** Ablaufdatum des Zertifikats. sslDaysUntilExpiry hängt vom Prüftag ab und taugt nur ungefähr. */
   sslValidTo?: string;
   dmarcPolicy?: DmarcPolicy;
   /**
-   * Sektionen, deren Abfrage fehlschlug. sslValid, dnssecValid und
-   * dmarcPresent sind dann nur Defaults (false) — ohne diese Liste meldete
-   * der nächste Vergleich nach einem Timeout „DMARC entfernt“.
+   * Sektionen, deren Ergebnis nicht belastbar ist: Abfrage fehlgeschlagen
+   * oder ihr entscheidender Teil (DNSSEC-Schlüssel, DMARC-Record). sslValid,
+   * dnssecValid und dmarcPresent sind dann nur Defaults (false) — ohne diese
+   * Liste meldete der nächste Vergleich nach einem Timeout „DMARC entfernt“.
    */
   failedChecks?: SectionKey[];
 }
@@ -153,6 +158,11 @@ export function createHistoryEntry(
   lookedUpAt: string = new Date().toISOString()
 ): LookupHistoryEntry {
   const dmarc = report.mail.dmarc;
+  // Teilausfälle zählen wie ein Ausfall der Sektion: der Server meldet dann
+  // `false`, weiß es aber nicht.
+  const unreliable = new Set<SectionKey>(failed);
+  if (report.dnssec.lookupFailed) unreliable.add('dnssec');
+  if (dmarc.lookupFailed) unreliable.add('mail');
   return {
     domain: report.domain,
     lookedUpAt,
@@ -171,7 +181,7 @@ export function createHistoryEntry(
     // Felder mit undefined lässt JSON.stringify weg — sie kosten keinen Platz.
     sslValidTo: report.ssl?.validTo || undefined,
     dmarcPolicy: dmarc.present ? dmarc.policy : undefined,
-    failedChecks: failed.length > 0 ? [...failed] : undefined,
+    failedChecks: unreliable.size > 0 ? [...unreliable] : undefined,
   };
 }
 
@@ -189,8 +199,13 @@ function recordValue(record: LookupReport['records'][number]): string {
 }
 
 function trackedRecords(report: LookupReport): TrackedRecords {
+  const failedTypes = new Set(report.failedRecordTypes ?? []);
   const result: TrackedRecords = {};
   for (const type of TRACKED_RECORD_TYPES) {
+    if (failedTypes.has(type)) {
+      result[type] = null;
+      continue;
+    }
     const values = report.records
       .filter((record) => record.type === type)
       .map((record) => normalizeRecordValue(recordValue(record)));
@@ -277,6 +292,10 @@ function validRecords(records: unknown): TrackedRecords | undefined {
   for (const type of TRACKED_RECORD_TYPES) {
     const values = source[type];
     if (values === undefined) continue;
+    if (values === null) {
+      clean[type] = null;
+      continue;
+    }
     // Ein kaputter Typ verwirft alle: fehlte nur er, meldete der Vergleich
     // „alle Records dieses Typs entfallen“.
     if (!Array.isArray(values) || !values.every((value) => typeof value === 'string')) {

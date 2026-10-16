@@ -23,7 +23,7 @@ export type CheckChange =
   | { kind: 'ssl-renewed'; validTo: string }
   | { kind: 'ssl-replaced'; validTo: string }
   | { kind: 'ssl-invalid' }
-  | { kind: 'ssl-valid'; validTo?: string }
+  | { kind: 'ssl-valid'; validTo: string }
   | { kind: 'dnssec'; enabled: boolean }
   | { kind: 'dmarc'; present: boolean; policy?: DmarcPolicy }
   | { kind: 'dmarc-policy'; from: DmarcPolicy; to: DmarcPolicy }
@@ -51,7 +51,7 @@ interface ComparableState {
   score?: number;
   /** Nur Typen, deren Werte vollständig bekannt sind. */
   records: Partial<Record<TrackedRecordType, string[]>>;
-  ssl?: { valid: boolean; validTo?: number; approximate: boolean };
+  ssl?: { valid: boolean; validTo: number; approximate: boolean };
   dnssec?: boolean;
   dmarc?: { present: boolean; policy?: DmarcPolicy };
 }
@@ -106,10 +106,7 @@ function comparableState(entry: LookupHistoryEntry): ComparableState {
   return {
     score: scoreComplete && Number.isFinite(entry.score) ? entry.score : undefined,
     records: entry.records ? completeRecords(entry.records) : legacyRecords(entry),
-    ssl:
-      failed.has('ssl') || typeof entry.sslValid !== 'boolean'
-        ? undefined
-        : { valid: entry.sslValid, ...sslExpiry(entry) },
+    ssl: failed.has('ssl') || typeof entry.sslValid !== 'boolean' ? undefined : sslState(entry),
     dnssec:
       failed.has('dnssec') || typeof entry.dnssecValid !== 'boolean'
         ? undefined
@@ -126,7 +123,11 @@ function completeRecords(
 ): ComparableState['records'] {
   const result: ComparableState['records'] = {};
   for (const type of TRACKED_RECORD_TYPES) {
-    const values = records[type] ?? [];
+    const stored = records[type];
+    // null: Abfrage gescheitert, Werte unbekannt. Fehlt der Typ: keine Records.
+    if (stored === null) continue;
+    const values = stored ?? [];
+    // Am Limit: womöglich gekürzt.
     if (values.length >= RECORD_VALUE_LIMIT) continue;
     result[type] = values.map(normalizeRecordValue);
   }
@@ -154,19 +155,27 @@ function legacyRecords(entry: LookupHistoryEntry): ComparableState['records'] {
 }
 
 /**
- * Ablaufdatum des Zertifikats. Alte Einträge haben nur die Resttage zum
+ * Zertifikatsstand — nur, wenn ein Zertifikat gelesen wurde. Ohne eines
+ * (`ssl: null`) ist offen, ob die Seite kein TLS hat oder der Handshake nur
+ * in den Timeout lief: der Server liefert für beides dasselbe.
+ *
+ * Alte Einträge haben statt des Ablaufdatums nur die Resttage zum
  * Prüfzeitpunkt — daraus lässt es sich auf etwa einen Tag genau schätzen.
  */
-function sslExpiry(entry: LookupHistoryEntry): { validTo?: number; approximate: boolean } {
+function sslState(entry: LookupHistoryEntry): ComparableState['ssl'] {
   if (entry.sslValidTo) {
     const validTo = Date.parse(entry.sslValidTo);
-    if (Number.isFinite(validTo)) return { validTo, approximate: false };
+    if (Number.isFinite(validTo)) return { valid: entry.sslValid, validTo, approximate: false };
   }
   const checkedAt = Date.parse(entry.lookedUpAt);
   if (typeof entry.sslDaysUntilExpiry === 'number' && Number.isFinite(checkedAt)) {
-    return { validTo: checkedAt + entry.sslDaysUntilExpiry * DAY_MS, approximate: true };
+    return {
+      valid: entry.sslValid,
+      validTo: checkedAt + entry.sslDaysUntilExpiry * DAY_MS,
+      approximate: true,
+    };
   }
-  return { approximate: false };
+  return undefined;
 }
 
 function scoreChanges(before?: number, after?: number): CheckChange[] {
@@ -178,9 +187,9 @@ function sslChanges(before: ComparableState['ssl'], after: ComparableState['ssl'
   if (!before || !after) return [];
   if (before.valid && !after.valid) return [{ kind: 'ssl-invalid' }];
   if (!before.valid && after.valid) {
-    return [{ kind: 'ssl-valid', validTo: toIso(after.validTo) }];
+    return [{ kind: 'ssl-valid', validTo: new Date(after.validTo).toISOString() }];
   }
-  if (!after.valid || before.validTo === undefined || after.validTo === undefined) return [];
+  if (!after.valid) return [];
 
   // Ein geschätztes Datum kann um einen Tag danebenliegen. Echte Wechsel
   // verschieben das Ablaufdatum um Wochen, nicht um Stunden.
@@ -235,8 +244,4 @@ function recordChanges(
 /** Natürlich sortiert: „5 mx…“ vor „10 mx…“. */
 function sorted(values: string[]): string[] {
   return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-}
-
-function toIso(timestamp?: number): string | undefined {
-  return timestamp === undefined ? undefined : new Date(timestamp).toISOString();
 }

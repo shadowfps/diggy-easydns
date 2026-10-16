@@ -95,6 +95,15 @@ describe('diffChecks', () => {
       expect(diffChecks(entry(), after)).toEqual([]);
     });
 
+    // null: die Abfrage des Typs scheiterte (Timeout, SERVFAIL) — unbekannt,
+    // nicht leer. Sonst hieße es „alle AAAA-Records entfallen“ und beim
+    // nächsten Mal „neu“.
+    it('überspringt einen Typ, dessen Abfrage scheiterte', () => {
+      const failed = entry({ records: { ...entry().records, AAAA: null } });
+      expect(diffChecks(entry(), failed)).toEqual([]);
+      expect(diffChecks(failed, entry())).toEqual([]);
+    });
+
     it('überspringt einen Typ, der die Speichergrenze erreicht — er könnte gekürzt sein', () => {
       const many = Array.from({ length: 20 }, (_, i) => `198.51.100.${i + 1}`);
       const before = entry({ records: { ...entry().records, A: many } });
@@ -125,10 +134,25 @@ describe('diffChecks', () => {
     });
 
     it('meldet ein wieder gültiges Zertifikat mit Ablaufdatum', () => {
-      const before = entry({ sslValid: false, sslDaysUntilExpiry: undefined, sslValidTo: undefined });
+      const before = entry({
+        sslValid: false,
+        sslDaysUntilExpiry: -3,
+        sslValidTo: '2026-10-10T12:00:00.000Z',
+      });
       expect(diffChecks(before, entry())).toEqual([
         { kind: 'ssl-valid', validTo: '2026-11-22T12:00:00.000Z' },
       ]);
+    });
+
+    // ssl: null heißt „kein TLS“ ODER „Handshake im Timeout“ — der Server
+    // unterscheidet das nicht. Ein Timeout darf nicht „ungültig“ heißen.
+    it('vergleicht nicht, wenn auf einer Seite kein Zertifikat gelesen wurde', () => {
+      const none = entry({ sslValid: false, sslDaysUntilExpiry: undefined, sslValidTo: undefined });
+      expect(diffChecks(entry(), none)).toEqual([]);
+      expect(diffChecks(none, entry())).toEqual([]);
+      expect(diffChecks(legacy(), legacy({ sslValid: false, sslDaysUntilExpiry: undefined }))).toEqual(
+        []
+      );
     });
 
     it('vergleicht nicht, wenn der SSL-Check auf einer Seite fehlschlug', () => {
@@ -272,7 +296,7 @@ describe('changeTone', () => {
     [{ kind: 'ssl-renewed', validTo: CHECKED_AT }, 'success'],
     [{ kind: 'ssl-replaced', validTo: CHECKED_AT }, 'neutral'],
     [{ kind: 'ssl-invalid' }, 'danger'],
-    [{ kind: 'ssl-valid' }, 'success'],
+    [{ kind: 'ssl-valid', validTo: CHECKED_AT }, 'success'],
     [{ kind: 'dnssec', enabled: true }, 'success'],
     [{ kind: 'dnssec', enabled: false }, 'warning'],
     [{ kind: 'dmarc', present: true }, 'success'],

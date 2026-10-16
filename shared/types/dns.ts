@@ -95,6 +95,11 @@ export interface DnssecInfo {
   valid: boolean;
   algorithm?: string;
   chainOfTrust: 'valid' | 'invalid' | 'incomplete' | 'none';
+  /**
+   * Die DS- oder DNSKEY-Abfrage scheiterte (Timeout, HTTP-Fehler). `enabled`
+   * und `valid` sind dann nur der Stand ohne diese Antwort, nicht belastbar.
+   */
+  lookupFailed?: boolean;
 }
 
 export interface MailSecurity {
@@ -110,6 +115,11 @@ export interface MailSecurity {
     record?: string;
     policy?: 'none' | 'quarantine' | 'reject';
     rua?: string;
+    /**
+     * Die Abfrage scheiterte (Timeout, SERVFAIL) — `present: false` heißt dann
+     * „unbekannt“, nicht „kein Record“.
+     */
+    lookupFailed?: boolean;
   };
   dkim: {
     selectors: { selector: string; present: boolean; record?: string }[];
@@ -248,6 +258,11 @@ export interface LookupReport {
   findings: Finding[];
   healthScore: HealthScore;
   techStack: DetectedTech[];
+  /**
+   * Record-Typen, deren Abfrage scheiterte (Timeout, SERVFAIL …). Sie fehlen
+   * in `records`, ohne dass es sie nicht gibt.
+   */
+  failedRecordTypes?: RecordType[];
 }
 
 export type DomainAvailabilityStatus = 'available' | 'taken' | 'unknown';

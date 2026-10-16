@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -102,6 +103,35 @@ describe('Seit dem letzten Check im Report', () => {
     expect(list.getByText('203.0.113.5').closest('li')).toHaveTextContent(/^neu/);
     expect(list.getByText('198.51.100.7').closest('li')).toHaveTextContent(/^entfallen/);
     expect(list.getByText(/DMARC-Record gesetzt/)).toBeInTheDocument();
+  });
+
+  // StrictMode rendert doppelt und führt Mount-Effects zweimal aus — der
+  // alte Eintrag muss trotzdem vor dem Speichern gegriffen sein.
+  it('greift den alten Stand auch unter StrictMode vor dem Speichern', async () => {
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    );
+    await screen.findByText('Health Score');
+
+    stubApi({ ip: '203.0.113.5', timestamp: '2026-10-16T09:00:00.000Z', dmarc: false });
+    await lookUpAgain();
+
+    expect(await screen.findByRole('button', { name: /2 Änderungen seit/ })).toBeInTheDocument();
+  });
+
+  // Permalink neu geladen: frischer App-Mount, der alte Stand steht nur noch
+  // in localStorage.
+  it('vergleicht nach einem Neuladen mit dem gespeicherten Stand', async () => {
+    const first = render(<App />);
+    await screen.findByText('Health Score');
+    first.unmount();
+
+    stubApi({ ip: '203.0.113.5', timestamp: '2026-10-16T09:00:00.000Z', dmarc: false });
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: /2 Änderungen seit/ })).toBeInTheDocument();
   });
 
   it('sagt beim zweiten Lookup ohne Änderungen „Keine Änderungen seit …“', async () => {

@@ -147,6 +147,31 @@ describe('Speicherformat für den Vergleich', () => {
     expect(entry.failedChecks).toEqual(['whois']);
   });
 
+  // Der Server meldet Timeouts als „nichts gefunden“ — mit Marker. Der muss
+  // in die History, sonst hält der nächste Vergleich den Ausfall für eine
+  // Änderung („AAAA entfallen“, „DNSSEC aus“, „DMARC entfernt“).
+  it('hält gescheiterte Abfragen als unbekannt fest, nicht als leer', () => {
+    const report = fullReport();
+    saveLookupToHistory(
+      {
+        ...report,
+        failedRecordTypes: ['AAAA', 'TXT'],
+        dnssec: { ...report.dnssec, lookupFailed: true },
+        mail: { ...report.mail, dmarc: { present: false, lookupFailed: true } },
+      },
+      ['whois']
+    );
+
+    const [entry] = stored();
+    expect(entry.records).toEqual({
+      A: ['198.51.100.7'],
+      AAAA: null,
+      MX: ['10 mx1.example.com'],
+      NS: ['ns1.example.net'],
+    });
+    expect(entry.failedChecks).toEqual(['whois', 'dnssec', 'mail']);
+  });
+
   it('lässt leere Zusatzfelder weg, statt Platz zu belegen', () => {
     saveLookupToHistory(reportFor('example.com'));
 
@@ -207,6 +232,24 @@ describe('Speicherformat für den Vergleich', () => {
     expect(entry).not.toHaveProperty('sslValidTo');
     expect(entry).not.toHaveProperty('dmarcPolicy');
     expect(entry.failedChecks).toEqual(['ssl']);
+  });
+
+  it('liest einen als gescheitert markierten Typ (null) wieder ein', () => {
+    const saved = {
+      domain: 'old.example',
+      lookedUpAt: '2026-09-01T10:00:00.000Z',
+      score: 64,
+      ips: [],
+      mx: [],
+      nameservers: [],
+      records: { A: ['203.0.113.5'], AAAA: null },
+    };
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify([saved]));
+
+    saveLookupToHistory(reportFor('example.com'));
+    const { result } = renderHook(() => useLookupHistory());
+
+    expect(result.current[1].records).toEqual({ A: ['203.0.113.5'], AAAA: null });
   });
 });
 
