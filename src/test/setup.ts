@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { setLanguage } from '@/i18n';
 
 /**
  * Gemeinsames Setup für die Frontend-Tests.
@@ -18,6 +19,15 @@ import { cleanup } from '@testing-library/react';
 
 afterEach(() => {
   cleanup();
+  // Tests laufen auf Deutsch (#86): jsdom meldet `en-US` als Browser-Sprache,
+  // die App startet hier aber nie über initLanguage(). Wer in einem Test auf
+  // Englisch schaltet, soll den nächsten Test nicht mitnehmen.
+  void setLanguage('de', { persist: false });
+  try {
+    window.localStorage.removeItem('diggy-language');
+  } catch {
+    // Kein Storage — nichts aufzuräumen.
+  }
 });
 
 /** Vollständiges MediaQueryList — Framer Motion nutzt noch das Legacy-API. */
