@@ -39,6 +39,18 @@ describe('auditMail: Mail-TXT-Tags', () => {
     });
   });
 
+  /** #107: Bei mehreren Records wenden Empfänger DMARC nicht an (RFC 7489 §6.6.3, Schritt 5). */
+  it('liefert bei mehreren DMARC-Records alle mit, andere TXT-Records nicht', async () => {
+    const first = 'v=DMARC1; p=reject';
+    const second = 'v=DMARC1; p=none; rua=mailto:dmarc@example.com';
+    vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) =>
+      name === '_dmarc.example.com' ? [[first], ['google-site-verification=abc'], [second]] : []
+    );
+    expect((await auditMail('example.com')).dmarc).toEqual({
+      present: true, record: first, records: [first, second], policy: 'reject', rua: undefined,
+    });
+  });
+
   it.each(['p=reject; v=DMARC1', 'v=DMARC2; p=reject', 'sp=none; p=reject'])(
     'verwirft einen DMARC-Record ohne v=DMARC1 an erster Stelle: %s',
     async (record) => {

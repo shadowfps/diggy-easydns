@@ -79,4 +79,20 @@ describe('QuickFacts — DMARC', () => {
     expect(value).toHaveTextContent('unwirksam');
     expect(value.querySelector('.text-danger')).not.toBeNull();
   });
+
+  it('nennt ein ungültiges sp= neben p=reject', () => {
+    const value = renderWithDmarc({
+      present: true,
+      record: 'v=DMARC1; p=reject; sp=foo; rua=mailto:x@y',
+      policy: 'reject',
+    });
+    expect(value).toHaveTextContent('sp= ungültig');
+    expect(value.querySelector('.text-success')).toBeNull();
+  });
+
+  it('zeigt mehrere Records als unwirksam', () => {
+    const records = ['v=DMARC1; p=reject', 'v=DMARC1; p=none'];
+    const value = renderWithDmarc({ present: true, record: records[0], records, policy: 'reject' });
+    expect(value).toHaveTextContent('unwirksam');
+  });
 });

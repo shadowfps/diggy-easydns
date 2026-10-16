@@ -171,7 +171,7 @@ describe('bimiDmarcGap', () => {
   it('nennt, was an DMARC fehlt', () => {
     expect(bimiDmarcGap({ present: false })).toBe('kein DMARC-Record');
     expect(bimiDmarcGap(dmarc('v=DMARC1; p=invalid'))).toBe(
-      'DMARC-Record wirkt nicht (p=invalid ist ungültig)'
+      'DMARC wirkt nicht (p=invalid ist ungültig)'
     );
     expect(bimiDmarcGap(dmarc('v=DMARC1; p=none', 'none'))).toBe('DMARC p=none');
     expect(bimiDmarcGap(dmarc('v=DMARC1; p=quarantine; pct=50', 'quarantine'))).toBe(
@@ -186,9 +186,16 @@ describe('bimiDmarcGap', () => {
     expect(bimiDmarcGap(dmarc('v=DMARC1; p=foo; rua=mailto:x@y'))).toBe(
       'DMARC wirkt wie p=none (p=foo ist ungültig)'
     );
-    expect(bimiDmarcGap(dmarc('v=DMARC1; sp=reject'))).toBe('DMARC-Record wirkt nicht (p= fehlt)');
+    expect(bimiDmarcGap(dmarc('v=DMARC1; sp=reject'))).toBe('DMARC wirkt nicht (p= fehlt)');
     expect(bimiDmarcGap(dmarc('v=DMARC1; sp=reject; rua=mailto:x@y'))).toBe(
       'DMARC wirkt wie p=none (p= fehlt)'
+    );
+    expect(bimiDmarcGap(dmarc('v=DMARC1; p=reject; sp=foo; rua=mailto:x@y', 'reject'))).toBe(
+      'DMARC wirkt wie p=none (sp=foo ist ungültig)'
+    );
+    const records = ['v=DMARC1; p=reject', 'v=DMARC1; p=reject'];
+    expect(bimiDmarcGap({ present: true, record: records[0], records, policy: 'reject' })).toBe(
+      'DMARC wirkt nicht (2 DMARC-Records statt einem)'
     );
   });
 });

@@ -384,13 +384,10 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       bad: !dnssecInfo?.enabled,
     };
 
-  // Ein Record ohne gültiges p= ist nicht „gesetzt“ (shared/dmarc.ts). Wirkt
-  // er dank rua= wie p=none, steht der Mangel da — ohne Haken. Ignorieren ihn
-  // Empfänger, ist er so schlecht wie keiner.
-  const dmarc = mail.data?.dmarc;
-  const { policy: dmarcPolicy, flaw: dmarcFlaw } = effectiveDmarcPolicy(
-    dmarc?.present ? dmarc.record : undefined
-  );
+  // Ein Record, der nicht wie geschrieben gilt, ist nicht „gesetzt“
+  // (shared/dmarc.ts). Wirkt er dank rua= wie p=none, steht der Mangel da —
+  // ohne Haken. Ignorieren ihn Empfänger, ist er so schlecht wie keiner.
+  const { policy: dmarcPolicy, flaw: dmarcFlaw } = effectiveDmarcPolicy(mail.data?.dmarc);
   const dmarcItem: QuickFactItem =
     placeholder('DMARC', mail.status) ??
     (dmarcPolicy === null

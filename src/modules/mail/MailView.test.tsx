@@ -260,7 +260,9 @@ describe('MailView — DMARC ohne gültiges p=', () => {
     expect(badge.querySelector('svg')).not.toBeNull();
     expect(within(card).getByText('wie none')).toBeInTheDocument();
     expect(within(card).getByText('rua gesetzt')).toBeInTheDocument();
-    expect(within(card).getByText(/werten Empfänger den Record wie p=none \(RFC 7489 §6\.6\.3\)/)).toBeInTheDocument();
+    expect(
+      within(card).getByText(/^Ohne gültiges p= werten Empfänger den Record wie p=none, weil rua= .*\(RFC 7489 §6\.6\.3\)/)
+    ).toBeInTheDocument();
   });
 
   it('zeigt einen Record ohne p= und ohne rua= als unwirksam', () => {
@@ -280,7 +282,40 @@ describe('MailView — DMARC ohne gültiges p=', () => {
     const card = dmarcCard();
     expect(within(card).getByText('p= ungültig')).toBeInTheDocument();
     expect(within(card).getByText('rua ungültig')).toBeInTheDocument();
-    expect(within(card).getByText(/p=foo ist ungültig, und ohne gültige Report-Adresse/)).toBeInTheDocument();
+    expect(within(card).getByText(/^Ohne gültiges p= und ohne gültige Report-Adresse/)).toBeInTheDocument();
+  });
+
+  /** §6.6.3 Schritt 6: Ein ungültiges sp= entwertet auch ein gültiges p=. */
+  it('zeigt ein ungültiges sp= neben p=reject als Mangel', () => {
+    render(
+      <MailView
+        mail={{
+          ...withMx,
+          dmarc: { ...record('v=DMARC1; p=reject; sp=foo; rua=mailto:x@y'), policy: 'reject', rua: 'mailto:x@y' },
+        }}
+      />
+    );
+    const card = dmarcCard();
+    expect(within(card).getByText('sp= ungültig')).toHaveClass('badge', 'badge-warning');
+    expect(within(card).getByText('wie none')).toBeInTheDocument();
+    expect(within(card).getByText(/^Ein ungültiges sp= macht den ganzen Record ungültig, auch p=reject\./)).toBeInTheDocument();
+  });
+
+  /** §6.6.3 Schritt 5: Bei mehreren Records wenden Empfänger DMARC gar nicht an. */
+  it('zeigt mehrere Records alle und als unwirksam', () => {
+    const records = ['v=DMARC1; p=reject; rua=mailto:x@y', 'v=DMARC1; p=none'];
+    render(
+      <MailView
+        mail={{ ...withMx, dmarc: { present: true, record: records[0], records, policy: 'reject', rua: 'mailto:x@y' } }}
+      />
+    );
+    const card = dmarcCard();
+    expect(within(card).getByText('2 Records')).toHaveClass('badge', 'badge-warning');
+    for (const value of records) expect(within(card).getByText(value)).toBeInTheDocument();
+    expect(within(card).getByText('keine')).toBeInTheDocument();
+    // Gilt keiner, gehen auch keine Berichte raus.
+    expect(within(card).queryByText('rua gesetzt')).not.toBeInTheDocument();
+    expect(within(card).getByText(/mehr als einem DMARC-Record wenden Empfänger DMARC gar nicht an/)).toBeInTheDocument();
   });
 
   it('zeigt ohne MX das Badge ohne Warnfarbe — wie den fehlenden Record', () => {
@@ -312,6 +347,6 @@ describe('MailView — DMARC ohne gültiges p=', () => {
 
     render(<MailView mail={{ ...withMx, dmarc: record('v=DMARC1; p=foo'), bimi: { present: false } }} />);
     const bimi = screen.getByRole('heading', { name: 'BIMI' }).closest('.card') as HTMLElement;
-    expect(within(bimi).getByText(/jetzt: DMARC-Record wirkt nicht \(p=foo ist ungültig\)/)).toBeInTheDocument();
+    expect(within(bimi).getByText(/jetzt: DMARC wirkt nicht \(p=foo ist ungültig\)/)).toBeInTheDocument();
   });
 });

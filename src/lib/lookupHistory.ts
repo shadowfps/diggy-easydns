@@ -108,8 +108,7 @@ function toHistoryEntry(report: LookupReport): LookupHistoryEntry {
     dnssecValid: report.dnssec.enabled && report.dnssec.valid,
     // „DMARC gesetzt“ nur, wenn Empfänger den Record auch anwenden — einer
     // ohne gültiges p= und ohne rua= zählt wie keiner (shared/dmarc.ts).
-    dmarcPresent:
-      report.mail.dmarc.present && effectiveDmarcPolicy(report.mail.dmarc.record).policy !== null,
+    dmarcPresent: effectiveDmarcPolicy(report.mail.dmarc).policy !== null,
     findingsCount: report.findings.length,
   };
 }

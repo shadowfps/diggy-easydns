@@ -104,4 +104,17 @@ describe('saveLookupToHistory — DMARC', () => {
     });
     expect(result.current[0].dmarcPresent).toBe(present);
   });
+
+  it('zählt mehrere DMARC-Records nicht als gesetzt', () => {
+    const report = reportFor('example.com');
+    const records = ['v=DMARC1; p=reject', 'v=DMARC1; p=none'];
+    const { result } = renderHook(() => useLookupHistory());
+    act(() => {
+      saveLookupToHistory({
+        ...report,
+        mail: { ...report.mail, dmarc: { present: true, record: records[0], records, policy: 'reject' } },
+      });
+    });
+    expect(result.current[0].dmarcPresent).toBe(false);
+  });
 });

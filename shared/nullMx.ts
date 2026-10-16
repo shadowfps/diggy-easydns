@@ -107,16 +107,14 @@ export interface NoMailProtection {
  * Wie gut eine Domain mit Null-MX gegen Fälschungen in ihrem Namen geschützt ist.
  *
  * DMARC zählt mit der wirksamen Policy (shared/dmarc.ts): Ohne gültiges `p=`
- * ist sie höchstens `none` (RFC 7489 §6.6.3) — auch neben `sp=reject`.
- * `reject` kommt also immer aus einem gültigen `p=`, und nur dann ist `pct`
- * überhaupt von Belang.
+ * oder mit ungültigem `sp=` ist sie höchstens `none` (RFC 7489 §6.6.3) —
+ * auch neben `sp=reject` bzw. `p=reject`. `reject` kommt also immer aus
+ * einem gültigen `p=`, und nur dann ist `pct` überhaupt von Belang.
  */
 export function noMailProtection(mail: Pick<MailSecurity, 'spf' | 'dmarc' | 'nullMx'>): NoMailProtection {
   const spf = spfAllowsNoSender(mail.spf.record);
   const dmarc =
-    mail.dmarc.present &&
-    effectiveDmarcPolicy(mail.dmarc.record).policy === 'reject' &&
-    dmarcPct(mail.dmarc.record) === 100;
+    effectiveDmarcPolicy(mail.dmarc).policy === 'reject' && dmarcPct(mail.dmarc.record) === 100;
   return {
     spfAllowsNoSender: spf,
     dmarcReject: dmarc,

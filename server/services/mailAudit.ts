@@ -169,15 +169,18 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
   try {
     const records = await resolver.resolveTxt(`_dmarc.${domain}`);
     const merged = records.map((chunks) => chunks.join(''));
-    const dmarcLine = merged.find((r) => leadingVersion(r)?.toLowerCase() === 'dmarc1');
+    const dmarcLines = merged.filter((r) => leadingVersion(r)?.toLowerCase() === 'dmarc1');
+    const [dmarcLine] = dmarcLines;
 
     if (!dmarcLine) return { present: false };
 
     // Nur das gültige p= — was Empfänger ohne eins tun, entscheidet erst
-    // effectiveDmarcPolicy (shared/dmarc.ts). Report-Adressen bleiben unverändert.
+    // effectiveDmarcPolicy (shared/dmarc.ts), ebenso, dass bei mehreren
+    // Records keiner gilt. Report-Adressen bleiben unverändert.
     return {
       present: true,
       record: dmarcLine,
+      ...(dmarcLines.length > 1 && { records: dmarcLines }),
       policy: declaredDmarcPolicy(dmarcLine),
       rua: matchTag(dmarcLine, 'rua'),
     };

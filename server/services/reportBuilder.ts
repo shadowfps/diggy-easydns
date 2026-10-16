@@ -10,7 +10,14 @@ import type {
 import { isDnsOnlyName } from '../../shared/dnsName.js';
 import { dmarcPct, noMailProtection } from '../../shared/nullMx.js';
 import { bimiDmarcGap } from '../../shared/bimiTlsRpt.js';
-import { type DmarcPolicy, dmarcPolicyFlawText, effectiveDmarcPolicy } from '../../shared/dmarc.js';
+import {
+  type DmarcPolicy,
+  type DmarcPolicyFlaw,
+  dmarcFlawEffect,
+  dmarcPolicyFlawText,
+  effectiveDmarcPolicy,
+  isDmarcPolicy,
+} from '../../shared/dmarc.js';
 
 /* ─── DNS-Basics ──────────────────────────────────────────────────────── */
 
@@ -218,98 +225,43 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): Finding[] 
 
 /**
  * DMARC wird nach der wirksamen Policy bewertet (shared/dmarc.ts), nicht
- * nach dem bloßen Vorhandensein eines Records. Ohne gültiges `p=` gilt
- * RFC 7489 §6.6.3: Mit Report-Adresse in `rua=` wirkt der Record wie
- * `p=none`, ohne ignorieren ihn Empfänger.
+ * nach dem bloßen Vorhandensein eines Records. Nach RFC 7489 §6.6.3 wirkt
+ * ein Record ohne gültiges `p=` oder mit ungültigem `sp=` wie `p=none`,
+ * wenn `rua=` eine Report-Adresse nennt; ohne ignorieren ihn Empfänger,
+ * ebenso jeden von mehreren Records.
  *
- * Beide Fälle tragen deshalb die ID und Severity ihres Gegenstücks —
+ * Diese Fälle tragen deshalb die ID und Severity ihres Gegenstücks —
  * `dmarc-policy-none` bzw. `no-dmarc`. So kosten sie dieselben Punkte, und
  * `causedBy` (null-mx-incomplete) greift wie dort. Nur Titel, Text und
  * Vorschlag nennen den Mangel; vorher ging so ein Record als
  * „DMARC-Policy: gesetzt“ durch.
  */
 function dmarcFinding(mail: MailSecurity, apexDomain: string, receivesMail: boolean): Finding {
-  const { policy, flaw } = effectiveDmarcPolicy(mail.dmarc.present ? mail.dmarc.record : undefined);
+  const { policy, flaw } = effectiveDmarcPolicy(mail.dmarc);
+  if (flaw) return flawedDmarcFinding(mail, apexDomain, receivesMail, policy, flaw);
 
   if (policy === null) {
-    const severity = receivesMail ? 'warning' : 'info';
-    // Der übliche Vorschlag passt nicht zu einem Null-MX: die Report-Adresse
-    // läge auf der Domain selbst, die keine Mail annimmt. Und weil es keine
-    // echten Mails gibt, die verloren gehen könnten, gibt es auch keinen
-    // Grund, mit p=none oder quarantine vorsichtig anzufangen.
-    const snippet = mail.nullMx
-      ? `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`
-      : `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@${apexDomain}"`;
-    const advice = mail.nullMx
-      ? 'ohne echte Mails geht dabei nichts verloren. Reports (rua) nur an eine Adresse auf einer anderen Domain: diese hier nimmt keine Mails an.'
-      : 'Mit p=none läuft erstmal nur Reporting, ohne abzulehnen.';
-
-    if (!flaw) {
-      return {
-        id: 'no-dmarc',
-        severity,
-        title: 'Kein DMARC-Record auf _dmarc.<domain>',
-        description: 'Ohne DMARC können Angreifer leichter E-Mails in deinem Namen verschicken (Spoofing).',
-        fix: {
-          explanation: mail.nullMx
-            ? `Lege einen DMARC-Record mit p=reject an — ${advice}`
-            : `Lege einen DMARC-Record an. ${advice}`,
-          snippet,
-        },
-        category: 'mail',
-      };
-    }
-
-    // Record da, aber wirkungslos: dieselbe Bewertung wie ohne Record. Der
-    // Vorschlag ersetzt ihn — ohne Report-Adresse steht nichts darin, was
-    // Empfänger auswerten.
     return {
       id: 'no-dmarc',
-      severity,
-      title: `DMARC-Record wirkt nicht: ${dmarcPolicyFlawText(flaw)}`,
-      description: 'Ohne gültiges p= und ohne gültige Report-Adresse in rua= ignorieren Empfänger den Record, als gäbe es kein DMARC (RFC 7489 §6.6.3). Angreifer können so leichter E-Mails in deinem Namen verschicken (Spoofing).',
+      severity: receivesMail ? 'warning' : 'info',
+      title: 'Kein DMARC-Record auf _dmarc.<domain>',
+      description: 'Ohne DMARC können Angreifer leichter E-Mails in deinem Namen verschicken (Spoofing).',
       fix: {
         explanation: mail.nullMx
-          ? `Ersetze den Record durch einen mit p=reject direkt hinter v=DMARC1 — ${advice}`
-          : `Ersetze den Record durch einen mit p= direkt hinter v=DMARC1: none, quarantine oder reject. ${advice}`,
-        snippet,
+          ? `Lege einen DMARC-Record mit p=reject an — ${NULL_MX_DMARC_ADVICE}`
+          : `Lege einen DMARC-Record an. ${DMARC_START_ADVICE}`,
+        snippet: newDmarcSnippet(mail, apexDomain),
       },
       category: 'mail',
     };
   }
 
   if (policy === 'none') {
-    // Bei einem Null-MX gibt es keine echten Mails, die beim Ablehnen
-    // verloren gehen könnten — der Zwischenschritt über quarantine
-    // widerspräche dem Hinweis null-mx-incomplete (p=reject).
-    const nextStep = mail.nullMx
-      ? 'Ohne echte Mails geht beim Ablehnen nichts verloren: direkt auf p=reject wechseln.'
-      : 'Sobald Reports stabil aussehen: auf quarantine wechseln.';
-
-    if (!flaw) {
-      return {
-        id: 'dmarc-policy-none',
-        severity: 'warning',
-        title: 'DMARC-Policy ist p=none (nur Reporting)',
-        description: `Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. ${nextStep}`,
-        category: 'mail',
-      };
-    }
-
-    // Wirkt wie p=none, nur weil rua= eine Adresse nennt. Der Vorschlag
-    // schreibt die Policy ausdrücklich hinein: p=none hält fest, was
-    // Empfänger heute schon tun — bei einem Null-MX gleich p=reject.
     return {
       id: 'dmarc-policy-none',
       severity: 'warning',
-      title: `DMARC wirkt wie p=none: ${dmarcPolicyFlawText(flaw)}`,
-      description: `Ohne gültiges p= behandeln Empfänger den Record wie p=none, weil rua= eine Report-Adresse nennt (RFC 7489 §6.6.3): Spoofing-Versuche werden gemeldet, aber nicht abgelehnt. ${nextStep}`,
-      fix: {
-        explanation: mail.nullMx
-          ? 'Trag p=reject direkt hinter v=DMARC1 ein — ohne echte Mails geht dabei nichts verloren.'
-          : 'Trag p= direkt hinter v=DMARC1 ein. p=none hält fest, was Empfänger heute schon tun; danach Schritt für Schritt verschärfen.',
-        snippet: `_dmarc.${apexDomain}  TXT  "${withDmarcPolicy(mail.dmarc.record ?? '', mail.nullMx ? 'reject' : 'none')}"`,
-      },
+      title: 'DMARC-Policy ist p=none (nur Reporting)',
+      description: `Mit p=none werden Spoofing-Versuche zwar gemeldet, aber nicht abgelehnt. ${dmarcNoneNextStep(mail)}`,
       category: 'mail',
     };
   }
@@ -323,18 +275,135 @@ function dmarcFinding(mail: MailSecurity, apexDomain: string, receivesMail: bool
   };
 }
 
+/** Ein Record, der nicht wie geschrieben gilt — bewertet wie sein Gegenstück. */
+function flawedDmarcFinding(
+  mail: MailSecurity,
+  apexDomain: string,
+  receivesMail: boolean,
+  policy: DmarcPolicy | null,
+  flaw: DmarcPolicyFlaw
+): Finding {
+  const effect = dmarcFlawEffect(policy, flaw);
+  const fix = dmarcFlawFix(mail, apexDomain, policy, flaw);
+
+  if (policy === null) {
+    return {
+      id: 'no-dmarc',
+      severity: receivesMail ? 'warning' : 'info',
+      title: `DMARC wirkt nicht: ${dmarcPolicyFlawText(flaw)}`,
+      description: `${effect} Angreifer können so leichter E-Mails in deinem Namen verschicken (Spoofing).`,
+      fix,
+      category: 'mail',
+    };
+  }
+
+  return {
+    id: 'dmarc-policy-none',
+    severity: 'warning',
+    title: `DMARC wirkt wie p=none: ${dmarcPolicyFlawText(flaw)}`,
+    // Bei einem ungültigen sp= steht die gewollte Policy schon in p=; der
+    // nächste Schritt ist der Fix, nicht das Verschärfen.
+    description: flaw.kind === 'sp-invalid' ? effect : `${effect} ${dmarcNoneNextStep(mail)}`,
+    fix,
+    category: 'mail',
+  };
+}
+
+/*
+ * Der übliche Vorschlag passt nicht zu einem Null-MX: die Report-Adresse
+ * läge auf der Domain selbst, die keine Mail annimmt. Und weil es keine
+ * echten Mails gibt, die verloren gehen könnten, gibt es auch keinen Grund,
+ * mit p=none oder quarantine vorsichtig anzufangen.
+ */
+const NULL_MX_DMARC_ADVICE = 'ohne echte Mails geht dabei nichts verloren. Reports (rua) nur an eine Adresse auf einer anderen Domain: diese hier nimmt keine Mails an.';
+const DMARC_START_ADVICE = 'Mit p=none läuft erstmal nur Reporting, ohne abzulehnen.';
+
+function newDmarcSnippet(mail: MailSecurity, apexDomain: string): string {
+  return mail.nullMx
+    ? `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=reject"`
+    : `_dmarc.${apexDomain}  TXT  "v=DMARC1; p=quarantine; rua=mailto:dmarc@${apexDomain}"`;
+}
+
+/**
+ * Bei einem Null-MX gibt es keine echten Mails, die beim Ablehnen verloren
+ * gehen könnten — der Zwischenschritt über quarantine widerspräche dem
+ * Hinweis null-mx-incomplete (p=reject).
+ */
+function dmarcNoneNextStep(mail: MailSecurity): string {
+  return mail.nullMx
+    ? 'Ohne echte Mails geht beim Ablehnen nichts verloren: direkt auf p=reject wechseln.'
+    : 'Sobald Reports stabil aussehen: auf quarantine wechseln.';
+}
+
+/**
+ * Der Weg zu einem Record, der wie geschrieben gilt. Wo es geht, bleibt der
+ * vorhandene Record die Grundlage — nur der Mangel fällt weg. Bei einem
+ * Null-MX schlagen wir wie überall gleich p=reject vor, sonst stünden hier
+ * und in null-mx-incomplete zwei verschiedene Records.
+ */
+function dmarcFlawFix(
+  mail: MailSecurity,
+  apexDomain: string,
+  policy: DmarcPolicy | null,
+  flaw: DmarcPolicyFlaw
+): Finding['fix'] {
+  const record = mail.dmarc.record ?? '';
+  const snippet = (value: string) => `_dmarc.${apexDomain}  TXT  "${value}"`;
+
+  if (flaw.kind === 'multiple') {
+    // Welcher Record gemeint ist, wissen nur die Betreiber: kein Snippet.
+    return {
+      explanation: 'Lass nur einen DMARC-Record stehen und entferne die übrigen. Brauchst du Report-Adressen aus mehreren, trag sie kommagetrennt in das rua= des einen ein.',
+    };
+  }
+
+  if (flaw.kind === 'sp-invalid') {
+    const target = mail.nullMx ? 'reject' : flaw.declared;
+    return {
+      explanation: mail.nullMx && flaw.declared !== 'reject'
+        ? 'Entferne sp= und setz p=reject — ohne echte Mails geht dabei nichts verloren, und ohne sp= gilt p= auch für Subdomains.'
+        : `Entferne sp= oder setz es auf none, quarantine oder reject — ohne sp= gilt p=${target} auch für Subdomains.`,
+      snippet: snippet(withDmarcPolicy(record, target)),
+    };
+  }
+
+  // p= fehlt oder ist ungültig, und ohne Report-Adresse steht nichts im
+  // Record, was Empfänger auswerten: ersetzen statt ergänzen.
+  if (policy === null) {
+    return {
+      explanation: mail.nullMx
+        ? `Ersetze den Record durch einen mit p=reject direkt hinter v=DMARC1 — ${NULL_MX_DMARC_ADVICE}`
+        : `Ersetze den Record durch einen mit p= direkt hinter v=DMARC1: none, quarantine oder reject. ${DMARC_START_ADVICE}`,
+      snippet: newDmarcSnippet(mail, apexDomain),
+    };
+  }
+
+  // Wirkt wie p=none, nur weil rua= eine Adresse nennt. Der Vorschlag
+  // schreibt die Policy ausdrücklich hinein: p=none hält fest, was
+  // Empfänger heute schon tun — bei einem Null-MX gleich p=reject.
+  return {
+    explanation: mail.nullMx
+      ? 'Trag p=reject direkt hinter v=DMARC1 ein — ohne echte Mails geht dabei nichts verloren.'
+      : 'Trag p= direkt hinter v=DMARC1 ein. p=none hält fest, was Empfänger heute schon tun; danach Schritt für Schritt verschärfen.',
+    snippet: snippet(withDmarcPolicy(record, mail.nullMx ? 'reject' : 'none')),
+  };
+}
+
 /**
  * Der Record mit `p=` an zweiter Stelle, wo RFC 7489 §6.3 es verlangt. Ein
- * vorhandenes `p=` (leer oder ungültig) fliegt raus, die übrigen Tags
- * bleiben, wie sie waren.
+ * vorhandenes `p=` (leer oder ungültig) fliegt raus, ebenso ein ungültiges
+ * `sp=` — mit ihm wirkte auch der neue Record nicht (§6.6.3). Die übrigen
+ * Tags bleiben, wie sie waren.
  */
 function withDmarcPolicy(record: string, policy: DmarcPolicy): string {
   const rest = record
     .split(';')
     .map((tag) => tag.trim())
     .filter((tag) => {
-      const name = tag.split('=', 1)[0].trim().toLowerCase();
-      return tag !== '' && name !== 'v' && name !== 'p';
+      const separator = tag.indexOf('=');
+      const name = (separator < 0 ? tag : tag.slice(0, separator)).trim().toLowerCase();
+      if (tag === '' || name === 'v' || name === 'p') return false;
+      return name !== 'sp' || isDmarcPolicy(tag.slice(separator + 1).trim().toLowerCase());
     });
   return ['v=DMARC1', `p=${policy}`, ...rest].join('; ');
 }
@@ -510,7 +579,7 @@ function noMailFindings(mail: MailSecurity, apexDomain: string): Finding[] {
   if (!protection.dmarcReject) {
     // Wirksame Policy wie in noMailProtection: ohne gültiges p= kein reject,
     // und „jetzt p=none“ stimmte nicht für einen Record ohne p= (#107).
-    const { policy, flaw } = effectiveDmarcPolicy(mail.dmarc.present ? mail.dmarc.record : undefined);
+    const { policy, flaw } = effectiveDmarcPolicy(mail.dmarc);
     missing.push(
       flaw
         ? `DMARC mit p=reject (jetzt: ${dmarcPolicyFlawText(flaw)})`

@@ -624,7 +624,7 @@ describe('mailFindings — DMARC ohne gültiges p=', () => {
     expectSameRating(findings, without);
 
     const finding = findings.find((f) => f.id === 'no-dmarc');
-    expect(finding?.title).toBe('DMARC-Record wirkt nicht: p= fehlt');
+    expect(finding?.title).toBe('DMARC wirkt nicht: p= fehlt');
     expect(finding?.description).toContain('als gäbe es kein DMARC');
     expect(finding?.fix?.snippet).toBe(without.find((f) => f.id === 'no-dmarc')?.fix?.snippet);
   });
@@ -676,6 +676,54 @@ describe('mailFindings — DMARC ohne gültiges p=', () => {
     expect(finding?.fix).toBeUndefined();
   });
 
+  /** §6.6.3 Schritt 6 gilt auch für ein ungültiges sp= — dann zählt p=reject nicht. */
+  describe('mit ungültigem sp=', () => {
+    it('wertet p=reject; sp=foo mit rua= wie p=none und schlägt den Record ohne sp= vor', () => {
+      const findings = mailFindings(
+        real({ dmarc: { ...record('v=DMARC1; p=reject; sp=foo; rua=mailto:x@y'), policy: 'reject' } }),
+        'example.de'
+      );
+      expectSameRating(findings, mailFindings(real({ dmarc: dmarc('none') }), 'example.de'));
+      const finding = findings.find((f) => f.id === 'dmarc-policy-none');
+      expect(finding?.title).toBe('DMARC wirkt wie p=none: sp=foo ist ungültig');
+      expect(finding?.description).toContain('auch p=reject');
+      // Die gewollte Policy steht schon in p=: kein „auf quarantine wechseln“.
+      expect(finding?.description).not.toContain('quarantine wechseln');
+      expect(finding?.fix?.snippet).toBe('_dmarc.example.de  TXT  "v=DMARC1; p=reject; rua=mailto:x@y"');
+    });
+
+    it('wertet ein leeres sp= ohne rua= wie keinen DMARC-Record und behält p=', () => {
+      const findings = mailFindings(real({ dmarc: record('v=DMARC1; p=quarantine; sp=; adkim=s') }), 'example.de');
+      expectSameRating(findings, mailFindings(real({ dmarc: dmarc(undefined) }), 'example.de'));
+      const finding = findings.find((f) => f.id === 'no-dmarc');
+      expect(finding?.title).toBe('DMARC wirkt nicht: sp= ist leer');
+      expect(finding?.fix?.snippet).toBe('_dmarc.example.de  TXT  "v=DMARC1; p=quarantine; adkim=s"');
+    });
+
+    /** Sonst bliebe der Vorschlag selbst wirkungslos. */
+    it('lässt ein ungültiges sp= auch beim Ergänzen von p= weg', () => {
+      const findings = mailFindings(real({ dmarc: record('v=DMARC1; sp=foo; rua=mailto:x@y') }), 'example.de');
+      expect(findings.find((f) => f.id === 'dmarc-policy-none')?.fix?.snippet).toBe(
+        '_dmarc.example.de  TXT  "v=DMARC1; p=none; rua=mailto:x@y"'
+      );
+    });
+  });
+
+  /** §6.6.3 Schritt 5: Bei mehreren Records wenden Empfänger DMARC gar nicht an. */
+  it('wertet mehrere DMARC-Records wie keinen, auch mit p=reject', () => {
+    const records = ['v=DMARC1; p=reject; rua=mailto:x@y', 'v=DMARC1; p=quarantine'];
+    const findings = mailFindings(
+      real({ dmarc: { present: true, record: records[0], records, policy: 'reject', rua: 'mailto:x@y' } }),
+      'example.de'
+    );
+    expectSameRating(findings, mailFindings(real({ dmarc: dmarc(undefined) }), 'example.de'));
+    const finding = findings.find((f) => f.id === 'no-dmarc');
+    expect(finding?.title).toBe('DMARC wirkt nicht: 2 DMARC-Records statt einem');
+    expect(finding?.description).toContain('mehr als einem DMARC-Record');
+    expect(finding?.fix?.explanation).toContain('nur einen DMARC-Record');
+    expect(finding?.fix?.snippet).toBeUndefined();
+  });
+
   describe('bei einer Domain ohne Mail (Null-MX)', () => {
     it('wertet rua= ohne p= wie p=none — ohne doppelten Abzug', () => {
       const findings = mailFindings(
@@ -691,6 +739,32 @@ describe('mailFindings — DMARC ohne gültiges p=', () => {
       );
       const hint = findings.find((f) => f.id === 'null-mx-incomplete');
       expect(hint?.description).toContain('DMARC mit p=reject (jetzt: p= fehlt)');
+    });
+
+    it('zählt p=reject neben ungültigem sp= nicht als Schutz und schlägt p=reject ohne sp= vor', () => {
+      const findings = mailFindings(
+        mail({ dmarc: { ...record('v=DMARC1; p=quarantine; sp=foo; rua=mailto:d@example.net'), policy: 'quarantine' } }),
+        'example.com'
+      );
+      expectSameRating(findings, mailFindings(mail({ dmarc: dmarc('none') }), 'example.com'));
+      expect(findings.find((f) => f.id === 'dmarc-policy-none')?.fix?.snippet).toBe(
+        '_dmarc.example.com  TXT  "v=DMARC1; p=reject; rua=mailto:d@example.net"'
+      );
+      expect(findings.find((f) => f.id === 'null-mx-incomplete')?.description).toContain(
+        'DMARC mit p=reject (jetzt: sp=foo ist ungültig)'
+      );
+    });
+
+    it('zählt mehrere Records mit p=reject nicht als Schutz', () => {
+      const records = ['v=DMARC1; p=reject', 'v=DMARC1; p=reject'];
+      const findings = mailFindings(
+        mail({ dmarc: { present: true, record: records[0], records, policy: 'reject' } }),
+        'example.com'
+      );
+      expectSameRating(findings, mailFindings(mail({ dmarc: dmarc(undefined) }), 'example.com'));
+      expect(findings.find((f) => f.id === 'null-mx-incomplete')?.description).toContain(
+        'DMARC mit p=reject (jetzt: 2 DMARC-Records statt einem)'
+      );
     });
 
     /** Vorher: „sauber als mail-frei markiert“, weil der Record als gesetzt galt. */
@@ -728,7 +802,7 @@ describe('mailFindings — DMARC ohne gültiges p=', () => {
         'example.de'
       );
       expect(findings.find((f) => f.id === 'bimi-dmarc-weak')?.description).toContain(
-        'Jetzt: DMARC-Record wirkt nicht (p=foo ist ungültig)'
+        'Jetzt: DMARC wirkt nicht (p=foo ist ungültig)'
       );
       expect(summary(findings)).not.toContain('success bimi-present');
     });

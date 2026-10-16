@@ -131,10 +131,10 @@ function bimiProblem(logo: string | undefined, evidence: string): string | undef
  */
 export function bimiDmarcGap(dmarc: MailSecurity['dmarc']): string | undefined {
   if (!dmarc.present) return 'kein DMARC-Record';
-  const { policy, flaw } = effectiveDmarcPolicy(dmarc.record);
+  const { policy, flaw } = effectiveDmarcPolicy(dmarc);
   if (flaw) {
     const problem = dmarcPolicyFlawText(flaw);
-    return policy ? `DMARC wirkt wie p=none (${problem})` : `DMARC-Record wirkt nicht (${problem})`;
+    return policy ? `DMARC wirkt wie p=none (${problem})` : `DMARC wirkt nicht (${problem})`;
   }
   if (!policy) return 'kein DMARC-Record';
   if (policy === 'none') return 'DMARC p=none';
