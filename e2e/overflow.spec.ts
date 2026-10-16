@@ -70,6 +70,14 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       await expectNoHorizontalOverflow(page, 'History');
     });
 
+    // Beide Seiten nebeneinander, mit langen TXT-Werten von github.com (#85).
+    test('Vergleich', async ({ page }) => {
+      await page.goto('/compare/example.com/github.com');
+      await page.getByRole('heading', { name: 'Mail-Schutz' }).waitFor();
+      await settle(page);
+      await expectNoHorizontalOverflow(page, 'Vergleich');
+    });
+
     test('Available Check mit Ergebnis', async ({ page }) => {
       await page.goto('/availability');
       await page.getByLabel('Domain', { exact: true }).fill('diggy');

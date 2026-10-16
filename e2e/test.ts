@@ -170,10 +170,11 @@ export async function openReport(page: Page, domain: Domain): Promise<void> {
   await settle(page);
 
   /*
-   * Der Health Score zählt per JavaScript hoch (1,2 s) und ignoriert dabei
-   * „Bewegung reduzieren“ — ohne dieses Warten erwischte der Pixelvergleich
-   * die Zahl mitten im Hochzählen (90 statt 94). Den Endwert rechnet dieselbe
-   * Funktion aus wie die App; der Balken ist fertig, wenn seine Breite passt.
+   * Der Health Score zählte per JavaScript hoch (1,2 s) und ignorierte dabei
+   * „Bewegung reduzieren“ — der Pixelvergleich erwischte die Zahl mitten im
+   * Hochzählen (90 statt 94). Seit #103 steht er dann sofort auf dem Endwert;
+   * das Warten bleibt als Absicherung. Den Endwert rechnet dieselbe Funktion
+   * aus wie die App; der Balken ist fertig, wenn seine Breite passt.
    */
   const score = String(expectedScore(domain));
   const card = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Health Score' }) });
