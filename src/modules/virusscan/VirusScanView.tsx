@@ -3,6 +3,7 @@ import type { VirusScanReport } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
 import {
   AlertCircle,
   AlertTriangle,
@@ -299,10 +300,12 @@ function ScanLoader() {
     return () => window.clearInterval(id);
   }, []);
 
-  // role="status" statt aria-busy — Begründung beim PageSpeedLoader.
+  // Einmalige Ansage statt aria-busy, Anzeige aria-hidden — Begründung beim
+  // PageSpeedLoader.
   return (
-    <div className="mx-auto mt-8 max-w-md" role="status" aria-live="polite">
-      <div className="panel px-6 py-6 text-center">
+    <div className="mx-auto mt-8 max-w-md">
+      <LoadingAnnouncement>VirusTotal-Scan läuft…</LoadingAnnouncement>
+      <div className="panel px-6 py-6 text-center" aria-hidden="true">
         <Loader2 className="mx-auto size-5 animate-spin text-fg" />
         <div className="eyebrow mt-4">Scan läuft</div>
         <div key={stage} className="mt-1.5 animate-fade-in-up text-sm text-fg">

@@ -161,6 +161,9 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
 - Ein Ladezustand hängt nie allein an der Bewegung: Text oder Icon dazu, und
   der Text steht in `role="status"`, damit ihn auch ein Screenreader ansagt.
   Ein Status je Ladevorgang, auch wenn mehrere Platzhalter auf ihn warten.
+  Wechselnder Text (Ladestufen) gehört nicht in die Region, sonst wird jeder
+  Wechsel angesagt: dann `LoadingAnnouncement` mit einem gleichbleibenden
+  Satz, die sichtbare Anzeige `aria-hidden`.
 
 ## Zugänglichkeit
 

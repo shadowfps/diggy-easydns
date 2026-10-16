@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
 import { VirusScanView } from './VirusScanView';
 
 /**
@@ -12,18 +12,42 @@ function renderView(loading: boolean) {
 }
 
 describe('VirusScanView — Ladezustand', () => {
-  it('sagt den laufenden Scan als Status an', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sagt den laufenden Scan an, sobald die Region steht', () => {
     renderView(true);
     const status = screen.getByRole('status');
-    expect(status).toHaveTextContent('Scan läuft');
-    expect(status).toHaveTextContent('Verbinde mit VirusTotal');
+    expect(status).toBeEmptyDOMElement();
+
+    act(() => vi.advanceTimersByTime(100));
+    expect(status).toHaveTextContent('VirusTotal-Scan läuft');
     expect(status).not.toHaveAttribute('aria-busy');
   });
 
-  it('animiert über die Klassen, die die Reduced-Motion-Regel erreicht', () => {
+  /** Die Stufen wechseln endlos alle 2 s — angesagt wird nur der Scan selbst. */
+  it('sagt Stufenwechsel nicht an', () => {
     renderView(true);
+    act(() => vi.advanceTimersByTime(100));
+    const status = screen.getByRole('status');
+    const announced = status.textContent;
+
+    expect(screen.getByText('Verbinde mit VirusTotal…').closest('[aria-hidden="true"]')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByText('Prüfe 80+ Security-Engines…')).toBeInTheDocument();
+    expect(status.textContent).toBe(announced);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
+  it('animiert über die Klassen, die die Reduced-Motion-Regel erreicht', () => {
+    const { container } = renderView(true);
     expect(screen.getByText('Verbinde mit VirusTotal…')).toHaveClass('animate-fade-in-up');
-    expect(screen.getByRole('status').querySelectorAll('.animate-scan-bar')).toHaveLength(5);
+    expect(container.querySelectorAll('.animate-scan-bar')).toHaveLength(5);
   });
 
   it('hat ohne laufenden Scan keine Statusanzeige', () => {
