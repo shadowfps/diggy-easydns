@@ -25,6 +25,8 @@ import {
   hasDmarcReportUri,
 } from '@/lib/dmarc';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { InfoButton } from '@/components/ui/InfoButton';
+import { explainMailTerm } from '@/lib/explanations';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 
 interface MailViewProps {
@@ -595,6 +597,7 @@ function Card({
   children,
 }: {
   icon: ReactNode;
+  /** Ist der Titel ein Fachbegriff (SPF, BIMI …), steht dahinter ein „?“ mit seiner Erklärung. */
   title: string;
   subtitle: string;
   tone: Tone;
@@ -604,6 +607,7 @@ function Card({
   className?: string;
   children: ReactNode;
 }) {
+  const explanation = explainMailTerm(title);
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -614,6 +618,7 @@ function Card({
       <CardHeader
         icon={icon}
         title={title}
+        info={explanation && <InfoButton term={title} explanation={explanation} />}
         subtitle={subtitle}
         tone={unchecked ? 'neutral' : tone}
         aside={unchecked ? <UncheckedBadge /> : aside}

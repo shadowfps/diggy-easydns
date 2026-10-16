@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { MailSecurity } from '@/types/dns';
+import { MAIL_EXPLANATIONS } from '@/lib/explanations';
 import { MailView } from './MailView';
 
 /**
@@ -486,5 +488,40 @@ describe('MailView — nicht prüfbar', () => {
     expect(screen.getByText('Kein DMARC-Record auf _dmarc.<domain>')).toBeInTheDocument();
     expect(screen.getByText('nicht eingerichtet')).toBeInTheDocument();
     expect(screen.queryByText('nicht prüfbar')).not.toBeInTheDocument();
+  });
+});
+
+/** Jede Mail-Karte erklärt ihren Begriff über ein „?“ neben dem Titel (#80). */
+
+const EXPLAINED: MailSecurity = {
+  spf: { present: true, record: 'v=spf1 -all', lookupCount: 0, valid: true, issues: [] },
+  dmarc: { present: true, record: 'v=DMARC1; p=reject', policy: 'reject' },
+  dkim: { selectors: [] },
+  mtaSts: { present: false },
+  hasMx: true,
+  nullMx: false,
+  bimi: { present: false },
+  tlsRpt: { present: false },
+};
+
+describe('MailView — Erklärungen', () => {
+  it.each(['SPF', 'DKIM', 'DMARC', 'MTA-STS', 'BIMI', 'TLS-RPT'] as const)('erklärt %s', async (term) => {
+    const user = userEvent.setup();
+    render(<MailView mail={EXPLAINED} />);
+
+    // Der Button steht neben der Überschrift, nicht in ihr — sonst würde der
+    // Popover-Text Teil des Überschriftennamens.
+    const heading = screen.getByRole('heading', { name: term });
+    const button = screen.getByRole('button', { name: `Was bedeutet ${term}?` });
+    expect(heading).not.toContainElement(button);
+
+    await user.click(button);
+    expect(screen.getByText(MAIL_EXPLANATIONS[term].text)).toBeInTheDocument();
+  });
+
+  it('setzt kein „?“ an die Null-MX-Karte — ihr Titel ist kein Fachbegriff', () => {
+    render(<MailView mail={{ ...EXPLAINED, nullMx: true }} />);
+    expect(screen.getByRole('heading', { name: 'Keine Mails (Null-MX)' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Was bedeutet / })).toHaveLength(6);
   });
 });

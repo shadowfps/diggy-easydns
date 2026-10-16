@@ -3,6 +3,8 @@ import { useState, useMemo } from 'react';
 import type { DnsRecord, RecordType } from '@/types/dns';
 import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
+import { InfoButton } from '@/components/ui/InfoButton';
+import { explainRecordType } from '@/lib/explanations';
 import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface RecordsListProps {
@@ -22,6 +24,17 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
 
   const filtered = filter === 'ALL' ? records : records.filter((r) => r.type === filter);
 
+  // Das „?“ zur Erklärung steht nur in der ersten Zeile je Typ. An jeder
+  // Zeile wären es bei vielen TXT- oder NS-Records ein Dutzend gleiche
+  // Fragezeichen untereinander — und ebenso viele Tab-Stopps.
+  const explainedRows = new Set<number>();
+  const seenTypes = new Set<RecordType>();
+  filtered.forEach((record, i) => {
+    if (seenTypes.has(record.type)) return;
+    seenTypes.add(record.type);
+    explainedRows.add(i);
+  });
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
@@ -39,10 +52,15 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
         ))}
       </div>
 
-      <div className="card-flush divide-y divide-line-subtle">
+      {/* `overflow-visible`: die Erklärung hängt als Popover an der Typ-Spalte
+          und reicht bei kurzen Listen über den Kartenrand. Mit dem
+          `overflow-hidden` aus card-flush wäre sie dort abgeschnitten; die
+          Zeilen haben keinen Hintergrund, die Rundung braucht es hier nicht. */}
+      <div className="card-flush divide-y divide-line-subtle overflow-visible">
         {filtered.map((record, i) => {
           const hasIpDetails =
             (record.type === 'A' || record.type === 'AAAA') && isInspectableIp(record.value);
+          const explanation = explainedRows.has(i) ? explainRecordType(record.type) : undefined;
 
           return (
             <motion.div
@@ -52,8 +70,9 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
               transition={{ duration: 0.3, delay: staggerDelay(i, 0.03, reduced) }}
               className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 sm:px-6"
             >
-              <span className="font-mono text-xs font-semibold text-fg-muted">
+              <span className="flex items-center gap-1 font-mono text-xs font-semibold text-fg-muted">
                 {record.type}
+                {explanation && <InfoButton term={record.type} explanation={explanation} />}
               </span>
               <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[13px] text-fg">
                 {record.priority !== undefined && (
