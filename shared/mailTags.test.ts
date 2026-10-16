@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchTag } from './mailTags.js';
+import { leadingVersion, matchTag } from './mailTags.js';
 
 describe('matchTag', () => {
   it.each(['sp=none; p=reject', 'p=reject; sp=none'])(
@@ -29,5 +29,21 @@ describe('matchTag', () => {
   it('nimmt bei doppelten Tags den ersten Wert, auch einen leeren', () => {
     expect(matchTag('p=none; P=reject', 'p')).toBe('none');
     expect(matchTag('p= ; p=reject', 'p')).toBe('');
+  });
+});
+
+describe('leadingVersion', () => {
+  it('liest v= nur als erstes Tag', () => {
+    expect(leadingVersion('v=DMARC1; p=reject')).toBe('DMARC1');
+    expect(leadingVersion(' v = DMARC1 ;p=reject')).toBe('DMARC1');
+    expect(leadingVersion('v=DKIM1')).toBe('DKIM1');
+  });
+
+  it('übersieht ein v= an anderer Stelle oder ein fehlendes', () => {
+    expect(leadingVersion('p=reject; v=DMARC1')).toBeUndefined();
+    expect(leadingVersion('; v=DMARC1')).toBeUndefined();
+    expect(leadingVersion('sv=DMARC1; p=reject')).toBeUndefined();
+    expect(leadingVersion('')).toBeUndefined();
+    expect(leadingVersion(undefined)).toBeUndefined();
   });
 });

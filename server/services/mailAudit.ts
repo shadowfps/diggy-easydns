@@ -16,7 +16,7 @@
 import { promises as dnsPromises, type MxRecord } from 'node:dns';
 import type { MailSecurity } from '../types.js';
 import { isNullMx } from '../../shared/nullMx.js';
-import { matchTag } from '../../shared/mailTags.js';
+import { leadingVersion, matchTag } from '../../shared/mailTags.js';
 
 const resolver = new dnsPromises.Resolver({ timeout: 4000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
@@ -161,7 +161,7 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
   try {
     const records = await resolver.resolveTxt(`_dmarc.${domain}`);
     const merged = records.map((chunks) => chunks.join(''));
-    const dmarcLine = merged.find((r) => matchTag(r, 'v')?.toLowerCase() === 'dmarc1');
+    const dmarcLine = merged.find((r) => leadingVersion(r)?.toLowerCase() === 'dmarc1');
 
     if (!dmarcLine) return { present: false };
 
@@ -194,9 +194,7 @@ async function probeDkimSelectors(
       try {
         const records = await resolver.resolveTxt(`${selector}._domainkey.${domain}`);
         const merged = records.map((chunks) => chunks.join(''));
-        const dkimRecord = merged.find(
-          (r) => r.toLowerCase().includes('v=dkim1') || r.toLowerCase().includes('k=')
-        );
+        const dkimRecord = merged.find(isDkimKeyRecord);
         if (dkimRecord && hasUsableDkimKey(dkimRecord)) {
           return { selector, present: true, record: dkimRecord };
         }
@@ -210,6 +208,17 @@ async function probeDkimSelectors(
   );
 
   return checks.filter((c): c is NonNullable<typeof c> => c !== null);
+}
+
+/**
+ * DKIM-Key-Record nach RFC 6376 §3.6.1: `v=DKIM1` und `k=` sind optional,
+ * ein Record aus nur `p=…` ist also vollständig. Steht vorn ein `v=` mit
+ * anderem Wert, ist es kein DKIM-Record.
+ */
+function isDkimKeyRecord(record: string): boolean {
+  const version = leadingVersion(record);
+  if (version !== undefined) return version.toLowerCase() === 'dkim1';
+  return matchTag(record, 'p') !== undefined || matchTag(record, 'k') !== undefined;
 }
 
 /**

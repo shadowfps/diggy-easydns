@@ -39,11 +39,28 @@ describe('auditMail: Mail-TXT-Tags', () => {
     });
   });
 
+  it.each(['p=reject; v=DMARC1', 'v=DMARC2; p=reject', 'sp=none; p=reject'])(
+    'verwirft einen DMARC-Record ohne v=DMARC1 an erster Stelle: %s',
+    async (record) => {
+      vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) =>
+        name === '_dmarc.example.com' ? [[record]] : []
+      );
+      expect((await auditMail('example.com')).dmarc).toEqual({ present: false });
+    }
+  );
+
   it.each([
     ['v=DKIM1; sp=; p=AbC123==', true],
     ['v=DKIM1; sp=AbC123==; p=', false],
     ['v=DKIM1; p=; p=AbC123==', false],
     ['v=DKIM1; p=AbC123==', true],
+    // v= und k= sind optional (RFC 6376 §3.6.1)
+    ['p=AbC123==', true],
+    ['k=rsa; p=AbC123==', true],
+    [' v = DKIM1 ; p=AbC123==', true],
+    ['k=rsa; p=', false],
+    ['v=DKIM2; p=AbC123==', false],
+    ['google-site-verification=AbC123', false],
   ])('prüft beim DKIM-Schlüssel nur das vollständige p-Tag: %s', async (record, present) => {
     vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) =>
       name === 'default._domainkey.example.com' ? [[record]] : []
