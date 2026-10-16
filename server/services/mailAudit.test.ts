@@ -111,9 +111,13 @@ describe('auditMail: BIMI und TLS-RPT (#83)', () => {
   });
 
   /** Ein Timeout sagt nichts darüber, ob der Record existiert. */
-  it.each(['ETIMEOUT', 'ESERVFAIL', 'ECONNREFUSED'])(
-    'meldet bei %s „unbekannt“ statt „fehlt“ — und der Rest des Reports bleibt',
-    async (code) => {
+  it.each([
+    ['ETIMEOUT', 'timeout'],
+    ['ESERVFAIL', 'servfail'],
+    ['ECONNREFUSED', 'network'],
+  ] as const)(
+    'meldet bei %s „nicht prüfbar“ (%s) statt „fehlt“ — und der Rest des Reports bleibt',
+    async (code, reason) => {
       const dmarc = 'v=DMARC1; p=reject';
       vi.mocked(dnsPromises.Resolver.prototype.resolveTxt).mockImplementation(async (name) => {
         if (name === 'default._bimi.example.com' || name === '_smtp._tls.example.com') {
@@ -122,8 +126,8 @@ describe('auditMail: BIMI und TLS-RPT (#83)', () => {
         return name === '_dmarc.example.com' ? [[dmarc]] : [];
       });
       const mail = await auditMail('example.com');
-      expect(mail.bimi).toEqual({ present: false, lookupFailed: true });
-      expect(mail.tlsRpt).toEqual({ present: false, lookupFailed: true });
+      expect(mail.bimi).toEqual({ present: false, lookupFailed: reason });
+      expect(mail.tlsRpt).toEqual({ present: false, lookupFailed: reason });
       expect(mail.dmarc).toEqual({ present: true, record: dmarc, policy: 'reject', rua: undefined });
     }
   );

@@ -16,7 +16,10 @@ import {
   whoisFindings,
 } from './services/reportBuilder.js';
 import { cached } from './lib/cache.js';
+import { hasMailLookupFailure } from '../shared/lookupFailure.js';
+import { createIndexRenderer, domainFromLookupPath, lookupPreview, previewOrigin } from './lib/linkPreview.js';
 import { BlockedTargetError } from './lib/safeTarget.js';
+import { upstreamErrorStatus } from './lib/upstreamError.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { queryAllResolvers } from './services/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
@@ -56,6 +59,24 @@ const distDir = resolve(__dirname, '../../dist');
 const distIndex = resolve(distDir, 'index.html');
 
 /**
+ * Das gebaute index.html, EINMAL beim Start gelesen. Daraus kommen die
+ * CSP-Hashes und die Vorlage für die Link-Vorschau — beide aus demselben
+ * Stand, und kein Request muss die Datei erneut von der Platte holen.
+ */
+function readDistIndex(): string | null {
+  if (!existsSync(distIndex)) return null;
+
+  try {
+    return readFileSync(distIndex, 'utf8');
+  } catch (error) {
+    console.warn('[index] dist/index.html konnte nicht gelesen werden:', error);
+    return null;
+  }
+}
+
+const distIndexHtml = readDistIndex();
+
+/**
  * SHA-256-Hashes aller Inline-`<script>`-Blöcke im gebauten index.html.
  *
  * index.html enthält bewusst ein blockierendes Inline-Script, das das Theme
@@ -64,23 +85,23 @@ const distIndex = resolve(distDir, 'index.html');
  * nächsten Edit am HTML stillschweigend falsch. Stattdessen werden sie beim
  * Start aus der Datei abgeleitet: Script und CSP können nicht auseinanderlaufen.
  */
-function inlineScriptHashes(): string[] {
-  if (!existsSync(distIndex)) return [];
+function inlineScriptHashes(html: string | null): string[] {
+  if (!html) return [];
 
-  try {
-    const html = readFileSync(distIndex, 'utf8');
-    const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
-    return blocks
-      .map((match) => match[1])
-      .filter((code) => code.trim().length > 0)
-      .map((code) => `'sha256-${createHash('sha256').update(code, 'utf8').digest('base64')}'`);
-  } catch (error) {
-    console.warn('[csp] Inline-Script-Hashes konnten nicht gelesen werden:', error);
-    return [];
-  }
+  const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)];
+  return blocks
+    .map((match) => match[1])
+    .filter((code) => code.trim().length > 0)
+    .map((code) => `'sha256-${createHash('sha256').update(code, 'utf8').digest('base64')}'`);
 }
 
-const scriptHashes = inlineScriptHashes();
+const scriptHashes = inlineScriptHashes(distIndexHtml);
+
+/**
+ * index.html mit domain-spezifischen Meta-Tags für `/lookup/<domain>` (#81).
+ * Lässt die Inline-Scripts unberührt — die Hashes oben gelten weiter.
+ */
+const renderLookupIndex = distIndexHtml ? createIndexRenderer(distIndexHtml) : null;
 
 /* ─── Sicherheits-Header (#9) ────────────────────────────────────────────── */
 
@@ -153,7 +174,8 @@ const corsOrigins = process.env.CORS_ORIGINS?.split(',')
  * Öffentliche Origin dieser Installation, z. B. `https://diggy.example`.
  *
  * Vertrauenswürdige Referenz für die CSRF-Prüfung, damit sich die Schranke
- * nicht aus Headern definiert, die der Aufrufer mitliefert.
+ * nicht aus Headern definiert, die der Aufrufer mitliefert. Außerdem Basis
+ * der absoluten URLs in der Link-Vorschau (siehe lib/linkPreview.ts).
  */
 const publicOrigin = process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, '');
 
@@ -437,8 +459,7 @@ app.get('/api/pagespeed', rejectCrossSite, pageSpeedLimiter, pageSpeedConcurrenc
   } catch (error) {
     const err = error as Error;
     const message = err.message || 'PageSpeed-Analyse fehlgeschlagen.';
-    const status = message.toLowerCase().includes('timeout') ? 504 : 502;
-    return res.status(status).json({
+    return res.status(upstreamErrorStatus(error)).json({
       error: 'pagespeed_failed',
       message,
     });
@@ -456,8 +477,7 @@ app.get('/api/virusscan', rejectCrossSite, virusScanLimiter, virusScanConcurrenc
     res.json(result);
   } catch (error) {
     const err = error as Error;
-    const status = err.name === 'AbortError' ? 504 : 502;
-    return res.status(status).json({
+    return res.status(upstreamErrorStatus(error)).json({
       error: 'virusscan_failed',
       message: err.message || 'VirusTotal-Scan fehlgeschlagen.',
     });
@@ -610,7 +630,7 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
     const start = Date.now();
     const apexDomain = getApexDomain(domain);
 
-    const records = await cached(`records:${domain}`, LOOKUP_TTL_MS, () =>
+    const { records, failedTypes } = await cached(`records:${domain}`, LOOKUP_TTL_MS, () =>
       lookupStandardRecords(domain)
     );
     const findings = dnsFindings(records, domain, apexDomain);
@@ -621,6 +641,8 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
       records,
       findings,
+      // Nur wenn etwas scheiterte — der Normalfall bleibt unverändert.
+      ...(failedTypes.length > 0 && { failedRecordTypes: failedTypes }),
     });
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
@@ -660,8 +682,13 @@ app.get('/api/lookup/dnssec', async (req: Request, res: Response) => {
   if (!domain) return;
   const apexDomain = getApexDomain(domain);
   try {
-    const dnssec = await cached(`dnssec:${apexDomain}`, LOOKUP_TTL_MS, () =>
-      checkDnssec(apexDomain)
+    // Ein Ausfall bleibt nur kurz im Cache: „nicht prüfbar“ soll beim
+    // nächsten Check neu prüfen, nicht eine Minute lang dasselbe melden (#101).
+    const dnssec = await cached(
+      `dnssec:${apexDomain}`,
+      LOOKUP_TTL_MS,
+      () => checkDnssec(apexDomain),
+      { failed: (result) => Boolean(result.lookupFailed) }
     );
     res.json({ dnssec, findings: dnssecFindings(dnssec) });
   } catch (error) {
@@ -673,8 +700,18 @@ app.get('/api/lookup/ssl', async (req: Request, res: Response) => {
   const domain = resolveDomainParam(req, res);
   if (!domain) return;
   try {
-    const ssl = await cached(`ssl:${domain}`, LOOKUP_TTL_MS, () => checkSsl(domain));
-    res.json({ ssl, findings: sslFindings(ssl) });
+    const result = await cached(`ssl:${domain}`, LOOKUP_TTL_MS, () => checkSsl(domain), {
+      failed: (check) => check.status === 'failed',
+    });
+    const ssl = result.status === 'ok' ? result.info : null;
+    const lookupFailed = result.status === 'failed' ? result.reason : undefined;
+    // `ssl` bleibt `SslInfo | null` wie bisher; `lookupFailed` kommt nur dazu,
+    // wenn der Check scheiterte — ältere Clients lesen es einfach nicht.
+    res.json({
+      ssl,
+      findings: sslFindings(ssl, lookupFailed),
+      ...(lookupFailed && { lookupFailed }),
+    });
   } catch (error) {
     sectionError(res, 'ssl_failed', error);
   }
@@ -687,10 +724,12 @@ app.get('/api/lookup/mail', async (req: Request, res: Response) => {
   try {
     // SPF liegt auf der Apex-Domain — hier eigenständig holen (der Primär-
     // Endpoint liefert die Records ja nicht mehr an diesen Endpoint durch).
-    const mail = await cached(`mail:${apexDomain}`, LOOKUP_TTL_MS, async () => {
-      const spf = await lookupSpfRecord(apexDomain);
-      return auditMail(apexDomain, spf);
-    });
+    const mail = await cached(
+      `mail:${apexDomain}`,
+      LOOKUP_TTL_MS,
+      async () => auditMail(apexDomain, await lookupSpfRecord(apexDomain)),
+      { failed: hasMailLookupFailure }
+    );
     res.json({ mail, findings: mailFindings(mail, apexDomain) });
   } catch (error) {
     sectionError(res, 'mail_failed', error);
@@ -730,7 +769,23 @@ if (existsSync(distIndex)) {
   // geschweiften Klammern machen ihn optional, damit auch `/` passt.
   app.get('/{*splat}', (req: Request, res: Response, next) => {
     if (req.path.startsWith('/api/')) return next();
-    return res.sendFile(distIndex);
+
+    // Permalinks bekommen eigene Meta-Tags für die Link-Vorschau (#81).
+    // Ungültige Domains und alle anderen Routen gehen unverändert an
+    // index.html.
+    const domain = renderLookupIndex ? domainFromLookupPath(req.path) : null;
+    if (renderLookupIndex && domain) {
+      // Wie bisher kein langes Caching: das HTML verweist auf die gehashten
+      // Assets des aktuellen Builds und muss nach einem Deploy sofort neu
+      // geladen werden. Die ETag setzt res.send selbst.
+      res.set('Cache-Control', 'no-cache');
+      res.type('html');
+      return res.send(renderLookupIndex(lookupPreview(domain, previewOrigin(req, publicOrigin))));
+    }
+
+    // Mit root prüft sendFile nur unterhalb von dist auf Dotfiles, damit
+    // übergeordnete Punkt-Ordner wie .claude keine SPA-Routen blockieren.
+    return res.sendFile('index.html', { root: distDir });
   });
 }
 

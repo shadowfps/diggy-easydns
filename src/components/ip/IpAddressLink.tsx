@@ -221,7 +221,7 @@ function IpDetailsOverlay({
 
             <div className="mt-4">
               {loading && (
-                <div className="panel flex items-center gap-2 text-sm text-fg-muted">
+                <div role="status" className="panel flex items-center gap-2 text-sm text-fg-muted">
                   <Loader2 className="size-4 animate-spin" />
                   <span>IP-Details werden geladen...</span>
                 </div>

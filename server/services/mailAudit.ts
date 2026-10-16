@@ -16,7 +16,9 @@
  */
 
 import { promises as dnsPromises, type MxRecord } from 'node:dns';
-import type { MailBimi, MailSecurity, MailTlsRpt } from '../types.js';
+import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt } from '../types.js';
+import { dnsLookupFailure } from '../lib/dnsFailure.js';
+import type { SpfLookup } from './dnsLookup.js';
 import { isNullMx } from '../../shared/nullMx.js';
 import { leadingVersion, matchTag } from '../../shared/mailTags.js';
 import { parseBimi, parseTlsRpt } from '../../shared/bimiTlsRpt.js';
@@ -55,10 +57,10 @@ const COMMON_DKIM_SELECTORS = [
 
 export async function auditMail(
   domain: string,
-  /** SPF aus dem Apex-TXT-Lookup, falls schon vorhanden */
-  spfRecord?: string
+  /** SPF aus dem Apex-TXT-Lookup (lookupSpfRecord) */
+  spfLookup: SpfLookup = {}
 ): Promise<MailSecurity> {
-  const [dmarc, dkimSelectors, mtaSts, mx, bimi, tlsRpt] = await Promise.all([
+  const [dmarc, dkim, mtaSts, mx, bimi, tlsRpt] = await Promise.all([
     lookupDmarc(domain),
     probeDkimSelectors(domain),
     lookupMtaSts(domain),
@@ -67,12 +69,14 @@ export async function auditMail(
     lookupTlsRpt(domain),
   ]);
 
-  const spf = analyzeSpf(spfRecord);
+  const spf: MailSecurity['spf'] = spfLookup.lookupFailed
+    ? { present: false, valid: false, issues: [], lookupFailed: spfLookup.lookupFailed }
+    : analyzeSpf(spfLookup.record);
 
   return {
     spf,
     dmarc,
-    dkim: { selectors: dkimSelectors },
+    dkim,
     mtaSts,
     ...summarizeMx(mx),
     bimi,
@@ -182,8 +186,13 @@ async function lookupDmarc(domain: string): Promise<MailSecurity['dmarc']> {
       policy: isValidPolicy(policy) ? policy : undefined,
       rua,
     };
-  } catch {
-    return { present: false };
+  } catch (error) {
+    // NXDOMAIN/NODATA heißt: kein DMARC-Record. Alles andere (Timeout,
+    // SERVFAIL) nur, dass die Antwort fehlt — das muss der Client wissen,
+    // sonst meldet der Report „DMARC fehlt“ und der Vergleich mit dem letzten
+    // Check „DMARC entfernt“.
+    const lookupFailed = dnsLookupFailure(error);
+    return lookupFailed ? { present: false, lookupFailed } : { present: false };
   }
 }
 
@@ -193,9 +202,8 @@ function isValidPolicy(p?: string): p is 'none' | 'quarantine' | 'reject' {
 
 /* ─── DKIM ────────────────────────────────────────────────────────────── */
 
-async function probeDkimSelectors(
-  domain: string
-): Promise<MailSecurity['dkim']['selectors']> {
+async function probeDkimSelectors(domain: string): Promise<MailSecurity['dkim']> {
+  let lookupFailed: MailSecurity['dkim']['lookupFailed'];
   const checks = await Promise.all(
     COMMON_DKIM_SELECTORS.map(async (selector) => {
       try {
@@ -207,14 +215,19 @@ async function probeDkimSelectors(
         }
         // TXT existiert aber ist DKIM-revoked (p=) oder kein echter DKIM-Record → ignorieren
         return null;
-      } catch {
-        // NXDOMAIN/ENODATA — Selector existiert nicht.
+      } catch (error) {
+        // NXDOMAIN/ENODATA — Selector existiert nicht. Alles andere: offen,
+        // ob es ihn gibt.
+        lookupFailed ??= dnsLookupFailure(error);
         return null;
       }
     })
   );
 
-  return checks.filter((c): c is NonNullable<typeof c> => c !== null);
+  const selectors = checks.filter((c): c is NonNullable<typeof c> => c !== null);
+  // Ein gefundener Selector reicht für die Aussage „DKIM aktiv“ — dann ist
+  // eine gescheiterte Probe egal. Ohne Fund hätte es genau diese sein können.
+  return selectors.length === 0 && lookupFailed ? { selectors, lookupFailed } : { selectors };
 }
 
 /**
@@ -252,8 +265,9 @@ async function lookupMtaSts(domain: string): Promise<MailSecurity['mtaSts']> {
     const merged = records.map((chunks) => chunks.join(''));
     const mtaSts = merged.find((r) => r.toLowerCase().startsWith('v=stsv1'));
     return { present: !!mtaSts };
-  } catch {
-    return { present: false };
+  } catch (error) {
+    const lookupFailed = dnsLookupFailure(error);
+    return lookupFailed ? { present: false, lookupFailed } : { present: false };
   }
 }
 
@@ -267,30 +281,33 @@ async function lookupMtaSts(domain: string): Promise<MailSecurity['mtaSts']> {
 
 async function lookupBimi(domain: string): Promise<MailBimi> {
   const txt = await resolveTxtOrMissing(`default._bimi.${domain}`);
-  return txt ? parseBimi(txt) : { present: false, lookupFailed: true };
+  return Array.isArray(txt) ? parseBimi(txt) : { present: false, lookupFailed: txt.lookupFailed };
 }
 
 async function lookupTlsRpt(domain: string): Promise<MailTlsRpt> {
   const txt = await resolveTxtOrMissing(`_smtp._tls.${domain}`);
-  return txt ? parseTlsRpt(txt) : { present: false, lookupFailed: true };
+  return Array.isArray(txt) ? parseTlsRpt(txt) : { present: false, lookupFailed: txt.lookupFailed };
 }
 
 /**
  * TXT-Records eines Namens, Teilstrings zusammengesetzt (RFC 7208 §3.3, so
- * verlangt es auch BIMI). `undefined`, wenn die Abfrage gescheitert ist.
+ * verlangt es auch BIMI). Ist die Abfrage gescheitert, der Grund.
  *
- * Nur NXDOMAIN und „keine TXT-Records“ heißen „gibt es nicht“. Ein Timeout
- * oder SERVFAIL sagt darüber nichts — als „fehlt“ gemeldet, bekäme eine
- * Domain mit korrektem Record einen falschen Hinweis. Geworfen wird trotzdem
- * nicht: Ein Ausfall hier darf den restlichen Mail-Report nicht kippen.
+ * Nur NXDOMAIN und „keine TXT-Records“ heißen „gibt es nicht“ (siehe
+ * dnsLookupFailure). Ein Timeout oder SERVFAIL sagt darüber nichts — als
+ * „fehlt“ gemeldet, bekäme eine Domain mit korrektem Record einen falschen
+ * Hinweis. Geworfen wird trotzdem nicht: Ein Ausfall hier darf den restlichen
+ * Mail-Report nicht kippen.
  */
-async function resolveTxtOrMissing(name: string): Promise<string[] | undefined> {
+async function resolveTxtOrMissing(
+  name: string
+): Promise<string[] | { lookupFailed: LookupFailure }> {
   try {
     const records = await resolver.resolveTxt(name);
     return records.map((chunks) => chunks.join(''));
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    return code === 'ENOTFOUND' || code === 'ENODATA' ? [] : undefined;
+    const lookupFailed = dnsLookupFailure(error);
+    return lookupFailed ? { lookupFailed } : [];
   }
 }
 
