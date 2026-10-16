@@ -23,6 +23,7 @@
  */
 
 import type { MailSecurity } from './types/dns.js';
+import { matchTag } from './mailTags.js';
 
 /** Ein MX-Eintrag, wie ihn `resolveMx` (exchange) oder ein DnsRecord (value) liefert. */
 export interface MxEntry {
@@ -85,8 +86,8 @@ export function spfAllowsNoSender(record?: string): boolean {
  * nichts ab, sondern stellt Fälschungen nur unter Quarantäne.
  */
 export function dmarcPct(record?: string): number {
-  const value = record?.match(/(?:^|;)\s*pct\s*=\s*(\d+)\s*(?:;|$)/i)?.[1];
-  return value === undefined ? 100 : Math.min(Number(value), 100);
+  const value = matchTag(record, 'pct');
+  return value === undefined || !/^\d+$/.test(value) ? 100 : Math.min(Number(value), 100);
 }
 
 export interface NoMailProtection {
