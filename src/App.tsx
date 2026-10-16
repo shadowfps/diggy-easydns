@@ -63,6 +63,7 @@ const VirusScanView = lazy(() =>
 );
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/cn';
 import { isDnsOnlyName } from '@/lib/dnsName';
 import {
@@ -109,6 +110,9 @@ export default function App() {
   // damit man ohne Klick per Strg+V einfügen und suchen kann. Bei Deep-Links
   // (Permalink oder Unterseite) übernimmt der Routing-Effekt.
   const [autoFocusSearch] = useState(() => window.location.pathname === '/');
+  // „Bewegung reduzieren“: springen statt gleiten. Das sanfte Scrollen per JS
+  // erreicht weder MotionConfig noch die CSS-Regel in globals.css.
+  const smoothScroll: ScrollBehavior = useReducedMotion() ? 'auto' : 'smooth';
 
   const report = lookup.report;
   const records = lookup.records;
@@ -155,7 +159,7 @@ export default function App() {
   };
 
   const handleSearch = (domain: string) => {
-    window.scrollTo({ top: 0, behavior: records || ipQuery ? 'smooth' : 'auto' });
+    window.scrollTo({ top: 0, behavior: records || ipQuery ? smoothScroll : 'auto' });
     /*
      * Eintrag nur anlegen, wenn wir NICHT schon auf einem Lookup-Pfad sind.
      *
@@ -274,14 +278,14 @@ export default function App() {
       window.history.pushState(null, '', pathname);
     }
     applyPath(pathname);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: smoothScroll });
   };
 
   // Aus der Score-Karte: Tab wechseln und die Tab-Leiste in Sicht holen — auf
   // dem Handy liegt sie sonst unter der Schnellübersicht außer Sicht.
   const handleShowFindings = () => {
     setActiveTab('findings');
-    document.getElementById('tab-findings')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('tab-findings')?.scrollIntoView({ behavior: smoothScroll, block: 'nearest' });
   };
 
   const handleHome = () => navigate('/');
@@ -304,7 +308,7 @@ export default function App() {
     if (!records && window.location.pathname !== '/') {
       window.history.pushState(null, '', '/');
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: smoothScroll });
   };
 
   // Erstes Laden: Deep-Link/Permalink anwenden.
@@ -537,13 +541,16 @@ export default function App() {
         </AnimatePresence>
 
         {/* Loading State — nur bis die Records da sind. Danach übernimmt der
-            Report mit Skeletons für die noch ladenden Sektionen. */}
+            Report mit Skeletons für die noch ladenden Sektionen. role="status",
+            damit der Text angesagt wird: bei „Bewegung reduzieren“ steht der
+            Spinner still und trägt den Ladezustand nicht mehr mit. */}
         <AnimatePresence>
           {view === 'lookup' && recordsLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              role="status"
               className="mx-auto mt-10 max-w-2xl text-center"
             >
               <Loader2 className="mx-auto size-6 animate-spin text-fg" />

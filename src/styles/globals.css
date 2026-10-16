@@ -104,6 +104,15 @@
 
   --shadow-card: var(--elevation-card);
   --shadow-overlay: var(--elevation-overlay);
+
+  /*
+   * Eigene Animationen, daraus werden `animate-fade-in-up` und
+   * `animate-scan-bar`. Benannte Klassen statt `style={{ animation }}` bzw.
+   * `animate-[…]`, damit die Regel für „Bewegung reduzieren“ am Dateiende sie
+   * treffen kann — gegen einen Inline-Style käme sie ohne !important nicht an.
+   */
+  --animate-fade-in-up: fadeInUp 0.4s ease-out;
+  --animate-scan-bar: scanBar 1.2s ease-in-out infinite;
 }
 
 /*
@@ -418,5 +427,60 @@
   }
   50% {
     opacity: 1;
+  }
+}
+
+/* fadeInUp ohne Versatz — Ersatz bei „Bewegung reduzieren“, siehe unten. */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * „Bewegung reduzieren“ (prefers-reduced-motion) für alles, was CSS bewegt.
+ * Framer Motion regelt `MotionConfig` in main.tsx, GSAP, die rAF-Komponenten
+ * und das Scrollen in App.tsx `useReducedMotion` — die erreicht diese Regel
+ * nicht.
+ *
+ * - Endlosschleifen stehen still: Spinner, Skeleton-Puls, Lade-Balken,
+ *   Punkte im Such-Button. Den Ladezustand tragen dann Text, das stehende
+ *   Icon und `role="status"` — die Drehung hat ihn nie allein getragen.
+ * - Einblendungen blenden nur noch ein, ohne Versatz und kürzer. Hart
+ *   ausschalten ginge auch, aber Ein- und Ausblenden ist keine Bewegung.
+ * - Buttons geben beim Klick nicht mehr nach; die Farbe reagiert weiter.
+ *
+ * Bewusst eine Liste statt `* { animation: none !important }`: der
+ * Pauschal-Reset entscheidet für jede Animation gleich, auch für künftige,
+ * deren Zustand an der Animation hängt (Fortschritt, Einblendung aus
+ * `opacity: 0`). Mit !important ließe er sich zudem nirgends gezielt anders
+ * lösen. Die Liste zwingt zur Entscheidung je Animation.
+ *
+ * Steht außerhalb jeder @layer: ungeschichtete Regeln schlagen alle Ebenen,
+ * also auch die Tailwind-Utilities — ohne !important. Nur Inline-Styles
+ * schlagen sie, deshalb keine Animation per `style`.
+ *
+ * Neue CSS-Animation: hier eintragen oder an der Stelle mit `motion-safe:`
+ * schreiben (docs/DESIGN.md, „Bewegung“). Ohne die Einstellung ändert diese
+ * Regel nichts.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-pulse,
+  .animate-scan-bar,
+  .dig-dots span {
+    animation: none;
+  }
+
+  .animate-fade-in-up {
+    animation-name: fadeIn;
+    animation-duration: 0.15s;
+  }
+
+  .btn:active {
+    scale: none;
   }
 }

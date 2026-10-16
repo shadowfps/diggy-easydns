@@ -110,7 +110,7 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
           <TopFinding finding={top} />
           <button type="button" onClick={onShowFindings} className="btn btn-ghost btn-sm -mr-2 group">
             Alle Findings
-            <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight className="size-3.5 transition-transform motion-safe:group-hover:translate-x-0.5" />
           </button>
         </div>
       </div>
