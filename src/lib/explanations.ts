@@ -30,11 +30,13 @@ export type MailTerm = 'SPF' | 'DKIM' | 'DMARC' | 'MTA-STS';
 export const RECORD_EXPLANATIONS: Record<ExplainedRecordType, Explanation> = {
   A: {
     title: 'IPv4-Adresse',
-    // Die TTL steht nur hier: A ist der erste Typ in der Liste und einer der
-    // wenigen, für die der Server eine echte TTL mitliefert.
+    // Die TTL steht nur hier, weil A in der Liste zuerst kommt — sie gilt für
+    // jede Zeile gleich. Die Zahl ist die Restzeit im Cache des abgefragten
+    // Resolvers, nicht die eingestellte TTL; deshalb verspricht der Text
+    // nicht, dass Änderungen nach genau dieser Zeit überall angekommen sind.
     text:
       'Die IPv4-Adresse des Servers hinter diesem Namen – dorthin verbinden sich Browser und Apps. ' +
-      'Die Sekunden rechts sind die TTL: So lange dürfen sich andere DNS-Server die Antwort merken, Änderungen kommen also erst danach überall an.',
+      'Die Sekunden rechts zeigen die TTL: Sie sagt, wie lange DNS-Server die Antwort zwischenspeichern dürfen, deshalb kommen Änderungen nicht sofort überall an.',
   },
   AAAA: {
     title: 'IPv6-Adresse',
@@ -45,8 +47,8 @@ export const RECORD_EXPLANATIONS: Record<ExplainedRecordType, Explanation> = {
   CNAME: {
     title: 'Alias für einen anderen Namen',
     text:
-      'Verweist auf einen anderen Namen: Wer diesen abfragt, bekommt die Einträge des Ziels. ' +
-      'Neben einem CNAME darf derselbe Name keine weiteren Einträge haben.',
+      'Macht diesen Namen zum Alias eines anderen: Wer ihn abfragt, bekommt die Einträge des Ziels. ' +
+      'Eigene weitere Einträge darf ein Name mit CNAME nicht haben – was sonst in der Liste steht, kommt vom Ziel.',
   },
   MX: {
     title: 'Mailserver',
@@ -64,7 +66,7 @@ export const RECORD_EXPLANATIONS: Record<ExplainedRecordType, Explanation> = {
     title: 'Freier Text',
     text:
       'Beliebiger Text zu einem Namen. ' +
-      'Damit belegen Dienste wie Google oder Microsoft, dass dir die Domain gehört, und auch Mail-Regeln wie SPF stehen hier.',
+      'Damit weist du etwa Google oder Microsoft nach, dass dir die Domain gehört, und auch Mail-Regeln wie SPF stehen hier.',
   },
   CAA: {
     title: 'Erlaubte Zertifizierungsstellen',
@@ -90,20 +92,23 @@ export const MAIL_EXPLANATIONS: Record<MailTerm, Explanation> = {
   DKIM: {
     title: 'Digitale Unterschrift',
     text:
-      'Dein Mailserver unterschreibt ausgehende Mails, den passenden öffentlichen Schlüssel veröffentlicht er im DNS unter <selector>._domainkey. ' +
+      'Dein Mailserver unterschreibt ausgehende Mails, der passende öffentliche Schlüssel steht im DNS unter <selector>._domainkey. ' +
       'So kann der Empfänger prüfen, dass die Mail wirklich von deiner Domain stammt und unterwegs nicht verändert wurde.',
   },
   DMARC: {
     title: 'Regel gegen Fälschungen',
+    // „für genau diese Domain“: DMARC verlangt, dass SPF oder DKIM für die
+    // Domain im sichtbaren Absender besteht (Alignment). Ein SPF-Pass für die
+    // Domain eines Versanddienstes allein reicht nicht.
     text:
-      'Legt fest, was mit Mails passiert, die deine Domain als Absender nennen, aber weder SPF noch DKIM bestehen: trotzdem zustellen (none), als Spam einsortieren (quarantine) oder ablehnen (reject). ' +
-      'Mit rua bekommst du Berichte darüber.',
+      'Sagt Empfängern, was mit Mails passieren soll, die deine Domain als Absender zeigen, aber weder per SPF noch per DKIM für genau diese Domain bestätigt sind: nichts tun (none), in den Spamordner (quarantine) oder ablehnen (reject). ' +
+      'Mit rua bekommst du Berichte.',
   },
   'MTA-STS': {
     title: 'Verschlüsselung erzwingen',
     text:
       'Verlangt von anderen Mailservern, Mails an deine Domain nur verschlüsselt und an Server mit gültigem Zertifikat zuzustellen. ' +
-      'Ohne MTA-STS kann ein Angreifer unterwegs die Verschlüsselung abschalten und mitlesen.',
+      'Ohne einen solchen Schutz kann ein Angreifer unterwegs die Verschlüsselung abschalten und mitlesen.',
   },
 };
 

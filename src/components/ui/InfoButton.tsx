@@ -124,7 +124,9 @@ export function InfoButton({ term, explanation, className }: InfoButtonProps) {
           className="overlay absolute left-0 top-full z-50 mt-2 block w-80 max-w-[calc(100vw-2rem)] whitespace-normal p-4 text-left font-sans font-normal normal-case tracking-normal data-[side=top]:top-auto data-[side=top]:bottom-full data-[side=top]:mb-2 data-[side=top]:mt-0"
         >
           <span className="block text-sm font-semibold text-fg">
-            {term} <span className="text-fg-subtle">·</span> {explanation.title}
+            {/* Der Punkt trennt nur fürs Auge; manche Screenreader lesen ihn
+                sonst als „Mittelpunkt“ vor. */}
+            {term} <span className="text-fg-subtle" aria-hidden="true">·</span> {explanation.title}
           </span>
           <span className="mt-1 block text-sm leading-relaxed text-fg-muted">{explanation.text}</span>
         </motion.span>
