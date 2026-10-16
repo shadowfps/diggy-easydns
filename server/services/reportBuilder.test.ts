@@ -450,3 +450,142 @@ describe('mailFindings — Domains mit echtem MX unverändert', () => {
     expect(summary(findings)).toEqual(['success spf-ok', 'success dmarc-present']);
   });
 });
+
+/**
+ * #83: BIMI und TLS-RPT sind Empfehlungen. Fehlen sie, gibt es einen Hinweis
+ * ohne Abzug; eine Domain ohne Mail bekommt gar keinen.
+ */
+describe('mailFindings — BIMI und TLS-RPT', () => {
+  const missing = { bimi: { present: false }, tlsRpt: { present: false } };
+  const real = (overrides: Partial<MailSecurity> = {}) =>
+    mail({ nullMx: false, ...missing, ...overrides });
+  const newIds = (findings: Finding[]) =>
+    summary(findings).filter((s) => /bimi|tls-rpt/.test(s));
+
+  it('weist auf fehlendes BIMI und TLS-RPT hin — ohne Score-Abzug', () => {
+    const findings = mailFindings(real(), 'example.de');
+    expect(newIds(findings)).toEqual(['info no-tls-rpt', 'info no-bimi']);
+    expect(
+      findings.filter((f) => /bimi|tls-rpt/.test(f.id)).every((f) => f.scored === false)
+    ).toBe(true);
+    expect(findings.find((f) => f.id === 'no-tls-rpt')?.fix?.snippet).toBe(
+      '_smtp._tls.example.de  TXT  "v=TLSRPTv1; rua=mailto:tls-reports@example.de"'
+    );
+    expect(findings.find((f) => f.id === 'no-bimi')?.fix?.snippet).toBe(
+      'default._bimi.example.de  TXT  "v=BIMI1; l=https://example.de/bimi/logo.svg"'
+    );
+  });
+
+  /** Gegenprobe: Mit den neuen Feldern bleibt der Score, wo er war. */
+  it.each<[string, Partial<MailSecurity>]>([
+    ['vollständiges Setup', { mtaSts: { present: true } }],
+    ['ohne SPF und DMARC', { spf: spf(undefined), dmarc: dmarc(undefined) }],
+    ['DMARC p=none', { dmarc: dmarc('none') }],
+    ['ohne MX', { hasMx: false }],
+  ])('ändert den Score nicht: %s', (_, overrides) => {
+    const before = mailFindings(mail({ nullMx: false, ...overrides }), 'example.de');
+    const after = mailFindings(real(overrides), 'example.de');
+    expect(calculateScore(after).score).toBe(calculateScore(before).score);
+  });
+
+  it('meldet bei einer Domain ohne Mail (Null-MX) nichts zu BIMI und TLS-RPT', () => {
+    expect(newIds(mailFindings(mail(missing), 'example.com'))).toEqual([]);
+    // Auch nicht, wenn dort doch Records stehen — sie hätten nichts zu tun.
+    const withRecords = mail({
+      bimi: { present: true, invalid: 'v=BIMI1 fehlt am Anfang' },
+      tlsRpt: { present: true, rua: ['mailto:tls@example.com'] },
+    });
+    expect(newIds(mailFindings(withRecords, 'example.com'))).toEqual([]);
+  });
+
+  it('meldet bei einer Domain ohne MX kein Fehlen — wie bei DKIM und MTA-STS', () => {
+    expect(newIds(mailFindings(real({ hasMx: false }), 'example.de'))).toEqual([]);
+  });
+
+  it('empfiehlt BIMI bei DMARC p=none nicht, sondern nennt erst DMARC', () => {
+    const findings = mailFindings(real({ dmarc: dmarc('none') }), 'example.de');
+    expect(newIds(findings)).toEqual(['info no-tls-rpt', 'info bimi-needs-dmarc']);
+    const hint = findings.find((f) => f.id === 'bimi-needs-dmarc');
+    expect(hint?.description).toContain('Jetzt: DMARC p=none');
+    expect(hint?.fix).toBeUndefined();
+    expect(hint?.scored).toBe(false);
+  });
+
+  it('nennt auch ein fehlendes DMARC als Voraussetzung', () => {
+    const findings = mailFindings(real({ dmarc: dmarc(undefined) }), 'example.de');
+    expect(findings.find((f) => f.id === 'bimi-needs-dmarc')?.description).toContain(
+      'Jetzt: kein DMARC-Record'
+    );
+  });
+
+  it('meldet einen BIMI-Record, der an DMARC p=none scheitert', () => {
+    const findings = mailFindings(
+      real({
+        dmarc: dmarc('none'),
+        bimi: { present: true, logoUrl: 'https://example.de/l.svg' },
+      }),
+      'example.de'
+    );
+    expect(newIds(findings)).toContain('info bimi-dmarc-weak');
+    expect(findings.find((f) => f.id === 'bimi-dmarc-weak')?.scored).toBe(false);
+  });
+
+  it('meldet vorhandene Records positiv', () => {
+    const findings = mailFindings(
+      real({
+        bimi: {
+          present: true,
+          logoUrl: 'https://example.de/l.svg',
+          evidenceUrl: 'https://example.de/vmc.pem',
+        },
+        tlsRpt: { present: true, rua: ['mailto:tls@example.de', 'https://r.example.net/'] },
+      }),
+      'example.de'
+    );
+    expect(newIds(findings)).toEqual(['success tls-rpt-present', 'success bimi-present']);
+    expect(findings.find((f) => f.id === 'tls-rpt-present')?.description).toContain(
+      'mailto:tls@example.de, https://r.example.net/'
+    );
+    expect(findings.find((f) => f.id === 'bimi-present')?.description).toContain('mit Zertifikat');
+  });
+
+  it('nennt bei ungültigen Records den Grund — ohne Abzug', () => {
+    const findings = mailFindings(
+      real({
+        bimi: { present: true, invalid: 'Die Logo-URL in l= muss mit https:// beginnen' },
+        tlsRpt: { present: true, invalid: '2 TLS-RPT-Records — RFC 8460 verlangt genau einen' },
+      }),
+      'example.de'
+    );
+    expect(newIds(findings)).toEqual(['info tls-rpt-invalid', 'info bimi-invalid']);
+    expect(findings.find((f) => f.id === 'bimi-invalid')?.description).toContain('https://');
+    expect(findings.find((f) => f.id === 'tls-rpt-invalid')?.description).toContain(
+      '2 TLS-RPT-Records'
+    );
+    expect(calculateScore(findings).score).toBe(
+      calculateScore(mailFindings(mail({ nullMx: false }), 'example.de')).score
+    );
+  });
+
+  it('übergeht den bewussten BIMI-Verzicht', () => {
+    const findings = mailFindings(real({ bimi: { present: true, declined: true } }), 'example.de');
+    expect(newIds(findings)).toEqual(['info no-tls-rpt']);
+  });
+
+  /** Ausfall ≠ fehlt: ohne Antwort kein „fehlt“-Hinweis. */
+  it('sagt nichts, wenn die Abfrage gescheitert ist', () => {
+    const findings = mailFindings(
+      real({
+        bimi: { present: false, lookupFailed: true },
+        tlsRpt: { present: false, lookupFailed: true },
+      }),
+      'example.de'
+    );
+    expect(newIds(findings)).toEqual([]);
+  });
+
+  it('verweist bei vorhandenem MTA-STS auf die fehlenden Berichte', () => {
+    const findings = mailFindings(real({ mtaSts: { present: true } }), 'example.de');
+    expect(findings.find((f) => f.id === 'no-tls-rpt')?.description).toContain('Zu MTA-STS');
+  });
+});

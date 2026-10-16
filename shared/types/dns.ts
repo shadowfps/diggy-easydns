@@ -48,6 +48,14 @@ export interface Finding {
    * Ursache, und drei Criticals dafür machen den Score unlesbar.
    */
   causedBy?: string[];
+  /**
+   * `false`: nur eine Empfehlung, die angezeigt und gezählt wird, aber keine
+   * Score-Punkte kostet. Für Standards, die eine gute Mail-Konfiguration
+   * ergänzen, ohne dass ihr Fehlen eine Lücke wäre (BIMI, TLS-RPT, #83) —
+   * sonst sänke der Score fast jeder Domain, ohne dass sich an ihr etwas
+   * geändert hat.
+   */
+  scored?: false;
 }
 
 export interface HealthScore {
@@ -126,6 +134,49 @@ export interface MailSecurity {
    * Regel und Rolle von SPF/DMARC: shared/nullMx.ts.
    */
   nullMx: boolean;
+  /**
+   * BIMI und TLS-RPT (#83). Optional, weil ältere Server-Antworten sie nicht
+   * kennen — dann zeigt der Mail-Tab die Karten nicht an.
+   */
+  bimi?: MailBimi;
+  tlsRpt?: MailTlsRpt;
+}
+
+/**
+ * Gemeinsamer Teil von BIMI und TLS-RPT: ein TXT-Record unter einem festen
+ * Namen, der mit einem Versions-Tag beginnt (Regeln: shared/bimiTlsRpt.ts).
+ */
+export interface MailPolicyRecord {
+  /**
+   * Unter dem Namen steht ein Record, der dafür gedacht ist — auch ein
+   * ungültiger. `false` heißt: fehlt.
+   */
+  present: boolean;
+  /** Die gefundenen Records; mehr als einer ist ungültig. */
+  records?: string[];
+  /** Warum Empfänger den Record nicht auswerten; fehlt bei einem gültigen. */
+  invalid?: string;
+  /**
+   * Die DNS-Abfrage ist gescheitert (Timeout, SERVFAIL). Dann wissen wir
+   * nicht, ob der Record existiert — das ist kein „fehlt“.
+   */
+  lookupFailed?: boolean;
+}
+
+/** BIMI-Record auf `default._bimi.<domain>`. */
+export interface MailBimi extends MailPolicyRecord {
+  /** `l=` und `a=` leer: Die Domain verzichtet ausdrücklich auf BIMI. */
+  declined?: boolean;
+  /** Logo-URL aus `l=`, nur https. Wird nie vom Server geladen. */
+  logoUrl?: string;
+  /** Zertifikats-URL (VMC/CMC) aus `a=`, nur https. */
+  evidenceUrl?: string;
+}
+
+/** TLS-RPT-Record auf `_smtp._tls.<domain>` (RFC 8460). */
+export interface MailTlsRpt extends MailPolicyRecord {
+  /** Berichtsziele aus `rua=`: `mailto:`- oder `https:`-URIs. */
+  rua?: string[];
 }
 
 export interface WhoisInfo {

@@ -8,15 +8,18 @@
  *      mit gängigen Selectors (default, google, k1, mail, ...)
  *   4) MTA-STS — TXT auf _mta-sts.<domain> + HTTPS-Policy auf mta-sts.<domain>
  *   5) MX — ob die Domain überhaupt Mail annimmt (Null-MX, RFC 7505)
+ *   6) BIMI — TXT auf default._bimi.<domain> (Markenlogo, #83)
+ *   7) TLS-RPT — TXT auf _smtp._tls.<domain> (RFC 8460, #83)
  *
  * Alles parallel, alles per node:dns mit Cloudflare als Resolver
  * (siehe dnsLookup.ts) — günstiger als DoH für reine Existenz-Checks.
  */
 
 import { promises as dnsPromises, type MxRecord } from 'node:dns';
-import type { MailSecurity } from '../types.js';
+import type { MailBimi, MailSecurity, MailTlsRpt } from '../types.js';
 import { isNullMx } from '../../shared/nullMx.js';
 import { leadingVersion, matchTag } from '../../shared/mailTags.js';
+import { parseBimi, parseTlsRpt } from '../../shared/bimiTlsRpt.js';
 
 const resolver = new dnsPromises.Resolver({ timeout: 4000, tries: 2 });
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
@@ -55,11 +58,13 @@ export async function auditMail(
   /** SPF aus dem Apex-TXT-Lookup, falls schon vorhanden */
   spfRecord?: string
 ): Promise<MailSecurity> {
-  const [dmarc, dkimSelectors, mtaSts, mx] = await Promise.all([
+  const [dmarc, dkimSelectors, mtaSts, mx, bimi, tlsRpt] = await Promise.all([
     lookupDmarc(domain),
     probeDkimSelectors(domain),
     lookupMtaSts(domain),
     lookupMx(domain),
+    lookupBimi(domain),
+    lookupTlsRpt(domain),
   ]);
 
   const spf = analyzeSpf(spfRecord);
@@ -70,6 +75,8 @@ export async function auditMail(
     dkim: { selectors: dkimSelectors },
     mtaSts,
     ...summarizeMx(mx),
+    bimi,
+    tlsRpt,
   };
 }
 
@@ -247,6 +254,43 @@ async function lookupMtaSts(domain: string): Promise<MailSecurity['mtaSts']> {
     return { present: !!mtaSts };
   } catch {
     return { present: false };
+  }
+}
+
+/* ─── BIMI und TLS-RPT ────────────────────────────────────────────────── */
+
+/*
+ * Regeln für beide: shared/bimiTlsRpt.ts. Das BIMI-Logo laden wir bewusst
+ * nicht — die URL kommt aus fremdem DNS, und der Server soll weder als
+ * Abrufer für beliebige Adressen dienen (SSRF) noch fremde Server belasten.
+ */
+
+async function lookupBimi(domain: string): Promise<MailBimi> {
+  const txt = await resolveTxtOrMissing(`default._bimi.${domain}`);
+  return txt ? parseBimi(txt) : { present: false, lookupFailed: true };
+}
+
+async function lookupTlsRpt(domain: string): Promise<MailTlsRpt> {
+  const txt = await resolveTxtOrMissing(`_smtp._tls.${domain}`);
+  return txt ? parseTlsRpt(txt) : { present: false, lookupFailed: true };
+}
+
+/**
+ * TXT-Records eines Namens, Teilstrings zusammengesetzt (RFC 7208 §3.3, so
+ * verlangt es auch BIMI). `undefined`, wenn die Abfrage gescheitert ist.
+ *
+ * Nur NXDOMAIN und „keine TXT-Records“ heißen „gibt es nicht“. Ein Timeout
+ * oder SERVFAIL sagt darüber nichts — als „fehlt“ gemeldet, bekäme eine
+ * Domain mit korrektem Record einen falschen Hinweis. Geworfen wird trotzdem
+ * nicht: Ein Ausfall hier darf den restlichen Mail-Report nicht kippen.
+ */
+async function resolveTxtOrMissing(name: string): Promise<string[] | undefined> {
+  try {
+    const records = await resolver.resolveTxt(name);
+    return records.map((chunks) => chunks.join(''));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'ENOTFOUND' || code === 'ENODATA' ? [] : undefined;
   }
 }
 

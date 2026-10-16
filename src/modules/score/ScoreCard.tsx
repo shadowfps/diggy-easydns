@@ -27,7 +27,11 @@ function scoreTone(s: number) {
 
 export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
   const tone = scoreTone(score.score);
-  const top = PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
+  // Reine Empfehlungen (`scored: false`, etwa BIMI) erst, wenn sonst nichts offen ist.
+  const top =
+    PRIORITY.map((severity) =>
+      findings.find((f) => f.severity === severity && f.scored !== false)
+    ).find(Boolean) ?? findings.find((f) => f.severity === 'info');
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
   const [displayValue, setDisplayValue] = useState(0);

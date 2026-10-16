@@ -8,7 +8,6 @@ import { RecordsList } from '@/modules/records/RecordsList';
 import { PropagationView } from '@/modules/propagation/PropagationView';
 import { FindingsList } from '@/modules/findings/FindingsList';
 import { SecurityView } from '@/modules/security/SecurityView';
-import { MailView } from '@/modules/mail/MailView';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
 import { HistoryView } from '@/modules/history/HistoryView';
@@ -60,6 +59,16 @@ const PageSpeedView = lazy(() =>
 );
 const VirusScanView = lazy(() =>
   import('@/modules/virusscan/VirusScanView').then((m) => ({ default: m.VirusScanView }))
+);
+
+/*
+ * Der Mail-Tab: Seine Daten lädt der Report sofort, die Ansicht braucht aber
+ * erst der Klick auf den Tab. Mit BIMI und TLS-RPT (#83) wäre index.js sonst
+ * über sein Budget gewachsen (47,05 → 48,31 kB gzip bei 48 kB Grenze);
+ * nachgeladen sind es 3,6 kB, die niemanden beim ersten Report aufhalten.
+ */
+const MailView = lazy(() =>
+  import('@/modules/mail/MailView').then((m) => ({ default: m.MailView }))
 );
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
@@ -371,7 +380,9 @@ export default function App() {
     ? (mailData.spf.present ? 1 : 0) +
         (mailData.dmarc.present ? 1 : 0) +
         mailData.dkim.selectors.length +
-        (mailData.mtaSts.present ? 1 : 0) || undefined
+        (mailData.mtaSts.present ? 1 : 0) +
+        (mailData.tlsRpt?.present ? 1 : 0) +
+        (mailData.bimi?.present ? 1 : 0) || undefined
     : undefined;
   const securityLoading = ssl.status === 'loading' || dnssec.status === 'loading';
   const dnsOnly = lookup.domain !== null && isDnsOnlyName(lookup.domain);
@@ -744,7 +755,9 @@ export default function App() {
                       ) : mail.status === 'error' ? (
                         <SectionError message={mail.error} />
                       ) : mailData ? (
-                        <MailView mail={mailData} />
+                        <Suspense fallback={<SectionCardsSkeleton count={4} />}>
+                          <MailView mail={mailData} />
+                        </Suspense>
                       ) : (
                         <SectionCardsSkeleton count={4} />
                       ))}
