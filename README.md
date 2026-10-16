@@ -109,7 +109,14 @@ npm run lint        # ESLint 9 (Flat Config, inkl. react-hooks)
 npm run typecheck   # tsc für Client und Server
 npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
 npm run verify      # alle drei, so wie die CI es fährt
+npm run e2e         # Browser-Tests gegen den Build (vorher npm run build)
+npm run e2e:docker  # dasselbe im Playwright-Image, inkl. Pixelvergleich
 ```
+
+Die Browser-Tests (`e2e/`, Playwright) prüfen jede wichtige Ansicht hell/dunkel
+bei 390 und 1440 px auf seitliches Überlaufen und vergleichen Startseite und
+Report mit Referenzbildern. Wie man sie startet und die Referenzbilder
+aktualisiert, steht in [docs/E2E.md](docs/E2E.md).
 
 Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
 
@@ -129,8 +136,9 @@ einmal ein Defekt saß — nicht nach Abdeckungsquote. `src/test/setup.ts`
 dokumentiert, welche Browser-APIs jsdom fehlen und warum sie dort ergänzt
 werden.
 
-Jeder Push auf `main` und jeder Pull Request läuft durch den `verify`-Job;
-Image-Build und Deploy folgen nur auf `main`. Ein zweiter, **nicht
+Jeder Push auf `main` und jeder Pull Request läuft durch den `verify`-Job und
+parallel durch den `e2e`-Job; Image-Build und Deploy folgen nur auf `main` und
+warten allein auf `verify`. Ein zweiter, **nicht
 blockierender** `audit`-Job hält den Zustand der Abhängigkeiten sichtbar, ohne
 dass ein neu veröffentlichter Advisory einen bis dahin grünen Build rot macht —
 die eigentliche Arbeit macht Dependabot (`.github/dependabot.yml`).
@@ -245,7 +253,9 @@ technisch korrekt, aber **nicht juristisch geprüft**.
 ```
 diggy/
 ├── docs/
-│   └── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
+│   ├── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
+│   └── E2E.md              # Browser-Tests, Referenzbilder aktualisieren
+├── e2e/                    # Playwright: Überlauf-Check, Pixelvergleich, Testdaten
 ├── shared/
 │   ├── scoring.ts          # Health-Score — geteilt, damit Server und Client
 │   │                       # garantiert dasselbe rechnen

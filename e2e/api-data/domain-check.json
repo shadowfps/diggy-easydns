@@ -1,0 +1,49 @@
+{
+  "diggy": {
+    "query": "diggy",
+    "label": "diggy",
+    "checkedAt": "2026-10-16T08:24:47.277Z",
+    "results": [
+      {
+        "domain": "mydiggy.com",
+        "status": "taken",
+        "source": "rdap.verisign.com"
+      },
+      {
+        "domain": "diggy.de",
+        "status": "taken",
+        "source": "rdap.denic.de"
+      },
+      {
+        "domain": "diggy.com",
+        "status": "taken",
+        "source": "rdap.verisign.com"
+      },
+      {
+        "domain": "diggy.io",
+        "status": "unknown",
+        "source": "rdap.org"
+      },
+      {
+        "domain": "diggy.net",
+        "status": "taken",
+        "source": "rdap.verisign.com"
+      },
+      {
+        "domain": "diggy.app",
+        "status": "unknown",
+        "source": "rdap.org"
+      },
+      {
+        "domain": "diggy.dev",
+        "status": "unknown",
+        "source": "rdap.org"
+      },
+      {
+        "domain": "diggy.org",
+        "status": "unknown",
+        "source": "rdap.org"
+      }
+    ]
+  }
+}

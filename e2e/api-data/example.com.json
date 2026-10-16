@@ -1,0 +1,381 @@
+{
+  "lookup": {
+    "domain": "example.com",
+    "timestamp": "2026-10-16T08:24:35.883Z",
+    "records": [
+      {
+        "type": "A",
+        "name": "example.com",
+        "value": "172.66.147.243",
+        "ttl": 109
+      },
+      {
+        "type": "A",
+        "name": "example.com",
+        "value": "104.20.23.154",
+        "ttl": 109
+      },
+      {
+        "type": "AAAA",
+        "name": "example.com",
+        "value": "2606:4700:10::ac42:93f3",
+        "ttl": 45
+      },
+      {
+        "type": "AAAA",
+        "name": "example.com",
+        "value": "2606:4700:10::6814:179a",
+        "ttl": 45
+      },
+      {
+        "type": "MX",
+        "name": "example.com",
+        "value": "",
+        "priority": 0,
+        "ttl": 0
+      },
+      {
+        "type": "NS",
+        "name": "example.com",
+        "value": "hera.ns.cloudflare.com",
+        "ttl": 0
+      },
+      {
+        "type": "NS",
+        "name": "example.com",
+        "value": "elliott.ns.cloudflare.com",
+        "ttl": 0
+      },
+      {
+        "type": "TXT",
+        "name": "example.com",
+        "value": "v=spf1 -all",
+        "ttl": 0
+      },
+      {
+        "type": "TXT",
+        "name": "example.com",
+        "value": "_k2n1y4vw3qtb4skdx9e7dxt97qrmmq9",
+        "ttl": 0
+      },
+      {
+        "type": "SOA",
+        "name": "example.com",
+        "value": "elliott.ns.cloudflare.com dns.cloudflare.com 2416374680 10000 2400 604800 1800",
+        "ttl": 1800
+      }
+    ],
+    "findings": [
+      {
+        "id": "no-caa",
+        "severity": "info",
+        "title": "Kein CAA-Record",
+        "description": "Mit CAA-Records legst du fest, welche Certificate Authorities für deine Domain Zertifikate ausstellen dürfen — ein einfacher Schutz gegen Mis-Issuance.",
+        "fix": {
+          "explanation": "Lege einen CAA-Record an, der nur deine genutzte CA erlaubt.",
+          "snippet": "example.com  CAA  0 issue \"letsencrypt.org\""
+        },
+        "category": "security"
+      }
+    ]
+  },
+  "propagation": {
+    "propagation": [
+      {
+        "resolver": {
+          "id": "cloudflare",
+          "name": "Cloudflare",
+          "ip": "1.1.1.1",
+          "country": "Global",
+          "flag": "🌐",
+          "provider": "Cloudflare"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 126
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 126
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 158
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 158
+          }
+        ],
+        "responseTimeMs": 86
+      },
+      {
+        "resolver": {
+          "id": "google",
+          "name": "Google",
+          "ip": "8.8.8.8",
+          "country": "US",
+          "flag": "🇺🇸",
+          "provider": "Google"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 300
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 300
+          }
+        ],
+        "responseTimeMs": 68
+      },
+      {
+        "resolver": {
+          "id": "adguard",
+          "name": "AdGuard",
+          "ip": "94.140.14.14",
+          "country": "CY",
+          "flag": "🇨🇾",
+          "provider": "AdGuard"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 128
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 128
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 300
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 300
+          }
+        ],
+        "responseTimeMs": 130
+      },
+      {
+        "resolver": {
+          "id": "dns-sb",
+          "name": "DNS.SB",
+          "ip": "185.222.222.222",
+          "country": "HK",
+          "flag": "🇭🇰",
+          "provider": "DNS.SB"
+        },
+        "records": [],
+        "responseTimeMs": 5000,
+        "error": "Timeout"
+      },
+      {
+        "resolver": {
+          "id": "nextdns",
+          "name": "NextDNS",
+          "ip": "45.90.28.0",
+          "country": "US",
+          "flag": "🇺🇸",
+          "provider": "NextDNS"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 235
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 235
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 300
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 300
+          }
+        ],
+        "responseTimeMs": 303
+      }
+    ],
+    "findings": [
+      {
+        "id": "propagation-consistent",
+        "severity": "success",
+        "title": "Konsistente Propagation",
+        "description": "Alle 4 Resolver liefern dasselbe Ergebnis.",
+        "category": "dns"
+      }
+    ]
+  },
+  "dnssec": {
+    "dnssec": {
+      "enabled": true,
+      "valid": true,
+      "algorithm": "ECDSAP256SHA256",
+      "chainOfTrust": "valid"
+    },
+    "findings": [
+      {
+        "id": "dnssec-valid",
+        "severity": "success",
+        "title": "DNSSEC aktiv und valide",
+        "description": "Chain of Trust verifiziert. Algorithmus: ECDSAP256SHA256.",
+        "category": "dnssec"
+      }
+    ]
+  },
+  "ssl": {
+    "ssl": {
+      "valid": true,
+      "issuer": "Cloudflare TLS Issuing ECC CA 3 (SSL Corporation)",
+      "subject": "example.com",
+      "validFrom": "2026-09-26T22:49:11.000Z",
+      "validTo": "2026-12-25T22:56:35.000Z",
+      "daysUntilExpiry": 70,
+      "sans": [
+        "example.com",
+        "*.example.com"
+      ],
+      "tlsVersion": "TLSv1.3",
+      "signatureAlgorithm": "ECDSA prime256v1",
+      "isWildcard": true
+    },
+    "findings": [
+      {
+        "id": "ssl-ok",
+        "severity": "success",
+        "title": "SSL-Zertifikat gültig (noch 70 Tage)",
+        "description": "Ausgestellt von Cloudflare TLS Issuing ECC CA 3 (SSL Corporation) via TLSv1.3.",
+        "category": "ssl"
+      }
+    ]
+  },
+  "mail": {
+    "mail": {
+      "spf": {
+        "present": true,
+        "record": "v=spf1 -all",
+        "lookupCount": 0,
+        "valid": true,
+        "issues": []
+      },
+      "dmarc": {
+        "present": true,
+        "record": "v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s",
+        "policy": "reject"
+      },
+      "dkim": {
+        "selectors": []
+      },
+      "mtaSts": {
+        "present": false
+      },
+      "hasMx": true
+    },
+    "findings": [
+      {
+        "id": "spf-ok",
+        "severity": "success",
+        "title": "SPF-Record vorhanden und plausibel",
+        "description": "0 DNS-Lookups, gültiger Abschluss.",
+        "category": "mail"
+      },
+      {
+        "id": "dmarc-present",
+        "severity": "success",
+        "title": "DMARC-Policy: reject",
+        "description": "DMARC-Record vorhanden — Mail-Spoofing-Schutz aktiv.",
+        "category": "mail"
+      },
+      {
+        "id": "no-dkim-found",
+        "severity": "info",
+        "title": "Kein DKIM-Selector gefunden",
+        "description": "Wir haben gängige Selectors probiert (default, google, selector1, k1, …) und nichts gefunden. Vielleicht nutzt du einen exotischen Selector — manuell prüfen, oder DKIM einrichten.",
+        "category": "mail"
+      },
+      {
+        "id": "no-mta-sts",
+        "severity": "info",
+        "title": "Kein MTA-STS",
+        "description": "MTA-STS erzwingt TLS für eingehende Mail. Ohne MTA-STS können Angreifer einen Downgrade auf unverschlüsselten SMTP-Transport erzwingen.",
+        "category": "mail"
+      }
+    ]
+  },
+  "whois": {
+    "whois": {
+      "registrar": "RESERVED-Internet Assigned Numbers Authority",
+      "createdAt": "1995-08-14T04:00:00Z",
+      "expiresAt": "2027-08-13T04:00:00Z",
+      "updatedAt": "2026-08-14T08:01:43Z",
+      "nameServers": [
+        "elliott.ns.cloudflare.com",
+        "hera.ns.cloudflare.com"
+      ],
+      "status": [
+        "client delete prohibited",
+        "client transfer prohibited",
+        "client update prohibited"
+      ],
+      "dnssecDelegated": true,
+      "source": "rdap.verisign.com"
+    },
+    "findings": []
+  },
+  "techstack": {
+    "techStack": [
+      {
+        "name": "Cloudflare",
+        "category": "cdn",
+        "confidence": "high"
+      }
+    ]
+  }
+}
