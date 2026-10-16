@@ -74,6 +74,15 @@ describe('t', () => {
     expect(parts[0]).toBe('Gibt es ');
     expect(parts[2]).toBe(' nicht');
   });
+
+  it('setzt Strings in tRich wörtlich ein, auch mit Platzhalter darin', () => {
+    // Ein Wert aus dem DNS mit „{link}“ darin darf den Link nicht verdoppeln.
+    const link = { type: 'a' };
+    const parts = tRich('Wert {value} und {link}' as DeKey, { value: '{link}', link: link as never });
+    expect(parts).toHaveLength(5);
+    expect((parts[1] as { props: { children: unknown } }).props.children).toBe('{link}');
+    expect((parts[3] as { props: { children: unknown } }).props.children).toBe(link);
+  });
 });
 
 describe('Englisches Wörterbuch', () => {

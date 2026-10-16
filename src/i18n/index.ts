@@ -193,10 +193,13 @@ export function t(key: DeKey, params?: Params): string {
  * „.“), und im Englischen stimmt die Reihenfolge der Stücke oft nicht mehr.
  */
 export function tRich(key: DeKey, values: Record<string, ReactNode>): ReactNode[] {
+  // Nur Zahlen gehen vorher in den Text (Mehrzahl, Zahlenformat). Strings
+  // kommen wie Elemente erst nach dem Aufteilen dazu: ein Wert wie „{link}“
+  // aus einem TXT-Record würde sonst selbst zum Platzhalter.
   const params: Params = {};
   const nodes: Record<string, ReactNode> = {};
   for (const [name, value] of Object.entries(values)) {
-    if (typeof value === 'string' || typeof value === 'number') params[name] = value;
+    if (typeof value === 'number') params[name] = value;
     else nodes[name] = value;
   }
   // split() mit Gruppe: auf ungeraden Positionen stehen die Platzhalternamen.
