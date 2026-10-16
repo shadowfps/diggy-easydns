@@ -14,8 +14,9 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmdirSync, symlinkSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,7 +45,24 @@ function freePort() {
 const port = await freePort();
 const base = `http://127.0.0.1:${port}`;
 
-const server = spawn(process.execPath, [ENTRY], {
+/*
+ * Der Server startet über einen Symlink in einem Punkt-Ordner (#89). Ohne
+ * `root` prüft sendFile jedes Segment des absoluten Pfads auf Dotfiles; unter
+ * `.claude/worktrees/…` antworteten die SPA-Routen deshalb mit 404. Der
+ * CI-Checkout liegt ohne Punkt-Ordner, ein Rückfall fiele dort sonst nicht
+ * auf. `--preserve-symlinks-main` sorgt dafür, dass der Server den
+ * Symlink-Pfad sieht und nicht den aufgelösten.
+ */
+const linkDir = mkdtempSync(path.join(tmpdir(), 'diggy-smoke-'));
+const dotRoot = path.join(linkDir, '.punkt');
+symlinkSync(ROOT, dotRoot, 'dir');
+process.on('exit', () => {
+  unlinkSync(dotRoot);
+  rmdirSync(linkDir);
+});
+
+const entryViaDot = path.join(dotRoot, path.relative(ROOT, ENTRY));
+const server = spawn(process.execPath, ['--preserve-symlinks-main', entryViaDot], {
   cwd: ROOT,
   env: { ...process.env, NODE_ENV: 'production', PORT: String(port) },
   stdio: ['ignore', 'pipe', 'pipe'],
