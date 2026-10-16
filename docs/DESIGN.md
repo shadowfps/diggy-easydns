@@ -136,6 +136,8 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
   färbt die Kachel nur, wenn die Karte eine Bewertung trägt.
 - `EmptyState` (`components/ui/EmptyState.tsx`) — Leer-, Start- und
   Fehlerzustand eines Abschnitts.
+- `UncheckedBadge` / `UncheckedLine` (`components/ui/Unchecked.tsx`) —
+  „nicht prüfbar“ in einer Karte.
 
 - **Aktiv heißt `accent`.** Aktiver Tab, aktiver Chip, aktive Option eines
   Umschalters: dunkle Pille im Hellen, helle im Dunkeln.
@@ -146,6 +148,12 @@ React-Bausteine, wo eine Klasse allein nicht reicht:
   in einer `card`.
 - Fehler in einem Abschnitt: wie ein Leerzustand mit `icon-tile-danger`. Die
   Seite drumherum bleibt bedienbar.
+- **„Nicht prüfbar“ ist kein „fehlt“.** Scheitert ein Check (Timeout,
+  SERVFAIL), sagt das nichts über die Domain: Karte und Schnellübersicht
+  zeigen neutral ein Fragezeichen mit „nicht prüfbar“, die Karte darunter den
+  Grund. Keine Statusfarbe, und das Finding dazu zieht keine Punkte ab. Dafür
+  sagt der Health Score, dass er unvollständig ist — sonst sähe ein Check, der
+  ins Leere lief, besser aus als einer mit Befund.
 
 ## Bewegung
 

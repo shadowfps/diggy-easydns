@@ -157,8 +157,8 @@ describe('Speicherformat für den Vergleich', () => {
       {
         ...report,
         failedRecordTypes: ['AAAA', 'TXT'],
-        dnssec: { ...report.dnssec, lookupFailed: true },
-        mail: { ...report.mail, dmarc: { present: false, lookupFailed: true } },
+        dnssec: { ...report.dnssec, lookupFailed: 'timeout' },
+        mail: { ...report.mail, dmarc: { present: false, lookupFailed: 'servfail' } },
       },
       ['whois']
     );
@@ -171,6 +171,21 @@ describe('Speicherformat für den Vergleich', () => {
       NS: ['ns1.example.net'],
     });
     expect(entry.failedChecks).toEqual(['whois', 'dnssec', 'mail']);
+  });
+
+  // #101: Ausfälle zählen nicht mehr als Abzug. Ein Score aus einem Lookup mit
+  // gescheitertem SSL-, SPF-, DKIM- oder MTA-STS-Check ist deshalb eine andere
+  // Rechnung — der Vergleich darf ihn nicht als „Score gestiegen“ melden.
+  it('zählt gescheiterte SSL- und SPF-Checks als Teilausfall', () => {
+    const report = fullReport();
+    saveLookupToHistory({
+      ...report,
+      ssl: undefined,
+      sslLookupFailed: 'timeout',
+      mail: { ...report.mail, spf: { ...report.mail.spf, lookupFailed: 'network' } },
+    });
+
+    expect(stored()[0].failedChecks).toEqual(['ssl', 'mail']);
   });
 
   it('lässt leere Zusatzfelder weg, statt Platz zu belegen', () => {

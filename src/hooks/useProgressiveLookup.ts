@@ -17,6 +17,7 @@ import type {
   DnssecInfo,
   Finding,
   HealthScore,
+  LookupFailure,
   LookupReport,
   MailSecurity,
   RecordType,
@@ -34,6 +35,12 @@ export interface SectionSlice<T> {
   status: LoadStatus;
   data: T | undefined;
   error?: string;
+  /**
+   * Fertig, aber der Check kam zu keinem Ergebnis (Timeout, SERVFAIL). Nur
+   * SSL nutzt das: ohne Zertifikat gibt es kein Objekt, das den Ausfall wie
+   * bei DNSSEC und Mail selbst tragen könnte.
+   */
+  lookupFailed?: LookupFailure;
 }
 
 export type SectionKey = 'propagation' | 'dnssec' | 'ssl' | 'mail' | 'whois' | 'techStack';
@@ -118,7 +125,14 @@ type Action =
   | { type: 'start'; seq: number; domain: string; skipped: readonly SectionKey[] }
   | { type: 'recordsDone'; seq: number; core: LookupCore }
   | { type: 'recordsError'; seq: number; message: string }
-  | { type: 'sectionDone'; seq: number; key: SectionKey; data: unknown; findings: Finding[] }
+  | {
+      type: 'sectionDone';
+      seq: number;
+      key: SectionKey;
+      data: unknown;
+      findings: Finding[];
+      lookupFailed?: LookupFailure;
+    }
   | { type: 'sectionError'; seq: number; key: SectionKey; message: string };
 
 function reducer(state: State, action: Action): State {
@@ -151,7 +165,14 @@ function reducer(state: State, action: Action): State {
       if (action.seq !== state.seq) return state;
       return {
         ...state,
-        sections: { ...state.sections, [action.key]: { status: 'done', data: action.data } },
+        sections: {
+          ...state.sections,
+          [action.key]: {
+            status: 'done',
+            data: action.data,
+            ...(action.lookupFailed && { lookupFailed: action.lookupFailed }),
+          },
+        },
         sectionFindings: { ...state.sectionFindings, [action.key]: action.findings },
       };
     case 'sectionError':
@@ -223,14 +244,13 @@ export function useProgressiveLookup(): ProgressiveLookup {
         const fire = <R,>(
           key: SectionKey,
           request: () => Promise<R>,
-          pick: (r: R) => { data: unknown; findings: Finding[] }
+          pick: (r: R) => { data: unknown; findings: Finding[]; lookupFailed?: LookupFailure }
         ) => {
           if (skipped.includes(key)) return;
           request()
             .then((r) => {
               if (seq !== seqRef.current) return;
-              const { data, findings } = pick(r);
-              dispatch({ type: 'sectionDone', seq, key, data, findings });
+              dispatch({ type: 'sectionDone', seq, key, ...pick(r) });
             })
             .catch((e) => {
               if (seq !== seqRef.current) return;
@@ -244,7 +264,11 @@ export function useProgressiveLookup(): ProgressiveLookup {
           findings: r.findings,
         }));
         fire('dnssec', () => lookupDnssec(target), (r) => ({ data: r.dnssec, findings: r.findings }));
-        fire('ssl', () => lookupSsl(target), (r) => ({ data: r.ssl, findings: r.findings }));
+        fire('ssl', () => lookupSsl(target), (r) => ({
+          data: r.ssl,
+          findings: r.findings,
+          lookupFailed: r.lookupFailed,
+        }));
         fire('mail', () => lookupMail(target), (r) => ({ data: r.mail, findings: r.findings }));
         fire('whois', () => lookupWhois(target), (r) => ({ data: r.whois, findings: r.findings }));
         fire('techStack', () => lookupTechStack(target), (r) => ({ data: r.techStack, findings: [] }));
@@ -304,6 +328,7 @@ export function useProgressiveLookup(): ProgressiveLookup {
       healthScore,
       techStack: (sections.techStack.data as DetectedTech[] | undefined) ?? [],
       failedRecordTypes: state.failedRecordTypes,
+      ...(sections.ssl.lookupFailed && { sslLookupFailed: sections.ssl.lookupFailed }),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, findings, healthScore]);

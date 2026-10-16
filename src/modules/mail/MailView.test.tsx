@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type { MailSecurity } from '@/types/dns';
 import { MailView } from './MailView';
 
@@ -78,6 +78,38 @@ describe('MailView — Domain ohne Mail (Null-MX)', () => {
     expect(screen.getByText('reject, pct=0')).toBeInTheDocument();
     expect(screen.getByText(/gehören SPF -all und DMARC p=reject dazu/)).toBeInTheDocument();
   });
+  /** Scheiterte eine Abfrage (#101), ist offen, ob dort etwas fehlt. */
+  it('nennt gescheiterte SPF- und DMARC-Abfragen „nicht prüfbar“ statt „fehlt“', () => {
+    render(
+      <MailView
+        mail={{
+          ...exampleCom,
+          spf: { present: false, valid: false, issues: [], lookupFailed: 'timeout' },
+          dmarc: { present: false, lookupFailed: 'servfail' },
+        }}
+      />
+    );
+    const card = screen.getByRole('heading', { name: 'Keine Mails (Null-MX)' }).closest('.card');
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).queryByText('fehlt')).not.toBeInTheDocument();
+    expect(within(card as HTMLElement).getAllByText('nicht prüfbar')).toHaveLength(2);
+  });
+
+  /** Ohne Mail sind DKIM und MTA-STS nicht nötig — auch wenn eine Probe scheiterte. */
+  it('zeigt DKIM und MTA-STS als nicht nötig, auch wenn ihre Abfrage scheiterte', () => {
+    render(
+      <MailView
+        mail={{
+          ...exampleCom,
+          dkim: { selectors: [], lookupFailed: 'timeout' },
+          mtaSts: { present: false, lookupFailed: 'network' },
+        }}
+      />
+    );
+    expect(screen.getByText(/Nicht nötig: Eine Domain ohne Mails/)).toBeInTheDocument();
+    expect(screen.getByText('nicht nötig')).toBeInTheDocument();
+    expect(screen.queryByText('nicht prüfbar')).not.toBeInTheDocument();
+  });
 });
 
 describe('MailView — Domain mit echtem MX', () => {
@@ -86,5 +118,69 @@ describe('MailView — Domain mit echtem MX', () => {
     expect(screen.queryByRole('heading', { name: 'Keine Mails (Null-MX)' })).not.toBeInTheDocument();
     expect(screen.getByText('nicht eingerichtet')).toBeInTheDocument();
     expect(screen.getByText(/Keine gängigen DKIM-Selectors/)).toBeInTheDocument();
+  });
+});
+
+/** Mail-Karten bei gescheiterter Abfrage: „nicht prüfbar“ statt „fehlt“ (#101). */
+
+const missing: MailSecurity = {
+  spf: { present: false, valid: false, issues: [] },
+  dmarc: { present: false },
+  dkim: { selectors: [] },
+  mtaSts: { present: false },
+  hasMx: true,
+  nullMx: false,
+};
+
+describe('MailView — nicht prüfbar', () => {
+  it('zeigt gescheiterte Abfragen je Karte als nicht prüfbar, mit Grund', () => {
+    render(
+      <MailView
+        mail={{
+          spf: { ...missing.spf, lookupFailed: 'timeout' },
+          dmarc: { present: false, lookupFailed: 'servfail' },
+          dkim: { selectors: [], lookupFailed: 'timeout' },
+          mtaSts: { present: false, lookupFailed: 'network' },
+          hasMx: true,
+          nullMx: false,
+        }}
+      />
+    );
+
+    expect(screen.getAllByText('nicht prüfbar')).toHaveLength(4);
+    expect(screen.getByText(/^Der SPF-Check scheiterte \(Zeitüberschreitung\)\. Ob SPF/))
+      .toBeInTheDocument();
+    expect(screen.getByText(/^Der DMARC-Check scheiterte \(SERVFAIL\)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Der DKIM-Check scheiterte \(Zeitüberschreitung\)/))
+      .toBeInTheDocument();
+    expect(screen.getByText(/^Der MTA-STS-Check scheiterte \(Netzwerkfehler\)/))
+      .toBeInTheDocument();
+    expect(screen.queryByText('Kein SPF-Record gefunden')).not.toBeInTheDocument();
+    expect(screen.queryByText('Kein DMARC-Record auf _dmarc.<domain>')).not.toBeInTheDocument();
+    expect(screen.queryByText('nicht eingerichtet')).not.toBeInTheDocument();
+  });
+
+  // Ein gefundener Selector ist ein Ergebnis, auch wenn andere Proben scheiterten.
+  it('zeigt DKIM mit Fund normal, auch wenn eine Probe scheiterte', () => {
+    render(
+      <MailView
+        mail={{
+          ...missing,
+          dkim: { selectors: [{ selector: 'google', present: true }], lookupFailed: 'timeout' },
+        }}
+      />
+    );
+
+    expect(screen.getByText('google._domainkey')).toBeInTheDocument();
+    expect(screen.queryByText(/DKIM-Check scheiterte/)).not.toBeInTheDocument();
+  });
+
+  it('zeigt echtes Fehlen wie bisher', () => {
+    render(<MailView mail={missing} />);
+
+    expect(screen.getByText('Kein SPF-Record gefunden')).toBeInTheDocument();
+    expect(screen.getByText('Kein DMARC-Record auf _dmarc.<domain>')).toBeInTheDocument();
+    expect(screen.getByText('nicht eingerichtet')).toBeInTheDocument();
+    expect(screen.queryByText('nicht prüfbar')).not.toBeInTheDocument();
   });
 });

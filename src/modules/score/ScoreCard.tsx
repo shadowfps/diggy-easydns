@@ -1,13 +1,16 @@
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { AlertCircle, AlertTriangle, ArrowRight, Check, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Check, CircleHelp, Info } from 'lucide-react';
 import type { Finding, HealthScore } from '@/types/dns';
+import type { SectionKey } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface ScoreCardProps {
   score: HealthScore;
   findings: Finding[];
+  /** Sektionen, deren Abfrage ganz ausfiel — ihre Findings fehlen im Score. */
+  failed?: readonly SectionKey[];
   onShowFindings: () => void;
 }
 
@@ -26,9 +29,15 @@ function scoreTone(s: number) {
   return { bar: 'bg-danger', text: 'text-danger', badge: 'badge-danger' };
 }
 
-export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
+export function ScoreCard({ score, findings, failed = [], onShowFindings }: ScoreCardProps) {
   const reducedMotion = useReducedMotion();
   const tone = scoreTone(score.score);
+  // „Nicht prüfbar“ zieht nichts ab (#101). Ohne diesen Hinweis sähe ein
+  // Score, dem ganze Checks fehlen, aus wie ein vollständiger — und wer
+  // Abfragen ins Leere laufen lässt, käme so zu einem besseren. Der
+  // Tech-Stack liefert keine Findings; fällt er aus, fehlt dem Score nichts.
+  const unchecked =
+    findings.filter((f) => f.unchecked).length + failed.filter((key) => key !== 'techStack').length;
   const top = PRIORITY.map((severity) => findings.find((f) => f.severity === severity)).find(Boolean);
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
@@ -101,6 +110,14 @@ export function ScoreCard({ score, findings, onShowFindings }: ScoreCardProps) {
           <Stat label="Warnung" count={score.counts.warning} dot="bg-warning" />
           <Stat label="kritisch" count={score.counts.critical} dot="bg-danger" />
         </div>
+
+        {unchecked > 0 && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted">
+            <CircleHelp className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+            <span className="font-medium text-fg">Unvollständig:</span>
+            {unchecked} {unchecked > 1 ? 'Checks' : 'Check'} nicht prüfbar
+          </p>
+        )}
       </div>
 
       {/* Der nächste Schritt: der schwerste offene Punkt, ein Klick zu allen.

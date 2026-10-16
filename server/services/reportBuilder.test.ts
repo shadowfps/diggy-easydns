@@ -3,12 +3,21 @@ import {
   dnsFindings,
   dnssecFindings,
   mailFindings,
+  propagationFindings,
   sslFindings,
   whoisFindings,
 } from './reportBuilder.js';
 import { analyzeSpf } from './mailAudit.js';
 import { calculateScore } from '../../shared/scoring.js';
-import type { DnsRecord, Finding, MailSecurity, SslInfo, WhoisInfo } from '../types.js';
+import type {
+  DnsRecord,
+  DnssecInfo,
+  Finding,
+  LookupFailure,
+  MailSecurity,
+  SslInfo,
+  WhoisInfo,
+} from '../types.js';
 
 const ssl = (overrides: Partial<SslInfo> = {}): SslInfo => ({
   valid: true,
@@ -234,6 +243,120 @@ describe('whoisFindings', () => {
   });
 });
 
+/**
+ * Score vor und nach #101.
+ *
+ * Die Werte stammen aus einem Lauf mit dem Stand VOR der Änderung (gleiche
+ * Fixtures). Für Domains ohne Ausfall darf sich nichts verschieben — weder
+ * der Score noch, welche Findings entstehen. Nur ein gescheiterter Check
+ * ändert etwas: dann fällt sein Abzug weg.
+ */
+describe('Score einer normalen Domain bleibt wie vor #101', () => {
+  const D = 'example.com';
+  const records: DnsRecord[] = [
+    { type: 'A', name: D, value: '203.0.113.5', ttl: 300 },
+    { type: 'AAAA', name: D, value: '2001:db8::5', ttl: 300 },
+    { type: 'NS', name: D, value: 'ns1.example.net', ttl: 0 },
+    { type: 'MX', name: D, value: 'mx.example.net', priority: 10, ttl: 0 },
+  ];
+  const mail: MailSecurity = {
+    spf: { present: true, record: 'v=spf1 mx -all', lookupCount: 1, valid: true, issues: [] },
+    dmarc: { present: true, record: 'v=DMARC1; p=reject', policy: 'reject' },
+    dkim: { selectors: [{ selector: 'default', present: true }] },
+    mtaSts: { present: false },
+    hasMx: true,
+    nullMx: false,
+  };
+  const noMail: MailSecurity = {
+    spf: { present: false, valid: false, issues: [] },
+    dmarc: { present: false },
+    dkim: { selectors: [] },
+    mtaSts: { present: false },
+    hasMx: false,
+    nullMx: false,
+  };
+  const dnssecOff: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
+
+  function report(over: {
+    records?: DnsRecord[];
+    ssl?: SslInfo | null;
+    sslFailed?: LookupFailure;
+    mail?: MailSecurity;
+    dnssec?: DnssecInfo;
+  } = {}) {
+    const findings = [
+      ...dnsFindings(over.records ?? records, D, D),
+      ...propagationFindings([]),
+      ...dnssecFindings(over.dnssec ?? dnssecOff),
+      ...sslFindings(
+        over.ssl === undefined ? ssl({ daysUntilExpiry: 60 }) : over.ssl,
+        over.sslFailed
+      ),
+      ...mailFindings(over.mail ?? mail, D),
+      ...whoisFindings(null),
+    ];
+    return { score: calculateScore(findings).score, ids: findings.map((f) => f.id).join(',') };
+  }
+
+  it.each([
+    ['normal', {}, 94, 'no-caa,dnssec-off,ssl-ok,spf-ok,dmarc-present,dkim-present,no-mta-sts'],
+    [
+      'ohne TLS',
+      { ssl: null },
+      86,
+      'no-caa,dnssec-off,no-ssl,spf-ok,dmarc-present,dkim-present,no-mta-sts',
+    ],
+    [
+      'ohne DMARC',
+      { mail: { ...mail, dmarc: { present: false } } },
+      86,
+      'no-caa,dnssec-off,ssl-ok,spf-ok,no-dmarc,dkim-present,no-mta-sts',
+    ],
+    [
+      'ohne SPF',
+      { mail: { ...mail, spf: { present: false, valid: false, issues: [] } } },
+      86,
+      'no-caa,dnssec-off,ssl-ok,no-spf,dmarc-present,dkim-present,no-mta-sts',
+    ],
+    [
+      'mit DNSSEC',
+      {
+        dnssec: {
+          enabled: true,
+          valid: true,
+          chainOfTrust: 'valid',
+          algorithm: 'ECDSAP256SHA256',
+        },
+      },
+      96,
+      'no-caa,dnssec-valid,ssl-ok,spf-ok,dmarc-present,dkim-present,no-mta-sts',
+    ],
+    [
+      'nur A und NS, ohne Mail',
+      { records: [records[0], records[2]], mail: noMail },
+      94,
+      'no-ipv6,no-caa,dnssec-off,ssl-ok,no-spf,no-dmarc',
+    ],
+  ] as const)('%s', (_label, over, score, ids) => {
+    expect(report(over)).toEqual({ score, ids });
+  });
+
+  it('ein gescheiterter Check kostet nichts: Timeout bei SSL, DMARC und DNSSEC', () => {
+    const failed = report({
+      ssl: null,
+      sslFailed: 'timeout',
+      mail: { ...mail, dmarc: { present: false, lookupFailed: 'timeout' } },
+      dnssec: { ...dnssecOff, lookupFailed: 'timeout' },
+    });
+
+    // dnssec-off (−2) entfällt mit dem Ausfall — der Score kann nur steigen.
+    expect(failed.score).toBe(96);
+    expect(failed.ids).toBe(
+      'no-caa,dnssec-unchecked,ssl-unchecked,spf-ok,dmarc-unchecked,dkim-present,no-mta-sts'
+    );
+  });
+});
+
 /* ─── Mail ────────────────────────────────────────────────────────────── */
 
 const spf = (record?: string): MailSecurity['spf'] =>
@@ -386,6 +509,40 @@ describe('mailFindings — Domain ohne Mail (Null-MX)', () => {
     const noDmarc = findings.find((f) => f.id === 'no-dmarc');
     expect(noDmarc?.severity).toBe('info');
     expect(noDmarc?.fix?.snippet).toBe('_dmarc.example.com  TXT  "v=DMARC1; p=reject"');
+  });
+
+  /**
+   * Scheiterte die Abfrage (#101), ist offen, ob SPF oder DMARC fehlen — der
+   * Hinweis auf die Lücke darf sie dann nicht als fehlend nennen.
+   */
+  it('nennt eine nicht prüfbare SPF- oder DMARC-Abfrage nicht als Lücke', () => {
+    const spfFailed = mailFindings(
+      mail({ spf: { present: false, valid: false, issues: [], lookupFailed: 'timeout' } }),
+      'example.com'
+    );
+    expect(summary(spfFailed)).toEqual([
+      'info spf-unchecked',
+      'success dmarc-present',
+      'success null-mx',
+    ]);
+    expect(spfFailed.find((f) => f.id === 'null-mx')?.title).not.toContain('sauber');
+
+    const bothFailed = mailFindings(
+      mail({
+        spf: spf('v=spf1 ~all'),
+        dmarc: { present: false, lookupFailed: 'servfail' },
+      }),
+      'example.com'
+    );
+    expect(summary(bothFailed)).toEqual([
+      'success spf-ok',
+      'info dmarc-unchecked',
+      'success null-mx',
+      'info null-mx-incomplete',
+    ]);
+    const hint = bothFailed.find((f) => f.id === 'null-mx-incomplete');
+    expect(hint?.description).toContain('v=spf1 -all');
+    expect(hint?.description).not.toContain('DMARC');
   });
 
   it('zeigt gefundene DKIM-Selectors weiter an', () => {

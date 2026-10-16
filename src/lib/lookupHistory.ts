@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { LookupReport, MailSecurity, RecordType } from '@/types/dns';
 import { SECTION_KEYS, type SectionKey } from '@/hooks/useProgressiveLookup';
+import { hasMailLookupFailure } from '@/lib/lookupFailure';
 
 /**
  * Record-Typen, deren Werte für „Seit dem letzten Check“ (#79) vollständig
@@ -162,7 +163,9 @@ export function createHistoryEntry(
   // `false`, weiß es aber nicht.
   const unreliable = new Set<SectionKey>(failed);
   if (report.dnssec.lookupFailed) unreliable.add('dnssec');
-  if (dmarc.lookupFailed) unreliable.add('mail');
+  if (report.sslLookupFailed) unreliable.add('ssl');
+  // Auch SPF, DKIM, MTA-STS: ihr Ausfall ändert die Findings und damit den Score.
+  if (hasMailLookupFailure(report.mail)) unreliable.add('mail');
   return {
     domain: report.domain,
     lookedUpAt,

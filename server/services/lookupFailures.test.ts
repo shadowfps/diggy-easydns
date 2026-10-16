@@ -60,13 +60,19 @@ describe('lookupStandardRecords', () => {
 describe('checkDnssec', () => {
   const answer = { records: [], authenticated: false, status: 0, responseTimeMs: 1 };
 
+  // Mit DNSKEY in der Zone hinge „aktiv“ allein an der DS-Antwort. Ohne
+  // DNSKEY wäre DNSSEC sicher aus, auch ohne DS-Antwort (#101).
   it('markiert das Ergebnis, wenn die DS-Abfrage scheitert', async () => {
+    const dnskey = { type: 'DNSKEY' as const, name: 'example.com', value: '257 3 13 abcd', ttl: 300 };
     vi.mocked(dohQuery).mockImplementation(async (_resolver, _domain, type) => {
-      if (type === 'DS') throw new Error('Timeout');
-      return answer;
+      if (type === 'DS') throw Object.assign(new Error('Timeout'), { name: 'AbortError' });
+      return type === 'DNSKEY' ? { ...answer, records: [dnskey] } : answer;
     });
 
-    expect(await checkDnssec('example.com')).toMatchObject({ enabled: false, lookupFailed: true });
+    expect(await checkDnssec('example.com')).toMatchObject({
+      enabled: false,
+      lookupFailed: 'timeout',
+    });
   });
 
   it('lässt eine unsignierte Zone unmarkiert', async () => {

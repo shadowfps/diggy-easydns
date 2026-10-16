@@ -5,6 +5,7 @@ import type {
   DomainCheckReport,
   Finding,
   IpDetails,
+  LookupFailure,
   MailSecurity,
   PageSpeedReport,
   PageSpeedStrategy,
@@ -74,6 +75,8 @@ export interface LookupCore {
 export interface SslSection {
   ssl: SslInfo | null;
   findings: Finding[];
+  /** Nur wenn der Check scheiterte: `ssl: null` heißt dann „unbekannt“, nicht „kein TLS“. */
+  lookupFailed?: LookupFailure;
 }
 export interface DnssecSection {
   dnssec: DnssecInfo;

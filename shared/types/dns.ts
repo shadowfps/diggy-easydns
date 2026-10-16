@@ -34,6 +34,16 @@ export interface DnsRecord {
 
 export type Severity = 'critical' | 'warning' | 'info' | 'success';
 
+/**
+ * Warum eine Abfrage keine Antwort brachte: Zeitüberschreitung, SERVFAIL
+ * (oder eine andere Fehlerantwort des Resolvers) oder ein Netzwerkfehler.
+ *
+ * Ein Ausfall ist kein Ergebnis über die Domain. „Gibt es nicht“ — NXDOMAIN,
+ * NODATA, Port 443 zu, Handshake abgelehnt — ist dagegen eines und wird nie so
+ * markiert.
+ */
+export type LookupFailure = 'timeout' | 'servfail' | 'network';
+
 export interface Finding {
   id: string;
   severity: Severity;
@@ -58,6 +68,13 @@ export interface Finding {
    * Ursache, und drei Criticals dafür machen den Score unlesbar.
    */
   causedBy?: string[];
+  /**
+   * Der Check selbst scheiterte (siehe `LookupFailure`): das Finding meldet nur
+   * „konnte nicht geprüft werden“. Es wird angezeigt und gezählt, zieht aber
+   * keine Punkte ab — sonst schwankte der Score mit der Erreichbarkeit der
+   * Resolver statt mit der Domain.
+   */
+  unchecked?: boolean;
 }
 
 export interface HealthScore {
@@ -106,12 +123,18 @@ export interface DnssecInfo {
   algorithm?: string;
   chainOfTrust: 'valid' | 'invalid' | 'incomplete' | 'none';
   /**
-   * Die DS- oder DNSKEY-Abfrage scheiterte (Timeout, HTTP-Fehler). `enabled`
-   * und `valid` sind dann nur der Stand ohne diese Antwort, nicht belastbar.
+   * Die DS- oder DNSKEY-Abfrage scheiterte (Timeout, SERVFAIL, HTTP-Fehler).
+   * `enabled` und `valid` sind dann nur der Stand ohne diese Antwort, nicht
+   * belastbar. Truthy heißt gescheitert; der Wert nennt den Grund.
    */
-  lookupFailed?: boolean;
+  lookupFailed?: LookupFailure;
 }
 
+/*
+ * `lookupFailed` in MailSecurity: die Abfrage scheiterte (Timeout, SERVFAIL) —
+ * `present: false` heißt dann „unbekannt“, nicht „kein Record“. Fehlt das
+ * Feld, war die Antwort echt (auch NXDOMAIN/NODATA).
+ */
 export interface MailSecurity {
   spf: {
     present: boolean;
@@ -119,22 +142,21 @@ export interface MailSecurity {
     lookupCount?: number;
     valid: boolean;
     issues: string[];
+    lookupFailed?: LookupFailure;
   };
   dmarc: {
     present: boolean;
     record?: string;
     policy?: 'none' | 'quarantine' | 'reject';
     rua?: string;
-    /**
-     * Die Abfrage scheiterte (Timeout, SERVFAIL) — `present: false` heißt dann
-     * „unbekannt“, nicht „kein Record“.
-     */
-    lookupFailed?: boolean;
+    lookupFailed?: LookupFailure;
   };
   dkim: {
     selectors: { selector: string; present: boolean; record?: string }[];
+    /** Nur ohne gefundenen Selector: mindestens eine Probe blieb unbeantwortet. */
+    lookupFailed?: LookupFailure;
   };
-  mtaSts: { present: boolean };
+  mtaSts: { present: boolean; lookupFailed?: LookupFailure };
   /**
    * Ob die Apex-Domain MX-Records hat (für Findings bei Subdomain-Lookups).
    * Auch ein Null-MX zählt hier mit — ob die Domain Mail empfängt, sagt erst
@@ -288,6 +310,11 @@ export interface LookupReport {
    * in `records`, ohne dass es sie nicht gibt.
    */
   failedRecordTypes?: RecordType[];
+  /**
+   * Der TLS-Check scheiterte (Timeout, Netzwerk, DNS). `ssl` fehlt dann, ohne
+   * dass es kein Zertifikat gibt.
+   */
+  sslLookupFailed?: LookupFailure;
 }
 
 export type DomainAvailabilityStatus = 'available' | 'taken' | 'unknown';

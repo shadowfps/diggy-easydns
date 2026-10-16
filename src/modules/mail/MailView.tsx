@@ -10,10 +10,11 @@ import {
   FileSignature,
   Send,
 } from 'lucide-react';
-import type { MailSecurity } from '@/types/dns';
+import type { LookupFailure, MailSecurity } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
 import { CardHeader, type Tone } from '@/components/ui/CardHeader';
+import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 
 interface MailViewProps {
   mail: MailSecurity;
@@ -38,7 +39,9 @@ export function MailView({ mail }: MailViewProps) {
  * Die Töne der Kartenköpfe folgen den Mail-Findings (reportBuilder): ein
  * fehlender SPF-/DMARC-Record ist mit MX eine Warnung, ohne MX nur ein
  * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis — und bei einer
- * Domain ohne Mail (Null-MX) gar nicht.
+ * Domain ohne Mail (Null-MX) gar nicht. Scheiterte die Abfrage
+ * (`lookupFailed`), ist nichts bewertet: neutral und „nicht prüfbar“ statt
+ * „fehlt“ (#101).
  */
 
 /* ─── Keine Mails (Null-MX) ──────────────────────────────────────────── */
@@ -92,6 +95,7 @@ function NoMailCard({ mail }: { mail: MailSecurity }) {
  */
 function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): string {
   if (allowsNoSender) return '-all';
+  if (spf.lookupFailed) return 'nicht prüfbar';
   if (!spf.present || !spf.record) return 'fehlt';
   const mechanisms = spfMechanisms(spf.record) ?? [];
   return mechanisms.length === 1 && /^[+~?]?all$/.test(mechanisms[0])
@@ -102,6 +106,7 @@ function noMailSpfLabel(spf: MailSecurity['spf'], allowsNoSender: boolean): stri
 /** `reject` gilt erst ohne `pct` unter 100 — sonst steht der Anteil dabei. */
 function noMailDmarcLabel(dmarc: MailSecurity['dmarc'], reject: boolean): string {
   if (reject) return 'reject';
+  if (dmarc.lookupFailed) return 'nicht prüfbar';
   if (!dmarc.present || !dmarc.policy) return 'fehlt';
   if (dmarc.policy === 'reject') return `reject, pct=${dmarcPct(dmarc.record)}`;
   return dmarc.policy;
@@ -127,6 +132,7 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
       subtitle="Wer darf in deinem Namen senden?"
       tone={tone}
       delay={0}
+      unchecked={spf.lookupFailed}
     >
       {!spf.present ? (
         <StatusLine text="Kein SPF-Record gefunden" tone={hasMx ? 'warning' : 'neutral'} />
@@ -184,6 +190,7 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
       subtitle="Was passiert mit Spoofing-Versuchen?"
       tone={tone}
       delay={0.05}
+      unchecked={dmarc.lookupFailed}
     >
       {!dmarc.present ? (
         <StatusLine
@@ -215,6 +222,9 @@ function DkimCard({ dkim, noMail }: { dkim: MailSecurity['dkim']; noMail: boolea
       subtitle="Welche Selectors signieren ausgehende Mails?"
       tone={found ? 'success' : 'neutral'}
       delay={0.1}
+      // Ein gefundener Selector reicht für „aktiv“, auch wenn andere scheiterten.
+      // Ohne Mail (Null-MX) ist DKIM nicht nötig — dann zählt keine Probe.
+      unchecked={!found && !noMail && dkim.lookupFailed}
     >
       {!found && noMail ? (
         <StatusLine
@@ -257,6 +267,7 @@ function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail
       subtitle="Erzwingt TLS für eingehende Mail"
       tone={mtaSts.present ? 'success' : 'neutral'}
       delay={0.15}
+      unchecked={!noMail && mtaSts.lookupFailed}
     >
       <div className="flex items-center gap-2 text-sm">
         {mtaSts.present ? (
@@ -289,12 +300,18 @@ function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail
 
 /* ─── Bausteine ──────────────────────────────────────────────────────── */
 
+/**
+ * `unchecked`: die Abfrage scheiterte, aus diesem Grund. Dann zeigt die Karte
+ * statt ihres Inhalts, dass nichts bewertet ist: neutral, Badge „nicht
+ * prüfbar“ und der Grund.
+ */
 function Card({
   icon,
   title,
   subtitle,
   tone,
   delay,
+  unchecked,
   className,
   children,
 }: {
@@ -303,6 +320,7 @@ function Card({
   subtitle: string;
   tone: Tone;
   delay: number;
+  unchecked?: LookupFailure | false;
   className?: string;
   children: ReactNode;
 }) {
@@ -313,8 +331,16 @@ function Card({
       transition={{ duration: 0.3, delay }}
       className={cn('card', className)}
     >
-      <CardHeader icon={icon} title={title} subtitle={subtitle} tone={tone} />
-      <div className="mt-4">{children}</div>
+      <CardHeader
+        icon={icon}
+        title={title}
+        subtitle={subtitle}
+        tone={unchecked ? 'neutral' : tone}
+        aside={unchecked && <UncheckedBadge />}
+      />
+      <div className="mt-4">
+        {unchecked ? <UncheckedLine name={title} reason={unchecked} /> : children}
+      </div>
     </motion.div>
   );
 }

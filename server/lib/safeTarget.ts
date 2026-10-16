@@ -34,10 +34,13 @@ export class BlockedTargetError extends Error {
  * Bewusst getrennt von BlockedTargetError: eine Mail-only- oder geparkte
  * Domain ohne A/AAAA ist eine völlig gültige Eingabe. Der Aufrufer soll daraus
  * "kein Zertifikat" / "keine Technologien" machen, nicht einen 400er.
+ *
+ * `cause` trägt den Fehler von `dns.lookup`: EAI_AGAIN heißt dort „gerade
+ * nicht auflösbar“ (SERVFAIL, Timeout), nicht „gibt es nicht“.
  */
 export class UnresolvableTargetError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'UnresolvableTargetError';
   }
 }
@@ -243,8 +246,8 @@ export async function resolvePublicHost(hostname: string): Promise<ResolvedTarge
   let resolved: { address: string; family: number }[];
   try {
     resolved = await dnsPromises.lookup(hostname, { all: true, verbatim: true });
-  } catch {
-    throw new UnresolvableTargetError(`Ziel ${hostname} ist nicht auflösbar.`);
+  } catch (error) {
+    throw new UnresolvableTargetError(`Ziel ${hostname} ist nicht auflösbar.`, { cause: error });
   }
 
   if (resolved.length === 0) {
