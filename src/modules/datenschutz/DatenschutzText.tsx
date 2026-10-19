@@ -178,10 +178,11 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           Über Cloudflare als Reverse-Proxy läuft jeder Aufruf der Seite — Einzelheiten
           und Rechtsgrundlage im Abschnitt „Cloudflare (Reverse-Proxy und CDN)“. Für die
           übrigen Dienste gilt: Übermittelt wird jeweils nur die abgefragte Domain bzw.
-          IP-Adresse. Dienste mit Sitz in den USA sind gekennzeichnet; die Übermittlung
-          stützt sich dort auf Art. 49 Abs. 1 lit. b DSGVO (Erforderlichkeit zur
-          Erfüllung des von dir angeforderten Abrufs) und erfolgt ausschließlich auf
-          deine Eingabe hin.
+          IP-Adresse. Dienste mit Sitz außerhalb der EU sind gekennzeichnet. Für die
+          Schweiz und Kanada hat die EU-Kommission ein angemessenes Datenschutzniveau
+          festgestellt (Art. 45 DSGVO). In die USA stützt sich die Übermittlung auf
+          Art. 49 Abs. 1 lit. b DSGVO (Erforderlichkeit zur Erfüllung des von dir
+          angeforderten Abrufs) und erfolgt ausschließlich auf deine Eingabe hin.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-136 border-collapse text-left text-sm">
@@ -194,7 +195,12 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
             </thead>
             <tbody className="text-fg-muted">
               <Row service="Cloudflare" purpose="Reverse-Proxy/CDN: Auslieferung und Schutz der Seite, bei jedem Aufruf" region="USA" />
-              <Row service="Cloudflare, Google, AdGuard, DNS.SB, NextDNS" purpose="DNS-Auflösung, Propagations-Vergleich, DNSSEC" region="USA / EU" />
+              <Row service="Cloudflare (DNS-Resolver)" purpose="TTL der DNS-Records, DNSSEC-Prüfung, Propagations-Vergleich" region="USA" />
+              <Row service="Google Public DNS" purpose="DNSSEC-Prüfung, Propagations-Vergleich" region="USA" />
+              <Row service="NextDNS, OpenDNS (Cisco)" purpose="Propagations-Vergleich" region="USA" />
+              <Row service="Quad9" purpose="Propagations-Vergleich" region="Schweiz" />
+              <Row service="Control D" purpose="Propagations-Vergleich" region="Kanada" />
+              <Row service="AdGuard DNS, DNS.SB, DNS4EU" purpose="Propagations-Vergleich" region="EU" />
               <Row service="rdap.org, DENIC, Verisign" purpose="WHOIS/RDAP und Verfügbarkeits-Check" region="EU / USA" />
               <Row service="Google PageSpeed Insights" purpose="Performance-Analyse — nur auf Klick" region="USA" />
               <Row service="VirusTotal (Google)" purpose="Reputations-Check — nur auf Klick" region="USA" />
@@ -204,8 +210,11 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           </table>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-fg-subtle">
-          PageSpeed und VirusTotal laufen nicht automatisch — sie starten erst, wenn du
-          den jeweiligen Tab öffnest und den Check ausdrücklich anstößt.
+          Für den Propagations-Vergleich fragt der Server jeden Namen bei allen
+          genannten DNS-Resolvern gleichzeitig ab; jeder erhält dabei nur den Namen und
+          den Record-Typ. PageSpeed und VirusTotal laufen nicht automatisch — sie
+          starten erst, wenn du den jeweiligen Tab öffnest und den Check ausdrücklich
+          anstößt.
         </p>
       </Section>
 

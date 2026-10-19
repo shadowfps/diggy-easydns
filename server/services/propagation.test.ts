@@ -3,6 +3,7 @@ import { queryAllResolvers } from './propagation.js';
 import { propagationFindings } from './reportBuilder.js';
 import { DOH_RESOLVERS } from './doh.js';
 import { propagationTypes } from '../../shared/propagation.js';
+import { parseQuery, rdataFromJson, response } from '../test/dnsMessage.js';
 
 /**
  * Die Resolver werden über `fetch` gemockt: geprüft wird, was wir fragen und
@@ -20,19 +21,39 @@ interface Answer {
   data: string;
 }
 
-/** Antwortet je nach Resolver und Typ — so, wie die echten DoH-Anbieter formatieren. */
+/**
+ * Antwortet je nach Resolver und Typ — so, wie die echten DoH-Anbieter
+ * formatieren. Anbieter ohne JSON-API (`?dns=…`) bekommen dieselben Einträge
+ * im Wireformat.
+ */
 function stubDoh(
   answer: (resolverUrl: string, type: number) => Answer[],
   status: (resolverUrl: string) => number = () => 0
 ) {
-  const calls: { url: string; type: number }[] = [];
+  const calls: { url: string; type: number; format: 'json' | 'wire' }[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string) => {
       const url = new URL(input);
-      const type = Number(url.searchParams.get('type'));
       const base = `${url.origin}${url.pathname}`;
-      calls.push({ url: base, type });
+      const dns = url.searchParams.get('dns');
+      if (dns) {
+        const question = parseQuery(Buffer.from(dns, 'base64url'));
+        calls.push({ url: base, type: question.type, format: 'wire' });
+        const body = response({
+          rcode: status(base),
+          question,
+          answers: answer(base, question.type).map((a) => ({
+            name: a.name,
+            type: a.type,
+            ttl: a.TTL,
+            rdata: rdataFromJson(a.type, a.data),
+          })),
+        });
+        return new Response(body, { headers: { 'content-type': 'application/dns-message' } });
+      }
+      const type = Number(url.searchParams.get('type'));
+      calls.push({ url: base, type, format: 'json' });
       return new Response(JSON.stringify({ Status: status(base), Answer: answer(base, type) }), {
         headers: { 'content-type': 'application/dns-json' },
       });
@@ -43,6 +64,7 @@ function stubDoh(
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('queryAllResolvers — Typauswahl', () => {
@@ -95,7 +117,7 @@ describe('queryAllResolvers — TXT über alle Resolver', () => {
     const types = propagationTypes(DKIM);
     const findings = propagationFindings(await queryAllResolvers(DKIM, { types }), types);
     expect(findings.map((f) => f.id)).toEqual(['propagation-mismatch']);
-    expect(findings[0].description).toContain('1 von 5 Resolvern');
+    expect(findings[0].description).toContain(`1 von ${DOH_RESOLVERS.length} Resolvern`);
     expect(findings[0].description).toContain('TXT-Record');
   });
 
@@ -152,5 +174,201 @@ describe('queryAllResolvers — TXT über alle Resolver', () => {
       'CNAME sel1.dkim.provider.net',
       'TXT v=DKIM1; p=X',
     ]);
+  });
+
+  /**
+   * Die Anbieter mit Wireformat bekommen den Schlüssel in Stücken ohne
+   * Anführungszeichen. Zusammengesetzt muss er derselbe sein wie bei
+   * Cloudflare und Google — sonst stünden sie alle als „abweichend“ da.
+   */
+  it('setzt TXT-Stücke aus dem Wireformat wie die der JSON-API zusammen', async () => {
+    stubDoh((url, type) => {
+      if (type !== 16) return [];
+      const data = url.includes('dns.google')
+        ? 'sagt "hallo" ' + KEY_PART_1 + KEY_PART_2
+        : `"sagt \\"hallo\\" ${KEY_PART_1}" "${KEY_PART_2}"`;
+      return [{ name: `${DKIM}.`, type: 16, TTL: 3600, data }];
+    });
+
+    const types = propagationTypes(DKIM);
+    const results = await queryAllResolvers(DKIM, { types });
+    for (const r of results) {
+      expect(r.records.map((rec) => rec.value), r.resolver.id).toEqual([
+        `sagt "hallo" ${KEY_PART_1}${KEY_PART_2}`,
+      ]);
+    }
+    expect(propagationFindings(results, types).map((f) => f.id)).toEqual(['propagation-consistent']);
+  });
+});
+
+describe('queryAllResolvers — Formate', () => {
+  /**
+   * Quad9, OpenDNS, Control D und DNS4EU haben keine JSON-API. Fragt
+   * man sie mit `?name=…`, antworten sie mit HTTP 400 — der Resolver stünde
+   * dauerhaft als Fehler da.
+   */
+  it('fragt jeden Anbieter in seinem Format und jeden genau einmal je Typ', async () => {
+    const calls = stubDoh(() => []);
+    await queryAllResolvers('www.example.com', { types: ['A'] });
+
+    expect(calls).toHaveLength(DOH_RESOLVERS.length);
+    for (const resolver of DOH_RESOLVERS) {
+      const endpoint = new URL(resolver.url);
+      const own = calls.filter((c) => c.url === `${endpoint.origin}${endpoint.pathname}`);
+      expect(own.map((c) => c.format), resolver.id).toEqual([resolver.format]);
+    }
+  });
+
+  it('bringt Wireformat- und JSON-Antworten auf denselben Stand', async () => {
+    stubDoh((_url, type) =>
+      type === 28
+        ? [{ name: 'www.example.com.', type: 28, TTL: 300, data: '2001:db8::1' }]
+        : [{ name: 'www.example.com.', type: 1, TTL: 300, data: '192.0.2.1' }]
+    );
+    const types = propagationTypes('www.example.com');
+    const results = await queryAllResolvers('www.example.com', { types });
+
+    for (const r of results) {
+      expect(r.error, r.resolver.id).toBeUndefined();
+      expect(r.records.map((rec) => `${rec.type} ${rec.name} ${rec.value}`), r.resolver.id).toEqual([
+        'A www.example.com 192.0.2.1',
+        'AAAA www.example.com 2001:db8::1',
+      ]);
+    }
+    expect(propagationFindings(results, types).map((f) => f.id)).toEqual(['propagation-consistent']);
+  });
+});
+
+describe('queryAllResolvers — ausfallende Resolver', () => {
+  const HOST = 'www.example.com';
+
+  /** Antwortet wie ein gesunder Resolver mit 192.0.2.1 — als JSON oder im Wireformat. */
+  function healthy(input: string): Response {
+    const url = new URL(input);
+    const dns = url.searchParams.get('dns');
+    if (dns) {
+      const question = parseQuery(Buffer.from(dns, 'base64url'));
+      return new Response(
+        response({
+          question,
+          answers: question.type === 1 ? [{ name: question.name, type: 1, rdata: [192, 0, 2, 1] }] : [],
+        })
+      );
+    }
+    const type = Number(url.searchParams.get('type'));
+    return Response.json({
+      Status: 0,
+      Answer: type === 1 ? [{ name: HOST, type: 1, TTL: 300, data: '192.0.2.1' }] : [],
+    });
+  }
+
+  const urlOf = (id: string) => DOH_RESOLVERS.find((r) => r.id === id)!.url;
+
+  it('liefert ein Ergebnis je Resolver, auch wenn einzelne scheitern', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (input.startsWith(urlOf('quad9'))) throw new TypeError('fetch failed');
+        if (input.startsWith(urlOf('opendns'))) return new Response('busy', { status: 503 });
+        // Abgeschnitten: Kopf ohne Rest
+        if (input.startsWith(urlOf('controld'))) {
+          return new Response(new Uint8Array([0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0, 3]));
+        }
+        // Antwort auf eine andere Frage
+        if (input.startsWith(urlOf('dns4eu'))) {
+          return new Response(
+            response({
+              question: { name: 'andere.example.org', type: 1 },
+              answers: [{ name: 'andere.example.org', type: 1, rdata: [198, 51, 100, 7] }],
+            })
+          );
+        }
+        return healthy(input);
+      })
+    );
+
+    const types = propagationTypes(HOST);
+    const results = await queryAllResolvers(HOST, { types });
+
+    // Reihenfolge wie DOH_RESOLVERS — die Ansicht verlässt sich darauf.
+    expect(results.map((r) => r.resolver.id)).toEqual(DOH_RESOLVERS.map((r) => r.id));
+    const errors = Object.fromEntries(
+      results.filter((r) => r.error).map((r) => [r.resolver.id, r.error])
+    );
+    expect(errors).toEqual({
+      quad9: 'fetch failed',
+      opendns: 'opendns HTTP 503',
+      controld: 'Ungültige DNS-Antwort: Nachricht endet vorzeitig',
+      dns4eu: 'Ungültige DNS-Antwort: gehört nicht zur Frage',
+    });
+
+    // Wer scheitert, zählt nicht mit — die übrigen sind sich einig.
+    const findings = propagationFindings(results, types);
+    expect(findings.map((f) => f.id)).toEqual(['propagation-consistent']);
+    expect(findings[0].params).toEqual({ count: DOH_RESOLVERS.length - 4 });
+  });
+
+  it('bricht einen hängenden Resolver nach dem Timeout ab, ohne auf ihn zu warten', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init: RequestInit) => {
+        if (!input.startsWith(urlOf('dns4eu'))) return healthy(input);
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        });
+      })
+    );
+
+    const start = Date.now();
+    const results = await queryAllResolvers(HOST, { types: ['A'], timeoutMs: 100 });
+
+    expect(Date.now() - start).toBeLessThan(2000);
+    expect(results.find((r) => r.resolver.id === 'dns4eu')?.error).toBe('Timeout');
+    expect(results.filter((r) => !r.error)).toHaveLength(DOH_RESOLVERS.length - 1);
+  });
+
+  /**
+   * Quad9 setzte im Test rund 40 % der neuen TLS-Verbindungen zurück. Neue
+   * Versuche retten die Antwort; ein Resolver, der gar nicht erreichbar ist,
+   * bekommt trotzdem nur vier — und keiner, der eine HTTP-Antwort schickt.
+   */
+  it('versucht es nach Verbindungsabbrüchen bis zu dreimal neu', async () => {
+    const attempts = new Map<string, number>();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const id = DOH_RESOLVERS.find((r) => input.startsWith(r.url))!.id;
+        const n = (attempts.get(id) ?? 0) + 1;
+        attempts.set(id, n);
+        if (id === 'quad9' && n <= 2) throw new TypeError('fetch failed');
+        if (id === 'controld') throw new TypeError('fetch failed');
+        if (id === 'opendns') return new Response('busy', { status: 503 });
+        return healthy(input);
+      })
+    );
+
+    const results = await queryAllResolvers(HOST, { types: ['A'] });
+
+    const quad9 = results.find((r) => r.resolver.id === 'quad9');
+    expect(quad9?.records.map((r) => r.value)).toEqual(['192.0.2.1']);
+    expect(attempts.get('quad9')).toBe(3);
+    expect(results.find((r) => r.resolver.id === 'controld')?.error).toBe('fetch failed');
+    expect(attempts.get('controld')).toBe(4);
+    expect(attempts.get('opendns')).toBe(1);
+    expect(attempts.get('cloudflare')).toBe(1);
+  });
+
+  it('wertet eine gekürzte Antwort (TC) als Fehler statt als anderen Wert', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (!input.startsWith(urlOf('quad9'))) return healthy(input);
+        const dns = new URL(input).searchParams.get('dns')!;
+        return new Response(response({ question: parseQuery(Buffer.from(dns, 'base64url')), flags: 0x0200 }));
+      })
+    );
+
+    const results = await queryAllResolvers(HOST, { types: ['A'] });
+    expect(results.find((r) => r.resolver.id === 'quad9')?.error).toBe('quad9: Antwort gekürzt (TC)');
   });
 });
