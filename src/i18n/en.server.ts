@@ -373,6 +373,7 @@ export const apiErrors: Record<ApiErrorCode, string> = {
   invalid_record_type: '"{input}" isn’t a record type the propagation check compares ({types}).',
   lookup_failed: 'The lookup failed.',
   propagation_failed: 'The propagation check failed.',
+  authoritative_failed: 'Querying the authoritative name servers failed.',
   dnssec_failed: 'The DNSSEC check failed.',
   ssl_failed: 'The SSL check failed.',
   mail_failed: 'The email audit failed.',
