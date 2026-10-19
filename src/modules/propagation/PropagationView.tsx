@@ -1,10 +1,9 @@
 import { motion } from 'motion/react';
-import { useMemo, useState } from 'react';
-import { AlertTriangle, AlertCircle, Check, ChevronDown, Loader2, Minus } from 'lucide-react';
+import { useDeferredValue, useMemo } from 'react';
+import { AlertTriangle, AlertCircle, Check, Loader2, Minus, Network, X } from 'lucide-react';
 import type { RecordType, ResolverResult } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import {
-  comparePropagation,
   countsMissingAnswers,
   primaryPropagationType,
   PROPAGATION_RECORD_TYPES,
@@ -12,10 +11,21 @@ import {
   type PropagationRecordType,
   type ResolverAnswer,
 } from '@/lib/propagation';
+import {
+  authoritativeReference,
+  compareWithBasis,
+  propagationBasis,
+  type PropagationBasis,
+} from '@shared/authoritative';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
+import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { errorText, formatNumber, t, useI18n, type Language } from '@/i18n';
+import type { DeKey } from '@/i18n/de';
 import { useTypedPropagation } from './useTypedPropagation';
+import { useAuthoritative } from './useAuthoritative';
+import { AuthoritativeBlock } from './AuthoritativeBlock';
+import { AnswerGroup, type AnswerGroupBadge } from './AnswerGroup';
 
 interface PropagationViewProps {
   domain: string;
@@ -30,27 +40,34 @@ interface PropagationViewProps {
   /** Der gezeigte Typ — gewählt oder die Voreinstellung (App, für den Link). */
   type: PropagationRecordType;
   onTypeChange: (type: PropagationRecordType) => void;
+  /**
+   * Der erwartete Wert (#133) — steht mit im Link, deshalb hält ihn die App.
+   * Leer heißt: keiner.
+   */
+  expected: string;
+  onExpectedChange: (value: string) => void;
 }
 
-/**
- * Ab dieser Länge wird ein Wert gekürzt. Ein DKIM-Schlüssel (RSA 2048)
- * hat rund 410 Zeichen — fünf davon untereinander wären eine Textwand, in der
- * niemand mehr sieht, ob sie gleich sind.
- */
-const LONG_VALUE = 120;
-/**
- * Anfang und Ende der Kurzform. Bei DKIM-Schlüsseln ist der Anfang für alle
- * RSA-2048-Schlüssel gleich (`v=DKIM1; k=rsa; p=MIIBIjANBgkq…`); unterscheiden
- * lassen sie sich am Ende — daher bleibt auch das stehen.
- */
-const HEAD = 64;
-const TAIL = 24;
-
-export function PropagationView({ domain, results, types, type, onTypeChange }: PropagationViewProps) {
+export function PropagationView({
+  domain,
+  results,
+  types,
+  type,
+  onTypeChange,
+  expected,
+  onExpectedChange,
+}: PropagationViewProps) {
   const { t } = useI18n();
   const standard = types.includes(type);
   const typed = useTypedPropagation(results, domain, type, !standard);
   const shown = standard ? results : typed.results;
+
+  // Die autoritativen Nameserver erst hier, also erst im offenen Tab (#133).
+  const auth = useAuthoritative(results, domain, type);
+  const reference = useMemo(() => (auth.result ? authoritativeReference(auth.result) : undefined), [auth.result]);
+  // Tippen bleibt flüssig: Verglichen wird mit dem nachgezogenen Wert.
+  const deferredExpected = useDeferredValue(expected);
+  const basis = useMemo(() => propagationBasis(deferredExpected, reference), [deferredExpected, reference]);
 
   // „Kein Resolver liefert …“ nennt bei der Voreinstellung beide
   // Standard-Typen, wenn keiner eine Antwort hat — sonst den gezeigten.
@@ -58,25 +75,39 @@ export function PropagationView({ domain, results, types, type, onTypeChange }: 
 
   return (
     <div className="space-y-4">
-      {/* Alle wählbaren Typen, auch ohne Antwort: Wer nach einem neuen MX
-          fragt, muss ihn wählen können, bevor es ihn überall gibt. Native
-          Buttons — Tab und Enter/Leertaste reichen zur Bedienung. */}
-      <div role="group" aria-label={t('Record-Typ')} className="flex flex-wrap items-center gap-1.5">
-        {PROPAGATION_RECORD_TYPES.map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={option === type}
-            onClick={() => onTypeChange(option)}
-            className="chip"
-          >
-            {option}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        {/* Alle wählbaren Typen, auch ohne Antwort: Wer nach einem neuen MX
+            fragt, muss ihn wählen können, bevor es ihn überall gibt. Native
+            Buttons — Tab und Enter/Leertaste reichen zur Bedienung. */}
+        <div role="group" aria-label={t('Record-Typ')} className="flex flex-wrap items-center gap-1.5">
+          {PROPAGATION_RECORD_TYPES.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={option === type}
+              onClick={() => onTypeChange(option)}
+              className="chip"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+        <ExpectedInput type={type} value={expected} onChange={onExpectedChange} />
       </div>
 
+      {/* Erst der Stand der Zone, dann die Caches: Ist eine Änderung am
+          Nameserver nicht angekommen, sagen die Resolver nichts Neues. */}
+      <AuthoritativeBlock
+        key={type}
+        type={type}
+        domain={domain}
+        auth={auth}
+        reference={reference}
+        expected={deferredExpected}
+      />
+
       {shown ? (
-        <Comparison key={type} results={shown} type={type} emptyTypes={emptyTypes} />
+        <Comparison key={type} results={shown} type={type} emptyTypes={emptyTypes} basis={basis} />
       ) : typed.error ? (
         <EmptyState
           tone="danger"
@@ -101,19 +132,91 @@ export function PropagationView({ domain, results, types, type, onTypeChange }: 
   );
 }
 
+/** Beispiel im leeren Feld, je Typ in der Form, in der die Antworten stehen. */
+const EXPECTED_EXAMPLE: Record<PropagationRecordType, string> = {
+  A: '192.0.2.1',
+  AAAA: '2001:db8::1',
+  CNAME: 'host.example.net',
+  MX: '10 mx.example.net',
+  NS: 'ns1.example.net',
+  TXT: 'v=spf1 include:example.net -all',
+  CAA: '0 issue "letsencrypt.org"',
+  SOA: '2026101901',
+};
+
+/**
+ * Feld „erwarteter Wert“ (#133): Wer gerade etwas geändert hat, trägt den
+ * neuen Wert ein und sieht, wer ihn schon liefert. Geprüft wird im Browser,
+ * ohne neue Abfrage.
+ */
+function ExpectedInput({
+  type,
+  value,
+  onChange,
+}: {
+  type: PropagationRecordType;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-auto">
+      <label className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="shrink-0 text-xs text-fg-subtle">{t('Erwarteter Wert')}</span>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={EXPECTED_EXAMPLE[type]}
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          className="input h-8 min-w-0 flex-1 px-3 font-mono text-[13px] sm:w-64 sm:flex-none"
+        />
+      </label>
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          aria-label={t('Erwarteten Wert löschen')}
+          className="btn btn-ghost btn-sm btn-icon"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Wogegen verglichen wird — Untertitel der Resolver-Karte. */
+const BASIS_TEXT: Record<PropagationBasis['kind'], DeKey> = {
+  majority: 'Verglichen mit der Mehrheit der Resolver',
+  authoritative: 'Verglichen mit den autoritativen Nameservern',
+  expected: 'Verglichen mit dem erwarteten Wert — er muss in der Antwort stehen',
+};
+
+/** Badge der Antwort, die zur Basis passt. */
+const MATCH_BADGE: Record<PropagationBasis['kind'], AnswerGroupBadge> = {
+  majority: 'consensus',
+  authoritative: 'authoritative',
+  expected: 'expected',
+};
+
 /** Vergleich der Resolver für einen Typ: Zeilen, Antworten, Hinweis. */
 function Comparison({
   results,
   type,
   emptyTypes,
+  basis,
 }: {
   results: ResolverResult[];
   type: RecordType;
   emptyTypes: RecordType[];
+  basis: PropagationBasis;
 }) {
   const { t, language } = useI18n();
 
-  const comparison = useMemo(() => comparePropagation(results, type), [results, type]);
+  const comparison = useMemo(() => compareWithBasis(results, type, basis), [results, type, basis]);
   // `compared` statt aller Resolver: Wer einen Fehler hat, zählt nicht mit —
   // so nennen Hinweis und Befund dieselben Zahlen.
   const { answers, consensusKey, compared, deviating } = comparison;
@@ -126,13 +229,14 @@ function Comparison({
   // DKIM-Schlüssel hat rund 410 Zeichen, ein CNAME zum Anbieter oft 60, ein
   // NS-Set acht Hostnamen — auf dem Handy blieb neben ihnen vom Resolver-Namen
   // nur „Clou…“. Jede verschiedene Antwort steht deshalb einmal unter der
-  // Liste, die Zeilen verweisen mit einem Buchstaben darauf. Die
-  // Mehrheitsantwort heißt „A“.
+  // Liste, die Zeilen verweisen mit einem Buchstaben darauf. Die Antwort, die
+  // zur Basis passt (Mehrheit, autoritativ, erwartet), heißt „A“.
   const groups = useMemo(() => {
     if (!entry) return [];
     const withValues = answers.filter((a) => a.key !== '' && a.status !== 'error');
+    const matches = (key: string) => withValues.some((a) => a.key === key && a.status === 'match');
     const keys = [...new Set(withValues.map((a) => a.key))].sort(
-      (a, b) => Number(b === consensusKey) - Number(a === consensusKey)
+      (a, b) => Number(matches(b)) - Number(matches(a))
     );
     return keys.map((key, i) => {
       const members = withValues.filter((a) => a.key === key);
@@ -141,23 +245,29 @@ function Comparison({
         letter: String.fromCharCode(65 + i),
         values: members[0].values,
         resolvers: members.map((a) => a.result.resolver.name),
-        isConsensus: key === consensusKey,
+        matches: matches(key),
       };
     });
-  }, [entry, answers, consensusKey]);
+  }, [entry, answers]);
   const letterFor = (key: string) => groups.find((g) => g.key === key)?.letter;
 
   const answeredWithoutError = answers.some((a) => !a.result.error);
 
   return (
-    <div className="card">
+    <section className="card" aria-label={t('Öffentliche Resolver')}>
+      <CardHeader
+        icon={<Network className="size-4" />}
+        title={t('Öffentliche Resolver')}
+        subtitle={t(BASIS_TEXT[basis.kind])}
+      />
+
       {type === 'SOA' && (
-        <p className="mb-4 text-xs text-fg-subtle">
+        <p className="mt-4 text-xs text-fg-subtle">
           {t('Verglichen wird die Seriennummer, der dritte Wert im SOA.')}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
         {answers.map((answer, i) => (
           <ResolverRow
             key={answer.result.resolver.id}
@@ -176,10 +286,10 @@ function Comparison({
               key={group.key}
               letter={group.letter}
               values={group.values}
-              resolvers={group.resolvers}
+              members={group.resolvers}
               // „Mehrheit“ und „weicht ab“ nur, wenn es etwas zu
               // unterscheiden gibt. Sind alle gleich, sagt das der Hinweis.
-              status={deviating === 0 ? undefined : group.isConsensus ? 'consensus' : 'deviating'}
+              badge={deviating === 0 ? undefined : group.matches ? MATCH_BADGE[basis.kind] : 'deviating'}
             />
           ))}
         </div>
@@ -196,17 +306,7 @@ function Comparison({
         >
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <div className="space-y-1">
-            <p>
-              {entry
-                ? t(
-                    '{count} von {total} Resolvern weichen ab — eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).',
-                    { count: deviating, total: compared }
-                  )
-                : t(
-                    '{count} von {total} Resolvern weichen ab — möglicherweise noch nicht propagiert, oder absichtlich GeoDNS / Anycast.',
-                    { count: deviating, total: compared }
-                  )}
-            </p>
+            <p>{deviationText(basis.kind, entry, deviating, compared)}</p>
             {/* Nur mit TTL von jedem abweichenden Resolver — sonst ließe sich
                 „spätestens“ nicht sagen (requeryWithin). */}
             {requery !== undefined && (
@@ -229,14 +329,18 @@ function Comparison({
         >
           <Check className="mt-0.5 size-4 shrink-0 text-success" />
           <span>
-            {entry
+            {basis.kind === 'authoritative'
+              ? t('Alle Resolver liefern die Antwort der autoritativen Nameserver — sauber propagiert.')
+              : basis.kind === 'expected'
+              ? t('Alle Resolver liefern den erwarteten Wert.')
+              : entry
               ? t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type })
               : t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')}
           </span>
         </motion.div>
       )}
 
-      {consensusKey === undefined && answeredWithoutError && (
+      {deviating === 0 && consensusKey === undefined && answeredWithoutError && (
         <div className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted">
           <Minus className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
           <span>
@@ -246,8 +350,34 @@ function Comparison({
           </span>
         </div>
       )}
-    </div>
+    </section>
   );
+}
+
+/** Hinweis bei Abweichung — je nachdem, wogegen verglichen wurde. */
+function deviationText(basis: PropagationBasis['kind'], entry: boolean, count: number, total: number): string {
+  const values = { count, total };
+  if (basis === 'expected') return t('Noch ohne den erwarteten Wert: {count} von {total} Resolvern.', values);
+  if (basis === 'authoritative') {
+    return entry
+      ? t(
+          'Noch nicht auf dem Stand der autoritativen Nameserver: {count} von {total} Resolvern. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).',
+          values
+        )
+      : t(
+          'Andere Antwort als die autoritativen Nameserver: {count} von {total} Resolvern — noch nicht propagiert, oder GeoDNS / Anycast.',
+          values
+        );
+  }
+  return entry
+    ? t(
+        '{count} von {total} Resolvern weichen ab — eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).',
+        values
+      )
+    : t(
+        '{count} von {total} Resolvern weichen ab — möglicherweise noch nicht propagiert, oder absichtlich GeoDNS / Anycast.',
+        values
+      );
 }
 
 /**
@@ -387,82 +517,4 @@ function AnswerBadge({
   }
   if (!letter) return <span className="text-[13px] text-fg-subtle">{t('— kein Eintrag')}</span>;
   return <span className="badge">{label}</span>;
-}
-
-function AnswerGroup({
-  letter,
-  values,
-  resolvers,
-  status,
-}: {
-  letter: string;
-  values: string[];
-  resolvers: string[];
-  status: 'consensus' | 'deviating' | undefined;
-}) {
-  const { t } = useI18n();
-  return (
-    <section aria-label={t('Antwort {letter}', { letter })}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-xs font-semibold text-fg">{t('Antwort {letter}', { letter })}</span>
-        <span className="text-xs text-fg-subtle">{resolvers.join(', ')}</span>
-        {status === 'consensus' && <span className="badge">{t('Mehrheit')}</span>}
-        {status === 'deviating' && (
-          <span className="badge badge-warning">
-            <AlertTriangle className="size-3" />
-            {t('weicht ab')}
-          </span>
-        )}
-      </div>
-      <div className="mt-2 space-y-2">
-        {values.map((value) => (
-          <AnswerValue key={value} value={value} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/**
- * Ein Wert einer Antwort, lange Werte gekürzt auf Anfang…Ende.
- *
- * Ganz ausklappbar statt nur per Tooltip: Wer nach einem DKIM-Wechsel prüft,
- * vergleicht den Schlüssel mit dem aus dem Anbieter-Panel — auch auf dem
- * Handy und per Tastatur.
- */
-function AnswerValue({ value }: { value: string }) {
-  const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  const long = value.length > LONG_VALUE;
-
-  return (
-    <div className="panel py-3">
-      <p className="font-mono text-[13px] text-fg wrap-anywhere">
-        {long && !expanded ? (
-          <>
-            {value.slice(0, HEAD)}
-            <span className="text-fg-subtle">…</span>
-            {value.slice(-TAIL)}
-          </>
-        ) : (
-          value
-        )}
-      </p>
-      {long && (
-        <button
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((e) => !e)}
-          className="btn btn-ghost btn-sm mt-2 -ml-3"
-        >
-          <ChevronDown
-            className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
-          />
-          {expanded
-            ? t('Gekürzt zeigen')
-            : t('Ganzen Wert zeigen ({count} Zeichen)', { count: value.length })}
-        </button>
-      )}
-    </div>
-  );
 }

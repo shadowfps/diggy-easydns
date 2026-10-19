@@ -20,6 +20,7 @@ import type { DnsRecord, Finding, ResolverResult } from '@/types/dns';
 vi.mock('@/lib/api', () => ({
   lookupRecords: vi.fn(),
   lookupPropagation: vi.fn(),
+  lookupAuthoritative: vi.fn(),
   lookupDnssec: vi.fn(),
   lookupSsl: vi.fn(),
   lookupMail: vi.fn(),
@@ -47,6 +48,13 @@ function stubApi(domain = 'example.com') {
     findings: [],
   });
   vi.mocked(api.lookupPropagation).mockResolvedValue({ propagation: [], ...EMPTY_SECTION });
+  // Nameserver nicht prüfbar: Die Resolver vergleichen dann wie vor #133 mit der Mehrheit.
+  vi.mocked(api.lookupAuthoritative).mockImplementation(async (name, type) => ({
+    domain: name,
+    type,
+    nameservers: [],
+    error: 'lookup_failed',
+  }));
   vi.mocked(api.lookupDnssec).mockResolvedValue({
     dnssec: { enabled: false, valid: false, chainOfTrust: 'none' },
     ...EMPTY_SECTION,
@@ -551,5 +559,88 @@ describe('Propagation-Typ im Link', () => {
     await userEvent.click(findingsTab);
     expect(screen.getByText('Konsistente Propagation')).toBeInTheDocument();
     expect(screen.queryByText(/Propagation-Abweichung/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * #133: Der erwartete Wert gehört zum Typ und steht mit ihm im Link
+ * (`?propagation=A&expected=…`). Tippen ersetzt den Link, statt für jeden
+ * Tastendruck einen History-Eintrag anzulegen.
+ */
+describe('Erwarteter Wert im Link', () => {
+  const resolverResult = (name: string, value: string): ResolverResult => ({
+    resolver: { id: name.toLowerCase(), name, ip: '0.0.0.0', country: 'X', flag: '', provider: name },
+    records: [{ type: 'A', name: 'example.com', value, ttl: 60 }],
+    responseTimeMs: 10,
+  });
+
+  beforeEach(() => {
+    vi.mocked(api.lookupPropagation).mockResolvedValue({
+      propagation: [resolverResult('Cloudflare', '192.0.2.1'), resolverResult('Google', '192.0.2.9')],
+      findings: [],
+    });
+  });
+
+  const field = () => screen.findByRole('textbox', { name: 'Erwarteter Wert' });
+  const typeButton = async (name: string) =>
+    within(await screen.findByRole('group', { name: 'Record-Typ' })).getByRole('button', { name });
+  const currentUrl = () => `${window.location.pathname}${window.location.search}`;
+
+  it('öffnet einen Link mit erwartetem Wert und vergleicht die Resolver damit', async () => {
+    setPath('/lookup/example.com?propagation=A&expected=192.0.2.1');
+    render(<App />);
+
+    expect(await field()).toHaveValue('192.0.2.1');
+    expect(await screen.findByText('Noch ohne den erwarteten Wert: 1 von 2 Resolvern.')).toBeInTheDocument();
+    expect(screen.getByText(/Verglichen mit dem erwarteten Wert/)).toBeInTheDocument();
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A&expected=192.0.2.1'));
+  });
+
+  it('ohne Typ im Link bleibt der Wert außen vor', async () => {
+    setPath('/lookup/example.com?expected=192.0.2.1');
+    render(<App />);
+
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com'));
+    await userEvent.click(screen.getByRole('tab', { name: /Propagation/ }));
+    expect(await field()).toHaveValue('');
+  });
+
+  it('schreibt den Wert ohne History-Eintrag in den Link; ein anderer Typ beginnt leer', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Propagation/ }));
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
+
+    const push = vi.spyOn(window.history, 'pushState');
+    await userEvent.type(await field(), '192.0.2.9');
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A&expected=192.0.2.9'));
+    expect(push).not.toHaveBeenCalled();
+    expect(await screen.findByText('Noch ohne den erwarteten Wert: 1 von 2 Resolvern.')).toBeInTheDocument();
+
+    await userEvent.click(await typeButton('MX'));
+    expect(push).toHaveBeenCalledWith(null, '', '/lookup/example.com?propagation=MX');
+    expect(await field()).toHaveValue('');
+    push.mockRestore();
+
+    // Zurück: der vorige Typ mit seinem Wert.
+    setPath('/lookup/example.com?propagation=A&expected=192.0.2.9');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(async () => expect(await field()).toHaveValue('192.0.2.9'));
+    expect(await typeButton('A')).toHaveAttribute('aria-pressed', 'true');
+
+    // Leeren: der Wert verschwindet aus dem Link.
+    await userEvent.click(screen.getByRole('button', { name: 'Erwarteten Wert löschen' }));
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
+  });
+
+  it('fragt die autoritativen Nameserver erst im Propagation-Tab', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+    const findingsTab = await screen.findByRole('tab', { name: /Findings/ });
+    await waitFor(() => expect(findingsTab).toHaveTextContent(/\d/));
+    expect(api.lookupAuthoritative).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('tab', { name: /Propagation/ }));
+    await waitFor(() => expect(api.lookupAuthoritative).toHaveBeenCalledWith('example.com', 'A'));
   });
 });

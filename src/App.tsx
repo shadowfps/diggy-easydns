@@ -125,6 +125,7 @@ import { cn } from '@/lib/cn';
 import { isDnsOnlyName } from '@/lib/dnsName';
 import {
   defaultPropagationType,
+  propagationExpectedFromSearch,
   propagationTypeFromSearch,
   propagationTypes,
   type PropagationRecordType,
@@ -171,6 +172,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('records');
   // Im Propagation-Tab gewählter Record-Typ; `null` heißt Voreinstellung (#131).
   const [propagationType, setPropagationType] = useState<PropagationRecordType | null>(null);
+  // Erwarteter Wert im Propagation-Tab (#133) — gehört zum gezeigten Typ.
+  const [propagationExpected, setPropagationExpected] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const [comparePair, setComparePair] = useState<ComparePair>({ left: '', right: '' });
@@ -231,6 +234,7 @@ export default function App() {
     setIpQuery(null);
     setActiveTab('records');
     setPropagationType(null);
+    setPropagationExpected('');
     lookup.run(normalizedDomain);
   };
 
@@ -263,6 +267,7 @@ export default function App() {
     propagationType ??
     (lookup.domain ? defaultPropagationType(propagation.data ?? [], propagationTypes(lookup.domain)) : null);
   const linkedPropagationType = activeTab === 'propagation' ? shownPropagationType : null;
+  const linkedExpected = linkedPropagationType ? propagationExpected : '';
 
   /*
    * Records da → Permalink auf die (server-normalisierte) Domain setzen.
@@ -271,20 +276,27 @@ export default function App() {
    * (`?propagation=MX`, #131): Wer die Adresse kopiert, teilt genau diese
    * Ansicht. Tab und Voreinstellung schreiben ihn per replaceState — nur die
    * Wahl eines Typs legt einen History-Eintrag an (handlePropagationType).
+   * Der erwartete Wert (#133) ebenso per replaceState: ein Eintrag je
+   * Tastendruck wäre eine unbrauchbare Zurück-Taste.
    */
   useEffect(() => {
     if (lookup.recordsStatus !== 'done' || !lookup.domain) return;
-    const nextPath = lookupPathFor(lookup.domain, linkedPropagationType);
+    const nextPath = lookupPathFor(lookup.domain, linkedPropagationType, linkedExpected);
     if (`${window.location.pathname}${window.location.search}` !== nextPath) {
       window.history.replaceState(null, '', nextPath);
     }
-  }, [lookup.recordsStatus, lookup.domain, linkedPropagationType]);
+  }, [lookup.recordsStatus, lookup.domain, linkedPropagationType, linkedExpected]);
 
-  /** Typ im Propagation-Tab wählen: eigener History-Eintrag, Zurück führt zum vorigen Typ. */
+  /**
+   * Typ im Propagation-Tab wählen: eigener History-Eintrag, Zurück führt zum
+   * vorigen Typ — samt dessen erwartetem Wert. Der neue Typ beginnt ohne: Eine
+   * IPv4-Adresse passt nicht zu AAAA.
+   */
   const handlePropagationType = (type: PropagationRecordType) => {
     if (!lookup.domain || type === shownPropagationType) return;
     window.history.pushState(null, '', lookupPathFor(lookup.domain, type));
     setPropagationType(type);
+    setPropagationExpected('');
   };
 
   // Alle Sektionen fertig → vollständigen Report in die History schreiben.
@@ -372,6 +384,7 @@ export default function App() {
         // `null` (unbekannter Typ): Tab mit Voreinstellung.
         setActiveTab('propagation');
         setPropagationType(linkedType);
+        setPropagationExpected(propagationExpectedFromSearch(search));
       } else if (sameReport && activeTab === 'propagation') {
         setActiveTab('records');
       }
@@ -472,7 +485,7 @@ export default function App() {
 
   const handleCopyPermalink = async () => {
     if (!lookup.domain) return;
-    const url = getLookupUrl(lookup.domain, linkedPropagationType);
+    const url = getLookupUrl(lookup.domain, linkedPropagationType, linkedExpected);
     try {
       await navigator.clipboard.writeText(url);
       setPermalinkCopied(true);
@@ -948,6 +961,8 @@ export default function App() {
                             types={propagationTypes(report.domain)}
                             type={shownPropagationType ?? propagationTypes(report.domain)[0]}
                             onTypeChange={handlePropagationType}
+                            expected={propagationExpected}
+                            onExpectedChange={setPropagationExpected}
                           />
                         </Suspense>
                       ) : (
@@ -1116,8 +1131,12 @@ function formatCheckedAt(timestamp: string): string {
   return formatDate(timestamp, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function getLookupUrl(domain: string, propagationType: PropagationRecordType | null): string {
-  return `${window.location.origin}${lookupPathFor(domain, propagationType)}`;
+function getLookupUrl(
+  domain: string,
+  propagationType: PropagationRecordType | null,
+  expected: string
+): string {
+  return `${window.location.origin}${lookupPathFor(domain, propagationType, expected)}`;
 }
 
 function replaceLookupPath(domain: string): void {

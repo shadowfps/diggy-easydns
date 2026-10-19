@@ -17,3 +17,14 @@ export function propagationTypeFromSearch(search: string): PropagationRecordType
   const value = new URLSearchParams(search).get('propagation');
   return value === null ? undefined : parsePropagationType(value);
 }
+
+/**
+ * Höchstlänge des erwarteten Werts aus einem Link: reicht für einen
+ * DKIM-Schlüssel mit 4096 Bit (rund 750 Zeichen), mehr wäre kein Record.
+ */
+const MAX_EXPECTED = 2000;
+
+/** Der erwartete Wert aus dem Link (`&expected=…`, #133) — leer, wenn keiner da ist. */
+export function propagationExpectedFromSearch(search: string): string {
+  return (new URLSearchParams(search).get('expected') ?? '').slice(0, MAX_EXPECTED);
+}
