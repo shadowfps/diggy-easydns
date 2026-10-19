@@ -175,6 +175,12 @@ export async function propagationSection(
  * Die TTL zählt im Resolver weiter herunter, während die Antwort hier bis zu
  * `ttlMs` liegt. Unverändert ausgeliefert hieße „verbleibende TTL“ bis zu eine
  * Minute zu viel, und wer nach 30 s erneut prüft, sähe dieselben Zahlen.
+ *
+ * Länger als die kürzeste TTL der Antworten bleibt der Eintrag nicht
+ * (#133): Danach hat der Resolver womöglich schon neu gefragt, die Antwort
+ * im Cache zeigte einen Stand, den es dort nicht mehr gibt — und die
+ * heruntergezählte TTL stand als „TTL 0s“ da. Ein Wert von 0 kommt so nur
+ * noch vom Resolver selbst.
  */
 async function cachedResolvers(
   key: string,
@@ -182,11 +188,26 @@ async function cachedResolvers(
   domain: string,
   types: RecordType[]
 ): Promise<ResolverResult[]> {
-  const { results, at } = await cached(key, ttlMs, async () => {
-    const results = await queryAllResolvers(domain, { types });
-    return { results, at: Date.now() };
-  });
+  const { results, at } = await cached(
+    key,
+    ttlMs,
+    async () => {
+      const results = await queryAllResolvers(domain, { types });
+      return { results, at: Date.now() };
+    },
+    { maxTtlMs: ({ results }) => shortestTtl(results) * 1000 }
+  );
   return agedResults(results, Math.floor((Date.now() - at) / 1000));
+}
+
+/** Die kürzeste TTL in Sekunden über alle Records und Negativ-TTLs — ohne eine: unbegrenzt. */
+export function shortestTtl(results: ResolverResult[]): number {
+  let shortest = Infinity;
+  for (const result of results) {
+    for (const rec of result.records) if (rec.ttl !== null) shortest = Math.min(shortest, rec.ttl);
+    for (const ttl of Object.values(result.negativeTtl ?? {})) shortest = Math.min(shortest, ttl);
+  }
+  return shortest;
 }
 
 /** Zieht `seconds` von jeder TTL ab, nicht unter 0. Das Original bleibt unverändert. */
