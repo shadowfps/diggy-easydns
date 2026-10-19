@@ -226,7 +226,9 @@ Zielserver selbst“ bei TLS und Tech-Stack.
 Gefragt wird nur, wenn der Tab offen ist; der Report lädt nichts davon. Nur
 öffentliche Adressen (dieselbe Liste wie `safeTarget.ts`), höchstens acht, je
 Adresse zwei Fragen, je Ziel-Adresse höchstens 120 Fragen pro Minute über
-alle Nutzer; die Route hat ein eigenes Rate-Limit (30/min je IP).
+alle Nutzer, höchstens acht Prüfungen zugleich (belegt, bis sie fertig sind —
+auch wenn der Client abbricht); die Route hat ein eigenes Rate-Limit (30/min
+je IP).
 
 **Offener Punkt:** In Produktion (Container bei mittwald hinter Cloudflare)
 ist ausgehendes DNS über Port 53 nicht zugesagt. Ist es gesperrt, zeigt der

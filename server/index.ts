@@ -21,7 +21,7 @@ import { BlockedTargetError } from './lib/safeTarget.js';
 import { upstreamErrorStatus } from './lib/upstreamError.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { propagationSection, propagationTypeQuery } from './services/propagation.js';
-import { authoritativeSection } from './services/authoritative.js';
+import { AuthoritativeBusyError, authoritativeSection } from './services/authoritative.js';
 import { PROPAGATION_RECORD_TYPES } from '../shared/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
@@ -353,7 +353,9 @@ const techStackConcurrency = concurrencyLimit(
  * Ein eigener Bucket, deutlich unter dem Basis-Limit: Normale Nutzung sind
  * ein paar Typen pro Report, 30 pro Minute reichen dafür. Dazu ein Deckel,
  * weil eine Abfrage mit stummen Nameservern einige Sekunden läuft. Je
- * Ziel-Adresse begrenzt authoritative.ts zusätzlich, über alle Nutzer.
+ * Ziel-Adresse und für die laufenden Prüfungen selbst — auch nach einem
+ * Abbruch durch den Client — begrenzt authoritative.ts zusätzlich, über alle
+ * Nutzer.
  */
 const authoritativeLimiter = rateLimit({
   windowMs: 60_000,
@@ -749,6 +751,11 @@ app.get('/api/lookup/authoritative', authoritativeLimiter, async (req: Request, 
     try {
       res.json(await authoritativeSection(domain, type, AUTHORITATIVE_TTL_MS));
     } catch (error) {
+      if (error instanceof AuthoritativeBusyError) {
+        res.setHeader('Retry-After', '30');
+        res.status(503).json({ error: 'server_busy', message: error.message });
+        return;
+      }
       sectionError(res, 'authoritative_failed', error);
     }
   });

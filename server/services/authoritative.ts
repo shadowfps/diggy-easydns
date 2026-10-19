@@ -28,6 +28,8 @@
  *    keinem Verweis wird gefolgt
  *  - höchstens 8 Nameserver-Namen, 8 Adressen und je Adresse 2 Fragen
  *  - je Ziel-Adresse höchstens 120 Fragen pro Minute, über alle Nutzer
+ *  - höchstens 8 Prüfungen zugleich unterwegs, über alle Nutzer — auch wenn
+ *    der Client die Anfrage vorher abbricht (`authoritativeSection`)
  *  - die Route selbst mit eigenem Rate-Limit und Parallelitäts-Deckel
  *    (server/index.ts)
  */
@@ -59,6 +61,8 @@ export const AUTHORITATIVE_LIMITS = {
   queryTimeoutMs: 2500,
   /** Fragen je Ziel-Adresse und Minute, über alle Nutzer zusammen. */
   perDestinationPerMinute: 120,
+  /** Prüfungen, die zugleich laufen — über alle Nutzer, bis sie fertig sind. */
+  concurrentChecks: 8,
 } as const;
 
 /** Zone und Nameserver ändern sich selten — eine Minute wie die übrigen Lookups. */
@@ -358,6 +362,35 @@ export async function checkAuthoritative(domain: string, type: RecordType): Prom
   };
 }
 
+/** Alle acht Plätze belegt (`AUTHORITATIVE_LIMITS.concurrentChecks`). */
+export class AuthoritativeBusyError extends Error {
+  constructor() {
+    super('Es laufen gerade zu viele Abfragen an autoritative Nameserver. Bitte kurz warten.');
+    this.name = 'AuthoritativeBusyError';
+  }
+}
+
+let runningChecks = 0;
+
+/**
+ * Eine Prüfung mit Platz im Deckel — der bleibt belegt, bis sie fertig ist.
+ * Der Deckel der Route gibt seinen Platz frei, sobald der Client die
+ * Verbindung schließt; die Fragen über Port 53 laufen dann aber weiter, bis
+ * sie beantwortet sind oder ablaufen. Wer Anfragen abschickt und sofort
+ * abbricht, käme an jenem Deckel vorbei — an diesem nicht. Gezählt wird
+ * hinter dem Cache: Wer dieselbe Domain und denselben Typ fragt, teilt sich
+ * eine laufende Prüfung und belegt keinen Platz.
+ */
+async function withCheckSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (runningChecks >= AUTHORITATIVE_LIMITS.concurrentChecks) throw new AuthoritativeBusyError();
+  runningChecks += 1;
+  try {
+    return await work();
+  } finally {
+    runningChecks -= 1;
+  }
+}
+
 /** Antwort von `/api/lookup/authoritative`: das Ergebnis und, für Skripte, die Auswertung. */
 export interface AuthoritativeSection extends AuthoritativeResult {
   /** `authoritativeReference(…).state` — die Ansicht rechnet selbst, mit derselben Funktion. */
@@ -371,13 +404,17 @@ export interface AuthoritativeSection extends AuthoritativeResult {
  * Änderung neu prüft, will den Stand von jetzt sehen — 15 Sekunden fangen
  * nur Bursts ab (Tab-Wechsel, ein geteilter Link). Ist nichts prüfbar, nur
  * fünf (`cached`).
+ *
+ * Wirft `AuthoritativeBusyError`, wenn schon acht Prüfungen laufen
+ * (`withCheckSlot`) — nicht gecacht, der nächste Versuch fragt neu.
  */
 export async function authoritativeSection(
   domain: string,
   type: RecordType,
   ttlMs: number
 ): Promise<AuthoritativeSection> {
-  const result = await cached(`authoritative:${type}:${domain}`, ttlMs, () => checkAuthoritative(domain, type), {
+  const produce = () => withCheckSlot(() => checkAuthoritative(domain, type));
+  const result = await cached(`authoritative:${type}:${domain}`, ttlMs, produce, {
     failed: (r) => r.error !== undefined || r.nameservers.every((s) => s.error !== undefined),
   });
   const reference = authoritativeReference(result);

@@ -39,6 +39,7 @@ vi.mock('./dnsPort53.js', async (importOriginal) => ({
 
 const {
   AUTHORITATIVE_LIMITS,
+  AuthoritativeBusyError,
   authoritativeSection,
   checkAuthoritative,
   discoverNameservers,
@@ -389,4 +390,43 @@ describe('authoritativeSection', () => {
     expect(dohCalls).toHaveLength(before);
   });
 
+  /**
+   * Der Deckel der Route gibt seinen Platz frei, sobald der Client abbricht —
+   * die Fragen über Port 53 laufen aber weiter. Dieser zählt die Prüfungen
+   * selbst, bis sie fertig sind.
+   */
+  it('lässt höchstens acht Prüfungen zugleich laufen, bis sie fertig sind', async () => {
+    const { queryNameserver } = await import('./dnsPort53.js');
+    const original = vi.mocked(queryNameserver).getMockImplementation()!;
+    const release: (() => void)[] = [];
+    vi.mocked(queryNameserver).mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          release.push(() => resolve({ ok: false, failure: 'timeout', responseTimeMs: 2500 }))
+        )
+    );
+    try {
+      const max = AUTHORITATIVE_LIMITS.concurrentChecks;
+      for (let i = 0; i <= max; i++) zone(`d${i}.example`, { [`ns.d${i}.example`]: [`1.1.1.${i + 1}`] });
+
+      const running = Array.from({ length: max }, (_, i) => authoritativeSection(`d${i}.example`, 'A', 15_000));
+      await vi.waitFor(() => expect(release).toHaveLength(max * 2));
+
+      // Dieselbe Domain teilt sich die laufende Prüfung und belegt keinen Platz.
+      const joined = authoritativeSection('d0.example', 'A', 15_000);
+      await expect(authoritativeSection(`d${max}.example`, 'A', 15_000)).rejects.toBeInstanceOf(
+        AuthoritativeBusyError
+      );
+
+      for (const done of release.splice(0)) done();
+      await Promise.all([...running, joined]);
+      // Fertig — der Platz ist wieder frei.
+      const next = authoritativeSection(`d${max}.example`, 'A', 15_000);
+      await vi.waitFor(() => expect(release).toHaveLength(2));
+      for (const done of release.splice(0)) done();
+      expect((await next).state).toBe('unavailable');
+    } finally {
+      vi.mocked(queryNameserver).mockImplementation(original);
+    }
+  });
 });
