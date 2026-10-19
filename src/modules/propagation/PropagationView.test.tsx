@@ -751,6 +751,30 @@ describe('PropagationView — erwarteter Wert (#133)', () => {
     expect(await within(await authBlock()).findByText('Die Nameserver liefern den erwarteten Wert.')).toBeInTheDocument();
   });
 
+  /** Den Wert liefern dann die Nameserver des Ziels — „nicht angekommen“ wäre falsch. */
+  it('misst einen CNAME aus der Zone hinaus nicht am erwarteten Wert', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('A', [
+        {
+          ...nameserver('ns1.example.net', []),
+          records: [{ type: 'CNAME', name: 'example.com', value: 'cdn.provider.example', ttl: 300 }],
+        },
+      ])
+    );
+    render(
+      <View
+        results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])}
+        types={HOST}
+        expected="192.0.2.1"
+      />
+    );
+    const block = await authBlock();
+    expect(await within(block).findByText(/ist ein CNAME auf cdn.provider.example/)).toBeInTheDocument();
+    expect(within(block).queryByText(/erwarteten Wert/)).toBeNull();
+    expect(block.querySelector('.text-warning')).toBeNull();
+    expect(within(resolverCard()).getByText('Alle Resolver liefern den erwarteten Wert.')).toBeInTheDocument();
+  });
+
   it('zählt gegen den erwarteten Wert auch Resolver ohne Eintrag als abweichend', () => {
     render(
       <View

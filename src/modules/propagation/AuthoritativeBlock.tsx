@@ -120,9 +120,15 @@ export function AuthoritativeBlock({
   const hasExpected = expected.trim() !== '';
   const answered = answers.filter((a) => !a.server.error);
 
+  // Am erwarteten Wert gemessen werden nur Nameserver mit eigener Antwort:
+  // Ist der Name ein CNAME aus der Zone hinaus, liefern den Wert andere —
+  // „dort ist die Änderung nicht angekommen“ wäre falsch.
+  const judged = answered.filter((a) => !a.cname);
+
   /** Ob eine Antwort als abweichend gilt: gegen den erwarteten Wert, sonst gegen die übrigen Nameserver. */
   const flagged = (a: AuthoritativeAnswer) =>
-    !a.server.error && (hasExpected ? !matchesExpected(type, a.comparables, expected) : disagree && a.valueDeviates);
+    !a.server.error &&
+    (hasExpected ? !a.cname && !matchesExpected(type, a.comparables, expected) : disagree && a.valueDeviates);
 
   // Verschiedene Antworten einmal unter der Liste, wie bei den Resolvern —
   // mit Ziffern, damit „Antwort A“ dort und „Antwort 1“ hier nicht
@@ -146,7 +152,7 @@ export function AuthoritativeBlock({
   const labelFor = (key: string) => groups.find((g) => g.key === key)?.label;
   // Gezählt werden Nameserver, nicht Adressen: Wer zwei Namen einträgt, denkt
   // in zwei Servern, auch wenn jeder vier Adressen hat.
-  const missingExpected = new Set(answered.filter(flagged).map((a) => a.server.host)).size;
+  const missingExpected = new Set(judged.filter(flagged).map((a) => a.server.host)).size;
 
   return (
     <section className="card" aria-label={t('Autoritative Nameserver')}>
@@ -192,7 +198,7 @@ export function AuthoritativeBlock({
 
       <div className="panel mt-5 space-y-1.5 py-3">
         <StateNote state={state} type={type} domain={domain} reference={reference} disagree={disagree} />
-        {hasExpected && answered.length > 0 && (
+        {hasExpected && judged.length > 0 && (
           <Note
             icon={
               missingExpected > 0 ? (
@@ -205,7 +211,7 @@ export function AuthoritativeBlock({
             {missingExpected > 0
               ? t('Noch ohne den erwarteten Wert: {count} von {total} Nameservern — dort ist die Änderung nicht angekommen.', {
                   count: missingExpected,
-                  total: answeredHosts.size,
+                  total: new Set(judged.map((a) => a.server.host)).size,
                 })
               : t('Die Nameserver liefern den erwarteten Wert.')}
           </Note>
