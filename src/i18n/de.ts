@@ -277,11 +277,13 @@ export type DeText =
   | 'keine öffentliche Adresse'
   | 'keine Adresse'
   | 'gerade zu oft gefragt'
+  | 'diggy ohne IPv6'
   | 'Noch ohne den erwarteten Wert: {count} von {total} Resolvern.'
   | 'Noch nicht auf dem Stand der autoritativen Nameserver: {count} von {total} Resolvern. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).'
   | 'Andere Antwort als die autoritativen Nameserver: {count} von {total} Resolvern — noch nicht propagiert, oder GeoDNS / Anycast.'
   | 'Noch ohne den erwarteten Wert: {count} von {total} Nameservern — dort ist die Änderung nicht angekommen.'
   | 'Nicht gefragt: {count} von {total} Nameservern, höchstens acht je Abfrage.'
+  | 'Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.'
   | 'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.'
 
   // ─── PageSpeed ───────────────────────────────────────────────────────

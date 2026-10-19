@@ -146,6 +146,8 @@ export interface ResolverResult {
  * - `blocked`: der Name zeigt nur auf nicht-öffentliche Adressen — nicht gefragt
  * - `no_address`: keine Adresse ermittelbar
  * - `rate_limited`: diese Adresse wurde in der letzten Minute zu oft gefragt
+ * - `no_ipv6`: der diggy-Server hat kein IPv6 — die IPv6-Adresse wurde nicht
+ *   gefragt, oder die Frage scheiterte schon am Verbinden
  */
 export type AuthoritativeFailure =
   | 'timeout'
@@ -156,7 +158,8 @@ export type AuthoritativeFailure =
   | 'invalid_response'
   | 'blocked'
   | 'no_address'
-  | 'rate_limited';
+  | 'rate_limited'
+  | 'no_ipv6';
 
 /** Antwort eines autoritativen Nameservers, direkt über Port 53 gefragt (#133). */
 export interface AuthoritativeServer {
@@ -191,6 +194,11 @@ export interface AuthoritativeResult {
   nameservers: AuthoritativeServer[];
   /** Weitere Nameserver der Zone, die über der Obergrenze lagen und nicht gefragt wurden. */
   omitted?: number;
+  /**
+   * Die Nameserver haben IPv6-Adressen, gefragt wurde aber nur über IPv4:
+   * Der diggy-Server hat kein IPv6.
+   */
+  ipv6Skipped?: true;
   /**
    * Die Zone oder ihre Nameserver ließen sich nicht ermitteln: `no_zone` —
    * kein NS-Record bis hinauf zur registrierbaren Domain; `lookup_failed` —

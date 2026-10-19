@@ -618,6 +618,27 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
     expect(within(resolverCard()).getByText(/Alle Resolver liefern dasselbe Ergebnis/)).toBeInTheDocument();
   });
 
+  /** In einem Container ohne IPv6 — eine Aussage über diggy, nicht über die Nameserver. */
+  it('sagt, wenn der diggy-Server kein IPv6 hat, statt Nameserver als unerreichbar zu zeigen', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative(
+        'A',
+        [
+          nameserver('ns1.example.net', [['A', '192.0.2.1']]),
+          nameserver('ns2.example.net', [], { error: 'no_ipv6', ip: '2606:4700:4700::1111' }),
+        ],
+        { ipv6Skipped: true }
+      )
+    );
+    render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
+
+    const block = await authBlock();
+    expect(await within(block).findByText('diggy ohne IPv6')).toBeInTheDocument();
+    expect(within(block).getByText('Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.')).toBeInTheDocument();
+    expect(within(block).queryByText('nicht erreichbar')).toBeNull();
+    expect(within(block).getByText('einig')).toBeInTheDocument();
+  });
+
   it('sagt, wenn sich die Zone nicht ermitteln ließ', async () => {
     vi.mocked(api.lookupAuthoritative).mockResolvedValue(authoritative('A', [], { zone: undefined, error: 'no_zone' }));
     render(<View results={results([[]])} types={HOST} />);

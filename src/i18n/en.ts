@@ -338,6 +338,8 @@ const ui: Dictionary = {
   },
   'Nicht gefragt: {count} von {total} Nameservern, höchstens acht je Abfrage.':
     'Not asked: {count} of {total} name servers, at most eight per check.',
+  'Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.':
+    'Asked over IPv4 only: the diggy server has no IPv6.',
   'einig': 'agree',
   'uneinig': 'disagree',
   'verschieden': 'differ',
@@ -374,6 +376,7 @@ const ui: Dictionary = {
   'keine öffentliche Adresse': 'no public address',
   'keine Adresse': 'no address',
   'gerade zu oft gefragt': 'asked too often',
+  'diggy ohne IPv6': 'no IPv6 at diggy',
   'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.':
     'Going by their TTL, the differing resolvers will query the nameservers again within {duration} of this check.',
 

@@ -14,6 +14,8 @@ const dns = new Map<string, Answer>();
 const nameservers = new Map<string, (name: string, type: RecordType) => NameserverReply>();
 const asked: { ip: string; name: string; type: RecordType; options: QueryOptions }[] = [];
 const dohCalls: string[] = [];
+/** Ob der diggy-Server IPv6 hat (`hasIpv6`) — fest, damit das Ergebnis nicht vom Rechner abhängt. */
+let serverIpv6 = true;
 
 vi.mock('./doh.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./doh.js')>()),
@@ -27,6 +29,7 @@ vi.mock('./doh.js', async (importOriginal) => ({
 
 vi.mock('./dnsPort53.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./dnsPort53.js')>()),
+  hasIpv6: vi.fn(() => serverIpv6),
   queryNameserver: vi.fn(async (ip: string, name: string, type: RecordType, options: QueryOptions) => {
     asked.push({ ip, name, type, options });
     const server = nameservers.get(ip);
@@ -82,6 +85,7 @@ beforeEach(() => {
   nameservers.clear();
   asked.length = 0;
   dohCalls.length = 0;
+  serverIpv6 = true;
   clearCache();
   resetDestinationBudgets();
 });
@@ -203,6 +207,24 @@ describe('selectTargets', () => {
     ]);
   });
 
+  /** Ohne IPv6 am diggy-Server scheiterte jede IPv6-Frage sofort — „nicht erreichbar“ träfe den Falschen. */
+  it('lässt IPv6-Adressen weg, wenn der Server kein IPv6 hat', () => {
+    const targets = selectTargets(
+      [
+        { host: 'beides.example.net', v4: ['8.8.8.8'], v6: ['2001:4860:4860::8888'] },
+        { host: 'nur-v6.example.net', v4: [], v6: ['2606:4700:4700::1111'] },
+        { host: 'intern-v6.example.net', v4: [], v6: ['fd00::1'] },
+      ],
+      8,
+      false
+    );
+    expect(targets).toEqual([
+      { host: 'beides.example.net', ip: '8.8.8.8' },
+      { host: 'nur-v6.example.net', error: 'no_ipv6' },
+      { host: 'intern-v6.example.net', error: 'blocked' },
+    ]);
+  });
+
   it('fragt eine Adresse unter zwei Namen nur einmal, zeigt aber beide Namen', () => {
     const targets = selectTargets([
       { host: 'a.example.net', v4: ['8.8.8.8'], v6: [] },
@@ -286,6 +308,24 @@ describe('checkAuthoritative', () => {
     expect(new Set(asked.map((a) => a.ip)).size).toBe(AUTHORITATIVE_LIMITS.addresses);
   });
 
+  it('fragt ohne IPv6 am Server nur über IPv4 und sagt, dass IPv6 fehlt', async () => {
+    serverIpv6 = false;
+    zone('example.com', { 'ns1.example.net': ['1.1.1.1', '2606:4700:4700::1111'] });
+    authoritative('1.1.1.1', 'example.com', {});
+
+    const result = await checkAuthoritative('example.com', 'A');
+    expect(result.nameservers.map((s) => s.ip)).toEqual(['1.1.1.1']);
+    expect(asked.every((a) => !a.ip.includes(':'))).toBe(true);
+    expect(result.ipv6Skipped).toBe(true);
+
+    serverIpv6 = true;
+    clearCache();
+    authoritative('2606:4700:4700::1111', 'example.com', {});
+    const withIpv6 = await checkAuthoritative('example.com', 'A');
+    expect(withIpv6.nameservers.map((s) => s.ip)).toEqual(['1.1.1.1', '2606:4700:4700::1111']);
+    expect(withIpv6).not.toHaveProperty('ipv6Skipped');
+  });
+
   it('gibt Zone-Fehler als Ergebnis zurück', async () => {
     dns.set('example.com|NS', 'fail');
     expect(await checkAuthoritative('example.com', 'A')).toEqual({
@@ -348,4 +388,5 @@ describe('authoritativeSection', () => {
     expect(asked).toHaveLength(8);
     expect(dohCalls).toHaveLength(before);
   });
+
 });

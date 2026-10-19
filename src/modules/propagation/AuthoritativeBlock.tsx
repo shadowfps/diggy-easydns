@@ -29,10 +29,11 @@ const FAILURE_TEXT: Record<AuthoritativeFailure, DeKey> = {
   blocked: 'keine öffentliche Adresse',
   no_address: 'keine Adresse',
   rate_limited: 'gerade zu oft gefragt',
+  no_ipv6: 'diggy ohne IPv6',
 };
 
 /** Fehler, die auf den Weg dorthin zeigen statt auf den Nameserver. */
-const UNREACHABLE = new Set<AuthoritativeFailure>(['timeout', 'network']);
+const UNREACHABLE = new Set<AuthoritativeFailure>(['timeout', 'network', 'no_ipv6']);
 
 /**
  * Referenz-Block über den Resolvern (#133): was die autoritativen
@@ -215,6 +216,12 @@ export function AuthoritativeBlock({
               count: result.omitted,
               total: new Set(answers.map((a) => a.server.host)).size + result.omitted,
             })}
+          </Note>
+        )}
+        {/* Eine Aussage über diggy, nicht über die Domain — deshalb neutral. */}
+        {result.ipv6Skipped && (
+          <Note icon={<Info className="mt-0.5 size-4 shrink-0 text-fg-subtle" />}>
+            {t('Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.')}
           </Note>
         )}
       </div>

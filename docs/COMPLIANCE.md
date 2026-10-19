@@ -231,6 +231,10 @@ alle Nutzer; die Route hat ein eigenes Rate-Limit (30/min je IP).
 **Offener Punkt:** In Produktion (Container bei mittwald hinter Cloudflare)
 ist ausgehendes DNS über Port 53 nicht zugesagt. Ist es gesperrt, zeigt der
 Tab „nicht prüfbar“, und es geht nichts nach außen außer den DoH-Abfragen.
+Hat der Container kein IPv6 (keine Schnittstelle mit IPv6-Adresse außer
+Loopback und Link-local), fragt der Server nur die IPv4-Adressen der
+Nameserver und sagt das im Tab — eine Aussage über diggy, nicht über die
+Domain.
 
 ### Cloudflare vor der Seite (#125)
 

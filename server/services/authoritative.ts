@@ -34,7 +34,7 @@
 
 import { getDomain } from 'tldts';
 import { DOH_RESOLVERS, dohQuery } from './doh.js';
-import { queryNameserver, type NameserverReply } from './dnsPort53.js';
+import { hasIpv6, queryNameserver, type NameserverReply } from './dnsPort53.js';
 import { isPublicIp } from '../lib/safeTarget.js';
 import { cached } from '../lib/cache.js';
 import { authoritativeReference, type AuthoritativeState } from '../../shared/authoritative.js';
@@ -170,7 +170,7 @@ export interface Target {
   host: string;
   ip?: string;
   /** Ohne Adresse: warum. */
-  error?: Extract<AuthoritativeFailure, 'blocked' | 'no_address'>;
+  error?: Extract<AuthoritativeFailure, 'blocked' | 'no_address' | 'no_ipv6'>;
 }
 
 /**
@@ -180,11 +180,19 @@ export interface Target {
  *
  * Nicht-öffentliche Adressen fallen heraus. Bleibt einem Nameserver keine,
  * steht er mit Grund in der Liste, gefragt wird er nicht.
+ *
+ * `ipv6: false` — der diggy-Server hat kein IPv6 (`hasIpv6`): IPv6-Adressen
+ * fallen ebenfalls heraus. Gefragt, scheiterte jede sofort; die Zeilen
+ * sagten „nicht erreichbar“ über Nameserver, denen nichts fehlt.
  */
-export function selectTargets(hosts: NameserverHost[], max: number = AUTHORITATIVE_LIMITS.addresses): Target[] {
+export function selectTargets(
+  hosts: NameserverHost[],
+  max: number = AUTHORITATIVE_LIMITS.addresses,
+  ipv6 = true
+): Target[] {
   const queues = hosts.map((h) => {
     const v4 = h.v4.filter((ip) => isPublicIp(ip));
-    const v6 = h.v6.filter((ip) => isPublicIp(ip));
+    const v6 = ipv6 ? h.v6.filter((ip) => isPublicIp(ip)) : [];
     const order: string[] = [];
     for (let i = 0; i < Math.max(v4.length, v6.length); i++) {
       if (v4[i]) order.push(v4[i]);
@@ -214,6 +222,7 @@ export function selectTargets(hosts: NameserverHost[], max: number = AUTHORITATI
     // Je Nameserver IPv4 vor IPv6, sonst in der Reihenfolge der Auswahl.
     const ordered = [...picked].sort((a, b) => Number(a.includes(':')) - Number(b.includes(':')));
     if (ordered.length > 0) return ordered.map((ip) => ({ host: host.host, ip }));
+    if (!ipv6 && host.v6.some((ip) => isPublicIp(ip))) return [{ host: host.host, error: 'no_ipv6' }];
     const hadAddresses = host.v4.length + host.v6.length > 0;
     return [{ host: host.host, error: hadAddresses ? 'blocked' : 'no_address' }];
   });
@@ -325,17 +334,28 @@ export async function checkAuthoritative(domain: string, type: RecordType): Prom
   if (delegation.failure !== undefined) return { domain, type, nameservers: [], error: delegation.failure };
 
   const { zone, hosts, omitted } = delegation;
+  const ipv6 = hasIpv6();
   // Dieselbe Adresse unter zwei Namen nur einmal fragen.
   const asked = new Map<string, Promise<AuthoritativeServer>>();
   const nameservers = await Promise.all(
-    selectTargets(hosts).map(async ({ host, ip, error }): Promise<AuthoritativeServer> => {
-      if (!ip) return { host, records: [], responseTimeMs: 0, error };
-      if (!asked.has(ip)) asked.set(ip, askServer(host, ip, domain, type, zone));
-      return { ...(await asked.get(ip)!), host };
-    })
+    selectTargets(hosts, AUTHORITATIVE_LIMITS.addresses, ipv6).map(
+      async ({ host, ip, error }): Promise<AuthoritativeServer> => {
+        if (!ip) return { host, records: [], responseTimeMs: 0, error };
+        if (!asked.has(ip)) asked.set(ip, askServer(host, ip, domain, type, zone));
+        return { ...(await asked.get(ip)!), host };
+      }
+    )
   );
+  const ipv6Skipped = !ipv6 && hosts.some((h) => h.v6.some((ip) => isPublicIp(ip)));
 
-  return { domain, type, zone, nameservers, ...(omitted > 0 && { omitted }) };
+  return {
+    domain,
+    type,
+    zone,
+    nameservers,
+    ...(omitted > 0 && { omitted }),
+    ...(ipv6Skipped && { ipv6Skipped: true as const }),
+  };
 }
 
 /** Antwort von `/api/lookup/authoritative`: das Ergebnis und, für Skripte, die Auswertung. */

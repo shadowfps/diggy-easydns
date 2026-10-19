@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createSocket, type Socket } from 'node:dgram';
 import { createServer, type Server } from 'node:net';
-import { buildQuery, queryNameserver } from './dnsPort53.js';
+import { buildQuery, connectFailure, queryNameserver } from './dnsPort53.js';
 import { QUESTION_NAME, ipv4, name, parseQuery, pointer, response, txt, u16, type ResponseSpec } from '../test/dnsMessage.js';
 
 /**
@@ -186,5 +186,23 @@ describe('queryNameserver', () => {
 
   it('fragt nie einen Hostnamen — der würde an der Prüfung vorbei neu aufgelöst', async () => {
     await expect(queryNameserver('ns1.example.net', 'example.com', 'A', { timeoutMs: 100 })).rejects.toThrow();
+  });
+});
+
+describe('connectFailure', () => {
+  const error = (code: string) => Object.assign(new Error(code), { code });
+
+  /** So scheitert es in einem Docker-Container ohne IPv6 — sofort, beim Verbinden. */
+  it('liest „kein Weg ins IPv6-Netz“ als Aussage über diggy, nicht über den Nameserver', () => {
+    for (const code of ['ENETUNREACH', 'EAFNOSUPPORT', 'EADDRNOTAVAIL']) {
+      expect(connectFailure('2606:4700:4700::1111', error(code)), code).toMatchObject({ failure: 'no_ipv6' });
+    }
+  });
+
+  it('lässt andere Fehler und IPv4 unverändert', () => {
+    const refused = error('ECONNREFUSED');
+    expect(connectFailure('2606:4700:4700::1111', refused)).toBe(refused);
+    const unreachable = error('ENETUNREACH');
+    expect(connectFailure('1.1.1.1', unreachable)).toBe(unreachable);
   });
 });

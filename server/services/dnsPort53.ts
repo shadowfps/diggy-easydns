@@ -26,6 +26,7 @@
 import { createSocket } from 'node:dgram';
 import { randomInt } from 'node:crypto';
 import { connect, isIP } from 'node:net';
+import { networkInterfaces } from 'node:os';
 import { parseDohTxt } from './doh.js';
 import { decodeResponse, encodeQuery, type DnsAnswer, type DnsResponse } from './dnsWire.js';
 import type { DnsRecord, RecordType } from '../types.js';
@@ -51,7 +52,12 @@ const TYPE_NUMBERS: Partial<Record<RecordType, number>> = {
 
 const TYPE_NAMES = new Map(Object.entries(TYPE_NUMBERS).map(([name, number]) => [number, name as RecordType]));
 
-export type Port53Failure = 'timeout' | 'network' | 'invalid_response';
+/**
+ * `no_ipv6`: Die Frage an eine IPv6-Adresse scheiterte schon am Verbinden,
+ * weil dieser Server keinen Weg ins IPv6-Netz hat — eine Aussage über diggy,
+ * nicht über den Nameserver.
+ */
+export type Port53Failure = 'timeout' | 'network' | 'invalid_response' | 'no_ipv6';
 
 export type NameserverReply =
   | {
@@ -70,6 +76,33 @@ class Port53Error extends Error {
     super(failure);
     this.name = 'Port53Error';
   }
+}
+
+/**
+ * Fehler beim Verbinden, die heißen: Von hier führt kein Weg ins IPv6-Netz —
+ * keine Route (ENETUNREACH, so in einem Docker-Container ohne IPv6), IPv6 im
+ * Kernel abgeschaltet (EAFNOSUPPORT), keine passende Absenderadresse
+ * (EADDRNOTAVAIL). Beim Verbinden eines UDP-Sockets geht noch kein Paket
+ * hinaus; der Fehler kommt also von diesem Server, nicht von unterwegs.
+ */
+const NO_IPV6_CODES = new Set(['ENETUNREACH', 'EAFNOSUPPORT', 'EADDRNOTAVAIL']);
+
+/** Ein Fehler beim Verbinden mit `ip` — bei IPv6 ohne Weg dorthin als `no_ipv6`. */
+export function connectFailure(ip: string, error: Error): Error {
+  const code = (error as NodeJS.ErrnoException).code;
+  return isIP(ip) === 6 && code !== undefined && NO_IPV6_CODES.has(code) ? new Port53Error('no_ipv6') : error;
+}
+
+/**
+ * Ob dieser Server überhaupt IPv6 hat: eine Schnittstelle mit einer
+ * IPv6-Adresse außer Loopback und Link-local (fe80::/10). Ohne — etwa in
+ * einem Docker-Container ohne IPv6 — scheiterte jede Frage an eine
+ * IPv6-Adresse sofort; authoritative.ts fragt dann nur über IPv4.
+ */
+export function hasIpv6(): boolean {
+  return Object.values(networkInterfaces()).some((addresses) =>
+    (addresses ?? []).some((a) => a.family === 'IPv6' && !a.internal && !/^fe[89ab]/i.test(a.address))
+  );
 }
 
 /**
@@ -232,14 +265,14 @@ function udpExchange(
     const timer = setTimeout(() => finish(new Port53Error('timeout')), timeoutMs);
     const retry = setTimeout(send, Math.floor(timeoutMs / 2));
 
-    socket.on('error', (error) => finish(error));
+    socket.on('error', (error) => finish(connected ? error : connectFailure(ip, error)));
     socket.on('message', (msg) => {
       if (msg.length >= 2 && msg.readUInt16BE(0) === id) finish(null, msg);
     });
     // Scheitert das Verbinden, ruft Node den Callback mit dem Fehler auf
     // (statt `error` zu senden) — die Typen kennen das Argument nicht.
     socket.connect(port, ip, ((error?: Error) => {
-      if (error) return finish(error);
+      if (error) return finish(connectFailure(ip, error));
       connected = true;
       send();
     }) as () => void);
