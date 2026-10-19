@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { agedResults, propagationSection, propagationTypeQuery, queryAllResolvers } from './propagation.js';
 import { propagationFindings } from './reportBuilder.js';
 import { DOH_RESOLVERS } from './doh.js';
-import { propagationTypes } from '../../shared/propagation.js';
+import { comparePropagation, propagationTypes } from '../../shared/propagation.js';
 import type { ResolverResult } from '../types.js';
 import { parseQuery, rdataFromJson, response } from '../test/dnsMessage.js';
 
@@ -236,6 +236,38 @@ describe('queryAllResolvers — Formate', () => {
       ]);
     }
     expect(propagationFindings(results, types).map((f) => f.id)).toEqual(['propagation-consistent']);
+  });
+
+  /**
+   * #131 vergleicht jeden wählbaren Typ, #132 holt vier Anbieter im
+   * Wireformat dazu. Dieselben Records müssen aus beiden Formaten gleich
+   * verglichen werden — Schlusspunkt, Anführungszeichen im CAA, SOA-Felder —
+   * und jeder Resolver eine TTL nennen. Live für github.com geprüft
+   * (A, AAAA, MX, NS, TXT, CAA, SOA über alle neun): gleiche Werte.
+   */
+  it('vergleicht jeden wählbaren Typ aus beiden Formaten gleich, mit TTL', async () => {
+    const HOST = 'example.com';
+    const DATA: Record<number, string[]> = {
+      1: ['192.0.2.1'],
+      28: ['2001:db8::1'],
+      5: ['target.example.net.'],
+      15: ['10 mx1.example.com.', '20 mx2.example.com.'],
+      2: ['ns1.example.com.', 'ns2.example.net.'],
+      16: ['"v=spf1 include:_spf.example.com -all"', '"sagt \\"hallo\\"" " in zwei Stücken"'],
+      257: ['0 issue "letsencrypt.org"', '0 iodef "mailto:security@example.com"', '128 issuewild ";"'],
+      6: ['ns1.example.com. hostmaster.example.com. 2026101901 7200 900 1209600 3600'],
+    };
+    stubDoh((_url, type) => (DATA[type] ?? []).map((data) => ({ name: `${HOST}.`, type, TTL: 300, data })));
+
+    for (const type of ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'CAA', 'SOA'] as const) {
+      const comparison = comparePropagation(await queryAllResolvers(HOST, { types: [type] }), type);
+      expect(comparison.compared, type).toBe(DOH_RESOLVERS.length);
+      expect(comparison.deviating, type).toBe(0);
+      for (const answer of comparison.answers) {
+        expect(answer.status, `${type} ${answer.result.resolver.id}`).toBe('match');
+        expect(answer.ttl, `${type} ${answer.result.resolver.id}`).toBe(300);
+      }
+    }
   });
 });
 

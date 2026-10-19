@@ -134,6 +134,14 @@ export function rdataFromJson(type: number, data: string): number[] {
       const [mname, rname, ...numbers] = data.trim().split(/\s+/);
       return [...name(mname), ...name(rname), ...numbers.flatMap((n) => u32(Number(n)))];
     }
+    case 257: {
+      // `0 issue "letsencrypt.org"`
+      const caa = /^(\d+)\s+(\S+)\s+"(.*)"$/.exec(data.trim());
+      if (!caa) throw new Error(`rdataFromJson: CAA „${data}“ nicht lesbar`);
+      const tag = [...Buffer.from(caa[2], 'ascii')];
+      const value = [...Buffer.from(caa[3].replace(/\\(["\\])/g, '$1'), 'utf8')];
+      return [Number(caa[1]), tag.length, ...tag, ...value];
+    }
     case 16: {
       // `"a" "b"` wie Cloudflare oder zusammengesetzt wie Google
       if (/^\s*"(?:[^"\\]|\\.)*"(?:\s+"(?:[^"\\]|\\.)*")*\s*$/.test(data)) {
