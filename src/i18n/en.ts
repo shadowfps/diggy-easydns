@@ -286,6 +286,12 @@ const ui: Dictionary = {
   'weicht ab': 'differs',
   'Gekürzt zeigen': 'Show shortened',
   'Ganzen Wert zeigen ({count} Zeichen)': 'Show full value ({count} characters)',
+  'Record-Typ': 'Record type',
+  '{type}-Records werden bei allen Resolvern abgefragt…': 'Asking every resolver for {type} records…',
+  'Verglichen wird die Seriennummer, der dritte Wert im SOA.':
+    'Compared by serial number, the third value in the SOA.',
+  'Abweichende Resolver fragen laut TTL spätestens in {duration} neu nach.':
+    'Going by their TTL, the differing resolvers will ask again within {duration}.',
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   'Scan abgeschlossen': 'Scan complete',

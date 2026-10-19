@@ -130,6 +130,9 @@ gewählte Konfigurationen betreffen. Daraus ergibt sich das Urteil von
   und Vergleich zeigen, welche Resolver noch die alten Werte liefern.
 - *„Ist der neue DKIM-Schlüssel live?“* — `selector._domainkey.domain.de`
   eingeben, und die Propagation vergleicht den TXT-Eintrag über alle Resolver.
+- *„Sieht jeder schon den neuen MX?“* — Im Propagation-Tab MX wählen (auch NS,
+  TXT, CAA, SOA …): Der Tab zeigt je Resolver Antwort und TTL, und der Link
+  dahin lässt sich teilen.
 - *„Wann läuft mein Zertifikat ab — und die Domain?“* — Restlaufzeiten stehen
   im Report, die Erinnerung kommt per Kalenderdatei.
 - *„Ist meine Domain sauber konfiguriert?“* — Der Health Score sagt es in einer

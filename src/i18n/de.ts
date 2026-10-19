@@ -227,6 +227,10 @@ export type DeText =
   | 'weicht ab'
   | 'Gekürzt zeigen'
   | 'Ganzen Wert zeigen ({count} Zeichen)'
+  | 'Record-Typ'
+  | '{type}-Records werden bei allen Resolvern abgefragt…'
+  | 'Verglichen wird die Seriennummer, der dritte Wert im SOA.'
+  | 'Abweichende Resolver fragen laut TTL spätestens in {duration} neu nach.'
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   | 'Scan abgeschlossen'
