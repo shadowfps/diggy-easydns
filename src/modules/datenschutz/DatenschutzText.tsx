@@ -9,6 +9,10 @@
  * Wer dort etwas ändert, muss diese Seite mitziehen — die Tabelle in
  * docs/COMPLIANCE.md hält die Zuordnung fest.
  *
+ * Cloudflare vor der Seite (#125) steht nicht im Code, sondern in der
+ * DNS-Konfiguration der Domain; Anschrift, DPF-Zertifizierung und DPA sind
+ * mit Quellen in docs/COMPLIANCE.md belegt.
+ *
  * Kein Ersatz für eine juristische Prüfung. Technisch korrekt, rechtlich
  * unbestätigt.
  */
@@ -21,7 +25,7 @@
  */
 
 /** Wird im Footer und im Text als Datumsangabe genutzt. */
-const LAST_UPDATED = '16. Oktober 2026';
+const LAST_UPDATED = '19. Oktober 2026';
 
 interface DatenschutzTextProps {
   onOpenImpressum?: () => void;
@@ -58,8 +62,9 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           <Bullet>Keine Registrierung, keine Nutzerkonten.</Bullet>
           <Bullet>Kein Analytics, kein Tracking, keine Werbe-Cookies.</Bullet>
           <Bullet>
-            Keine Einbindung von Schriftarten, Skripten oder Inhalten Dritter — beim
-            Aufruf der Seite entsteht keine Verbindung zu einem fremden Server.
+            Keine Einbindung von Schriftarten, Skripten oder Inhalten Dritter — alles
+            kommt von der eigenen Domain. Ausgeliefert wird die Seite über Cloudflare
+            (siehe unten).
           </Bullet>
           <Bullet>Keine Weitergabe zu Werbezwecken, kein Verkauf von Daten.</Bullet>
         </ul>
@@ -70,13 +75,61 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           Beim Abruf fallen technisch notwendige Verbindungsdaten an: IP-Adresse,
           Zeitpunkt, angefragter Pfad, übertragene Datenmenge, Statuscode, Referrer und
           User-Agent. Diese Daten sind für die Auslieferung erforderlich und dienen der
-          Erkennung und Abwehr von Störungen und Missbrauch.
+          Erkennung und Abwehr von Störungen und Missbrauch. Sie fallen bei Cloudflare
+          an, das der Seite vorgeschaltet ist, und beim Hosting-Dienstleister — beide
+          verarbeiten sie in unserem Auftrag (siehe die nächsten beiden Abschnitte).
         </p>
         <Meta
           basis="Art. 6 Abs. 1 lit. f DSGVO — berechtigtes Interesse am sicheren und
             stabilen Betrieb"
-          dauer="Die Logs werden vom Hosting-Dienstleister vorgehalten und regelmäßig
-            gelöscht; eine Zusammenführung mit anderen Daten findet nicht statt."
+          dauer="Beim Hosting-Dienstleister werden die Logs vorgehalten und regelmäßig
+            gelöscht, zu Cloudflare siehe unten. Eine Zusammenführung mit anderen Daten
+            findet nicht statt."
+        />
+      </Section>
+
+      <Section title="Cloudflare (Reverse-Proxy und CDN)">
+        <p>
+          Der Seite ist Cloudflare vorgeschaltet: Cloudflare, Inc., 101 Townsend St.,
+          San Francisco, CA 94107, USA. Jeder Aufruf läuft zuerst über das Netz von
+          Cloudflare und wird von dort an den Server beim Hosting-Dienstleister
+          weitergeleitet. Cloudflare nimmt die verschlüsselte Verbindung (TLS) entgegen,
+          liefert die Seite aus und wehrt Angriffe wie DDoS ab.
+        </p>
+        <p className="mt-3">
+          Dabei verarbeitet Cloudflare deine IP-Adresse und die oben genannten
+          Verbindungsdaten. Weil die Verbindung bei Cloudflare entschlüsselt wird,
+          verarbeitet Cloudflare auch die Inhalte deiner Anfragen — etwa die gesuchte
+          Domain oder deine Angaben im Kontaktformular. Cookies setzt Cloudflare für
+          diggy nicht.
+        </p>
+        <p className="mt-3">
+          Scheitert beim Laden die Verbindung, kann dein Browser einen technischen
+          Fehlerbericht direkt an Cloudflare schicken (Network Error Logging), mit
+          Angaben wie der aufgerufenen Adresse und der Art des Fehlers. Nach Angabe von
+          Cloudflare wird die IP-Adresse dabei nur für die Dauer der Anfrage verarbeitet
+          und nicht gespeichert.
+        </p>
+        <p className="mt-3">
+          Cloudflare verarbeitet diese Daten in unserem Auftrag (Art. 28 DSGVO).
+          Cloudflare, Inc. ist nach dem EU-U.S. Data Privacy Framework zertifiziert; die
+          Übermittlung in die USA stützt sich auf den Angemessenheitsbeschluss der
+          EU-Kommission vom 10. Juli 2023 (Art. 45 DSGVO). Einzelheiten stehen in der{' '}
+          <a
+            href="https://www.cloudflare.com/de-de/privacypolicy/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="link"
+          >
+            Datenschutzrichtlinie von Cloudflare
+          </a>
+          .
+        </p>
+        <Meta
+          basis="Art. 6 Abs. 1 lit. f DSGVO — berechtigtes Interesse an einer schnellen,
+            verschlüsselten und vor Angriffen geschützten Auslieferung der Seite"
+          dauer="Feste Fristen nennt Cloudflare nicht; laut seiner Datenschutzrichtlinie
+            werden die Daten so lange gespeichert, wie es der jeweilige Zweck erfordert."
         />
       </Section>
 
@@ -85,7 +138,7 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           Die Anwendung läuft bei der Mittwald CM Service GmbH &amp; Co. KG,
           Königsberger Straße 4–6, 32339 Espelkamp, Deutschland. Der Dienstleister
           verarbeitet die oben genannten Verbindungsdaten in unserem Auftrag
-          (Art. 28 DSGVO). Die Server stehen in Deutschland.
+          (Art. 28 DSGVO). Die Server der Anwendung stehen in Deutschland.
         </p>
       </Section>
 
@@ -121,10 +174,13 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
 
       <Section title="Empfänger">
         <p className="mb-4">
-          Übermittelt wird jeweils nur die abgefragte Domain bzw. IP-Adresse. Dienste
-          mit Sitz in den USA sind gekennzeichnet; die Übermittlung stützt sich dort
-          auf Art. 49 Abs. 1 lit. b DSGVO (Erforderlichkeit zur Erfüllung des von dir
-          angeforderten Abrufs) und erfolgt ausschließlich auf deine Eingabe hin.
+          Über Cloudflare als Reverse-Proxy läuft jeder Aufruf der Seite — Einzelheiten
+          und Rechtsgrundlage im Abschnitt „Cloudflare (Reverse-Proxy und CDN)“. Für die
+          übrigen Dienste gilt: Übermittelt wird jeweils nur die abgefragte Domain bzw.
+          IP-Adresse. Dienste mit Sitz in den USA sind gekennzeichnet; die Übermittlung
+          stützt sich dort auf Art. 49 Abs. 1 lit. b DSGVO (Erforderlichkeit zur
+          Erfüllung des von dir angeforderten Abrufs) und erfolgt ausschließlich auf
+          deine Eingabe hin.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-136 border-collapse text-left text-sm">
@@ -136,6 +192,7 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
               </tr>
             </thead>
             <tbody className="text-fg-muted">
+              <Row service="Cloudflare" purpose="Reverse-Proxy/CDN: Auslieferung und Schutz der Seite, bei jedem Aufruf" region="USA" />
               <Row service="Cloudflare, Google, AdGuard, DNS.SB, NextDNS" purpose="DNS-Auflösung, Propagations-Vergleich, DNSSEC" region="USA / EU" />
               <Row service="rdap.org, DENIC, Verisign" purpose="WHOIS/RDAP und Verfügbarkeits-Check" region="EU / USA" />
               <Row service="Google PageSpeed Insights" purpose="Performance-Analyse — nur auf Klick" region="USA" />
@@ -190,17 +247,19 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           <span className="font-mono text-[13px]">localStorage</span> ab:{' '}
           <span className="font-mono text-[13px]">diggy-lookup-history</span> mit deinen
           letzten zehn Abfragen,{' '}
-          <span className="font-mono text-[13px]">diggy-theme</span> mit der Einstellung
-          Hell/Dunkel und{' '}
+          <span className="font-mono text-[13px]">diggy-theme</span> mit Hell oder Dunkel,
+          wenn du das Theme im Menü umschaltest, und{' '}
           <span className="font-mono text-[13px]">diggy-language</span> mit der Sprache,
-          wenn du sie im Menü wählst. Alles bleibt in deinem Browser und wird nicht an den
-          Server übertragen. Die History bist du über „History löschen“ los, alle
-          Einträge über das Löschen der Websitedaten.
+          wenn du sie im Menü wählst. Solange du Theme und Sprache nicht selbst wählst,
+          folgt diggy den Einstellungen deines Browsers und speichert dafür nichts. Alles
+          bleibt in deinem Browser und wird nicht an den Server übertragen. Die History
+          bist du über „History löschen“ los, alle Einträge über das Löschen der
+          Websitedaten.
         </p>
         <p className="mt-3">
-          Cookies setzt die Seite nicht. Diese Einträge sind für die von dir aufgerufenen
-          Funktionen erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG), eine Einwilligung ist dafür
-          nicht nötig.
+          Cookies setzt die Seite nicht, auch nicht über Cloudflare. Diese Einträge sind
+          für die von dir aufgerufenen Funktionen erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG),
+          eine Einwilligung ist dafür nicht nötig.
         </p>
       </Section>
 
