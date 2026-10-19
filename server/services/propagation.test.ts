@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { propagationSection, propagationTypeQuery, queryAllResolvers } from './propagation.js';
+import { agedResults, propagationSection, propagationTypeQuery, queryAllResolvers } from './propagation.js';
 import { propagationFindings } from './reportBuilder.js';
 import { DOH_RESOLVERS } from './doh.js';
 import { propagationTypes } from '../../shared/propagation.js';
+import type { ResolverResult } from '../types.js';
 
 /**
  * Die Resolver werden über `fetch` gemockt: geprüft wird, was wir fragen und
@@ -255,5 +256,56 @@ describe('propagationSection', () => {
     await propagationSection(domain, { type: 'MX', ttlMs: TTL_MS });
     await propagationSection(domain, { type: 'A', ttlMs: TTL_MS });
     expect(calls).toHaveLength(DOH_RESOLVERS.length * 4);
+  });
+});
+
+/**
+ * Die TTL zählt im Resolver weiter, während die Antwort im Cache liegt. Wer
+ * nach 42 s erneut prüft, bekommt dieselben Antworten — aber die TTL von
+ * jetzt, nicht die von vor 42 s.
+ */
+describe('propagationSection — TTL aus dem Cache', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('zieht die Zeit im Cache von den TTLs ab', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
+    const calls = stubDoh((_url, type) =>
+      type === 15 ? [{ name: 'aged.section.example.', type: 15, TTL: 300, data: '10 mx.example.net.' }] : []
+    );
+    const options = { type: 'MX' as const, ttlMs: 60_000 };
+
+    const first = await propagationSection('aged.section.example', options);
+    expect(first.propagation[0].records[0].ttl).toBe(300);
+
+    vi.setSystemTime(new Date('2026-10-19T12:00:42.900Z'));
+    const second = await propagationSection('aged.section.example', options);
+    expect(calls).toHaveLength(DOH_RESOLVERS.length);
+    expect(second.propagation.map((r) => r.records[0].ttl)).toEqual(DOH_RESOLVERS.map(() => 258));
+    // Der Eintrag im Cache bleibt, wie er ist.
+    expect(first.propagation[0].records[0].ttl).toBe(300);
+    expect((await propagationSection('aged.section.example', options)).propagation[0].records[0].ttl).toBe(258);
+  });
+});
+
+describe('agedResults', () => {
+  const result = (ttl: number | null, negativeTtl?: ResolverResult['negativeTtl']): ResolverResult => ({
+    resolver: { id: 'x', name: 'X', ip: '0.0.0.0', country: 'X', flag: '', provider: 'X' },
+    records: [{ type: 'A', name: 'example.com', value: '192.0.2.1', ttl }],
+    responseTimeMs: 10,
+    ...(negativeTtl && { negativeTtl }),
+  });
+
+  it('zählt auch die Negativ-TTL herunter, nie unter 0', () => {
+    const [aged] = agedResults([result(30, { AAAA: 300, MX: 10 })], 20);
+    expect(aged.records[0].ttl).toBe(10);
+    expect(aged.negativeTtl).toEqual({ AAAA: 280, MX: 0 });
+  });
+
+  it('lässt unbekannte TTLs und frische Antworten, wie sie sind', () => {
+    const fresh = [result(30)];
+    expect(agedResults(fresh, 0)).toBe(fresh);
+    expect(agedResults([result(null)], 20)[0].records[0].ttl).toBeNull();
+    expect(agedResults([result(30)], 20)[0]).not.toHaveProperty('negativeTtl');
   });
 });
