@@ -1,326 +1,172 @@
-# Diggy
+<p align="center">
+  <a href="https://diggydns.cloud">
+    <img src="public/og-image.png" alt="diggy — DNS made friendly" width="720">
+  </a>
+</p>
 
-> DNS made friendly — DNS, SSL & Domain-Audits auf einen Blick.
+<p align="center">
+  <strong>Der DNS-Check, den man versteht.</strong><br>
+  Records, Mail-Schutz, SSL, DNSSEC, Propagation und WHOIS in einem Report —<br>
+  mit Bewertung, Erklärung und konkreten Empfehlungen.
+</p>
 
-Diggy ist ein webbasiertes DNS-Audit-Tool. Domain eingeben, fertig: Records, Mail-Security, SSL-Status, Propagation, WHOIS und PageSpeed-Score landen übersichtlich auf einem Screen — mit Health-Score und konkreten Empfehlungen.
+<p align="center">
+  <a href="https://diggydns.cloud"><strong>diggydns.cloud öffnen&nbsp;→</strong></a>
+</p>
 
-![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss&logoColor=white)
+<p align="center">
+  <a href="https://diggydns.cloud"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fdiggydns.cloud&label=diggydns.cloud&up_message=online"></a>
+  <a href="https://github.com/shadowfps/diggy-easydns/actions/workflows/container.yml"><img alt="CI" src="https://github.com/shadowfps/diggy-easydns/actions/workflows/container.yml/badge.svg"></a>
+  <img alt="Sprachen: Deutsch, Englisch" src="https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN-informational">
+  <img alt="Lizenz: MIT" src="https://img.shields.io/badge/Lizenz-MIT-blue">
+</p>
 
-## Features
+<br>
 
-### DNS-Audit
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/report-dark.png">
+  <img alt="Der diggy-Report für github.com: Health Score 86 von 100, Schnellübersicht und alle DNS-Records" src="docs/images/report-light.png">
+</picture>
 
-- **DNS Records** — A, AAAA, MX, NS, TXT, CAA, SOA, CNAME auf einen Blick
-- **Subdomains** — Lookups für `www.` und andere Subdomains (Mail/WHOIS/DNSSEC über Apex)
-- **IP-Owner** — Anzeige des Netz-Betreibers hinter A/AAAA-Records
-- **Health-Score** — automatisch berechnet aus Findings und Konfigurationslücken
-- **Findings & Empfehlungen** — konkrete Hinweise zu fehlenden oder fehlerhaften Einträgen
-- **Mail Security** — SPF, DKIM (Selector-Scan), DMARC, MTA-STS, TLS-RPT, BIMI
-- **SSL / TLS** — Zertifikats-Details, Ablaufdatum, Chain-Check
-- **DNSSEC** — Validierungsstatus
-- **Propagation** — Vergleich über mehrere DNS-over-HTTPS-Resolver weltweit
-- **WHOIS / RDAP** — Registrar-Infos, Ablaufdatum der Domain
-- **Tech-Stack** — erkannte Technologien der Website
-- **PageSpeed** — Google Lighthouse Score (Mobile & Desktop)
-- **VirusTotal** — Domain-Reputation und Engine-Ergebnisse
+## Was ist diggy?
 
-### Weitere Funktionen
+Wer eine Domain betreut, kennt das Spiel: `dig` im Terminal, ein SSL-Checker im
+nächsten Tab, ein Mail-Tester im dritten, ein WHOIS-Dienst für das Ablaufdatum —
+und am Ende ein Haufen Rohdaten, die man selbst deuten muss.
 
-- **IP-Lookup / Reverse DNS** — reine IP-Adresse (IPv4/IPv6) eingeben und PTR-Record, ASN, Netz & Geolocation abrufen
-- **Available Check** — Domain-Verfügbarkeit prüfen (RDAP, u. a. `.de`, `.com`, `.net`)
-- **Lookup-History** — zuletzt abgefragte Domains (lokal im Browser)
-- **Permalinks** — direkt verlinkbare Ergebnisseiten (`/lookup/<domain>`), mit eigener Link-Vorschau (Open Graph) beim Teilen
-- **JSON-Export** — vollständigen Report als Datei herunterladen
-- **Kontaktformular** — auf der Impressum-Seite, mit SMTP-Versand und Auto-Reply
-- **Dark Mode** — systembasiert, manuell umschaltbar
-- **Deutsch & Englisch** — nach Browser-Sprache, im Menü umschaltbar (Impressum und Datenschutz bleiben deutsch)
+**diggy macht daraus einen einzigen, verständlichen Report.** Domain eingeben,
+und kurz darauf steht da, was eingerichtet ist, was fehlt und was man konkret
+dagegen tun kann. Ein Health Score fasst alles in einer Zahl zusammen, jeder
+Befund erklärt sich in einem Satz, und wo ein Eintrag fehlt, liefert diggy den
+passenden Record nach Möglichkeit gleich mit.
 
-## Stack
+Kostenlos, ohne Anmeldung, ohne Tracking — und Open Source.
 
-| Bereich | Technologie |
+## Warum diggy?
+
+- **Alles in einem Report.** Records, Mail-Schutz, Zertifikat, DNSSEC,
+  Propagation und WHOIS kommen aus einer Abfrage. Kein Tab-Hopping, kein
+  Zusammensuchen.
+- **Verständlich statt kryptisch.** Zu jedem Record-Typ und jedem Mail-Begriff
+  gibt es eine Erklärung in Alltagssprache. Befunde sagen nicht nur, *was*
+  fehlt, sondern *warum* es wichtig ist und wie die Lösung aussieht.
+- **Ehrlich bewertet.** Der Health Score folgt festen, nachvollziehbaren Regeln
+  auf Basis der einschlägigen RFCs. Scheitert eine Abfrage, steht dort „nicht
+  prüfbar" statt eines falschen Alarms. Und eine Domain, die bewusst keine Mails
+  empfängt, wird nicht für fehlenden Mail-Schutz bestraft.
+- **Schnell.** Der Report baut sich auf, während die Antworten eintreffen.
+  Langsame Checks wie WHOIS oder das Zertifikat halten den Rest nicht auf.
+- **Privat.** Kein Konto, keine Cookies, kein Analytics. Verlauf, Theme und
+  Sprache bleiben in deinem Browser.
+- **Für jeden Bildschirm und jede Person.** Desktop und Mobil, hell und dunkel,
+  Deutsch und Englisch, per Tastatur und Screenreader bedienbar — und wer
+  „Bewegung reduzieren“ eingestellt hat, bekommt keine Animationen.
+
+## Was diggy prüft
+
+| Bereich | Was du erfährst |
 |---|---|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, Motion, GSAP |
-| Backend | Node.js, Express, TypeScript, Nodemailer |
-| DNS | Native Node.js `dns` + DNS-over-HTTPS (DoH) |
+| **Records** | A, AAAA, MX, NS, TXT, CAA, SOA und CNAME mit echter TTL — und hinter jeder IP der Netzbetreiber. |
+| **Mail-Schutz** | SPF inklusive Zählung der DNS-Lookups (RFC 7208), DKIM über 18 gängige Selektoren, DMARC mit der tatsächlich wirksamen Policy (RFC 7489), MTA-STS, TLS-RPT und BIMI. Domains ohne Mailempfang (Null-MX, RFC 7505) werden erkannt. |
+| **SSL / TLS** | Zertifikat, Aussteller, Restlaufzeit und Kette — bevor Besucher eine Warnung sehen. |
+| **DNSSEC** | Ist die Zone signiert und mit welchem Algorithmus — und bestätigen validierende Resolver die Signatur? |
+| **Propagation** | Fünf öffentliche Resolver (Cloudflare, Google, AdGuard, NextDNS, DNS.SB) im Vergleich. Für Einträge wie `_dmarc` oder einen DKIM-Schlüssel auch per TXT und CNAME. |
+| **WHOIS / RDAP** | Registrar, Registrierungs- und Ablaufdatum, Status und Nameserver. |
+| **Tech-Stack** | Erkannte Webserver, CDNs, CMS und Frameworks der Website. |
+| **Auf Klick** | PageSpeed (Google Lighthouse, mobil und Desktop) und die Reputation bei VirusTotal. |
 
-## Quickstart
+### Der Health Score
 
-```bash
-# Abhängigkeiten installieren
-npm install
+Jeder Report startet bei 100 Punkten. Kritische Befunde kosten 25 Punkte,
+Warnungen 8, Hinweise 2 — Hinweise zusammen höchstens 6, weil sie oft bewusst
+gewählte Konfigurationen betreffen. Daraus ergibt sich das Urteil von
+*Hervorragend* (ab 90) über *Solides Setup*, *Optimierbar* und *Lückenhaft* bis
+*Kritisch*. Die Regeln stehen offen im Code
+([`shared/scoring.ts`](shared/scoring.ts)) — keine Blackbox, keine KI.
 
-# Umgebungsvariablen anlegen
-cp .env.example .env
-# Keys und SMTP-Daten eintragen (siehe Konfiguration)
+## Mehr als ein Lookup
 
-# Dev-Server starten (Frontend + Backend gleichzeitig)
-npm run dev
-# Frontend → http://localhost:5173
-# Backend  → http://localhost:3001
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img alt="Mail-Tab mit SPF, DMARC, DKIM-Selektoren und MTA-STS" src="docs/images/mail-light.png"><br>
+      <sub><b>Mail-Schutz im Detail</b> — SPF, DKIM, DMARC und MTA-STS mit Bewertung und Erklärung.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img alt="Vergleich von github.com und gitlab.com mit markierten Unterschieden" src="docs/images/compare-light.png"><br>
+      <sub><b>Zwei Domains vergleichen</b> — Unterschiede auf einen Blick, zum Beispiel beim Hoster-Umzug.</sub>
+    </td>
+  </tr>
+</table>
 
-# Nur Frontend
-npm run dev:client
+- **Zwei Domains vergleichen.** Alter gegen neuen Hoster, `domain.de` gegen
+  `www.domain.de`: Score, Records, Mail-Schutz, Zertifikat und DNSSEC
+  nebeneinander, Unterschiede markiert — mit eigenem Link unter
+  `/compare/<a>/<b>`.
+- **Was hat sich geändert?** Prüfst du eine Domain erneut, zeigt diggy, was
+  seit dem letzten Mal anders ist: neue oder entfallene Records, ein erneuertes
+  Zertifikat, eine geänderte DMARC-Policy, ein besserer oder schlechterer Score.
+- **Ablauf im Kalender.** Ein Klick erzeugt eine Kalenderdatei (`.ics`) für das
+  Ablaufdatum von Zertifikat und Domain — mit Erinnerung 14 Tage und einen Tag
+  vorher.
+- **Teilen und exportieren.** Jeder Report hat einen festen Link mit eigener
+  Vorschau in Slack, Teams und Messengern. Der komplette Report lässt sich als
+  JSON herunterladen.
+- **IP-Adressen nachschlagen.** Eine IPv4- oder IPv6-Adresse eingeben und
+  Reverse DNS (PTR), Netz, ASN und Standort sehen.
+- **Domain noch frei?** Der Verfügbarkeits-Check prüft einen Namen und schlägt
+  gängige Alternativen (`.de`, `.com`, `.io`, `.net`, `.app`, `.dev`, `.org`)
+  gleich mit vor.
 
-# Nur Backend
-npm run dev:server
+<p align="center">
+  <img alt="Der Report auf dem Smartphone im dunklen Theme" src="docs/images/mobile-dark.png" width="280">
+</p>
 
-# Production-Build
-npm run build
+## Typische Fragen, die diggy beantwortet
 
-# Production-Server starten (liefert Frontend aus dist/)
-npm start
-```
+- *„Warum landen meine Mails im Spam?“* — Der Mail-Tab zeigt, ob SPF, DKIM und
+  DMARC zusammenpassen und was fehlt.
+- *„Ist der Umzug zum neuen Hoster schon überall angekommen?“* — Propagation
+  und Vergleich zeigen, welche Resolver noch die alten Werte liefern.
+- *„Ist der neue DKIM-Schlüssel live?“* — `selector._domainkey.domain.de`
+  eingeben, und die Propagation vergleicht den TXT-Eintrag über alle Resolver.
+- *„Wann läuft mein Zertifikat ab — und die Domain?“* — Restlaufzeiten stehen
+  im Report, die Erinnerung kommt per Kalenderdatei.
+- *„Ist meine Domain sauber konfiguriert?“* — Der Health Score sagt es in einer
+  Zahl, die Findings sagen, was zu tun ist.
 
-## Konfiguration
+## Datenschutz und Sicherheit
 
-Alle Secrets gehören in `.env` (liegt in `.gitignore`). Vorlage: `.env.example`.
+- **Kein Konto, keine Cookies, kein Tracking, keine Werbung.** Schriften werden
+  selbst ausgeliefert, im Browser lädt diggy nichts von Drittanbietern.
+- **Kaum Daten auf dem Server.** Abfrageergebnisse liegen nur kurz im
+  Zwischenspeicher, für DNS-Lookups 60 Sekunden. Der Verlauf deiner Abfragen
+  bleibt ausschließlich in deinem Browser.
+- **Gehärtet für den öffentlichen Betrieb.** Schutz gegen Missbrauch als
+  Angriffswerkzeug (SSRF), Rate-Limits und eine strenge Content-Security-Policy.
+- **Gehostet in Deutschland** bei mittwald.
 
-| Variable | Beschreibung |
-|---|---|
-| `PAGESPEED_API_KEY` | Optional — Google PageSpeed Insights API |
-| `VIRUS_TOTAL_API_KEY` | Optional — VirusTotal API |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` | SMTP für das Kontaktformular |
-| `CONTACT_TO` | Empfänger der Kontaktanfragen |
-| `CONTACT_FROM` | Absender (Admin-Mail + Bestätigung an Nutzer) |
-| `CONTACT_FORM_SECRET` | Geheimer Schlüssel für Anti-Spam-Token. **In Produktion Pflicht** (mind. 32 Zeichen) — ohne ihn startet der Server nicht, sobald SMTP konfiguriert ist. |
-| `TRUST_PROXY` | Anzahl vertrauenswürdiger Proxy-Hops (`true` = 1) für korrektes IP-Rate-Limiting. **Nur setzen, wenn tatsächlich ein Proxy davor liegt** — sonst kann sich jeder per `X-Forwarded-For` einen frischen Zähler holen. |
-| `PUBLIC_ORIGIN` | Öffentliche Origin der Installation (z. B. `https://diggy.example`). Vertrauenswürdige Referenz für die CSRF-Prüfung des Kontaktformulars und Basis der absoluten URLs in der Link-Vorschau von Permalinks (`og:url`, `og:image`) — ohne sie fallen beide auf den `Host`-Header zurück. |
-| `CORS_ORIGINS` | Optional — komma-separierte Origins, die per CORS zugreifen dürfen. Leer lassen, wenn Frontend und API unter derselben Origin laufen (Standard). |
-| `PORT` | Backend-Port (Standard: `3001`) |
+Die Details stehen in den
+[Datenschutzhinweisen](https://diggydns.cloud/datenschutz) und in
+[docs/COMPLIANCE.md](docs/COMPLIANCE.md).
 
-Secret generieren (WSL/Linux):
+## Unter der Haube
 
-```bash
-openssl rand -base64 32
-```
+diggy ist eine TypeScript-Anwendung aus einem Guss: React 19 und Tailwind CSS 4
+im Browser, Express 5 auf Node.js 24 im Backend, DNS-Abfragen über das System
+und über DNS-over-HTTPS. Jede Änderung durchläuft Unit- und Integrationstests
+sowie Browser-Tests mit Pixelvergleich in hellem und dunklem Theme, auf Desktop
+und Mobil.
 
-Das Kontaktformular ist deaktiviert, solange SMTP nicht konfiguriert ist. Anti-Spam: Honeypot, Timing-Token, Rate-Limits, Inhaltsfilter.
-
-### Rate-Limits
-
-Die API ist IP-basiert begrenzt: 120 Requests/Minute allgemein, 10/Stunde je Fremd-API-Provider (PageSpeed, VirusTotal — getrennte Zähler), 20/Minute für den Verfügbarkeits-Check. Dazu ein Concurrency-Deckel von 4 für die langlaufenden Checks. `/api/health` liegt bewusst vor dem Limiter, damit fremder Traffic den Container-Healthcheck nicht auf `unhealthy` dreht.
-
-## Entwicklung
-
-```bash
-npm run lint        # ESLint 9 (Flat Config, inkl. react-hooks)
-npm run i18n        # deutsche Texte, die nicht durchs Übersetzungsmodul laufen
-npm run typecheck   # tsc für Client und Server
-npm test            # Vitest — Parsing-, Scoring- und Guard-Logik
-npm run verify      # alles zusammen, so wie die CI es fährt
-npm run e2e         # Browser-Tests gegen den Build (vorher npm run build)
-npm run e2e:docker  # dasselbe im Playwright-Image, inkl. Pixelvergleich
-```
-
-Die Browser-Tests (`e2e/`, Playwright) prüfen jede wichtige Ansicht hell/dunkel
-bei 390 und 1440 px auf seitliches Überlaufen und vergleichen Startseite und
-Report mit Referenzbildern. Wie man sie startet und die Referenzbilder
-aktualisiert, steht in [docs/E2E.md](docs/E2E.md).
-
-Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
-
-- **server** (`node`) — die reine Logik, die der Nutzer als „Diggy sagt" liest:
-  Domain-Validierung und Apex-Auflösung, SPF-Lookup-Zählung nach
-  RFC 7208 §4.6.4, DoH-TXT-Zusammenbau, IP-Klassifizierung des SSRF-Guards,
-  Cache-Verhalten, Score-Aggregation und die Token-Prüfung des
-  Kontaktformulars. Dazu ein Integrationstest gegen eine echte Express-App,
-  der prüft, dass das Rate-Limit hinter einem Reverse-Proxy nicht per
-  `X-Forwarded-For` umgehbar ist.
-- **client** (`jsdom`) — Routing samt Zurück-Button, Tab-Semantik und
-  Tastatur-Bedienung, die Zustandsübergänge des Kontaktformulars, Error
-  Boundaries, Focus-Trap und das Verhalten bei `prefers-reduced-motion`.
-
-Geschrieben wurden die Frontend-Tests entlang der Pfade, auf denen schon
-einmal ein Defekt saß — nicht nach Abdeckungsquote. `src/test/setup.ts`
-dokumentiert, welche Browser-APIs jsdom fehlen und warum sie dort ergänzt
-werden.
-
-Jeder Push auf `main` und jeder Pull Request läuft durch den `verify`-Job und
-parallel durch den `e2e`-Job; Image-Build und Deploy folgen nur auf `main` und
-warten allein auf `verify`. Ein zweiter, **nicht
-blockierender** `audit`-Job hält den Zustand der Abhängigkeiten sichtbar, ohne
-dass ein neu veröffentlichter Advisory einen bis dahin grünen Build rot macht —
-die eigentliche Arbeit macht Dependabot (`.github/dependabot.yml`).
-
-## Container & Deployment
-
-Das Production-Image enthält Frontend und API in einem nicht privilegierten Node.js-Prozess. Es lauscht standardmäßig auf Port `3001` und stellt unter `/api/health` einen Healthcheck bereit.
-
-Lokal bauen und starten:
-
-```bash
-docker build -t diggy:local .
-docker run --rm -p 3001:3001 --env-file .env diggy:local
-```
-
-Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
-
-```text
-ghcr.io/shadowfps/diggy-easydns:latest
-```
-
-Anschließend wird der Mittwald-Stack automatisch per `mw stack deploy` aktualisiert.
-Das Image wird dabei **per Digest** referenziert (`DIGGY_IMAGE`), nicht per
-`:latest`.
-
-Das ist keine Kosmetik: `mw stack deploy` vergleicht die Compose-*Definition*.
-Mit einem festen `:latest` änderte sich die nicht, der Deploy meldete
-`No services were restarted` — und der Container lief weiter mit dem alten
-Image. Grüner Deploy, alter Code. Der Digest ändert sich bei jedem Build und
-erzwingt den Restart; außerdem ist ein Rollback damit einfach ein Deploy mit
-dem vorherigen Digest. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die `${…}`-Platzhalter von `compose.mittwald.yml` interpoliert. Dafür müssen im Repository unter **Settings → Secrets and variables → Actions** folgende **Repository-Secrets** hinterlegt sein:
-
-- `MITTWALD_API_TOKEN` — gültiges mStudio-API-Token
-- SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`
-- Kontakt: `CONTACT_TO`, `CONTACT_FROM`, `CONTACT_FORM_SECRET`
-- Optional: `PAGESPEED_API_KEY`, `VIRUS_TOTAL_API_KEY`
-
-Fehlt eines der SMTP-/Kontakt-Secrets, bricht der Deploy bewusst ab, statt die Stack-Env leer zu überschreiben.
-
-Versions-Tags wie `v0.3.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
-
-- Projekt: `p-nmi5ji`
-- Container-Stack: `86540922-d203-4150-8776-9cc4e22352bd`
-- Container-Port: `3001/tcp`
-
-Für manuelles Deployment zuerst prüfen, ob der Ziel-Stack weitere Services enthält, da nicht in der Compose-Datei enthaltene Services beim Stack-Abgleich entfernt werden können:
-
-```bash
-mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
-# DIGGY_IMAGE muss gesetzt sein, sonst fällt die Compose auf :latest zurück
-# und der Rollout bleibt aus. Digest oder Versions-Tag verwenden:
-export DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.3.0
-
-mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file .env
-```
-
-Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Platzhalter in `compose.mittwald.yml` (im CI übernehmen das die GitHub-Secrets). Die Runtime-Secrets gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
-
-## Sicherheit
-
-Was der Server tut, damit ein öffentlich erreichbares Lookup-Tool nicht selbst
-zum Werkzeug wird:
-
-| Schutz | Wo |
-|---|---|
-| **SSRF-Guard** — jedes nutzergewählte Ziel wird gegen eine Blockliste nicht-öffentlicher IP-Bereiche geprüft (IPv4 + IPv6 inkl. Transitions-Präfixe) und die Verbindung per `lookup`-Option auf die geprüften Adressen gepinnt. Ohne Pinning bliebe zwischen Prüfung und Connect ein DNS-Rebinding-Fenster. Redirects werden selbst verfolgt, jeder Hop neu geprüft. | `server/lib/safeTarget.ts` |
-| **Rate-Limits** — isolierte Zähler je Limiter, dazu ein Concurrency-Deckel für die langlaufenden Checks. `/api/health` liegt bewusst davor. | `server/lib/rateLimit.ts` |
-| **Security-Header** — CSP ohne Fremd-Hosts, HSTS, `nosniff`, `strict-origin-when-cross-origin`, `frame-ancestors 'none'`. Der SHA-256 des Inline-Theme-Scripts wird beim Start aus dem gebauten HTML abgeleitet, damit `script-src 'self'` bleiben kann. | `server/index.ts` |
-| **CSRF** — Origin-Prüfung gegen `PUBLIC_ORIGIN` für den schreibenden Endpoint, `Sec-Fetch-Site`-Riegel für die Endpoints mit Fremd-API-Kontingent. | `server/index.ts` |
-| **Anti-Spam** — Honeypot, signiertes Timing-Token mit Nonce und Einmalverwendung, IP-Limits, Duplikat-Erkennung, Inhaltsfilter, ein Auto-Reply pro Empfänger und Tag. | `server/services/contactSpamGuard.ts` |
-| **Graceful Shutdown** — Health auf 503, Drain-Fenster, dann `server.close()`. Request-Timeouts gegen Slowloris. | `server/index.ts` |
-
-Zwei Konfigurationswerte sind in Produktion Pflicht: `CONTACT_FORM_SECRET`
-(mindestens 32 Zeichen) und `CONTACT_TO`. Fehlt eines, startet der Server
-bewusst nicht, statt mit unsicherem Fallback zu laufen.
-
-`TRUST_PROXY` nur setzen, wenn tatsächlich ein Reverse-Proxy davor liegt —
-sonst kann sich jeder per `X-Forwarded-For` einen frischen Rate-Limit-Zähler
-holen.
-
-## Recht & Compliance
-
-`docs/COMPLIANCE.md` hält die technische Einordnung fest: Speicherdauern und
-Rechtsgrundlagen je Verarbeitung, sowie die Prüfung gegen den EU AI Act.
-
-Kurzfassung zum AI Act: **Diggy ist kein KI-System im Sinne von Art. 3 Nr. 1
-VO (EU) 2024/1689.** Alle Ausgaben — Health-Score, Findings,
-Tech-Stack-Erkennung, Mail-Bewertung — entstehen aus fest programmierten
-Regeln. Es gibt kein Modell, keine Inferenz und keine Anpassung nach der
-Inbetriebnahme; Erwägungsgrund 12 nimmt solche Systeme ausdrücklich aus. Es
-bestehen daher keine Pflichten aus der Verordnung. Sollte später ein
-LLM-Feature dazukommen, ist die Einordnung neu zu prüfen — die Datei nennt die
-Auslöser.
-
-Der Datenschutztext unter `/datenschutz` ist aus dem Code abgeleitet und
-technisch korrekt, aber **nicht juristisch geprüft**.
-
-## Routen
-
-| Pfad | Beschreibung |
-|---|---|
-| `/` | DNS-Lookup |
-| `/lookup/<domain>` | Permalink zu einem Lookup |
-| `/history` | Lookup-Verlauf |
-| `/availability` | Domain-Verfügbarkeit |
-| `/about` | Info-Seite |
-| `/impressum` | Impressum & Kontaktformular |
-| `/datenschutz` | Datenschutzhinweise |
-
-## Projekt-Struktur
-
-```
-diggy/
-├── docs/
-│   ├── COMPLIANCE.md       # Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
-│   ├── DESIGN.md           # Designregeln
-│   ├── E2E.md              # Browser-Tests, Referenzbilder aktualisieren
-│   └── I18N.md             # Übersetzung: Aufbau, neue Texte, Findings
-├── e2e/                    # Playwright: Überlauf-Check, Pixelvergleich, Testdaten
-├── shared/
-│   ├── scoring.ts          # Health-Score — geteilt, damit Server und Client
-│   │                       # garantiert dasselbe rechnen
-│   ├── textKeys.ts         # Kennungen der Findings und Fehlercodes (Übersetzung)
-│   └── types/              # Gemeinsame TypeScript-Typen
-├── src/
-│   ├── components/         # Wiederverwendbare UI-Bausteine, Error Boundaries
-│   ├── modules/            # Feature-Module (Lookup, History, Availability, …)
-│   ├── lib/                # API-Client, History, Routing-Helfer, Utilities
-│   ├── hooks/              # Theme, progressiver Lookup, Reduced-Motion, Focus-Trap
-│   ├── i18n/               # Übersetzungsmodul, deutsche Quelle, englisches Wörterbuch
-│   └── types/              # Re-Exports
-└── server/
-    ├── index.ts            # Express-App, Middleware-Kette & API-Routen
-    ├── lib/                # Cache, Rate-Limiting, SSRF-Guard
-    └── services/           # DNS, SSL, Mail-Audit, Kontakt, …
-```
-
-Tests liegen neben dem geprüften Code (`*.test.ts`).
-
-## API (Auszug)
-
-| Endpoint | Beschreibung |
-|---|---|
-| `GET /api/lookup?domain=` | Vollständiger DNS-Audit-Report |
-| `GET /api/domain-check?q=` | Domain-Verfügbarkeit |
-| `GET /api/pagespeed?domain=` | PageSpeed-Analyse |
-| `GET /api/virusscan?domain=` | VirusTotal-Scan |
-| `GET /api/ip-details?ip=` | IP-Geolocation & ASN |
-| `POST /api/contact` | Kontaktformular absenden |
-| `GET /api/contact/challenge` | Anti-Spam-Token für Formular |
-
-## Roadmap
-
-- [x] DNS-Queries (A/AAAA/MX/NS/TXT/CAA/SOA/CNAME)
-- [x] Subdomain-Lookups & Apex-Auflösung für Mail/WHOIS
-- [x] Domain-Validierung & Normalisierung
-- [x] Health-Score aus Findings
-- [x] Mail-Security-Audit (SPF, DKIM, DMARC, MTA-STS, TLS-RPT, BIMI)
-- [x] SSL/TLS-Check
-- [x] WHOIS/RDAP-Lookup
-- [x] PageSpeed-Integration
-- [x] VirusTotal-Integration
-- [x] Tech-Stack-Erkennung
-- [x] Multi-Resolver-Propagation via DNS-over-HTTPS
-- [x] Domain-Verfügbarkeits-Check
-- [x] IP-Lookup mit Reverse DNS (PTR) direkt über die Suche
-- [x] Permalinks & JSON-Export
-- [x] Lookup-History (Browser-lokal)
-- [x] Impressum & Kontaktformular (SMTP, Auto-Reply, Anti-Spam)
-- [x] Response-Caching im Backend (TTL pro Check, In-Flight-Dedup)
-- [x] Datenschutzhinweise & lokal gehostete Schriften
-- [x] Härtung: SSRF-Guard mit IP-Pinning, Rate-Limits, CSP/HSTS, CSRF-Riegel
-- [x] Tests, ESLint, Typecheck und ein verify-Gate in der CI
-- [x] Englische Version (Übersetzungsmodul, Findings per Kennung)
-- [ ] DNSSEC-Chain-Validierung (vertieft)
-- [ ] Watch/Monitor-Feature (Domain-Änderungen per E-Mail)
+Wer am Code mitarbeiten oder diggy selbst betreiben möchte, findet alles in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) und
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Mitmachen
 
-Pull Requests und Issues sind willkommen. Für größere Änderungen bitte vorher ein Issue öffnen.
+Ideen, Fehlerberichte und Pull Requests sind willkommen. Am einfachsten startest
+du mit einem [Issue](https://github.com/shadowfps/diggy-easydns/issues) —
+gerade bei größeren Änderungen lohnt es sich, die Idee vorher kurz abzustimmen.
 
 ## Lizenz
 
