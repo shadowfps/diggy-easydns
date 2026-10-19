@@ -649,7 +649,8 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
     );
     render(<View results={results([[['TXT', NEW_KEY]]])} types={DNS_ENTRY} />);
     const block = await authBlock();
-    expect(await within(block).findByText('→ dkim.provider.example')).toBeInTheDocument();
+    expect(await within(block).findByText(/ist ein CNAME auf/)).toBeInTheDocument();
+    expect(within(block).getByText('dkim.provider.example').parentElement).toHaveTextContent('→ dkim.provider.example');
     expect(within(block).getByText(/ist ein CNAME auf dkim.provider.example/)).toBeInTheDocument();
   });
 

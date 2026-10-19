@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { AlertTriangle, Check, CircleHelp, Info, Loader2, Server } from 'lucide-react';
 import type { AuthoritativeFailure, RecordType } from '@/types/dns';
 import { countsMissingAnswers } from '@/lib/propagation';
@@ -387,13 +387,17 @@ function NameserverRow({
 
   return (
     <div className="flex items-start justify-between gap-4 text-sm">
-      <div className="min-w-0">
-        <p className="font-mono text-[13px] text-fg-muted wrap-anywhere">{server.host}</p>
+      {/* Links nimmt den Platz, den die Antwort lässt: Namen und IPv6-Adressen
+          sind lang, eine Adresse rechts ist es nicht. */}
+      <div className="min-w-0 flex-1">
+        <p className="font-mono text-[13px] text-fg-muted">
+          <HostName host={server.host} />
+        </p>
         {answers.map(({ server: { ip, responseTimeMs, error } }) =>
           ip ? (
-            <p key={ip} className="text-xs tabular-nums text-fg-subtle wrap-anywhere">
-              <span className="font-mono">{ip}</span>
-              {!error && ` · ${responseTimeMs}ms`}
+            <p key={ip} className="flex flex-wrap gap-x-1 text-xs tabular-nums text-fg-subtle">
+              <span className="min-w-0 font-mono wrap-anywhere">{ip}</span>
+              {!error && <span className="whitespace-nowrap">· {responseTimeMs}ms</span>}
             </p>
           ) : null
         )}
@@ -414,21 +418,25 @@ function NameserverRow({
           {t(FAILURE_TEXT[server.error])}
         </span>
       ) : cname ? (
-        <span className="min-w-0 font-mono text-[13px] text-fg-muted wrap-anywhere">→ {cname}</span>
+        <span className="min-w-0 max-w-[55%] text-right font-mono text-[13px] text-fg-muted">
+          → <HostName host={cname} />
+        </span>
       ) : countsMissingAnswers(type) ? (
         <EntryBadge label={label} flagged={flagged} />
       ) : (
         <span
           className={cn(
-            'flex min-w-0 max-w-[60%] items-center justify-end gap-1.5 text-right font-mono text-[13px]',
+            'flex max-w-[55%] shrink-0 items-start justify-end gap-1.5 text-right font-mono text-[13px]',
             flagged ? 'font-medium text-warning' : values.length === 0 ? 'text-fg-subtle' : 'text-fg'
           )}
         >
-          {flagged && <AlertTriangle className="size-3.5 shrink-0" />}
+          {flagged && <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />}
           {values.length === 0 ? (
             <span className="truncate">{t('— kein Eintrag')}</span>
           ) : (
-            <span className="flex min-w-0 flex-wrap justify-end gap-x-2 gap-y-1">
+            // Untereinander: Zwei Adressen nebeneinander ließen dem Namen links
+            // kaum Platz.
+            <span className="flex min-w-0 flex-col items-end gap-y-1 wrap-anywhere">
               {values.map((value) => (
                 <IpAddressLink key={value} ip={value} className="text-[13px] text-inherit" />
               ))}
@@ -437,6 +445,29 @@ function NameserverRow({
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Hostname, der nur an Punkten umbricht — `elliott.ns.cloudflare.com` auf
+ * dem Handy lieber als `elliott.ns.cloudflare.` / `com` als mitten im Wort.
+ * `<wbr>` statt eines unsichtbaren Zeichens: Kopiert wird der Name, wie er ist.
+ */
+function HostName({ host }: { host: string }) {
+  const parts = host.split('.');
+  return (
+    <span className="wrap-anywhere">
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {part}
+          {i < parts.length - 1 && (
+            <>
+              .<wbr />
+            </>
+          )}
+        </Fragment>
+      ))}
+    </span>
   );
 }
 
