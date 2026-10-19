@@ -286,6 +286,8 @@ const ui: Dictionary = {
   'weicht ab': 'differs',
   'Gekürzt zeigen': 'Show shortened',
   'Ganzen Wert zeigen ({count} Zeichen)': 'Show full value ({count} characters)',
+  'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.':
+    'diggy asks from Germany. Each provider answers from its nearest data center (anycast): you see the caches of different providers in one place, not a worldwide spread. The flag shows where the provider is based.',
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   'Scan abgeschlossen': 'Scan complete',

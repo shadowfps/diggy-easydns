@@ -227,6 +227,7 @@ export type DeText =
   | 'weicht ab'
   | 'Gekürzt zeigen'
   | 'Ganzen Wert zeigen ({count} Zeichen)'
+  | 'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.'
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   | 'Scan abgeschlossen'
