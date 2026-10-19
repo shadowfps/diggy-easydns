@@ -18,7 +18,7 @@
   <a href="https://diggydns.cloud"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fdiggydns.cloud&label=diggydns.cloud&up_message=online"></a>
   <a href="https://github.com/shadowfps/diggy-easydns/actions/workflows/container.yml"><img alt="CI" src="https://github.com/shadowfps/diggy-easydns/actions/workflows/container.yml/badge.svg"></a>
   <img alt="Sprachen: Deutsch, Englisch" src="https://img.shields.io/badge/Sprachen-DE%20%C2%B7%20EN-informational">
-  <img alt="Lizenz: MIT" src="https://img.shields.io/badge/Lizenz-MIT-blue">
+  <a href="LICENSE"><img alt="Lizenz: MIT" src="https://img.shields.io/badge/Lizenz-MIT-blue"></a>
 </p>
 
 <br>
@@ -144,7 +144,7 @@ gewählte Konfigurationen betreffen. Daraus ergibt sich das Urteil von
   bleibt ausschließlich in deinem Browser.
 - **Gehärtet für den öffentlichen Betrieb.** Schutz gegen Missbrauch als
   Angriffswerkzeug (SSRF), Rate-Limits und eine strenge Content-Security-Policy.
-- **Gehostet in Deutschland** bei mittwald.
+- **Gehostet in Deutschland** — auf Servern von mittwald.
 
 Die Details stehen in den
 [Datenschutzhinweisen](https://diggydns.cloud/datenschutz) und in
@@ -170,4 +170,7 @@ gerade bei größeren Änderungen lohnt es sich, die Idee vorher kurz abzustimme
 
 ## Lizenz
 
-MIT
+diggy steht unter der [MIT-Lizenz](LICENSE): Du darfst den Code nutzen, verändern
+und weitergeben, auch kommerziell — solange der Copyright-Hinweis erhalten bleibt.
+
+© 2026 Ruben Riesen
