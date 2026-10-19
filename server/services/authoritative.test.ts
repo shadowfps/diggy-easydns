@@ -143,12 +143,12 @@ describe('discoverNameservers', () => {
   it('bleibt offen, wenn die Abfrage einer tieferen Stufe scheitert', async () => {
     zone('example.com', { 'ns1.example.net': ['192.0.2.1'] });
     dns.set('www.example.com|NS', 'fail');
-    expect(await discoverNameservers('www.example.com')).toEqual({ error: 'lookup_failed' });
+    expect(await discoverNameservers('www.example.com')).toEqual({ failure: 'lookup_failed' });
   });
 
   it('meldet `no_zone`, wenn bis oben kein NS-Record kommt', async () => {
     dns.set('gibt-es-nicht.example|NS', 'nxdomain');
-    expect(await discoverNameservers('www.gibt-es-nicht.example')).toEqual({ error: 'no_zone' });
+    expect(await discoverNameservers('www.gibt-es-nicht.example')).toEqual({ failure: 'no_zone' });
   });
 
   it('löst höchstens acht Nameserver auf und zählt den Rest', async () => {
@@ -156,7 +156,7 @@ describe('discoverNameservers', () => {
     zone('example.com', hosts);
     const delegation = await discoverNameservers('example.com');
     expect(delegation).toMatchObject({ omitted: 2 });
-    expect(delegation.error === undefined && delegation.hosts).toHaveLength(8);
+    expect(delegation.failure === undefined && delegation.hosts).toHaveLength(8);
     expect(dohCalls.filter((c) => c.endsWith('|A'))).toHaveLength(8);
   });
 });

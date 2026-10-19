@@ -74,9 +74,13 @@ interface NameserverHost {
   lookupFailed?: boolean;
 }
 
+/**
+ * Zone und Nameserver — oder warum sie sich nicht ermitteln ließen
+ * (`failure`, wird zu `AuthoritativeResult.error`).
+ */
 export type Delegation =
-  | { zone: string; hosts: NameserverHost[]; omitted: number; error?: undefined }
-  | { error: 'no_zone' | 'lookup_failed' };
+  | { zone: string; hosts: NameserverHost[]; omitted: number; failure?: undefined }
+  | { failure: NonNullable<AuthoritativeResult['error']> };
 
 /**
  * Die Stufen, auf denen die Zone liegen kann, tiefste zuerst: der Name
@@ -134,7 +138,7 @@ export async function discoverNameservers(name: string): Promise<Delegation> {
   let zone: string | undefined;
   let hosts: string[] = [];
   for (const [i, records] of answers.entries()) {
-    if (records === null) return { error: 'lookup_failed' };
+    if (records === null) return { failure: 'lookup_failed' };
     const ns = records
       .filter((r) => r.type === 'NS' && sameName(r.name, candidates[i]))
       .map((r) => hostName(r.value))
@@ -145,7 +149,7 @@ export async function discoverNameservers(name: string): Promise<Delegation> {
       break;
     }
   }
-  if (!zone) return { error: 'no_zone' };
+  if (!zone) return { failure: 'no_zone' };
 
   const asked = hosts.slice(0, AUTHORITATIVE_LIMITS.nameservers);
   const resolved = await Promise.all(
@@ -276,10 +280,15 @@ async function askServer(
   type: RecordType,
   zone: string
 ): Promise<AuthoritativeServer> {
+  const unchecked = (error: AuthoritativeFailure, responseTimeMs = 0): AuthoritativeServer => ({
+    host,
+    ip,
+    records: [],
+    responseTimeMs,
+    error,
+  });
   const soaInAnswer = type === 'SOA' && sameName(domain, zone);
-  if (!takeDestinationBudget(ip, soaInAnswer ? 1 : 2)) {
-    return { host, ip, records: [], responseTimeMs: 0, error: 'rate_limited' };
-  }
+  if (!takeDestinationBudget(ip, soaInAnswer ? 1 : 2)) return unchecked('rate_limited');
 
   const timeoutMs = AUTHORITATIVE_LIMITS.queryTimeoutMs;
   const [answer, soaReply] = await Promise.all([
@@ -289,15 +298,11 @@ async function askServer(
   const soa = soaReply ?? answer;
 
   const failure = replyFailure(answer) ?? replyFailure(soa);
-  if (failure || !answer.ok || !soa.ok) {
-    return { host, ip, records: [], responseTimeMs: answer.responseTimeMs, error: failure ?? 'invalid_response' };
-  }
+  if (failure || !answer.ok || !soa.ok) return unchecked(failure ?? 'invalid_response', answer.responseTimeMs);
 
   const soaRecord = soa.records.find((r) => r.type === 'SOA' && sameName(r.name, zone));
   const [primary, , serial] = soaRecord?.value.trim().split(/\s+/) ?? [];
-  if (!soaRecord || !serial) {
-    return { host, ip, records: [], responseTimeMs: answer.responseTimeMs, error: 'invalid_response' };
-  }
+  if (!soaRecord || !serial) return unchecked('invalid_response', answer.responseTimeMs);
 
   return {
     host,
@@ -315,9 +320,9 @@ async function askServer(
  */
 export async function checkAuthoritative(domain: string, type: RecordType): Promise<AuthoritativeResult> {
   const delegation = await cached(`authoritative-ns:${domain}`, DELEGATION_TTL_MS, () => discoverNameservers(domain), {
-    failed: (d) => d.error !== undefined,
+    failed: (d) => d.failure !== undefined,
   });
-  if (delegation.error !== undefined) return { domain, type, nameservers: [], error: delegation.error };
+  if (delegation.failure !== undefined) return { domain, type, nameservers: [], error: delegation.failure };
 
   const { zone, hosts, omitted } = delegation;
   // Dieselbe Adresse unter zwei Namen nur einmal fragen.
