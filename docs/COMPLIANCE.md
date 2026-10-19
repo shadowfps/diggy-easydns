@@ -95,7 +95,7 @@ technischen Fakten:
 
 | Was | Wo im Code | Speicherdauer |
 |---|---|---|
-| Abgefragte Domain/IP im Server-Cache | `server/lib/cache.ts` | bis 60 s (Propagation höchstens bis zur kürzesten TTL, autoritative Nameserver 15 s), IP-Details 30 min, PageSpeed 15 min, VirusTotal 6 h |
+| Abgefragte Domain/IP im Server-Cache | `server/lib/cache.ts` | bis 60 s (Propagation höchstens bis zur kürzesten TTL, mindestens 5 s; autoritative Nameserver 15 s), IP-Details 30 min, PageSpeed 15 min, VirusTotal 6 h |
 | IP-Zähler für Rate-Limits | `server/lib/rateLimit.ts`, `contactSpamGuard.ts` | max. 24 h, nur im Arbeitsspeicher |
 | Prüfsumme über Absender+Nachricht (Duplikatserkennung) | `contactSpamGuard.ts` | 5 min |
 | Empfänger-Sperre für Auto-Replies | `contactSpamGuard.ts` | 24 h |

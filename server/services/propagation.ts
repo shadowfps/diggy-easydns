@@ -179,8 +179,13 @@ export async function propagationSection(
  * Länger als die kürzeste TTL der Antworten bleibt der Eintrag nicht
  * (#133): Danach hat der Resolver womöglich schon neu gefragt, die Antwort
  * im Cache zeigte einen Stand, den es dort nicht mehr gibt — und die
- * heruntergezählte TTL stand als „TTL 0s“ da. Ein Wert von 0 kommt so nur
- * noch vom Resolver selbst.
+ * heruntergezählte TTL stand als „TTL 0s“ da.
+ *
+ * Kürzer als `MIN_RESOLVER_CACHE_MS` aber auch nicht: Bei TTL 0 oder 1 — bei
+ * Lastverteilern üblich, und ein Resolver kurz vor dem Ablauf meldet so
+ * etwas für jeden Record — ginge sonst jeder Aufruf erneut an alle neun
+ * Resolver, auch ein Reload oder ein geteilter Link Sekunden später. Ein
+ * „TTL 0s“ aus dem Cache kann es so nur in diesen ersten Sekunden geben.
  */
 async function cachedResolvers(
   key: string,
@@ -195,10 +200,13 @@ async function cachedResolvers(
       const results = await queryAllResolvers(domain, { types });
       return { results, at: Date.now() };
     },
-    { maxTtlMs: ({ results }) => shortestTtl(results) * 1000 }
+    { maxTtlMs: ({ results }) => Math.max(MIN_RESOLVER_CACHE_MS, shortestTtl(results) * 1000) }
   );
   return agedResults(results, Math.floor((Date.now() - at) / 1000));
 }
+
+/** Untergrenze für `cachedResolvers` — fängt Bursts ab wie `FAILED_TTL_MS` im Cache. */
+export const MIN_RESOLVER_CACHE_MS = 5_000;
 
 /** Die kürzeste TTL in Sekunden über alle Records und Negativ-TTLs — ohne eine: unbegrenzt. */
 export function shortestTtl(results: ResolverResult[]): number {
