@@ -129,7 +129,8 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           basis="Art. 6 Abs. 1 lit. f DSGVO — berechtigtes Interesse an einer schnellen,
             verschlüsselten und vor Angriffen geschützten Auslieferung der Seite"
           dauer="Feste Fristen nennt Cloudflare nicht; laut seiner Datenschutzrichtlinie
-            werden die Daten so lange gespeichert, wie es der jeweilige Zweck erfordert."
+            werden die Daten so lange gespeichert, wie es die jeweiligen Zwecke oder
+            gesetzliche Pflichten erfordern."
         />
       </Section>
 
@@ -150,7 +151,7 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           <strong className="font-semibold text-fg">
             vom Server aus, nicht aus deinem Browser
           </strong>
-          : deine IP-Adresse erfahren diese Dienste nicht.
+          : deine IP-Adresse erfahren diese Dienste über die Abfrage nicht.
         </p>
         <p className="mt-3">
           Ergebnisse werden serverseitig kurz zwischengespeichert, damit dieselbe

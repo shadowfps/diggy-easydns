@@ -144,11 +144,11 @@ Angaben im Datenschutztext, geprüft am 19. Oktober 2026:
 | Angabe | Quelle |
 |---|---|
 | Cloudflare, Inc., 101 Townsend St., San Francisco, CA 94107, USA | [Datenschutzrichtlinie](https://www.cloudflare.com/privacypolicy/) (gültig ab 4. November 2025), [Self-Serve Subscription Agreement](https://www.cloudflare.com/terms/), [DPA](https://www.cloudflare.com/cloudflare-customer-dpa/) |
-| Cloudflare ist Auftragsverarbeiter für Customer Logs und die durchgeleiteten Inhalte | Datenschutzrichtlinie; DPA |
+| Cloudflare ist Auftragsverarbeiter für Customer Logs und die durchgeleiteten Inhalte, im Übrigen nach eigener Aussage Verantwortlicher | Datenschutzrichtlinie; DPA |
 | Zertifiziert nach EU-U.S. DPF, UK Extension und Swiss-U.S. DPF, Nicht-HR-Daten abgedeckt; Status „Active - Re-certification under Review“ | [Eintrag auf dataprivacyframework.gov](https://www.dataprivacyframework.gov/participant/5666) |
 | Angemessenheitsbeschluss vom 10. Juli 2023 für Organisationen im EU-U.S. DPF | [EU-Kommission, Adequacy decisions](https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en) |
 | Entfällt die Zertifizierung, stützt sich Cloudflare auf Standardvertragsklauseln | Datenschutzrichtlinie |
-| Speicherdauer: keine festen Fristen, „consistent with the business purposes“ | Datenschutzrichtlinie |
+| Speicherdauer: keine festen Fristen, „consistent with the business purposes“ oder für gesetzliche Pflichten | Datenschutzrichtlinie |
 | Network Error Logging: Fehlerberichte an `a.nel.cloudflare.com`, Client-IP nur für die Dauer der Anfrage, für die Zone abschaltbar | [Cloudflare-Doku zu NEL](https://developers.cloudflare.com/network-error-logging/) |
 | Keine Cookies | eigene Prüfung: kein `Set-Cookie` auf `/`, `/datenschutz`, `/lookup/…`, `/api/health` |
 
@@ -168,6 +168,14 @@ unter § 25 TDDDG fällt, ist rechtlich nicht geprüft. Abschalten lässt sich N
 laut Cloudflare per Schalter im Dashboard oder über die API
 (`PATCH /zones/{zone_id}/settings/nel`); dann entfällt auch der Absatz dazu in
 `/datenschutz`.
+
+**Für die rechtliche Prüfung (#36):** Aus dem Verkehr leitet Cloudflare
+„Network Data“ ab — laut Datenschutzrichtlinie etwa Fehlerraten, Anfragevolumen
+und IP-Bedrohungswerte, gespeichert unter anderem, um Angriffe zu erkennen.
+Sie gehören nicht zu den Daten, für die sich Cloudflare dort als
+Auftragsverarbeiter einordnet. Der Datenschutztext beschreibt nur die
+Auftragsverarbeitung; ob diese eigene Verarbeitung dort erwähnt werden muss,
+ist nicht geprüft.
 
 **Offener Punkt:** Der Datenschutztext nennt Cloudflare als Auftragsverarbeiter
 nach Art. 28 DSGVO. Ob ein Auftragsverarbeitungsvertrag für das Konto vorliegt,
