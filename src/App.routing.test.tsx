@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { setMediaQuery } from '@/test/setup';
 import type { DnsRecord, Finding, ResolverResult } from '@/types/dns';
@@ -631,6 +631,37 @@ describe('Erwarteter Wert im Link', () => {
     // Leeren: der Wert verschwindet aus dem Link.
     await userEvent.click(screen.getByRole('button', { name: 'Erwarteten Wert löschen' }));
     await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
+  });
+
+  /**
+   * Safari wirft ab 100 replaceState-Aufrufen in zehn Sekunden einen
+   * SecurityError — eine gedrückte Rücktaste in einem langen Wert reicht.
+   */
+  it('zieht den Link beim Tippen erst nach einer Pause nach und übersteht ein abgelehntes replaceState', async () => {
+    setPath('/lookup/example.com?propagation=A');
+    render(<App />);
+    const input = await field();
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
+
+    const replace = vi.spyOn(window.history, 'replaceState');
+    try {
+      // Jeder Tastendruck einzeln, ohne Pause dazwischen.
+      for (const value of ['1', '19', '192', '192.0', '192.0.2', '192.0.2.9']) fireEvent.change(input, { target: { value } });
+      expect(replace).not.toHaveBeenCalled();
+      await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A&expected=192.0.2.9'));
+      expect(replace).toHaveBeenCalledTimes(1);
+
+      replace.mockImplementation(() => {
+        throw new DOMException('Attempt to use history.replaceState() more than 100 times per 10 seconds', 'SecurityError');
+      });
+      fireEvent.change(input, { target: { value: '192.0.2.1' } });
+      await waitFor(() => expect(replace).toHaveBeenCalledTimes(2));
+      // Die Ansicht bleibt — nur der Link hängt nach.
+      expect(await field()).toHaveValue('192.0.2.1');
+      expect(screen.getByText('Noch ohne den erwarteten Wert: 1 von 2 Resolvern.')).toBeInTheDocument();
+    } finally {
+      replace.mockRestore();
+    }
   });
 
   it('fragt die autoritativen Nameserver erst im Propagation-Tab', async () => {

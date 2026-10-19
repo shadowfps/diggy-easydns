@@ -278,13 +278,26 @@ export default function App() {
    * Wahl eines Typs legt einen History-Eintrag an (handlePropagationType).
    * Der erwartete Wert (#133) ebenso per replaceState: ein Eintrag je
    * Tastendruck wäre eine unbrauchbare Zurück-Taste.
+   *
+   * Ändert sich nur der erwartete Wert, wird getippt: Dann erst nach einer
+   * kurzen Pause. Safari wirft ab 100 replaceState-Aufrufen in zehn Sekunden
+   * einen SecurityError — eine gedrückt gehaltene Rücktaste in einem langen
+   * DKIM-Wert schafft das, und ein Fehler im Effect risse die Seite mit.
    */
   useEffect(() => {
     if (lookup.recordsStatus !== 'done' || !lookup.domain) return;
     const nextPath = lookupPathFor(lookup.domain, linkedPropagationType, linkedExpected);
-    if (`${window.location.pathname}${window.location.search}` !== nextPath) {
-      window.history.replaceState(null, '', nextPath);
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    if (currentPath === nextPath) return;
+    const typing =
+      linkedPropagationType !== null &&
+      currentPath.split('&expected=')[0] === lookupPathFor(lookup.domain, linkedPropagationType);
+    if (!typing) {
+      replaceHistoryPath(nextPath);
+      return;
     }
+    const timer = window.setTimeout(() => replaceHistoryPath(nextPath), EXPECTED_LINK_DELAY_MS);
+    return () => window.clearTimeout(timer);
   }, [lookup.recordsStatus, lookup.domain, linkedPropagationType, linkedExpected]);
 
   /**
@@ -1137,6 +1150,22 @@ function getLookupUrl(
   expected: string
 ): string {
   return `${window.location.origin}${lookupPathFor(domain, propagationType, expected)}`;
+}
+
+/** Pause nach dem letzten Tastendruck im Feld „erwarteter Wert“, bevor der Link nachzieht. */
+const EXPECTED_LINK_DELAY_MS = 300;
+
+/**
+ * replaceState für den Link der Ansicht. Der Link ist Komfort: Lehnt der
+ * Browser ab (Safari bei zu vielen Aufrufen), bleibt die Ansicht stehen —
+ * der nächste Stand schreibt ihn wieder.
+ */
+function replaceHistoryPath(path: string): void {
+  try {
+    window.history.replaceState(null, '', path);
+  } catch {
+    // SecurityError: zu viele Aufrufe in kurzer Zeit.
+  }
 }
 
 function replaceLookupPath(domain: string): void {
