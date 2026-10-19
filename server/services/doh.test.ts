@@ -118,6 +118,24 @@ describe('DOH_RESOLVERS', () => {
       expect(compliance, r.id).toContain(r.url);
     }
   });
+
+  /**
+   * Die Spalte „Sitz“ trägt die Rechtsgrundlage: EU ohne Weiteres, Schweiz
+   * und Kanada per Angemessenheitsbeschluss, USA per Art. 49. Ein Anbieter
+   * aus einem Land, das hier fehlt, braucht erst eine Einordnung im Text.
+   */
+  it('steht in den Datenschutzhinweisen mit dem Sitz des Betreibers', () => {
+    const privacy = readFileSync(new URL('../../src/modules/datenschutz/DatenschutzText.tsx', import.meta.url), 'utf8');
+    const REGION: Record<string, string> = { US: 'USA', CH: 'Schweiz', CA: 'Kanada', DE: 'EU', CY: 'EU', CZ: 'EU' };
+    for (const r of DOH_RESOLVERS) {
+      expect(REGION, `${r.id}: Sitz ${r.country} ohne Einordnung`).toHaveProperty(r.country);
+      const name = r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const row = privacy.match(
+        new RegExp(`<Row service="(?:[^"]*\\W)?${name}\\b[^"]*" purpose="[^"]*Propagations-Vergleich[^"]*" region="([^"]*)"`)
+      );
+      expect(row?.[1], r.id).toBe(REGION[r.country]);
+    }
+  });
 });
 
 describe('dohQuery — Wireformat', () => {
