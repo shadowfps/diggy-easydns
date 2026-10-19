@@ -133,6 +133,10 @@ gewählte Konfigurationen betreffen. Daraus ergibt sich das Urteil von
 - *„Sieht jeder schon den neuen MX?“* — Im Propagation-Tab MX wählen (auch NS,
   TXT, CAA, SOA …): Der Tab zeigt je Resolver Antwort und TTL, und der Link
   dahin lässt sich teilen.
+- *„Ist die Änderung überhaupt beim Nameserver angekommen?“* — Der
+  Propagation-Tab fragt die autoritativen Nameserver der Zone direkt und
+  vergleicht die Resolver mit ihrem Stand. Ein erwarteter Wert hebt hervor, wer
+  ihn noch nicht liefert.
 - *„Wann läuft mein Zertifikat ab — und die Domain?“* — Restlaufzeiten stehen
   im Report, die Erinnerung kommt per Kalenderdatei.
 - *„Ist meine Domain sauber konfiguriert?“* — Der Health Score sagt es in einer

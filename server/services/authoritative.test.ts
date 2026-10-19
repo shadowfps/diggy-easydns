@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import type { DnsRecord, RecordType } from '../types.js';
 import type { NameserverReply, QueryOptions } from './dnsPort53.js';
 
@@ -317,6 +318,16 @@ describe('takeDestinationBudget', () => {
     expect(takeDestinationBudget('9.9.9.9', 1, t0 + 1000)).toBe(false);
     // Andere Ziele haben ihr eigenes Budget.
     expect(takeDestinationBudget('1.1.1.1', 2, t0)).toBe(true);
+  });
+});
+
+describe('Datenschutz', () => {
+  /** Die Nameserver bekommen die abgefragte Domain — sie gehören in die Empfänger-Tabelle. */
+  it('nennt die Nameserver der Domain als Empfänger und in docs/COMPLIANCE.md', () => {
+    const privacy = readFileSync(new URL('../../src/modules/datenschutz/DatenschutzText.tsx', import.meta.url), 'utf8');
+    const compliance = readFileSync(new URL('../../docs/COMPLIANCE.md', import.meta.url), 'utf8');
+    expect(privacy).toMatch(/<Row service="Die Nameserver der abgefragten Domain" purpose="[^"]*Port 53[^"]*" region="je nach Domain"/);
+    expect(compliance).toContain('### Autoritative Nameserver (#133)');
   });
 });
 
