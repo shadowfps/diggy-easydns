@@ -5,6 +5,7 @@ import type { RecordType, ResolverResult } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import {
   countsMissingAnswers,
+  MAX_EXPECTED,
   primaryPropagationType,
   PROPAGATION_RECORD_TYPES,
   requeryWithin,
@@ -175,6 +176,7 @@ function ExpectedInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={EXPECTED_EXAMPLE[type]}
+          maxLength={MAX_EXPECTED}
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}
