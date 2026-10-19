@@ -137,14 +137,16 @@ gewählte Konfigurationen betreffen. Daraus ergibt sich das Urteil von
 
 ## Datenschutz und Sicherheit
 
-- **Kein Konto, keine Cookies, kein Tracking, keine Werbung.** Schriften werden
-  selbst ausgeliefert, im Browser lädt diggy nichts von Drittanbietern.
+- **Kein Konto, keine Cookies, kein Tracking, keine Werbung.** Schriften und
+  alle Inhalte kommen von diggy selbst, eingebettete Inhalte von Drittanbietern
+  gibt es nicht.
 - **Kaum Daten auf dem Server.** Abfrageergebnisse liegen nur kurz im
   Zwischenspeicher, für DNS-Lookups 60 Sekunden. Der Verlauf deiner Abfragen
   bleibt ausschließlich in deinem Browser.
 - **Gehärtet für den öffentlichen Betrieb.** Schutz gegen Missbrauch als
   Angriffswerkzeug (SSRF), Rate-Limits und eine strenge Content-Security-Policy.
-- **Gehostet in Deutschland** — auf Servern von mittwald.
+- **Gehostet in Deutschland** — auf Servern von mittwald. Ausgeliefert wird die
+  Seite über Cloudflare, das sie vor Angriffen schützt.
 
 Die Details stehen in den
 [Datenschutzhinweisen](https://diggydns.cloud/datenschutz) und in
