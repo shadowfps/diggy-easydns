@@ -14,8 +14,9 @@
  * werden müssten — als neue Laufzeit-Abhängigkeit für rund 200 Zeilen.
  *
  * Die Antwort kommt von außen. Jeder Zugriff ist gegen die Länge geprüft,
- * Kompressionszeiger dürfen nur zurück zeigen; eine kaputte oder
- * abgeschnittene Nachricht wirft `DnsWireError`, statt Werte zu erfinden.
+ * Kompressionszeiger dürfen nur zurück zeigen und nicht in den Kopf; eine
+ * kaputte oder abgeschnittene Nachricht wirft `DnsWireError`, statt Werte zu
+ * erfinden.
  */
 
 /** Eine kaputte, abgeschnittene oder unpassende DNS-Nachricht. */
@@ -53,6 +54,8 @@ export interface DnsResponse {
 
 const CLASS_IN = 1;
 const TYPE_OPT = 41;
+/** Länge des Kopfs (ID, Flags, vier Zähler). */
+const HEADER = 12;
 /** Größer kann eine DNS-Nachricht nicht sein (16-Bit-Länge bei TCP). */
 const MAX_MESSAGE = 65_535;
 const MAX_NAME = 255;
@@ -74,7 +77,7 @@ export function encodeQuery(
 ): Uint8Array {
   const qname = encodeName(name);
   const opt = options.dnssec ? 11 : 0;
-  const msg = new Uint8Array(12 + qname.length + 4 + opt);
+  const msg = new Uint8Array(HEADER + qname.length + 4 + opt);
   const view = new DataView(msg.buffer);
 
   view.setUint16(0, 0); // ID
@@ -82,8 +85,8 @@ export function encodeQuery(
   view.setUint16(4, 1); // QDCOUNT
   view.setUint16(10, options.dnssec ? 1 : 0); // ARCOUNT
 
-  msg.set(qname, 12);
-  let o = 12 + qname.length;
+  msg.set(qname, HEADER);
+  let o = HEADER + qname.length;
   view.setUint16(o, type);
   view.setUint16(o + 2, CLASS_IN);
   o += 4;
@@ -135,7 +138,7 @@ export function decodeResponse(
   question?: { name: string; type: number }
 ): DnsResponse {
   if (bytes.length > MAX_MESSAGE) throw new DnsWireError('länger als 65535 Bytes');
-  if (bytes.length < 12) throw new DnsWireError('kürzer als der Kopf');
+  if (bytes.length < HEADER) throw new DnsWireError('kürzer als der Kopf');
   const reader = new Reader(bytes);
 
   const flags = reader.u16(2);
@@ -143,7 +146,7 @@ export function decodeResponse(
   const qdcount = reader.u16(4);
   const ancount = reader.u16(6);
 
-  let o = 12;
+  let o = HEADER;
   const questions: { name: string; type: number }[] = [];
   for (let i = 0; i < qdcount; i++) {
     const { name, next } = reader.name(o);
@@ -240,6 +243,8 @@ class Reader {
       if ((len & 0xc0) === 0xc0) {
         const target = this.u16(pos) & 0x3fff;
         if (target >= pos) throw new DnsWireError('Kompressionszeiger zeigt nicht zurück');
+        // Namen stehen erst hinter dem Kopf; dort hinein zeigt kein gültiger Zeiger.
+        if (target < HEADER) throw new DnsWireError('Kompressionszeiger zeigt in den Kopf');
         if (++jumps > MAX_POINTER_JUMPS) throw new DnsWireError('zu viele Kompressionszeiger');
         if (next < 0) next = pos + 2;
         pos = target;

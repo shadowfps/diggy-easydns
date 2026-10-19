@@ -211,6 +211,12 @@ describe('decodeResponse — kaputte Antworten', () => {
     expectWireError(response({ question: Q, answers: [{ name: pointer(500), type: 1, rdata: ipv4('192.0.2.1') }] }), /zeigt nicht zurück/);
   });
 
+  it('scheitert an Kompressionszeigern in den Kopf', () => {
+    // Der Kopf ist kein Name — als Labels gelesen, entstünde ein erfundener.
+    expectWireError(response({ question: Q, answers: [{ name: pointer(0), type: 1, rdata: ipv4('192.0.2.1') }] }), /zeigt in den Kopf/);
+    expectWireError(response({ question: Q, answers: [{ name: pointer(11), type: 1, rdata: ipv4('192.0.2.1') }] }), /zeigt in den Kopf/);
+  });
+
   it('scheitert an einer Zeiger-Schleife über Labels', () => {
     // Antwort-Name: Label „a“, dann Zeiger zurück auf dieses Label — endlos „a.a.a…“
     const loop = response({ question: Q, answers: [{ name: [1, 0x61, ...pointer(29)], type: 1, rdata: ipv4('192.0.2.1') }] });
@@ -244,6 +250,71 @@ describe('decodeResponse — kaputte Antworten', () => {
       /unbekannter Label-Typ/
     );
     expectWireError(new Uint8Array(70_000), /länger als 65535 Bytes/);
+  });
+
+  /**
+   * Fuzz-Test mit festem Seed: gültige Antworten mit einzelnen kaputten
+   * Bytes, abgeschnitten oder verlängert, dazu reiner Zufall. Erlaubt ist
+   * eine Antwort oder `DnsWireError` — ein RangeError oder TypeError hieße,
+   * dass ein Lesezugriff ungeprüft war. Ein Lauf mit 500 000 Nachrichten
+   * fand vor dem Einchecken nichts; hier reichen wenige Tausend als Wächter.
+   */
+  it('wirft bei beliebigen Bytes nur DnsWireError', () => {
+    let seed = 132;
+    // mulberry32: klein, deterministisch, gut genug verteilt
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = seed;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const int = (n: number) => Math.floor(random() * n);
+
+    const at = pointer(QUESTION_NAME);
+    const seeds = [
+      valid,
+      response({ question: { name: 'example.com', type: 16 }, answers: [{ name: at, type: 16, rdata: txt('v=DKIM1; p=MIIB', 'abc') }] }),
+      response({
+        question: { name: 'example.com', type: 6 },
+        answers: [{ name: at, type: 6, rdata: [...name('ns1.example.com'), ...at, ...Array<number>(20).fill(1)] }],
+      }),
+      response({ question: { name: 'example.com', type: 257 }, answers: [{ name: at, type: 257, rdata: [0, 5, ...Buffer.from('issuex')] }] }),
+      response({ question: { name: 'example.com', type: 15 }, answers: [{ name: at, type: 15, rdata: [...u16(10), 4, ...Buffer.from('mail'), ...at] }] }),
+      response({ question: { name: 'example.com', type: 33 }, answers: [{ name: at, type: 33, rdata: [...u16(1), ...u16(2), ...u16(3), ...at] }] }),
+      response({ question: { name: 'example.com', type: 28 }, answers: [{ name: at, type: 28, rdata: ipv6('2001:db8::1') }] }),
+    ];
+
+    const outcomes = { ok: 0, wireError: 0 };
+    for (let i = 0; i < 5000; i++) {
+      let bytes: Uint8Array;
+      const mode = int(4);
+      if (mode === 0) {
+        bytes = Uint8Array.from({ length: int(200) }, () => int(256));
+      } else {
+        bytes = Uint8Array.from(seeds[int(seeds.length)]);
+        for (let flips = 1 + int(4); flips > 0; flips--) {
+          // Gezielt Zeiger, Längen und Grenzwerte, sonst ein beliebiges Byte
+          const values = [int(256), 0xc0 | int(64), 0, 1, 63, 64, 0xff];
+          bytes[int(bytes.length)] = values[int(values.length)];
+        }
+        if (mode === 2) bytes = bytes.slice(0, int(bytes.length + 1));
+        if (mode === 3) bytes = Uint8Array.from([...bytes, ...Array.from({ length: int(30) }, () => int(256))]);
+      }
+
+      try {
+        decodeResponse(bytes, int(2) ? Q : undefined);
+        outcomes.ok++;
+      } catch (error) {
+        if (!(error instanceof DnsWireError)) {
+          throw new Error(`${String(error)} bei ${Buffer.from(bytes).toString('hex')}`, { cause: error });
+        }
+        outcomes.wireError++;
+      }
+    }
+    // Beide Ausgänge kommen vor — sonst prüfte der Test nur eine Seite.
+    expect(outcomes.ok).toBeGreaterThan(100);
+    expect(outcomes.wireError).toBeGreaterThan(1000);
   });
 });
 
