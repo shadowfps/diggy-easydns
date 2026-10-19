@@ -302,17 +302,32 @@ export async function dohQuery(
 const CONNECT_ATTEMPTS = 4;
 
 /**
+ * Fehlercodes (`cause.code` von fetch), bei denen die Gegenseite die
+ * Verbindung abgebrochen hat: zurückgesetzt (auch mitten im TLS-Handshake)
+ * oder geschlossen, bevor eine Antwort kam. Ein Name, der sich nicht
+ * auflösen lässt, ein falsches Zertifikat oder eine kaputte HTTP-Antwort
+ * ändern sich beim nächsten Versuch nicht und werden nicht wiederholt.
+ */
+const CONNECTION_DROPPED = new Set(['ECONNRESET', 'EPIPE', 'ECONNABORTED', 'UND_ERR_SOCKET']);
+
+function connectionDropped(error: unknown): boolean {
+  const code = (error as { cause?: { code?: unknown } } | undefined)?.cause?.code;
+  return typeof code === 'string' && CONNECTION_DROPPED.has(code);
+}
+
+/**
  * `fetch` mit neuem Versuch, wenn die Verbindung abbricht, bevor eine
  * Antwort da ist. Ein Abbruch kommt nach wenigen Millisekunden, die Versuche
  * laufen im selben Zeitbudget — ein Timeout wird nicht wiederholt, eine
- * HTTP-Antwort (auch ein Fehlerstatus) ebenso wenig.
+ * HTTP-Antwort (auch ein Fehlerstatus) ebenso wenig, andere Netzwerkfehler
+ * auch nicht.
  */
 async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await fetch(url, init);
     } catch (error) {
-      if (init.signal?.aborted || attempt >= CONNECT_ATTEMPTS) throw error;
+      if (init.signal?.aborted || attempt >= CONNECT_ATTEMPTS || !connectionDropped(error)) throw error;
     }
   }
 }

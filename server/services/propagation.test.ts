@@ -327,6 +327,11 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
     expect(results.filter((r) => !r.error)).toHaveLength(DOH_RESOLVERS.length - 1);
   });
 
+  /** So meldet fetch (undici) einen Netzwerkfehler: TypeError, Grund in `cause`. */
+  function fetchFailed(code: string): TypeError {
+    return new TypeError('fetch failed', { cause: Object.assign(new Error(code), { code }) });
+  }
+
   /**
    * Quad9 setzte im Test rund 40 % der neuen TLS-Verbindungen zurück. Neue
    * Versuche retten die Antwort; ein Resolver, der gar nicht erreichbar ist,
@@ -340,8 +345,8 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
         const id = DOH_RESOLVERS.find((r) => input.startsWith(r.url))!.id;
         const n = (attempts.get(id) ?? 0) + 1;
         attempts.set(id, n);
-        if (id === 'quad9' && n <= 2) throw new TypeError('fetch failed');
-        if (id === 'controld') throw new TypeError('fetch failed');
+        if (id === 'quad9' && n <= 2) throw fetchFailed('ECONNRESET');
+        if (id === 'controld') throw fetchFailed('UND_ERR_SOCKET');
         if (id === 'opendns') return new Response('busy', { status: 503 });
         return healthy(input);
       })
@@ -356,6 +361,33 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
     expect(attempts.get('controld')).toBe(4);
     expect(attempts.get('opendns')).toBe(1);
     expect(attempts.get('cloudflare')).toBe(1);
+  });
+
+  /**
+   * Ein Name, der sich nicht auflösen lässt, oder ein falsches Zertifikat
+   * ist beim nächsten Versuch genauso falsch — vier Anläufe kosteten nur
+   * Zeit und, beim DNS, Plätze im Threadpool von Node.
+   */
+  it('wiederholt andere Netzwerkfehler nicht', async () => {
+    const attempts = new Map<string, number>();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const id = DOH_RESOLVERS.find((r) => input.startsWith(r.url))!.id;
+        attempts.set(id, (attempts.get(id) ?? 0) + 1);
+        if (id === 'quad9') throw fetchFailed('ENOTFOUND');
+        if (id === 'dns4eu') throw fetchFailed('CERT_HAS_EXPIRED');
+        if (id === 'controld') throw new TypeError('fetch failed');
+        return healthy(input);
+      })
+    );
+
+    const results = await queryAllResolvers(HOST, { types: ['A'] });
+
+    for (const id of ['quad9', 'dns4eu', 'controld']) {
+      expect(results.find((r) => r.resolver.id === id)?.error, id).toBe('fetch failed');
+      expect(attempts.get(id), id).toBe(1);
+    }
   });
 
   it('wertet eine gekürzte Antwort (TC) als Fehler statt als anderen Wert', async () => {
