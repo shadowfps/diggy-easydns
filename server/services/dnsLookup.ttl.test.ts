@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DnsRecord, RecordType } from '../types.js';
+import type { Http2GetInit } from '../lib/http2Get.js';
 
 /**
  * TTL-Zuordnung in lookupStandardRecords (#76).
@@ -10,7 +11,8 @@ import type { DnsRecord, RecordType } from '../types.js';
  * Ausfall der TTL-Quelle keinen Record kostet.
  *
  * Gemockt sind beide Quellen an ihrer Außengrenze — der node:dns-Resolver und
- * `fetch` —, damit das echte DoH-Parsing aus doh.ts mitläuft.
+ * der DoH-Transport (lib/http2Get.ts) —, damit das echte DoH-Parsing aus
+ * doh.ts mitläuft.
  */
 
 const dns = vi.hoisted(() => ({
@@ -42,7 +44,18 @@ vi.mock('node:dns', () => ({
   },
 }));
 
+vi.mock('../lib/http2Get.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/http2Get.js')>()),
+  http2Get: vi.fn(),
+}));
+
+/** Ersetzt den DoH-Transport (HTTP/2, lib/http2Get.ts) — Aufruf wie `fetch`. */
+function stubTransport(fn: (url: string, init: Http2GetInit) => Promise<Response>) {
+  vi.mocked(http2Get).mockImplementation(fn);
+}
+
 const { lookupStandardRecords, TTL_LOOKUP_TIMEOUT_MS } = await import('./dnsLookup.js');
+const { http2Get } = await import('../lib/http2Get.js');
 
 interface Answer {
   name: string;
@@ -90,15 +103,14 @@ function apexAnswers(): Partial<Record<RecordType, Answer[]>> {
   };
 }
 
-/** Stellt `fetch` auf eine DoH-Attrappe um, die je Typ aus `answers` antwortet. */
+/** Stellt den DoH-Transport auf eine Attrappe um, die je Typ aus `answers` antwortet. */
 function stubDoh(answers: Partial<Record<RecordType, Answer[]>>) {
-  const fetchMock = vi.fn(async (input: string | URL) => {
-    const type = TYPE_BY_NUMBER[new URL(String(input)).searchParams.get('type') ?? ''];
+  stubTransport(async (input) => {
+    const type = TYPE_BY_NUMBER[new URL(input).searchParams.get('type') ?? ''];
     const answer = type ? answers[type] : undefined;
     return Response.json(answer ? { Status: 0, Answer: answer } : { Status: 0 });
   });
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
+  return vi.mocked(http2Get);
 }
 
 function ttlsByType(records: DnsRecord[]): Partial<Record<RecordType, (number | null)[]>> {
@@ -131,7 +143,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.mocked(http2Get).mockReset();
   vi.useRealTimers();
 });
 
@@ -154,11 +166,11 @@ describe('lookupStandardRecords — TTL-Zuordnung', () => {
   });
 
   it('fragt DoH nur für die Typen, denen node:dns die TTL schuldig bleibt', async () => {
-    const fetchMock = stubDoh(apexAnswers());
+    const transport = stubDoh(apexAnswers());
 
     await lookupStandardRecords('example.com');
 
-    const queried = fetchMock.mock.calls.map(([url]) => new URL(String(url)));
+    const queried = transport.mock.calls.map(([url]) => new URL(url));
     expect(new Set(queried.map((u) => u.hostname))).toEqual(new Set(['cloudflare-dns.com']));
     expect(queried.map((u) => TYPE_BY_NUMBER[u.searchParams.get('type') ?? '']).sort()).toEqual(
       ['CAA', 'CNAME', 'MX', 'NS', 'SOA', 'TXT']
@@ -217,7 +229,7 @@ describe('lookupStandardRecords — TTL-Quelle fällt aus', () => {
     // DoH antwortet, kennt das RRset aber nicht (andere Cache-Sicht).
     ['Antwort ohne RRset', () => Promise.resolve(Response.json({ Status: 0 }))],
   ])('%s: Records bleiben, TTL ist null statt 0', async (_label, respond) => {
-    vi.stubGlobal('fetch', vi.fn(respond));
+    stubTransport(respond);
 
     const { records, failedTypes } = await lookupStandardRecords('example.com');
 
@@ -237,16 +249,11 @@ describe('lookupStandardRecords — TTL-Quelle fällt aus', () => {
   it(`wartet auf hängendes DoH höchstens ${TTL_LOOKUP_TIMEOUT_MS} ms`, async () => {
     vi.useFakeTimers();
     // Antwortet nie — nur der Abbruch über das AbortSignal beendet die Anfrage.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        (_url: string, init?: RequestInit) =>
-          new Promise((_resolve, reject) => {
-            init?.signal?.addEventListener('abort', () =>
-              reject(new DOMException('aborted', 'AbortError'))
-            );
-          })
-      )
+    stubTransport(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        })
     );
 
     let records: DnsRecord[] | undefined;
