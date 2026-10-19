@@ -125,7 +125,7 @@ export type DeText =
   | 'Chain of Trust valide'
   | 'Algorithmus'
   | 'unbekannt'
-  | 'DS- und DNSKEY-Records vorhanden, von Cloudflare und Quad9 validiert.'
+  | 'DS- und DNSKEY-Records vorhanden, Signatur über Cloudflare und Google geprüft.'
   | 'Chain unterbrochen'
   | 'Die Domain hat einen DNSKEY, aber der Parent-DS-Record fehlt. Resolver können die Signatur nicht prüfen → DNSSEC ist effektiv aus. Beim Registrar den DS-Record nachtragen.'
   | 'Validierung fehlgeschlagen'

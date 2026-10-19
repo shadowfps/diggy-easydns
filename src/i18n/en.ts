@@ -147,8 +147,8 @@ const ui: Dictionary = {
   'Chain of Trust valide': 'Chain of trust valid',
   Algorithmus: 'Algorithm',
   unbekannt: 'unknown',
-  'DS- und DNSKEY-Records vorhanden, von Cloudflare und Quad9 validiert.':
-    'DS and DNSKEY records present, validated by Cloudflare and Quad9.',
+  'DS- und DNSKEY-Records vorhanden, Signatur über Cloudflare und Google geprüft.':
+    'DS and DNSKEY records present, signature checked via Cloudflare and Google.',
   'Chain unterbrochen': 'Chain broken',
   'Die Domain hat einen DNSKEY, aber der Parent-DS-Record fehlt. Resolver können die Signatur nicht prüfen → DNSSEC ist effektiv aus. Beim Registrar den DS-Record nachtragen.':
     'The domain has a DNSKEY, but the DS record in the parent zone is missing. Resolvers can’t verify the signature → DNSSEC is effectively off. Add the DS record at your registrar.',

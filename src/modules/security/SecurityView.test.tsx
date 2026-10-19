@@ -170,3 +170,24 @@ describe('SecurityView – nicht prüfbar', () => {
     expect(screen.queryByText('nicht aktiviert')).not.toBeInTheDocument();
   });
 });
+
+describe('SecurityView – DNSSEC', () => {
+  /**
+   * Die Karte nennt die Resolver, deren AD-Flag zählt — das sind die aus
+   * server/services/dnssec.ts: Cloudflare und Google. Bis #132 stand hier
+   * Quad9, das für DNSSEC nie gefragt wurde.
+   */
+  it('nennt bei gültiger Signatur die Resolver, über die geprüft wird', () => {
+    render(
+      <SecurityView
+        domain="example.com"
+        ssl={done<SslInfo | null>(null)}
+        dnssec={done<DnssecInfo>({ enabled: true, valid: true, chainOfTrust: 'valid', algorithm: 'ECDSAP256SHA256' })}
+      />
+    );
+
+    expect(screen.getByText('DNSSEC · aktiv & valide')).toBeInTheDocument();
+    expect(screen.getByText(/über Cloudflare und Google geprüft/)).toBeInTheDocument();
+    expect(screen.queryByText(/Quad9/)).not.toBeInTheDocument();
+  });
+});
