@@ -389,6 +389,51 @@ describe('requeryWithin', () => {
     expect(requeryWithin(c)).toBe(240);
   });
 
+  /*
+   * `www` zeigt per CNAME (1 h) auf einen Host, dessen A-Record nur eine
+   * Minute gilt. Hat sich der CNAME geändert, liefert der abweichende
+   * Resolver die alte Adresse bis zu einer Stunde lang weiter — „spätestens
+   * in 60 s“ wäre falsch.
+   */
+  it('zählt die TTL eines CNAMEs vor dem Record mit', () => {
+    const viaCname = (target: string, address: string, cnameTtl: number) => [
+      { type: 'CNAME' as const, value: target, ttl: cnameTtl },
+      { type: 'A' as const, value: address, ttl: 60 },
+    ];
+    const c = comparePropagation(
+      [
+        full('cloudflare', viaCname('new.example.net', '192.0.2.1', 3600)),
+        full('google', viaCname('new.example.net', '192.0.2.1', 3600)),
+        full('adguard', viaCname('old.example.net', '198.51.100.7', 2400)),
+      ],
+      'A'
+    );
+    expect(c.answers.map((a) => a.ttl)).toEqual([60, 60, 60]);
+    expect(requeryWithin(c)).toBe(2400);
+
+    // Auch bei „kein Eintrag“ am Ende der Kette.
+    const empty = comparePropagation(
+      [
+        full('cloudflare', [{ type: 'MX', value: 'mx.example.net', priority: 10, ttl: 300 }]),
+        full('google', [{ type: 'MX', value: 'mx.example.net', priority: 10, ttl: 300 }]),
+        full('adguard', [{ type: 'CNAME', value: 'old.example.net', ttl: 900 }], { negativeTtl: { MX: 120 } }),
+      ],
+      'MX'
+    );
+    expect(requeryWithin(empty)).toBe(900);
+
+    // Beim Typ CNAME ist er selbst der Record.
+    const cname = comparePropagation(
+      [
+        full('cloudflare', [{ type: 'CNAME', value: 'new.example.net', ttl: 300 }]),
+        full('google', [{ type: 'CNAME', value: 'new.example.net', ttl: 300 }]),
+        full('adguard', [{ type: 'CNAME', value: 'old.example.net', ttl: 200 }]),
+      ],
+      'CNAME'
+    );
+    expect(requeryWithin(cname)).toBe(200);
+  });
+
   it('sagt nichts, wenn keiner abweicht', () => {
     const c = comparePropagation([full('cloudflare', [txt(60)]), full('google', [txt(30)])], 'TXT');
     expect(requeryWithin(c)).toBeUndefined();
