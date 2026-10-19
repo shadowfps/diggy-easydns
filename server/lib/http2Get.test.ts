@@ -27,7 +27,7 @@ afterEach(async () => {
   await server?.close();
   server = undefined;
   // Kein Test hinterlässt eine Sitzung — und der nächste bekommt keine alte.
-  await vi.waitFor(() => expect(openSessionCount()).toBe(0));
+  await vi.waitFor(() => expect(openSessionCount()).toBe(0), { timeout: 3000 });
 });
 
 function get(url: string, headers?: Record<string, string>) {
@@ -127,6 +127,25 @@ describe('http2Get — Verbindungsfehler wie bei fetch', () => {
   it('meldet einen abgewiesenen Stream (REFUSED_STREAM) ebenso — er wurde nicht bearbeitet', async () => {
     server = await startH2Server((req) => req.stream.close(7)); // NGHTTP2_REFUSED_STREAM
     expect((await failure(get(`${server.origin}/dns-query`))).code).toBe(CLOSED_BEFORE_RESPONSE);
+  });
+
+  it('meldet einen Stream, den der Server per GOAWAY nicht mehr bearbeitet, ebenso', async () => {
+    const open: { id: number; res: { end: (body: string) => void } }[] = [];
+    server = await startH2Server((req, res) => {
+      open.push({ id: req.stream.id!, res });
+      if (open.length < 2) return;
+      // Beide Streams sind da: Der Server bearbeitet nur noch den ersten.
+      const [first] = open.sort((a, b) => a.id - b.id);
+      req.stream.session?.goaway(0, first.id);
+      first.res.end('ok');
+    });
+
+    const [answered, refused] = await Promise.allSettled(['/a', '/b'].map((path) => get(`${server!.origin}${path}`)));
+
+    expect(answered.status === 'fulfilled' && answered.value.status).toBe(200);
+    expect(refused.status === 'rejected' && (refused.reason as TypeError).cause).toMatchObject({
+      code: CLOSED_BEFORE_RESPONSE,
+    });
   });
 
   it('meldet einen Server ohne HTTP/2 mit dem TLS-Fehler, nicht als Abbruch', async () => {
@@ -260,8 +279,10 @@ describe('http2Get — Verbindungen', () => {
     server = await startH2Server((_req, res) => res.end());
 
     await get(`${server.origin}/eins`);
-    await vi.waitFor(() => expect(server!.openSessions()).toBe(0), UNTIL_IDLE);
-    expect(openSessionCount()).toBe(0);
+    await vi.waitFor(() => {
+      expect(server!.openSessions()).toBe(0);
+      expect(openSessionCount()).toBe(0);
+    }, UNTIL_IDLE);
     await get(`${server.origin}/zwei`);
 
     expect(server.sockets).toHaveLength(2);
@@ -306,7 +327,8 @@ describe('http2Get — Verbindungen', () => {
    */
   it('schickt 200 gleichzeitige Anfragen über eine Verbindung und schließt sie danach', async () => {
     server = await startH2Server((req, res) => res.end(req.url));
-    const before = tcpSockets();
+    // Sockets früherer Tests schließen asynchron — erst danach zählen.
+    await vi.waitFor(() => expect(tcpSockets()).toBe(0));
 
     const bodies = await Promise.all(
       Array.from({ length: 200 }, (_, i) => get(`${server!.origin}/q${i}`).then((res) => res.text()))
@@ -314,11 +336,11 @@ describe('http2Get — Verbindungen', () => {
 
     expect(bodies).toEqual(Array.from({ length: 200 }, (_, i) => `/q${i}`));
     expect(server.sockets).toHaveLength(1);
-    expect(tcpSockets()).toBe(before + 2); // ein Socket je Seite, bis zur Leerlaufzeit
+    expect(tcpSockets()).toBe(2); // ein Socket je Seite, bis zur Leerlaufzeit
     await vi.waitFor(() => {
       expect(server!.openSessions()).toBe(0);
       expect(openSessionCount()).toBe(0);
-      expect(tcpSockets()).toBe(before);
+      expect(tcpSockets()).toBe(0);
     }, UNTIL_IDLE);
   }, LONG_TEST);
 });

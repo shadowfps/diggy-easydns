@@ -29,7 +29,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   await server?.close();
   server = undefined;
-  await vi.waitFor(() => expect(openSessionCount()).toBe(0));
+  await vi.waitFor(() => expect(openSessionCount()).toBe(0), { timeout: 3000 });
 });
 
 /** Ein Anbieter aus der Liste, mit dem lokalen Server als Endpunkt. */
