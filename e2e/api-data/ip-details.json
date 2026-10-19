@@ -35,26 +35,6 @@
     "timezone": "America/Los_Angeles",
     "source": "ipwhois.app + rdap.org"
   },
-  "140.82.113.4": {
-    "ip": "140.82.113.4",
-    "type": "IPv4",
-    "reverse": "lb-140-82-113-4-iad.github.com",
-    "ptr": [
-      "lb-140-82-113-4-iad.github.com"
-    ],
-    "organization": "GitHub, Inc.",
-    "isp": "GitHub, Inc.",
-    "asn": "AS36459",
-    "asnName": "GitHub, Inc.",
-    "network": "140.82.112.0/20",
-    "country": "United States",
-    "region": "California",
-    "city": "San Francisco",
-    "latitude": 37.774926,
-    "longitude": -122.4194208,
-    "timezone": "America/Los_Angeles",
-    "source": "ipwhois.app + rdap.org"
-  },
   "140.82.121.3": {
     "ip": "140.82.121.3",
     "type": "IPv4",

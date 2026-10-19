@@ -2,7 +2,7 @@
  * DNSSEC-Check.
  *
  * Wir validieren DNSSEC auf zwei Wegen:
- *  1) AD-Flag (Authenticated Data) — Cloudflare/Quad9 setzen es nur, wenn
+ *  1) AD-Flag (Authenticated Data) — Cloudflare/Google setzen es nur, wenn
  *     der Resolver die Chain validiert hat. Das ist die kürzeste Antwort
  *     auf "ist DNSSEC korrekt aktiv".
  *  2) DS- und DNSKEY-Records direkt anfragen, um zu erkennen ob die Domain

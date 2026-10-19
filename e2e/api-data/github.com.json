@@ -281,19 +281,19 @@
           "id": "cloudflare",
           "name": "Cloudflare",
           "ip": "1.1.1.1",
-          "country": "Global",
-          "flag": "🌐",
+          "country": "US",
+          "flag": "🇺🇸",
           "provider": "Cloudflare"
         },
         "records": [
           {
             "type": "A",
             "name": "github.com",
-            "value": "20.250.119.67",
-            "ttl": 17
+            "value": "140.82.121.3",
+            "ttl": 45
           }
         ],
-        "responseTimeMs": 20
+        "responseTimeMs": 18
       },
       {
         "resolver": {
@@ -308,17 +308,17 @@
           {
             "type": "A",
             "name": "github.com",
-            "value": "140.82.121.3",
+            "value": "140.82.121.4",
             "ttl": 60
           }
         ],
-        "responseTimeMs": 24
+        "responseTimeMs": 17
       },
       {
         "resolver": {
           "id": "adguard",
           "name": "AdGuard",
-          "ip": "94.140.14.14",
+          "ip": "94.140.14.140",
           "country": "CY",
           "flag": "🇨🇾",
           "provider": "AdGuard"
@@ -326,31 +326,31 @@
         "records": [
           {
             "type": "A",
-            "name": "GitHuB.CoM",
-            "value": "140.82.121.4",
-            "ttl": 26
+            "name": "github.com",
+            "value": "140.82.121.3",
+            "ttl": 55
           }
         ],
-        "responseTimeMs": 39
+        "responseTimeMs": 15
       },
       {
         "resolver": {
           "id": "dns-sb",
           "name": "DNS.SB",
           "ip": "185.222.222.222",
-          "country": "HK",
-          "flag": "🇭🇰",
+          "country": "DE",
+          "flag": "🇩🇪",
           "provider": "DNS.SB"
         },
         "records": [
           {
             "type": "A",
             "name": "github.com",
-            "value": "140.82.113.4",
-            "ttl": 41
+            "value": "140.82.121.4",
+            "ttl": 17
           }
         ],
-        "responseTimeMs": 125
+        "responseTimeMs": 14
       },
       {
         "resolver": {
@@ -366,10 +366,86 @@
             "type": "A",
             "name": "github.com",
             "value": "140.82.121.4",
-            "ttl": 5
+            "ttl": 9
           }
         ],
-        "responseTimeMs": 18
+        "responseTimeMs": 15
+      },
+      {
+        "resolver": {
+          "id": "quad9",
+          "name": "Quad9",
+          "ip": "9.9.9.10",
+          "country": "CH",
+          "flag": "🇨🇭",
+          "provider": "Quad9"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.4",
+            "ttl": 49
+          }
+        ],
+        "responseTimeMs": 13
+      },
+      {
+        "resolver": {
+          "id": "opendns",
+          "name": "OpenDNS",
+          "ip": "208.67.222.2",
+          "country": "US",
+          "flag": "🇺🇸",
+          "provider": "Cisco"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.4",
+            "ttl": 60
+          }
+        ],
+        "responseTimeMs": 25
+      },
+      {
+        "resolver": {
+          "id": "controld",
+          "name": "Control D",
+          "ip": "76.76.2.0",
+          "country": "CA",
+          "flag": "🇨🇦",
+          "provider": "Control D"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.4",
+            "ttl": 44
+          }
+        ],
+        "responseTimeMs": 19
+      },
+      {
+        "resolver": {
+          "id": "dns4eu",
+          "name": "DNS4EU",
+          "ip": "86.54.11.100",
+          "country": "CZ",
+          "flag": "🇨🇿",
+          "provider": "Whalebone"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "20.250.119.67",
+            "ttl": 57
+          }
+        ],
+        "responseTimeMs": 28
       }
     ],
     "findings": [
@@ -377,7 +453,12 @@
         "id": "propagation-mismatch",
         "severity": "warning",
         "title": "Propagation-Abweichung erkannt",
-        "description": "5 Resolver liefern 4 verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.",
+        "key": "propagation-mismatch",
+        "description": "9 Resolver liefern 3 verschiedene Antworten — entweder noch nicht propagiert, oder GeoDNS / Anycast.",
+        "params": {
+          "count": 9,
+          "answers": 3
+        },
         "category": "dns"
       }
     ]

@@ -88,7 +88,8 @@ export function PropagationSkeleton() {
   return (
     <div className="card">
       <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-        {Array.from({ length: 6 }).map((_, i) => (
+        {/* So viele Zeilen wie Resolver (DOH_RESOLVERS) — die Karte springt dann nicht. */}
+        {Array.from({ length: 9 }).map((_, i) => (
           <div key={i} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Skeleton className="size-4" />

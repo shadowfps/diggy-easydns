@@ -260,6 +260,15 @@ function Comparison({
           </span>
         </div>
       )}
+
+      {/* Was der Vergleich zeigen kann (#132). Neun Anbieter sind kein
+          Blick um die Welt: Anycast schickt jede Anfrage ins nächste
+          Rechenzentrum. Kein Status, deshalb leise am Ende. */}
+      <p className="mt-4 text-xs leading-relaxed text-fg-subtle">
+        {t(
+          'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.'
+        )}
+      </p>
     </div>
   );
 }

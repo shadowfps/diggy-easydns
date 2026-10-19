@@ -220,6 +220,20 @@ describe('PropagationView — Hosts', () => {
     expect(typeButton('CNAME')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText(/DNS sauber propagiert/)).toBeInTheDocument();
   });
+
+  /**
+   * #132: Neun Anbieter wirken wie ein Blick um die Welt. Per Anycast antwortet
+   * aber jeder aus seinem Rechenzentrum nahe dem Server — das muss dastehen,
+   * auch wenn ein Resolver ausfällt.
+   */
+  it('sagt, von wo aus gefragt wird und was die Flagge bedeutet', () => {
+    render(<View results={results([[['A', '192.0.2.1']], { error: 'Timeout' }])} types={HOST} />);
+
+    const hint = screen.getByText(/diggy fragt aus Deutschland/);
+    expect(hint).toHaveTextContent(/nächstgelegenen Rechenzentrum \(Anycast\)/);
+    expect(hint).toHaveTextContent(/keine weltweite Verteilung/);
+    expect(hint).toHaveTextContent(/Die Flagge zeigt den Sitz des Anbieters/);
+  });
 });
 
 describe('PropagationView — Typauswahl (#131)', () => {

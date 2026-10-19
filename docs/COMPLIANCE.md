@@ -4,7 +4,7 @@ Technische Bestandsaufnahme, keine Rechtsberatung. Sie beschreibt, was der Code
 tatsächlich tut, und ordnet das den einschlägigen Regelwerken zu. Die
 rechtliche Bewertung gehört fachlich geprüft.
 
-**Stand:** 8. September 2026, DSGVO-Teil ergänzt am 19. Oktober 2026 (#125) ·
+**Stand:** 8. September 2026, DSGVO-Teil ergänzt am 19. Oktober 2026 (#125, #132) ·
 **Bezug:** Commit-Stand von PR #34
 
 ---
@@ -116,7 +116,9 @@ Mittwald CM Service GmbH & Co. KG, Königsberger Straße 4–6, 32339 Espelkamp 
 LDI NRW, Kavalleriestraße 2–4, 40213 Düsseldorf.
 
 **Drittlandübermittlung:** Die Checks fragen unter anderem Dienste in den USA
-ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app). Übermittelt wird
+ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app), für den
+Propagations-Vergleich außerdem DoH-Resolver in der Schweiz und in Kanada
+(siehe „DoH-Resolver“ unten). Übermittelt wird
 dabei die abgefragte Domain bzw. IP-Adresse — die Anfragen gehen vom Server aus,
 nicht aus dem Browser des Nutzers, dessen IP erfahren diese Dienste also nicht.
 Zu beachten: eine abgefragte Domain kann im Einzelfall selbst personenbezogen
@@ -129,6 +131,85 @@ Aufruf **nichts** mehr von Dritten. Nachprüfbar: das gebaute `dist/index.html`
 und `dist/assets/*.css` enthalten keine Fremd-Host-Referenz. Ausgeliefert wird
 sie über Cloudflare (siehe unten); dazu kommen bei Verbindungsfehlern die
 NEL-Berichte an `a.nel.cloudflare.com`.
+
+### DoH-Resolver (#132)
+
+Der Propagations-Vergleich fragt jeden Namen gleichzeitig bei neun öffentlichen
+Resolvern ab (`server/services/doh.ts`, `DOH_RESOLVERS`). Jeder bekommt den Namen
+und den Record-Typ, vom Server aus — die IP des Besuchers erfährt keiner.
+DNSSEC und die TTL der Records fragen weiter nur Cloudflare und Google bzw.
+Cloudflare. Ein Test (`doh.test.ts`) verlangt, dass jeder Resolver in der
+Empfänger-Tabelle von `/datenschutz` und mit seinem Endpunkt hier steht.
+
+Gewählt wurde je Anbieter die Variante **ohne Filter**: Eine Variante, die
+Werbung, Malware oder Phishing blockt, antwortet für diese Domains mit 0.0.0.0,
+der Adresse einer Sperrseite oder NXDOMAIN und stünde im Vergleich als
+„abweichend“ da. Geprüft am 19. Oktober 2026: `doubleclick.net` lieferte beim
+bisher genutzten `dns.adguard-dns.com` 0.0.0.0, `internetbadguys.com` bei
+`doh.opendns.com` 146.112.61.108 (Sperrseite) — die ungefilterten Varianten
+lieferten dieselben Adressen wie alle anderen. `dnssec-failed.org` beantworteten
+alle neun mit SERVFAIL: alle validieren DNSSEC.
+
+| Anbieter | Endpunkt | Format | Variante | Betreiber, Sitz | Anycast | Quellen |
+|---|---|---|---|---|---|---|
+| Cloudflare | `https://cloudflare-dns.com/dns-query` | JSON | 1.1.1.1, ungefiltert | Cloudflare, Inc., USA | ja | [1.1.1.1](https://developers.cloudflare.com/1.1.1.1/), [Datenschutz](https://www.cloudflare.com/privacypolicy/) |
+| Google | `https://dns.google/resolve` | JSON | ungefiltert | Google LLC, USA | ja | [JSON-API](https://developers.google.com/speed/public-dns/docs/doh/json), [Datenschutz](https://developers.google.com/speed/public-dns/privacy) |
+| AdGuard | `https://unfiltered.adguard-dns.com/resolve` | JSON | „Non-filtering“ (bis #132: Standard mit Werbefilter) | AdGuard Software Ltd., Limassol, Zypern | ja | [Public DNS](https://adguard-dns.io/en/public-dns.html), [Datenschutz](https://adguard-dns.io/en/privacy.html) |
+| DNS.SB | `https://doh.dns.sb/dns-query` | JSON | ungefiltert | xTom GmbH, Düsseldorf, Deutschland | ja | [dns.sb](https://dns.sb/), [Datenschutz](https://dns.sb/privacy/) |
+| NextDNS | `https://dns.nextdns.io` | JSON | ohne Konfigurations-Id, ungefiltert | NextDNS Inc., USA | nein — per DNS zum nächsten Standort (`steering.nextdns.io`) | [Datenschutz](https://nextdns.io/privacy) |
+| Quad9 | `https://dns10.quad9.net/dns-query` | Wire | „Unsecured“ 9.9.9.10: ohne Blockliste, mit DNSSEC | Quad9 (Stiftung), c/o SWITCH, Zürich, Schweiz | ja | [Varianten](https://quad9.net/service/service-addresses-and-features/), [About](https://quad9.net/about/), [Datenschutz](https://quad9.net/privacy/policy/) |
+| OpenDNS | `https://doh.sandbox.opendns.com/dns-query` | Wire | „Sandbox“, ohne Filter | Cisco Systems, Inc., San José, USA | ja | [AdGuard-Verzeichnis](https://adguard-dns.io/kb/general/dns-providers/), [Datenschutz](https://www.opendns.com/privacy-policy/) |
+| Control D | `https://freedns.controld.com/p0` | Wire | Free DNS „Unfiltered“ (p0) | ControlD Inc., Ontario, Kanada | ja | [Free DNS](https://docs.controld.com/docs/free-dns), [Übersicht](https://controld.com/free-dns), [AGB](https://controld.com/terms) |
+| DNS4EU | `https://unfiltered.joindns4.eu/dns-query` | Wire | „Unfiltered“ | Whalebone, s.r.o., Brno, Tschechien | ja | [Für Privatnutzer](https://www.joindns4.eu/for-public), [Start des Dienstes](https://joindns4.eu/learn/dns4eu-public-service-launched), [Wikipedia](https://en.wikipedia.org/wiki/DNS4EU) |
+
+„Format“: JSON-API (`application/dns-json`) oder Wireformat nach RFC 8484
+(`application/dns-message`, `server/services/dnsWire.ts`) für Anbieter ohne
+JSON-API.
+
+**Was der Vergleich zeigen kann:** Alle Anbieter antworten aus dem
+Rechenzentrum, das dem Server am nächsten liegt; diggy läuft in Deutschland.
+Zu sehen sind die Caches verschiedener Anbieter an einem Ort, keine weltweite
+Verteilung. So steht es auch im Propagation-Tab. Nachgeprüft über
+`whoami.akamai.net`, das die Adresse zurückgibt, von der aus ein Resolver beim
+autoritativen Server fragt: DNS.SB und OpenDNS fragten aus Frankfurt, Quad9
+aus Berlin, NextDNS aus einem Hetzner-Netz in Deutschland. Für wikipedia.org,
+das per GeoDNS je nach Standort des Resolvers antwortet, bekamen alle neun
+dieselbe Adresse.
+
+**Bewusst nicht dabei:**
+
+- Mullvad — stellt den öffentlichen DoH-Dienst am 2. November 2026 ein
+  ([Ankündigung](https://mullvad.net/en/blog/2026/9/3/shutting-down-our-public-encrypted-dns-servers-and-sponsoring-quad9-instead)).
+- Wikimedia DNS — laut Betreiber „small-scale beta“ ohne Zusage für
+  Verfügbarkeit ([Wikimedia DNS](https://meta.wikimedia.org/wiki/Wikimedia_DNS)).
+- Hurricane Electric (`ordns.he.net`) — validiert kein DNSSEC (beantwortete
+  `dnssec-failed.org` als einziger), DoH vom Betreiber nicht beschrieben.
+- CIRA Canadian Shield — antwortet aus Kanada (rund 400 ms je Abfrage) und
+  brachte im Test einen Verbindungsfehler.
+- CZ.NIC ODVR (`https://odvr.nic.cz/doh`) — stabil und ungefiltert, fragt aber
+  als einziger aus Prag (`odvr-b-04.nic.cz`). Domains mit GeoDNS bekommen dort
+  andere Adressen: Von 44 geprüften Namen löste er bei wikipedia.org eine
+  „Propagation-Abweichung“ aus, die es mit den übrigen neun nicht gab
+  (185.15.58.224 statt 185.15.59.224) — ein Warn-Befund, der 8 Punkte kostet,
+  ohne dass etwas zu propagieren war.
+- Gefilterte Varianten aller Anbieter (siehe oben).
+
+**Offene Punkte:**
+
+- Schweiz und Kanada: Der Datenschutztext stützt die Übermittlung auf die
+  Angemessenheitsbeschlüsse (Art. 45 DSGVO). Der für Kanada gilt für
+  Organisationen, die dem PIPEDA unterliegen — für ControlD Inc. als
+  Unternehmen naheliegend, rechtlich nicht geprüft.
+- OpenDNS Sandbox steht in Verzeichnissen (AdGuard, Wikipedia) und
+  antwortet zuverlässig, Cisco beschreibt sie aber nicht auf seinen eigenen
+  Seiten. Verschwindet sie, steht OpenDNS als Fehler in der Liste; dann den
+  Eintrag entfernen.
+- Quad9 setzte im Test aus dem Büronetz rund 40 % der neuen TLS-Verbindungen
+  direkt nach dem ClientHello zurück (beide Varianten, IPv4 wie IPv6; andere
+  Anbieter nie). `dohQuery` verbindet nach einem Abbruch bis zu dreimal neu;
+  damit stand Quad9 in 1 von 20 Checks mit frischen Verbindungen als Fehler da
+  (mit nur einem neuen Versuch in 4 von 15). Ob das Rechenzentrum dasselbe
+  sieht, zeigt erst der Betrieb.
 
 ### Cloudflare vor der Seite (#125)
 

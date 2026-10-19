@@ -36,7 +36,7 @@ function checks({ t }: I18n) {
     {
       icon: Globe,
       title: 'Propagation',
-      text: t('Fünf öffentliche Resolver im Vergleich: Ist eine Änderung überall angekommen?'),
+      text: t('Neun öffentliche Resolver im Vergleich: Ist eine Änderung bei allen angekommen?'),
     },
     {
       icon: Landmark,
