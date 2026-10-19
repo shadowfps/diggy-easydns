@@ -150,6 +150,13 @@ const checks = [
   ['/', (res, body) => res.status === 200 && body === indexHtml],
   ['/lookup/example.com', hasPreviewTags],
   ['/lookup/Example.COM/', hasPreviewTags],
+  // Der Propagation-Typ im Link (#131) ändert die Vorschau nicht.
+  ['/lookup/example.com?propagation=MX', hasPreviewTags],
+  // `?type=` nur aus der festen Liste — abgelehnt, bevor ein Resolver gefragt wird.
+  [
+    '/api/lookup/propagation?domain=example.com&type=SRV',
+    (res, body) => res.status === 400 && JSON.parse(body).error === 'invalid_record_type',
+  ],
   // Zwei Pfadsegmente nach dem Präfix — der Wildcard muss auch die tragen.
   // Der Vergleich hat (noch) keine eigene Vorschau: das gebaute HTML.
   ['/compare/example.com/github.com', (res, body) => res.status === 200 && body === indexHtml],

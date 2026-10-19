@@ -192,6 +192,7 @@ Tests liegen neben dem geprüften Code (`*.test.ts`).
 | Endpoint | Beschreibung |
 |---|---|
 | `GET /api/lookup?domain=` | Vollständiger DNS-Audit-Report |
+| `GET /api/lookup/propagation?domain=&type=` | Antworten aller Resolver im Vergleich. Ohne `type` die Standard-Typen (A/AAAA, bei `_…`-Namen TXT/CNAME) samt Befund; mit `type` (A, AAAA, CNAME, MX, NS, TXT, CAA, SOA) nur dieser Typ, ohne Befund |
 | `GET /api/domain-check?q=` | Domain-Verfügbarkeit |
 | `GET /api/pagespeed?domain=` | PageSpeed-Analyse |
 | `GET /api/virusscan?domain=` | VirusTotal-Scan |

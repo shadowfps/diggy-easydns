@@ -370,6 +370,7 @@ export const apiErrors: Record<ApiErrorCode, string> = {
   invalid_ip: '"{input}" isn’t a public IP address.',
   domain_not_found: 'The domain "{domain}" couldn’t be resolved.',
   invalid_query: 'Please enter a domain name.',
+  invalid_record_type: '"{input}" isn’t a record type the propagation check compares ({types}).',
   lookup_failed: 'The lookup failed.',
   propagation_failed: 'The propagation check failed.',
   dnssec_failed: 'The DNSSEC check failed.',

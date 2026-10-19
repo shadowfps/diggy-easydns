@@ -127,6 +127,12 @@ export interface DohQueryResult {
   status: number;
   /** Antwortzeit in ms */
   responseTimeMs: number;
+  /**
+   * Ohne Eintrag des abgefragten Typs: Restlaufzeit des Negativ-Caches in
+   * Sekunden (siehe negativeCacheTtl). Fehlt, wenn der Resolver kein SOA
+   * mitliefert.
+   */
+  negativeTtl?: number;
 }
 
 interface QueryOptions {
@@ -173,16 +179,38 @@ export async function dohQuery(
     const records = (body.Answer ?? [])
       .filter((a) => NUMBER_TO_TYPE[a.type] !== undefined)
       .map((a) => mapAnswerToRecord(a, type));
+    const negativeTtl = records.some((r) => r.type === type)
+      ? undefined
+      : negativeCacheTtl(body.Authority);
 
     return {
       records,
       authenticated: body.AD ?? false,
       status: body.Status,
       responseTimeMs: Date.now() - start,
+      ...(negativeTtl !== undefined && { negativeTtl }),
     };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Wie lange ein Resolver „gibt es nicht“ (NXDOMAIN/NODATA) noch weitergibt.
+ *
+ * Zur negativen Antwort gehört das SOA der Zone im Authority-Abschnitt. Nach
+ * RFC 2308 gilt sie das Kleinere aus seiner TTL und seinem MINIMUM-Feld; die
+ * TTL zählt im Cache des Resolvers herunter wie bei jedem Record. Ohne SOA
+ * (AdGuard schickt keins) oder mit unlesbarem SOA: `undefined` — geraten wird
+ * nicht.
+ */
+export function negativeCacheTtl(
+  authority: { type: number; TTL: number; data: string }[] | undefined
+): number | undefined {
+  const soa = authority?.find((record) => record.type === RECORD_TYPE_NUMBERS.SOA);
+  const minimum = Number(soa?.data.trim().split(/\s+/)[6]);
+  if (!soa || !Number.isFinite(soa.TTL) || !Number.isFinite(minimum)) return undefined;
+  return Math.min(soa.TTL, minimum);
 }
 
 /**

@@ -12,7 +12,6 @@ import {
   sslFindings,
   dnssecFindings,
   mailFindings,
-  propagationFindings,
   whoisFindings,
 } from './services/reportBuilder.js';
 import { cached } from './lib/cache.js';
@@ -21,8 +20,8 @@ import { createIndexRenderer, domainFromLookupPath, lookupPreview, previewOrigin
 import { BlockedTargetError } from './lib/safeTarget.js';
 import { upstreamErrorStatus } from './lib/upstreamError.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
-import { queryAllResolvers } from './services/propagation.js';
-import { propagationTypes } from '../shared/propagation.js';
+import { propagationSection, propagationTypeQuery } from './services/propagation.js';
+import { PROPAGATION_RECORD_TYPES } from '../shared/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
 import { auditMail } from './services/mailAudit.js';
@@ -674,14 +673,22 @@ app.get('/api/lookup', async (req: Request, res: Response) => {
 app.get('/api/lookup/propagation', async (req: Request, res: Response) => {
   const domain = resolveDomainParam(req, res, 'dns');
   if (!domain) return;
+
+  // Ohne `type` die Standard-Typen wie bisher: Hosts A/AAAA, DNS-Einträge wie
+  // `s1._domainkey.example.com` TXT und CNAME. Mit `type` nur dieser (#131).
+  const type = propagationTypeQuery(req.query.type);
+  if (type === null) {
+    const input = forMessage(String(req.query.type));
+    const types = PROPAGATION_RECORD_TYPES.join(', ');
+    return res.status(400).json({
+      error: 'invalid_record_type',
+      message: `"${input}" ist kein Record-Typ, den die Propagation vergleicht (${types}).`,
+      params: { input, types },
+    });
+  }
+
   try {
-    // Hosts vergleichen A/AAAA, DNS-Einträge wie `s1._domainkey.example.com`
-    // TXT und CNAME. Der Typ hängt nur am Namen, der Cache-Key bleibt gültig.
-    const types = propagationTypes(domain);
-    const propagation = await cached(`propagation:${domain}`, LOOKUP_TTL_MS, () =>
-      queryAllResolvers(domain, { types })
-    );
-    res.json({ propagation, findings: propagationFindings(propagation, types) });
+    res.json(await propagationSection(domain, { type, ttlMs: LOOKUP_TTL_MS }));
   } catch (error) {
     sectionError(res, 'propagation_failed', error);
   }

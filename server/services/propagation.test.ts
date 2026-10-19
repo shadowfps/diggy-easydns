@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { queryAllResolvers } from './propagation.js';
+import { propagationSection, propagationTypeQuery, queryAllResolvers } from './propagation.js';
 import { propagationFindings } from './reportBuilder.js';
 import { DOH_RESOLVERS } from './doh.js';
 import { propagationTypes } from '../../shared/propagation.js';
@@ -152,5 +152,108 @@ describe('queryAllResolvers — TXT über alle Resolver', () => {
       'CNAME sel1.dkim.provider.net',
       'TXT v=DKIM1; p=X',
     ]);
+  });
+});
+
+/* ─── #131: wählbarer Typ ───────────────────────────────────────────── */
+
+describe('propagationTypeQuery', () => {
+  it('lässt einen fehlenden oder leeren Parameter beim Standard', () => {
+    expect(propagationTypeQuery(undefined)).toBeUndefined();
+    expect(propagationTypeQuery('')).toBeUndefined();
+  });
+
+  it('nimmt nur Typen aus der festen Liste, ohne Rücksicht auf Groß-/Kleinschreibung', () => {
+    expect(propagationTypeQuery('MX')).toBe('MX');
+    expect(propagationTypeQuery('caa')).toBe('CAA');
+    for (const raw of ['SRV', 'PTR', 'DS', 'ANY', '15', 'A;AAAA', ['A', 'MX'], { type: 'A' }]) {
+      expect(propagationTypeQuery(raw), JSON.stringify(raw)).toBeNull();
+    }
+  });
+});
+
+describe('queryAllResolvers — Negativ-TTL', () => {
+  it('hängt je Typ ohne Eintrag die Restlaufzeit an, wenn der Resolver ein SOA mitliefert', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = new URL(input);
+        const type = Number(url.searchParams.get('type'));
+        // AdGuard schickt zu „gibt es nicht“ kein SOA.
+        const soa = url.hostname.includes('adguard')
+          ? undefined
+          : [{ name: 'example.com.', type: 6, TTL: 1200, data: 'ns1.example. h.example. 9 7200 900 1209600 3600' }];
+        const body =
+          type === 1
+            ? { Status: 0, Answer: [{ name: 'example.com.', type: 1, TTL: 60, data: '192.0.2.1' }] }
+            : { Status: 0, Authority: soa };
+        return new Response(JSON.stringify(body));
+      })
+    );
+
+    const results = await queryAllResolvers('example.com', { types: ['A', 'AAAA'] });
+    const cloudflare = results.find((r) => r.resolver.id === 'cloudflare')!;
+    expect(cloudflare.negativeTtl).toEqual({ AAAA: 1200 });
+    expect(results.find((r) => r.resolver.id === 'adguard')).not.toHaveProperty('negativeTtl');
+  });
+});
+
+describe('propagationSection', () => {
+  const TTL_MS = 60_000;
+  /** A für alle, sonst MX — genug, um zu sehen, welche Typen gefragt werden. */
+  const answers = (_url: string, type: number): Answer[] =>
+    type === 1
+      ? [{ name: 'section.example.', type: 1, TTL: 60, data: '192.0.2.1' }]
+      : type === 15
+        ? [{ name: 'section.example.', type: 15, TTL: 300, data: '10 mx.example.net.' }]
+        : [];
+
+  /**
+   * Ohne `type` genau wie vor #131: A und AAAA für einen Host, der Befund
+   * dazu — Report und Score hängen daran.
+   */
+  it('liefert ohne Typ unverändert die Standard-Typen samt Befund', async () => {
+    const calls = stubDoh(answers);
+    const section = await propagationSection('compat.section.example', { ttlMs: TTL_MS });
+
+    expect(new Set(calls.map((c) => c.type))).toEqual(new Set([1, 28]));
+    expect(Object.keys(section)).toEqual(['propagation', 'findings']);
+    expect(section.findings).toEqual(propagationFindings(section.propagation, ['A', 'AAAA']));
+    expect(section.findings.map((f) => f.id)).toEqual(['propagation-consistent']);
+  });
+
+  it('fragt mit Typ nur diesen ab und liefert keinen Befund', async () => {
+    const calls = stubDoh(answers);
+    const section = await propagationSection('typed.section.example', { type: 'MX', ttlMs: TTL_MS });
+
+    expect(calls.map((c) => c.type)).toEqual(DOH_RESOLVERS.map(() => 15));
+    expect(section.type).toBe('MX');
+    // Score und Findings bleiben bei den Standard-Typen.
+    expect(section.findings).toEqual([]);
+    expect(section.propagation[0].records).toEqual([
+      { type: 'MX', name: 'section.example', priority: 10, value: 'mx.example.net', ttl: 300 },
+    ]);
+  });
+
+  it('cached je Typ getrennt', async () => {
+    const domain = 'cache.section.example';
+    const calls = stubDoh(answers);
+
+    await propagationSection(domain, { ttlMs: TTL_MS });
+    expect(calls).toHaveLength(DOH_RESOLVERS.length * 2);
+
+    // Ein anderer Typ ist ein eigener Eintrag …
+    await propagationSection(domain, { type: 'MX', ttlMs: TTL_MS });
+    expect(calls).toHaveLength(DOH_RESOLVERS.length * 3);
+
+    // … auch einer der Standard-Typen allein.
+    await propagationSection(domain, { type: 'A', ttlMs: TTL_MS });
+    expect(calls).toHaveLength(DOH_RESOLVERS.length * 4);
+
+    // Wiederholt: alles aus dem Cache.
+    await propagationSection(domain, { ttlMs: TTL_MS });
+    await propagationSection(domain, { type: 'MX', ttlMs: TTL_MS });
+    await propagationSection(domain, { type: 'A', ttlMs: TTL_MS });
+    expect(calls).toHaveLength(DOH_RESOLVERS.length * 4);
   });
 });

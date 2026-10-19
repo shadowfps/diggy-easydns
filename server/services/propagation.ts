@@ -5,11 +5,19 @@
  * Damit kann man sehen ob ein DNS-Wechsel weltweit angekommen ist —
  * oder ob ein einzelner Resolver noch eine alte IP oder einen alten
  * DKIM-Schlüssel cached. Welche Typen abgefragt werden, entscheidet
- * `propagationTypes` (shared/propagation.ts).
+ * `propagationTypes` (shared/propagation.ts) — oder wer im Tab einen anderen
+ * wählt (`?type=`, #131).
  */
 
 import { DOH_RESOLVERS, dohQuery, type DohResolver } from './doh.js';
-import type { DnsRecord, RecordType, ResolverResult } from '../types.js';
+import { propagationFindings } from './reportBuilder.js';
+import { cached } from '../lib/cache.js';
+import {
+  parsePropagationType,
+  propagationTypes,
+  type PropagationRecordType,
+} from '../../shared/propagation.js';
+import type { DnsRecord, Finding, RecordType, ResolverResult } from '../types.js';
 
 /** NOERROR und NXDOMAIN: Der Resolver hat geantwortet — mit Eintrag oder ohne. */
 const ANSWER_STATUSES = new Set([0, 3]);
@@ -64,8 +72,8 @@ async function queryResolverSafe(
     );
 
     // SERVFAIL oder REFUSED kommen als HTTP 200 mit leerer Antwort. Das ist
-    // ein Fehler des Resolvers, kein „gibt es nicht“ — bei TXT/CNAME zählt
-    // ein fehlender Eintrag als Abweichung, ein Fehler dagegen nie.
+    // ein Fehler des Resolvers, kein „gibt es nicht“ — außer bei Adressen
+    // zählt ein fehlender Eintrag als Abweichung, ein Fehler dagegen nie.
     const failed = responses.find((r) => !ANSWER_STATUSES.has(r.status));
     if (failed) throw new Error(DNS_STATUS_NAMES[failed.status] ?? `DNS-Status ${failed.status}`);
 
@@ -80,6 +88,12 @@ async function queryResolverSafe(
       records.push(rec);
     }
 
+    // Je Typ ohne Eintrag: wie lange der Resolver das noch so weitergibt.
+    const negativeTtl: Partial<Record<RecordType, number>> = {};
+    responses.forEach((response, i) => {
+      if (response.negativeTtl !== undefined) negativeTtl[types[i]] = response.negativeTtl;
+    });
+
     return {
       resolver: {
         id: resolver.id,
@@ -91,6 +105,7 @@ async function queryResolverSafe(
       },
       records,
       responseTimeMs: Date.now() - start,
+      ...(Object.keys(negativeTtl).length > 0 && { negativeTtl }),
     };
   } catch (error) {
     const err = error as Error;
@@ -108,4 +123,52 @@ async function queryResolverSafe(
       error: err.name === 'AbortError' ? 'Timeout' : err.message,
     };
   }
+}
+
+/** Antwort von `/api/lookup/propagation`. */
+export interface PropagationSectionResult {
+  propagation: ResolverResult[];
+  findings: Finding[];
+  /** Nur bei `?type=`: der abgefragte Typ. */
+  type?: PropagationRecordType;
+}
+
+/**
+ * Liest `?type=` (#131).
+ *
+ * - `undefined`: nicht angegeben (oder leer) — die Standard-Typen wie bisher
+ * - `null`: kein Typ aus PROPAGATION_RECORD_TYPES, oder mehrfach angegeben
+ */
+export function propagationTypeQuery(raw: unknown): PropagationRecordType | null | undefined {
+  if (raw === undefined || raw === '') return undefined;
+  return parsePropagationType(raw);
+}
+
+/**
+ * Inhalt von `/api/lookup/propagation`.
+ *
+ * Ohne `type` genau wie vor #131: die Standard-Typen des Namens
+ * (`propagationTypes`), derselbe Cache-Key und der Befund dazu. Davon hängen
+ * Report und Score ab.
+ *
+ * Mit `type` nur dieser Typ, unter eigenem Cache-Key — und ohne Befund: Score
+ * und Findings bleiben bei den Standard-Typen. Sonst hinge der Score davon ab,
+ * welchen Typ jemand gerade ansieht.
+ */
+export async function propagationSection(
+  domain: string,
+  { type, ttlMs }: { type?: PropagationRecordType; ttlMs: number }
+): Promise<PropagationSectionResult> {
+  if (!type) {
+    const types = propagationTypes(domain);
+    const propagation = await cached(`propagation:${domain}`, ttlMs, () =>
+      queryAllResolvers(domain, { types })
+    );
+    return { propagation, findings: propagationFindings(propagation, types) };
+  }
+
+  const propagation = await cached(`propagation:${type}:${domain}`, ttlMs, () =>
+    queryAllResolvers(domain, { types: [type] })
+  );
+  return { propagation, findings: [], type };
 }
