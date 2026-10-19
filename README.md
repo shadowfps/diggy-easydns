@@ -60,7 +60,7 @@ Kostenlos, ohne Anmeldung, ohne Tracking — und Open Source.
   Sprache bleiben in deinem Browser.
 - **Für jeden Bildschirm und jede Person.** Desktop und Mobil, hell und dunkel,
   Deutsch und Englisch, per Tastatur und Screenreader bedienbar — und wer
-  „Bewegung reduzieren" eingestellt hat, bekommt keine Animationen.
+  „Bewegung reduzieren“ eingestellt hat, bekommt keine Animationen.
 
 ## Was diggy prüft
 
@@ -124,15 +124,15 @@ gewählte Konfigurationen betreffen. Daraus ergibt sich das Urteil von
 
 ## Typische Fragen, die diggy beantwortet
 
-- *„Warum landen meine Mails im Spam?"* — Der Mail-Tab zeigt, ob SPF, DKIM und
+- *„Warum landen meine Mails im Spam?“* — Der Mail-Tab zeigt, ob SPF, DKIM und
   DMARC zusammenpassen und was fehlt.
-- *„Ist der Umzug zum neuen Hoster schon überall angekommen?"* — Propagation
+- *„Ist der Umzug zum neuen Hoster schon überall angekommen?“* — Propagation
   und Vergleich zeigen, welche Resolver noch die alten Werte liefern.
-- *„Ist der neue DKIM-Schlüssel live?"* — `selector._domainkey.domain.de`
+- *„Ist der neue DKIM-Schlüssel live?“* — `selector._domainkey.domain.de`
   eingeben, und die Propagation vergleicht den TXT-Eintrag über alle Resolver.
-- *„Wann läuft mein Zertifikat ab — und die Domain?"* — Restlaufzeiten stehen
+- *„Wann läuft mein Zertifikat ab — und die Domain?“* — Restlaufzeiten stehen
   im Report, die Erinnerung kommt per Kalenderdatei.
-- *„Ist meine Domain sauber konfiguriert?"* — Der Health Score sagt es in einer
+- *„Ist meine Domain sauber konfiguriert?“* — Der Health Score sagt es in einer
   Zahl, die Findings sagen, was zu tun ist.
 
 ## Datenschutz und Sicherheit
