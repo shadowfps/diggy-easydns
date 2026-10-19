@@ -49,7 +49,7 @@ export type DeText =
   | 'SPF, DKIM, DMARC und MTA-STS: Kann jemand in deinem Namen Mails fälschen?'
   | 'Zertifikat, Aussteller und Ablaufdatum — bevor Besucher eine Warnung sehen.'
   | 'Sind die Antworten signiert, und hält die Vertrauenskette?'
-  | 'Fünf öffentliche Resolver im Vergleich: Ist eine Änderung überall angekommen?'
+  | 'Neun öffentliche Resolver im Vergleich: Ist eine Änderung bei allen angekommen?'
   | 'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.'
   | 'Kennst du schon {converter} by diggy?'
   | 'Bilder umwandeln, skalieren & komprimieren — direkt im Browser.'

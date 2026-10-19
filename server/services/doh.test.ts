@@ -136,6 +136,24 @@ describe('DOH_RESOLVERS', () => {
       expect(row?.[1], r.id).toBe(REGION[r.country]);
     }
   });
+
+  /**
+   * Die Zahl steht auch außerhalb dieser Liste: Mit #132 nannte die
+   * Startseite noch „Fünf öffentliche Resolver“, während neun gefragt wurden.
+   */
+  it('stimmt mit der Zahl auf der Startseite, in der README und im Ladezustand überein', () => {
+    const read = (file: string) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
+    const words = ['Null', 'Eins', 'Zwei', 'Drei', 'Vier', 'Fünf', 'Sechs', 'Sieben', 'Acht', 'Neun', 'Zehn', 'Elf', 'Zwölf'];
+    const count = words[DOH_RESOLVERS.length];
+    expect(count, 'Zahlwort fehlt').toBeDefined();
+
+    expect(read('src/modules/home/CheckOverview.tsx')).toContain(`'${count} öffentliche Resolver im Vergleich`);
+    expect(read('README.md')).toContain(`${count} öffentliche Resolver`);
+    const skeletonRows = read('src/components/ui/Skeleton.tsx').match(
+      /So viele Zeilen wie Resolver[^\n]*\n\s*\{Array\.from\(\{ length: (\d+) \}\)/
+    );
+    expect(Number(skeletonRows?.[1])).toBe(DOH_RESOLVERS.length);
+  });
 });
 
 describe('dohQuery — Wireformat', () => {

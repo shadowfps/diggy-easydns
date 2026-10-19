@@ -48,8 +48,8 @@ const ui: Dictionary = {
     'Certificate, issuer and expiry date — before your visitors see a warning.',
   'Sind die Antworten signiert, und hält die Vertrauenskette?':
     'Are the answers signed, and does the chain of trust hold?',
-  'Fünf öffentliche Resolver im Vergleich: Ist eine Änderung überall angekommen?':
-    'Five public resolvers side by side: has your change arrived everywhere?',
+  'Neun öffentliche Resolver im Vergleich: Ist eine Änderung bei allen angekommen?':
+    'Nine public resolvers side by side: has your change reached all of them?',
   'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.':
     'Registrar, term and status — before a domain quietly expires.',
   'Kennst du schon {converter} by diggy?': 'Have you tried {converter} by diggy?',
