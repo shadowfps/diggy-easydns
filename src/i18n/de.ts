@@ -217,6 +217,7 @@ export type DeText =
   | 'Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.'
   | '— kein Eintrag'
   | 'Alle Resolver liefern denselben {type}-Record — sauber propagiert.'
+  | 'Alle Resolver liefern dieselben {type}-Records — sauber propagiert.'
   | 'Kein Resolver liefert einen {types} unter diesem Namen.'
   | '{type}-Record'
   | '{types}- oder {last}-Record'
@@ -227,6 +228,10 @@ export type DeText =
   | 'weicht ab'
   | 'Gekürzt zeigen'
   | 'Ganzen Wert zeigen ({count} Zeichen)'
+  | 'Record-Typ'
+  | '{type}-Records werden bei allen Resolvern abgefragt…'
+  | 'Verglichen wird die Seriennummer, der dritte Wert im SOA.'
+  | 'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.'
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   | 'Scan abgeschlossen'

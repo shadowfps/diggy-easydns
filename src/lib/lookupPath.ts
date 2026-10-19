@@ -1,5 +1,6 @@
 import { t } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
+import type { PropagationRecordType } from '@/lib/propagation';
 
 /**
  * Pure Helfer rund um Lookup-Pfade, Titel und Dateinamen.
@@ -43,8 +44,18 @@ export function buildDocumentTitle(
   return subject ? `${subject} — diggy` : 'diggy — DNS made friendly';
 }
 
-export function lookupPathFor(domain: string): string {
-  return `/lookup/${encodeURIComponent(domain)}`;
+/**
+ * Permalink eines Reports — mit Typ für den Propagation-Tab
+ * (`/lookup/example.com?propagation=MX`, #131).
+ *
+ * Ein Query-Parameter statt eines weiteren Pfadsegments: Server,
+ * Link-Vorschau und alle bisherigen Permalinks hängen am Pfad
+ * `/lookup/<domain>` und bleiben so unverändert. Gelesen wird er mit
+ * `propagationTypeFromSearch` (lib/propagation.ts).
+ */
+export function lookupPathFor(domain: string, propagationType?: PropagationRecordType | null): string {
+  const path = `/lookup/${encodeURIComponent(domain)}`;
+  return propagationType ? `${path}?propagation=${propagationType}` : path;
 }
 
 /**

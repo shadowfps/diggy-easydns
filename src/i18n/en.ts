@@ -275,6 +275,8 @@ const ui: Dictionary = {
   },
   'Alle Resolver liefern denselben {type}-Record — sauber propagiert.':
     'All resolvers return the same {type} record — fully propagated.',
+  'Alle Resolver liefern dieselben {type}-Records — sauber propagiert.':
+    'All resolvers return the same {type} records — fully propagated.',
   'Kein Resolver liefert einen {types} unter diesem Namen.':
     'No resolver returns any {types} under this name.',
   '{type}-Record': '{type} record',
@@ -286,6 +288,12 @@ const ui: Dictionary = {
   'weicht ab': 'differs',
   'Gekürzt zeigen': 'Show shortened',
   'Ganzen Wert zeigen ({count} Zeichen)': 'Show full value ({count} characters)',
+  'Record-Typ': 'Record type',
+  '{type}-Records werden bei allen Resolvern abgefragt…': 'Asking every resolver for {type} records…',
+  'Verglichen wird die Seriennummer, der dritte Wert im SOA.':
+    'Compared by serial number, the third value in the SOA.',
+  'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.':
+    'Going by their TTL, the differing resolvers will query the nameservers again within {duration} of this check.',
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   'Scan abgeschlossen': 'Scan complete',

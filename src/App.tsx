@@ -5,7 +5,6 @@ import { SearchBar } from '@/modules/search/SearchBar';
 import { ScoreCard } from '@/modules/score/ScoreCard';
 import { QuickFacts } from '@/modules/score/QuickFacts';
 import { RecordsList } from '@/modules/records/RecordsList';
-import { PropagationView } from '@/modules/propagation/PropagationView';
 import { FindingsList } from '@/modules/findings/FindingsList';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
@@ -78,6 +77,17 @@ const loadMailView = () => import('@/modules/mail/MailView');
 const MailView = lazy(() => loadMailView().then((m) => ({ default: m.MailView })));
 
 /*
+ * Der Propagation-Tab, aus demselben Grund: Mit der Typauswahl, TTL und den
+ * Abfragen weiterer Typen (#131) wäre index.js über sein Budget gewachsen
+ * (47,05 → 48,30 kB gzip bei 48 kB Grenze). Vorgeladen wird, sobald die
+ * Propagation-Daten da sind (siehe App).
+ */
+const loadPropagationView = () => import('@/modules/propagation/PropagationView');
+const PropagationView = lazy(() =>
+  loadPropagationView().then((m) => ({ default: m.PropagationView }))
+);
+
+/*
  * „Seit dem letzten Check“ erscheint nur bei einem erneuten Check derselben
  * Domain und erst nach dem Report — Vergleichslogik und Texte (rund 3 kB
  * gzip) müssen den ersten Report nicht aufhalten.
@@ -113,7 +123,12 @@ import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/cn';
 import { isDnsOnlyName } from '@/lib/dnsName';
-import { propagationTypes } from '@/lib/propagation';
+import {
+  defaultPropagationType,
+  propagationTypeFromSearch,
+  propagationTypes,
+  type PropagationRecordType,
+} from '@/lib/propagation';
 import {
   buildDocumentTitle,
   formatExportTimestamp,
@@ -154,6 +169,8 @@ export default function App() {
   const [virusScanError, setVirusScanError] = useState<unknown>(null);
   const [permalinkCopied, setPermalinkCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('records');
+  // Im Propagation-Tab gewählter Record-Typ; `null` heißt Voreinstellung (#131).
+  const [propagationType, setPropagationType] = useState<PropagationRecordType | null>(null);
   const [searchValue, setSearchValue] = useState('');
   const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const [comparePair, setComparePair] = useState<ComparePair>({ left: '', right: '' });
@@ -161,7 +178,7 @@ export default function App() {
   // applyPath schließt über aktuellen State. Der popstate-Listener wird nur
   // einmal gebunden, greift die Funktion aber über diese Ref ab, damit er
   // nicht auf einer veralteten Closure sitzt.
-  const applyPathRef = useRef<(pathname: string) => void>(() => {});
+  const applyPathRef = useRef<(pathname: string, search: string) => void>(() => {});
   // Beim Direktaufruf der Startseite soll der Cursor sofort im Suchfeld stehen,
   // damit man ohne Klick per Strg+V einfügen und suchen kann. Bei Deep-Links
   // (Permalink oder Unterseite) übernimmt der Routing-Effekt.
@@ -213,6 +230,7 @@ export default function App() {
 
     setIpQuery(null);
     setActiveTab('records');
+    setPropagationType(null);
     lookup.run(normalizedDomain);
   };
 
@@ -238,12 +256,36 @@ export default function App() {
     runLookup(domain);
   };
 
-  // Records da → Permalink auf die (server-normalisierte) Domain setzen.
+  const { propagation, dnssec, ssl, mail, whois, techStack } = lookup.sections;
+  // Der Typ, den der Propagation-Tab zeigt: der gewählte, sonst wie bisher
+  // der erste Standard-Typ mit Antwort.
+  const shownPropagationType =
+    propagationType ??
+    (lookup.domain ? defaultPropagationType(propagation.data ?? [], propagationTypes(lookup.domain)) : null);
+  const linkedPropagationType = activeTab === 'propagation' ? shownPropagationType : null;
+
+  /*
+   * Records da → Permalink auf die (server-normalisierte) Domain setzen.
+   *
+   * Im Propagation-Tab steht der gezeigte Typ mit im Link
+   * (`?propagation=MX`, #131): Wer die Adresse kopiert, teilt genau diese
+   * Ansicht. Tab und Voreinstellung schreiben ihn per replaceState — nur die
+   * Wahl eines Typs legt einen History-Eintrag an (handlePropagationType).
+   */
   useEffect(() => {
-    if (lookup.recordsStatus === 'done' && lookup.domain) {
-      replaceLookupPath(lookup.domain);
+    if (lookup.recordsStatus !== 'done' || !lookup.domain) return;
+    const nextPath = lookupPathFor(lookup.domain, linkedPropagationType);
+    if (`${window.location.pathname}${window.location.search}` !== nextPath) {
+      window.history.replaceState(null, '', nextPath);
     }
-  }, [lookup.recordsStatus, lookup.domain]);
+  }, [lookup.recordsStatus, lookup.domain, linkedPropagationType]);
+
+  /** Typ im Propagation-Tab wählen: eigener History-Eintrag, Zurück führt zum vorigen Typ. */
+  const handlePropagationType = (type: PropagationRecordType) => {
+    if (!lookup.domain || type === shownPropagationType) return;
+    window.history.pushState(null, '', lookupPathFor(lookup.domain, type));
+    setPropagationType(type);
+  };
 
   // Alle Sektionen fertig → vollständigen Report in die History schreiben.
   // Fehlgeschlagene Sektionen mit, damit der nächste Vergleich sie auslässt.
@@ -288,7 +330,7 @@ export default function App() {
    * und bei `popstate`. Vorher gab es nur den Init-Pfad, deshalb hat der
    * Zurück-Button nur die URL geändert und die Ansicht stehen gelassen.
    */
-  const applyPath = (pathname: string) => {
+  const applyPath = (pathname: string, search = '') => {
     // Vergleich: beide Domains stehen im Pfad, die Ansicht lädt sie selbst.
     const pair = getComparePairFromPath(pathname);
     if (pair) {
@@ -315,10 +357,24 @@ export default function App() {
 
     const domainFromPath = getDomainFromLookupPath(pathname);
     if (domainFromPath) {
+      const linkedType = propagationTypeFromSearch(search);
+      // Derselbe Report, nur ein anderer Propagation-Typ (Zurück/Vorwärts nach
+      // einer Typwahl): umschalten statt alles neu zu prüfen.
+      const sameReport =
+        view === 'lookup' &&
+        lookup.domain === domainFromPath &&
+        (lookup.recordsStatus === 'done' || lookup.recordsStatus === 'loading');
       // Der Pfad steht schon — nicht erneut hineinschreiben, sonst würde ein
       // replaceState den History-Eintrag überschreiben, zu dem wir gerade
       // zurückgesprungen sind.
-      runLookup(domainFromPath, { updatePath: false });
+      if (!sameReport) runLookup(domainFromPath, { updatePath: false });
+      if (linkedType !== undefined) {
+        // `null` (unbekannter Typ): Tab mit Voreinstellung.
+        setActiveTab('propagation');
+        setPropagationType(linkedType);
+      } else if (sameReport && activeTab === 'propagation') {
+        setActiveTab('records');
+      }
       return;
     }
 
@@ -387,7 +443,7 @@ export default function App() {
   useEffect(() => {
     if (initialPathHandledRef.current) return;
     initialPathHandledRef.current = true;
-    applyPath(window.location.pathname);
+    applyPath(window.location.pathname, window.location.search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -408,14 +464,15 @@ export default function App() {
 
   // Zurück/Vorwärts im Browser. Ohne diesen Listener änderte sich nur die URL.
   useEffect(() => {
-    const handlePopState = () => applyPathRef.current(window.location.pathname);
+    const handlePopState = () =>
+      applyPathRef.current(window.location.pathname, window.location.search);
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const handleCopyPermalink = async () => {
     if (!lookup.domain) return;
-    const url = getLookupUrl(lookup.domain);
+    const url = getLookupUrl(lookup.domain, linkedPropagationType);
     try {
       await navigator.clipboard.writeText(url);
       setPermalinkCopied(true);
@@ -445,7 +502,6 @@ export default function App() {
   const lookupHasOutput =
     view === 'lookup' && Boolean(records || recordsLoading || recordsErrored || ipQuery);
 
-  const { propagation, dnssec, ssl, mail, whois, techStack } = lookup.sections;
   const mailData = mail.data;
   const mailCount = mailData
     ? (mailData.spf.present ? 1 : 0) +
@@ -469,6 +525,10 @@ export default function App() {
   useEffect(() => {
     if (hasMailData) loadMailView().catch(() => {});
   }, [hasMailData]);
+  const hasPropagationData = propagation.status === 'done';
+  useEffect(() => {
+    if (hasPropagationData) loadPropagationView().catch(() => {});
+  }, [hasPropagationData]);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -880,11 +940,16 @@ export default function App() {
                       ) : propagation.status === 'error' ? (
                         <SectionError error={propagation.error} />
                       ) : propagation.data && propagation.data.length > 0 ? (
-                        <PropagationView
-                          key={report.domain}
-                          results={propagation.data}
-                          types={propagationTypes(report.domain)}
-                        />
+                        <Suspense fallback={<PropagationSkeleton />}>
+                          <PropagationView
+                            key={report.domain}
+                            domain={report.domain}
+                            results={propagation.data}
+                            types={propagationTypes(report.domain)}
+                            type={shownPropagationType ?? propagationTypes(report.domain)[0]}
+                            onTypeChange={handlePropagationType}
+                          />
+                        </Suspense>
                       ) : (
                         <Placeholder
                           title={t('Multi-Resolver-Propagation')}
@@ -1051,8 +1116,8 @@ function formatCheckedAt(timestamp: string): string {
   return formatDate(timestamp, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function getLookupUrl(domain: string): string {
-  return `${window.location.origin}${lookupPathFor(domain)}`;
+function getLookupUrl(domain: string, propagationType: PropagationRecordType | null): string {
+  return `${window.location.origin}${lookupPathFor(domain, propagationType)}`;
 }
 
 function replaceLookupPath(domain: string): void {

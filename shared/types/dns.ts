@@ -120,6 +120,14 @@ export interface ResolverResult {
   records: DnsRecord[];
   responseTimeMs: number;
   error?: string;
+  /**
+   * Restlaufzeit des Negativ-Caches in Sekunden, je abgefragtem Typ ohne
+   * Eintrag (NXDOMAIN/NODATA, #131): so lange gibt der Resolver „gibt es
+   * nicht“ weiter. Nach RFC 2308 das Kleinere aus der TTL des mitgelieferten
+   * SOA und seinem MINIMUM-Feld. Fehlt, wenn der Resolver kein SOA mitschickt —
+   * dann ist die Zeit unbekannt.
+   */
+  negativeTtl?: Partial<Record<RecordType, number>>;
 }
 
 export interface SslInfo {

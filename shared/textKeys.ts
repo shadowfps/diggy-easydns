@@ -209,6 +209,7 @@ export type ApiErrorCode =
   | 'invalid_ip'
   | 'domain_not_found'
   | 'invalid_query'
+  | 'invalid_record_type'
   | 'lookup_failed'
   | 'propagation_failed'
   | 'dnssec_failed'
