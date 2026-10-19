@@ -172,8 +172,12 @@ export function AuthoritativeBlock({
               values={group.values}
               members={group.members}
               badge={
+                // Wie bei den Resolvern nur, wenn es etwas zu unterscheiden
+                // gibt — sonst sagt es der Hinweis darunter.
                 hasExpected
-                  ? group.flagged
+                  ? missingExpected === 0
+                    ? undefined
+                    : group.flagged
                     ? 'deviating'
                     : 'expected'
                   : disagree && groups.length > 1 && group.flagged
