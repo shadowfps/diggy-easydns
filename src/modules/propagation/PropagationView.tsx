@@ -153,6 +153,7 @@ function Comparison({
     });
   }, [entry, answers, consensusKey]);
   const letterFor = (key: string) => groups.find((g) => g.key === key)?.letter;
+  const consensusSize = answers.find((a) => a.key === consensusKey)?.values.length ?? 0;
 
   const answeredWithoutError = answers.some((a) => !a.result.error);
 
@@ -239,9 +240,12 @@ function Comparison({
         >
           <Check className="mt-0.5 size-4 shrink-0 text-success" />
           <span>
-            {entry
-              ? t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type })
-              : t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')}
+            {/* Ein NS-, MX- oder CAA-Satz hat meist mehrere Records. */}
+            {!entry
+              ? t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')
+              : consensusSize > 1
+                ? t('Alle Resolver liefern dieselben {type}-Records — sauber propagiert.', { type })
+                : t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type })}
           </span>
         </motion.div>
       )}

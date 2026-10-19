@@ -217,6 +217,7 @@ export type DeText =
   | 'Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.'
   | '— kein Eintrag'
   | 'Alle Resolver liefern denselben {type}-Record — sauber propagiert.'
+  | 'Alle Resolver liefern dieselben {type}-Records — sauber propagiert.'
   | 'Kein Resolver liefert einen {types} unter diesem Namen.'
   | '{type}-Record'
   | '{types}- oder {last}-Record'

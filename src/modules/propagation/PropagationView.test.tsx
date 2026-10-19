@@ -275,7 +275,8 @@ describe('PropagationView — Typauswahl (#131)', () => {
     // Priorität und Ziel, wie im Zonefile.
     expect(group).toHaveTextContent('10 mx1.example.net');
     expect(group).toHaveTextContent('20 mx2.example.net');
-    expect(screen.getByText(/Alle Resolver liefern denselben MX-Record/)).toBeInTheDocument();
+    // Zwei MX: Mehrzahl.
+    expect(screen.getByText('Alle Resolver liefern dieselben MX-Records — sauber propagiert.')).toBeInTheDocument();
     expect(screen.getByText('20ms · TTL 300s')).toBeInTheDocument();
     expect(screen.getByText('20ms · TTL 120s')).toBeInTheDocument();
   });

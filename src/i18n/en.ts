@@ -275,6 +275,8 @@ const ui: Dictionary = {
   },
   'Alle Resolver liefern denselben {type}-Record — sauber propagiert.':
     'All resolvers return the same {type} record — fully propagated.',
+  'Alle Resolver liefern dieselben {type}-Records — sauber propagiert.':
+    'All resolvers return the same {type} records — fully propagated.',
   'Kein Resolver liefert einen {types} unter diesem Namen.':
     'No resolver returns any {types} under this name.',
   '{type}-Record': '{type} record',
