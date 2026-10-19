@@ -354,6 +354,10 @@ const ui: Dictionary = {
   'Die Zone liegt bei {count} Anbietern, jeder mit eigener Seriennummer — kein Fehler.':
     'The zone is served by {count} providers, each with its own serial number — not an error.',
   'alle {count} Nameserver': 'all {count} name servers',
+  'Die Zone liegt bei {count} Anbietern mit eigener Seriennummer — verglichen wird je Anbieter (Primary im SOA).':
+    'The zone is served by {count} providers with their own serial numbers — compared per provider (primary in the SOA).',
+  'Alle Resolver liefern die Seriennummer ihres Anbieters — sauber propagiert.':
+    'All resolvers return their provider’s serial number — fully propagated.',
   'Die Nameserver liefern unterschiedliche Adressen — bei Lastverteilung oder GeoDNS üblich.':
     'The name servers return different addresses — common with load balancing or GeoDNS.',
   '{name} ist ein CNAME auf {target} — den {type}-Record liefern dessen Nameserver.':

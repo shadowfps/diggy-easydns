@@ -262,6 +262,8 @@ export type DeText =
   | 'Die Nameserver gehören zu {count} Anbietern, jeder mit eigener Seriennummer — aktuell ist ein Resolver, der eine davon liefert.'
   | 'Die Zone liegt bei {count} Anbietern, jeder mit eigener Seriennummer — kein Fehler.'
   | 'alle {count} Nameserver'
+  | 'Die Zone liegt bei {count} Anbietern mit eigener Seriennummer — verglichen wird je Anbieter (Primary im SOA).'
+  | 'Alle Resolver liefern die Seriennummer ihres Anbieters — sauber propagiert.'
   | 'Die Nameserver liefern unterschiedliche Adressen — bei Lastverteilung oder GeoDNS üblich.'
   | '{name} ist ein CNAME auf {target} — den {type}-Record liefern dessen Nameserver.'
   | 'Kein Nameserver hat geantwortet — vom diggy-Server aus ist DNS über Port 53 womöglich gesperrt.'

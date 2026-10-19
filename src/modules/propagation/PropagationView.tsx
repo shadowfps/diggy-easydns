@@ -226,7 +226,7 @@ function Comparison({
   const comparison = useMemo(() => compareWithBasis(results, type, basis), [results, type, basis]);
   // `compared` statt aller Resolver: Wer einen Fehler hat, zählt nicht mit —
   // so nennen Hinweis und Befund dieselben Zahlen.
-  const { answers, consensusKey, compared, deviating } = comparison;
+  const { answers, consensusKey, compared, deviating, soaPrimaries } = comparison;
   // Außer bei Adressen geht es darum, ob eine Änderung angekommen ist — nicht
   // um GeoDNS. Das ändert die Hinweise.
   const entry = countsMissingAnswers(type);
@@ -272,6 +272,11 @@ function Comparison({
       {type === 'SOA' && (
         <p className="mt-4 text-xs text-fg-subtle">
           {t('Verglichen wird die Seriennummer, der dritte Wert im SOA.')}
+          {/* Mehrere Anbieter: verschiedene Seriennummern sind dann kein Befund. */}
+          {soaPrimaries !== undefined &&
+            ` ${t('Die Zone liegt bei {count} Anbietern mit eigener Seriennummer — verglichen wird je Anbieter (Primary im SOA).', {
+              count: soaPrimaries,
+            })}`}
         </p>
       )}
 
@@ -345,6 +350,8 @@ function Comparison({
               ? t('Alle Resolver liefern die Antwort der autoritativen Nameserver — sauber propagiert.')
               : basis.kind === 'expected'
                 ? t('Alle Resolver liefern den erwarteten Wert.')
+                : soaPrimaries !== undefined
+                ? t('Alle Resolver liefern die Seriennummer ihres Anbieters — sauber propagiert.')
                 : !entry
                   ? t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')
                   : consensusSize > 1

@@ -740,3 +740,23 @@ describe('PropagationView — erwarteter Wert (#133)', () => {
     expect(within(resolverCard()).getByText('Noch ohne den erwarteten Wert: 1 von 2 Resolvern.')).toBeInTheDocument();
   });
 });
+
+describe('PropagationView — SOA bei mehreren Anbietern (#133)', () => {
+  it('steht nicht als gestört da, auch wenn die Nameserver nicht prüfbar sind', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(authoritative('SOA', [], { error: 'lookup_failed' }));
+    vi.mocked(api.lookupPropagation).mockResolvedValue({
+      propagation: results([
+        { records: [{ type: 'SOA', value: 'ns-1707.awsdns-21.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400', ttl: 900 }] },
+        { records: [{ type: 'SOA', value: 'dns1.p08.nsone.net. hostmaster.nsone.net. 1656468023 43200 7200 1209600 3600', ttl: 3600 }] },
+        { records: [{ type: 'SOA', value: 'dns1.p08.nsone.net. hostmaster.nsone.net. 1656468023 43200 7200 1209600 3600', ttl: 3600 }] },
+      ]),
+      findings: [],
+    });
+    render(<View results={results([[]])} types={HOST} initial="SOA" />);
+
+    const card = await screen.findByRole('region', { name: 'Öffentliche Resolver' });
+    expect(within(card).getByText(/Die Zone liegt bei 2 Anbietern mit eigener Seriennummer/)).toBeInTheDocument();
+    expect(within(card).getByText('Alle Resolver liefern die Seriennummer ihres Anbieters — sauber propagiert.')).toBeInTheDocument();
+    expect(within(card).queryByText(/weicht ab/)).not.toBeInTheDocument();
+  });
+});
