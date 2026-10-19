@@ -290,8 +290,8 @@ const ui: Dictionary = {
   '{type}-Records werden bei allen Resolvern abgefragt…': 'Asking every resolver for {type} records…',
   'Verglichen wird die Seriennummer, der dritte Wert im SOA.':
     'Compared by serial number, the third value in the SOA.',
-  'Abweichende Resolver fragen laut TTL spätestens in {duration} neu nach.':
-    'Going by their TTL, the differing resolvers will ask again within {duration}.',
+  'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.':
+    'Going by their TTL, the differing resolvers will query the nameservers again within {duration} of this check.',
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   'Scan abgeschlossen': 'Scan complete',

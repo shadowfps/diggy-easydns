@@ -230,7 +230,7 @@ export type DeText =
   | 'Record-Typ'
   | '{type}-Records werden bei allen Resolvern abgefragt…'
   | 'Verglichen wird die Seriennummer, der dritte Wert im SOA.'
-  | 'Abweichende Resolver fragen laut TTL spätestens in {duration} neu nach.'
+  | 'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.'
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   | 'Scan abgeschlossen'
