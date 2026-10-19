@@ -263,8 +263,15 @@
     outline-offset: 2px;
   }
 
+  /*
+   * Aus den Tokens statt per `dark:`-Variante: `@apply dark:…` in einem
+   * Pseudo-Element wird zu `::selection:is()` kompiliert — ein Selektor, der nie
+   * greift. Im Dark Mode blieb so die helle Regel stehen, markierter Text wurde
+   * schwarz auf Schwarz (#127). `--fg` wechselt mit dem Theme, eine Regel reicht.
+   */
   ::selection {
-    @apply bg-ink-900/15 text-ink-950 dark:bg-ink-50/20 dark:text-ink-50;
+    color: var(--fg);
+    background-color: color-mix(in oklab, var(--fg) 20%, transparent);
   }
 }
 
