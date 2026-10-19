@@ -173,6 +173,42 @@ describe('decodeResponse — Status und Flags', () => {
     expect(decodeResponse(response({ question: Q, flags: 0x0200 }))).toMatchObject({ TC: true, AD: false });
     expect(decodeResponse(response({ question: Q, flags: 0x0020 }))).toMatchObject({ TC: false, AD: true });
   });
+
+  /**
+   * #131: Zu „gibt es nicht“ schickt der Resolver das SOA der Zone im
+   * Authority-Abschnitt — daran hängt die Negativ-TTL. Fehlte es bei den
+   * Anbietern mit Wireformat, stünde dort nie eine.
+   */
+  it('liest das SOA aus dem Authority-Abschnitt, bei NODATA und NXDOMAIN', () => {
+    const soa = {
+      name: pointer(QUESTION_NAME),
+      type: 6,
+      ttl: 900,
+      rdata: [
+        ...name('ns1.example.com'),
+        ...name('hostmaster.example.com'),
+        ...[2026101901, 7200, 900, 1209600, 3600].flatMap((n) => [...u16(n >>> 16), ...u16(n & 0xffff)]),
+      ],
+    };
+    const expected = [
+      {
+        name: 'example.com.',
+        type: 6,
+        TTL: 900,
+        data: 'ns1.example.com. hostmaster.example.com. 2026101901 7200 900 1209600 3600',
+      },
+    ];
+    for (const rcode of [0, 3]) {
+      const msg = decodeResponse(response({ question: Q, rcode, authority: [soa] }), Q);
+      expect(msg, `rcode ${rcode}`).toMatchObject({ Status: rcode, Answer: [], Authority: expected });
+    }
+    // Antwort und Authority nebeneinander: Jeder Abschnitt bekommt seine Einträge.
+    const both = decodeResponse(
+      response({ question: Q, answers: [{ name: pointer(QUESTION_NAME), type: 1, rdata: ipv4('192.0.2.1') }], authority: [soa] })
+    );
+    expect(both.Answer!.map((a) => a.data)).toEqual(['192.0.2.1']);
+    expect(both.Authority).toEqual(expected);
+  });
 });
 
 describe('decodeResponse — kaputte Antworten', () => {
@@ -191,6 +227,16 @@ describe('decodeResponse — kaputte Antworten', () => {
       expect(() => decodeResponse(valid.slice(0, length)), `${length} Bytes`).toThrow(DnsWireError);
     }
     expect(decodeResponse(valid).Answer).toHaveLength(1);
+
+    // Auch im Authority-Abschnitt: ein halbes SOA ist kein SOA.
+    const negative = response({
+      question: Q,
+      authority: [{ name: pointer(QUESTION_NAME), type: 6, rdata: [...name('ns1.example.com'), ...pointer(QUESTION_NAME), ...Array<number>(20).fill(1)] }],
+    });
+    for (let length = 29; length < negative.length; length++) {
+      expect(() => decodeResponse(negative.slice(0, length)), `${length} Bytes`).toThrow(DnsWireError);
+    }
+    expect(decodeResponse(negative).Authority).toHaveLength(1);
   });
 
   it('scheitert an einer Anfrage statt einer Antwort', () => {
@@ -283,6 +329,10 @@ describe('decodeResponse — kaputte Antworten', () => {
       response({ question: { name: 'example.com', type: 15 }, answers: [{ name: at, type: 15, rdata: [...u16(10), 4, ...Buffer.from('mail'), ...at] }] }),
       response({ question: { name: 'example.com', type: 33 }, answers: [{ name: at, type: 33, rdata: [...u16(1), ...u16(2), ...u16(3), ...at] }] }),
       response({ question: { name: 'example.com', type: 28 }, answers: [{ name: at, type: 28, rdata: ipv6('2001:db8::1') }] }),
+      response({
+        question: { name: 'example.com', type: 28 },
+        authority: [{ name: at, type: 6, rdata: [...name('ns1.example.com'), ...at, ...Array<number>(20).fill(1)] }],
+      }),
     ];
 
     const outcomes = { ok: 0, wireError: 0 };

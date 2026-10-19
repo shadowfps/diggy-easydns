@@ -275,6 +275,8 @@ const ui: Dictionary = {
   },
   'Alle Resolver liefern denselben {type}-Record — sauber propagiert.':
     'All resolvers return the same {type} record — fully propagated.',
+  'Alle Resolver liefern dieselben {type}-Records — sauber propagiert.':
+    'All resolvers return the same {type} records — fully propagated.',
   'Kein Resolver liefert einen {types} unter diesem Namen.':
     'No resolver returns any {types} under this name.',
   '{type}-Record': '{type} record',
@@ -288,6 +290,12 @@ const ui: Dictionary = {
   'Ganzen Wert zeigen ({count} Zeichen)': 'Show full value ({count} characters)',
   'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.':
     'diggy asks from Germany. Each provider answers from its nearest data center (anycast): you see the caches of different providers in one place, not a worldwide spread. The flag shows where the provider is based.',
+  'Record-Typ': 'Record type',
+  '{type}-Records werden bei allen Resolvern abgefragt…': 'Asking every resolver for {type} records…',
+  'Verglichen wird die Seriennummer, der dritte Wert im SOA.':
+    'Compared by serial number, the third value in the SOA.',
+  'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.':
+    'Going by their TTL, the differing resolvers will query the nameservers again within {duration} of this check.',
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   'Scan abgeschlossen': 'Scan complete',

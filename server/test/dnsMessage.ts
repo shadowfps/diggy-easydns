@@ -23,6 +23,8 @@ export interface ResponseSpec {
   query?: boolean;
   question?: { name: string; type: number };
   answers?: RawRecord[];
+  /** Authority-Abschnitt, etwa das SOA zu „gibt es nicht“. */
+  authority?: RawRecord[];
 }
 
 /** Ein Name als Labels, unkomprimiert. */
@@ -48,10 +50,18 @@ const u32 = (n: number) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0x
 
 export function response(spec: ResponseSpec): Uint8Array {
   const answers = spec.answers ?? [];
+  const authority = spec.authority ?? [];
   const flags = (spec.query ? 0 : 0x8000) | 0x0100 | 0x0080 | (spec.flags ?? 0) | (spec.rcode ?? 0);
-  const bytes = [...u16(0), ...u16(flags), ...u16(spec.question ? 1 : 0), ...u16(answers.length), ...u16(0), ...u16(0)];
+  const bytes = [
+    ...u16(0),
+    ...u16(flags),
+    ...u16(spec.question ? 1 : 0),
+    ...u16(answers.length),
+    ...u16(authority.length),
+    ...u16(0),
+  ];
   if (spec.question) bytes.push(...name(spec.question.name), ...u16(spec.question.type), ...u16(1));
-  for (const rr of answers) {
+  for (const rr of [...answers, ...authority]) {
     bytes.push(
       ...(typeof rr.name === 'string' ? name(rr.name) : rr.name),
       ...u16(rr.type),
@@ -119,6 +129,10 @@ export function rdataFromJson(type: number, data: string): number[] {
     case 15: {
       const [preference, host] = data.split(/\s+/);
       return [...u16(Number(preference)), ...name(host)];
+    }
+    case 6: {
+      const [mname, rname, ...numbers] = data.trim().split(/\s+/);
+      return [...name(mname), ...name(rname), ...numbers.flatMap((n) => u32(Number(n)))];
     }
     case 16: {
       // `"a" "b"` wie Cloudflare oder zusammengesetzt wie Google

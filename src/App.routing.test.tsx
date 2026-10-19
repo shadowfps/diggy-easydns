@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { setMediaQuery } from '@/test/setup';
+import type { DnsRecord, Finding, ResolverResult } from '@/types/dns';
 
 /**
  * Routing-Tests für App.tsx.
@@ -425,5 +426,130 @@ describe('DNS-Einträge mit Unterstrich', () => {
     );
     expect(within(panel).getByRole('button', { name: /Ganzen Wert zeigen/ })).toBeInTheDocument();
     expect(within(panel).getByText(/denselben TXT-Record/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * #131: Der Typ im Propagation-Tab steht im Link (`?propagation=MX`), Zurück
+ * und Vorwärts schalten zwischen den Typen. Was nicht zum Report gehört, fragt
+ * der Tab erst bei Auswahl ab — und es ändert weder Score noch Findings.
+ */
+describe('Propagation-Typ im Link', () => {
+  const resolverResult = (name: string, records: DnsRecord[]): ResolverResult => ({
+    resolver: { id: name.toLowerCase(), name, ip: '0.0.0.0', country: 'X', flag: '', provider: name },
+    records,
+    responseTimeMs: 10,
+  });
+  const consistent: Finding = {
+    id: 'propagation-consistent',
+    severity: 'success',
+    title: 'Konsistente Propagation',
+    description: 'Alle 5 Resolver liefern dasselbe Ergebnis.',
+    category: 'dns',
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.lookupPropagation).mockImplementation(async (domain, type) =>
+      type
+        ? {
+            propagation: [
+              resolverResult('Cloudflare', [{ type, name: domain, value: 'mx.example.net', priority: 10, ttl: 300 }]),
+              resolverResult('Google', [{ type, name: domain, value: 'mx.alt.example.net', priority: 10, ttl: 240 }]),
+              resolverResult('AdGuard', [{ type, name: domain, value: 'mx.example.net', priority: 10, ttl: 300 }]),
+            ],
+            // Käme hier ein Befund an, dürfte er den Report trotzdem nicht ändern.
+            findings: [{ ...consistent, id: 'propagation-mismatch', severity: 'warning' }],
+          }
+        : {
+            propagation: [resolverResult('Cloudflare', [{ type: 'A', name: domain, value: '93.184.216.34', ttl: 60 }])],
+            findings: [consistent],
+          }
+    );
+  });
+
+  afterEach(() => setMediaQuery());
+
+  const typeButton = async (name: string) =>
+    within(await screen.findByRole('group', { name: 'Record-Typ' })).getByRole('button', { name });
+  const currentUrl = () => `${window.location.pathname}${window.location.search}`;
+
+  it('öffnet einen Link mit Typ im Propagation-Tab', async () => {
+    setPath('/lookup/example.com?propagation=mx');
+    render(<App />);
+
+    expect(await typeButton('MX')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('tab', { name: /Propagation/ })).toHaveAttribute('aria-selected', 'true');
+    expect(api.lookupPropagation).toHaveBeenCalledWith('example.com', 'MX');
+    // Der Report selbst lädt weiter nur die Standard-Typen.
+    expect(api.lookupPropagation).toHaveBeenCalledWith('example.com');
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=MX'));
+  });
+
+  it('nimmt bei einem unbekannten Typ die Voreinstellung', async () => {
+    setPath('/lookup/example.com?propagation=SRV');
+    render(<App />);
+
+    expect(await typeButton('A')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('tab', { name: /Propagation/ })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
+    expect(api.lookupPropagation).toHaveBeenCalledTimes(1);
+  });
+
+  it('legt je Typwahl einen History-Eintrag an; Zurück schaltet ohne neuen Check', async () => {
+    setPath('/lookup/example.com');
+    render(<App />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Propagation/ }));
+    // Der Tab allein schreibt den gezeigten Typ in den Link, ohne Eintrag.
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
+
+    const push = vi.spyOn(window.history, 'pushState');
+    await userEvent.click(await typeButton('MX'));
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(null, '', '/lookup/example.com?propagation=MX');
+    expect(await screen.findByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
+    push.mockRestore();
+
+    // Zurück …
+    setPath('/lookup/example.com?propagation=A');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(async () => expect(await typeButton('A')).toHaveAttribute('aria-pressed', 'true'));
+
+    // … und wieder vor: aus dem Zwischenspeicher, ohne neue Abfrage.
+    setPath('/lookup/example.com?propagation=MX');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(async () => expect(await typeButton('MX')).toHaveAttribute('aria-pressed', 'true'));
+
+    expect(api.lookupRecords).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.lookupPropagation).mock.calls).toEqual([['example.com'], ['example.com', 'MX']]);
+  });
+
+  it('nimmt den Typ beim Wechsel auf einen anderen Tab aus dem Link', async () => {
+    setPath('/lookup/example.com?propagation=NS');
+    render(<App />);
+    await typeButton('NS');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Records/ }));
+    await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com'));
+  });
+
+  it('ändert weder Score noch Findings', async () => {
+    // Der Score steht dann sofort auf dem Endwert, statt hochzuzählen (#103).
+    setMediaQuery('(prefers-reduced-motion: reduce)');
+    setPath('/lookup/example.com');
+    render(<App />);
+    const findingsTab = await screen.findByRole('tab', { name: /Findings/ });
+    await waitFor(() => expect(findingsTab).toHaveTextContent(/\d/));
+    const scoreCard = () => screen.getByRole('heading', { name: 'Health Score' }).closest('.card');
+    const before = { findings: findingsTab.textContent, score: scoreCard()?.textContent };
+
+    await userEvent.click(screen.getByRole('tab', { name: /Propagation/ }));
+    await userEvent.click(await typeButton('MX'));
+    expect(await screen.findByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
+
+    expect(findingsTab.textContent).toBe(before.findings);
+    expect(scoreCard()?.textContent).toBe(before.score);
+    await userEvent.click(findingsTab);
+    expect(screen.getByText('Konsistente Propagation')).toBeInTheDocument();
+    expect(screen.queryByText(/Propagation-Abweichung/)).not.toBeInTheDocument();
   });
 });

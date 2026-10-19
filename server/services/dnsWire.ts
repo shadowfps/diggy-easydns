@@ -8,8 +8,8 @@
  * (`10 mail.example.com.`, `"stück 1" "stück 2"`). doh.ts behandelt danach
  * beide Formate gleich, auch beim Zusammensetzen der TXT-Stücke.
  *
- * Eigener Code statt Bibliothek: Gebraucht werden eine Frage und der
- * Answer-Abschnitt für ein Dutzend Typen. Eine Bibliothek wie dns-packet
+ * Eigener Code statt Bibliothek: Gebraucht werden eine Frage, der
+ * Answer-Abschnitt für ein Dutzend Typen und das SOA im Authority-Abschnitt. Eine Bibliothek wie dns-packet
  * (MIT) liefert Objekte, die trotzdem in die Textform der JSON-API übersetzt
  * werden müssten — als neue Laufzeit-Abhängigkeit für rund 200 Zeilen.
  *
@@ -27,7 +27,7 @@ export class DnsWireError extends Error {
   }
 }
 
-/** Ein Eintrag aus dem Answer-Abschnitt, Felder wie in der JSON-API. */
+/** Ein Eintrag aus dem Answer- oder Authority-Abschnitt, Felder wie in der JSON-API. */
 export interface DnsAnswer {
   name: string;
   type: number;
@@ -50,6 +50,11 @@ export interface DnsResponse {
   CD?: boolean;
   Question?: { name: string; type: number }[];
   Answer?: DnsAnswer[];
+  /**
+   * Bei „gibt es nicht“ (NXDOMAIN/NODATA) steht hier das SOA der Zone — die
+   * Negativ-TTL hängt daran (negativeCacheTtl in doh.ts, #131).
+   */
+  Authority?: DnsAnswer[];
 }
 
 const CLASS_IN = 1;
@@ -126,8 +131,8 @@ function encodeName(name: string): Uint8Array {
 }
 
 /**
- * Liest eine Antwort. Ausgewertet werden Kopf, Frage und Answer-Abschnitt;
- * Authority und Additional braucht diggy nicht.
+ * Liest eine Antwort. Ausgewertet werden Kopf, Frage, Answer- und
+ * Authority-Abschnitt; Additional braucht diggy nicht.
  *
  * `question` prüft, dass die Antwort zur gestellten Frage gehört — ein
  * Resolver oder Proxy, der eine fremde Antwort liefert, darf nicht als
@@ -145,6 +150,7 @@ export function decodeResponse(
   if (!(flags & 0x8000)) throw new DnsWireError('keine Antwort (QR-Bit fehlt)');
   const qdcount = reader.u16(4);
   const ancount = reader.u16(6);
+  const nscount = reader.u16(8);
 
   let o = HEADER;
   const questions: { name: string; type: number }[] = [];
@@ -163,8 +169,27 @@ export function decodeResponse(
     }
   }
 
-  const answers: DnsAnswer[] = [];
-  for (let i = 0; i < ancount; i++) {
+  const answer = readRecords(reader, o, ancount);
+  const authority = readRecords(reader, answer.next, nscount);
+
+  return {
+    Status: flags & 0x000f,
+    TC: Boolean(flags & 0x0200),
+    RD: Boolean(flags & 0x0100),
+    RA: Boolean(flags & 0x0080),
+    AD: Boolean(flags & 0x0020),
+    CD: Boolean(flags & 0x0010),
+    Question: questions,
+    Answer: answer.records,
+    Authority: authority.records,
+  };
+}
+
+/** `count` Einträge ab `offset`; `next` ist die Stelle hinter dem letzten. */
+function readRecords(reader: Reader, offset: number, count: number): { records: DnsAnswer[]; next: number } {
+  const records: DnsAnswer[] = [];
+  let o = offset;
+  for (let i = 0; i < count; i++) {
     const { name, next } = reader.name(o);
     reader.need(next, 10);
     const type = reader.u16(next);
@@ -175,19 +200,9 @@ export function decodeResponse(
     reader.need(start, rdlength);
     o = start + rdlength;
     if (cls !== CLASS_IN) continue;
-    answers.push({ name, type, TTL: ttl, data: formatRdata(reader, type, start, rdlength) });
+    records.push({ name, type, TTL: ttl, data: formatRdata(reader, type, start, rdlength) });
   }
-
-  return {
-    Status: flags & 0x000f,
-    TC: Boolean(flags & 0x0200),
-    RD: Boolean(flags & 0x0100),
-    RA: Boolean(flags & 0x0080),
-    AD: Boolean(flags & 0x0020),
-    CD: Boolean(flags & 0x0010),
-    Question: questions,
-    Answer: answers,
-  };
+  return { records, next: o };
 }
 
 function fqdn(name: string): string {

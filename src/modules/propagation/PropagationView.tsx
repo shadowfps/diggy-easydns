@@ -1,25 +1,36 @@
 import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
-import { AlertTriangle, AlertCircle, Check, ChevronDown, Minus } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Check, ChevronDown, Loader2, Minus } from 'lucide-react';
 import type { RecordType, ResolverResult } from '@/types/dns';
 import { cn } from '@/lib/cn';
 import {
   comparePropagation,
   countsMissingAnswers,
+  primaryPropagationType,
+  PROPAGATION_RECORD_TYPES,
+  requeryWithin,
+  type PropagationRecordType,
   type ResolverAnswer,
 } from '@/lib/propagation';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
-import { t, useI18n, type Language } from '@/i18n';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
+import { errorText, formatNumber, t, useI18n, type Language } from '@/i18n';
+import { useTypedPropagation } from './useTypedPropagation';
 
 interface PropagationViewProps {
+  domain: string;
+  /** Antworten des Reports — für die Standard-Typen (`types`). */
   results: ResolverResult[];
   /**
-   * Die abgefragten Typen, wichtigster zuerst (`propagationTypes`): A/AAAA bei
-   * Hosts, TXT/CNAME bei DNS-Einträgen. Ein Host, der per CNAME auf ein CDN
-   * zeigt, liefert den CNAME in jeder Antwort mit — als eigener Umschalter
-   * soll er dort trotzdem nicht auftauchen.
+   * Die Standard-Typen, wichtigster zuerst (`propagationTypes`): A/AAAA bei
+   * Hosts, TXT/CNAME bei DNS-Einträgen. Nur sie lädt der Report mit; jeden
+   * anderen Typ fragt die Ansicht erst ab, wenn er gewählt wird (#131).
    */
   types: RecordType[];
+  /** Der gezeigte Typ — gewählt oder die Voreinstellung (App, für den Link). */
+  type: PropagationRecordType;
+  onTypeChange: (type: PropagationRecordType) => void;
 }
 
 /**
@@ -36,33 +47,94 @@ const LONG_VALUE = 120;
 const HEAD = 64;
 const TAIL = 24;
 
-export function PropagationView({ results, types }: PropagationViewProps) {
-  // Verfügbare Typen aus den Daten extrahieren — nicht alles raten.
-  const availableTypes = useMemo(() => {
-    const set = new Set<RecordType>();
-    for (const r of results) for (const rec of r.records) set.add(rec.type);
-    return types.filter((t) => set.has(t));
-  }, [results, types]);
+export function PropagationView({ domain, results, types, type, onTypeChange }: PropagationViewProps) {
+  const { t } = useI18n();
+  const standard = types.includes(type);
+  const typed = useTypedPropagation(results, domain, type, !standard);
+  const shown = standard ? results : typed.results;
 
-  const [activeType, setActiveType] = useState<RecordType>(availableTypes[0] ?? types[0]);
+  // „Kein Resolver liefert …“ nennt bei der Voreinstellung beide
+  // Standard-Typen, wenn keiner eine Antwort hat — sonst den gezeigten.
+  const emptyTypes = standard && primaryPropagationType(results, types) === undefined ? types : [type];
+
+  return (
+    <div className="space-y-4">
+      {/* Alle wählbaren Typen, auch ohne Antwort: Wer nach einem neuen MX
+          fragt, muss ihn wählen können, bevor es ihn überall gibt. Native
+          Buttons — Tab und Enter/Leertaste reichen zur Bedienung. */}
+      <div role="group" aria-label={t('Record-Typ')} className="flex flex-wrap items-center gap-1.5">
+        {PROPAGATION_RECORD_TYPES.map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={option === type}
+            onClick={() => onTypeChange(option)}
+            className="chip"
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+
+      {shown ? (
+        <Comparison key={type} results={shown} type={type} emptyTypes={emptyTypes} />
+      ) : typed.error ? (
+        <EmptyState
+          tone="danger"
+          icon={<AlertTriangle className="size-5" />}
+          action={
+            <button type="button" onClick={typed.retry} className="btn btn-secondary btn-sm">
+              {t('Erneut versuchen')}
+            </button>
+          }
+        >
+          {errorText(typed.error, 'Propagation-Check fehlgeschlagen')}
+        </EmptyState>
+      ) : (
+        <div className="card">
+          {/* Angesagt über LoadingAnnouncement, die Anzeige ist aria-hidden:
+              Eine Live-Region, die schon mit Text eingefügt wird, sagen nicht
+              alle Screenreader an (#108). Je Typ eine Ansage. */}
+          <LoadingAnnouncement key={type}>
+            {t('{type}-Records werden bei allen Resolvern abgefragt…', { type })}
+          </LoadingAnnouncement>
+          <p aria-hidden="true" className="flex items-center gap-2 text-sm text-fg-muted">
+            <Loader2 className="size-4 shrink-0 animate-spin" />
+            {t('{type}-Records werden bei allen Resolvern abgefragt…', { type })}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Vergleich der Resolver für einen Typ: Zeilen, Antworten, Hinweis. */
+function Comparison({
+  results,
+  type,
+  emptyTypes,
+}: {
+  results: ResolverResult[];
+  type: RecordType;
+  emptyTypes: RecordType[];
+}) {
   const { t, language } = useI18n();
 
-  const comparison = useMemo(
-    () => comparePropagation(results, activeType),
-    [results, activeType]
-  );
+  const comparison = useMemo(() => comparePropagation(results, type), [results, type]);
   // `compared` statt aller Resolver: Wer einen Fehler hat, zählt nicht mit —
   // so nennen Hinweis und Befund dieselben Zahlen.
   const { answers, consensusKey, compared, deviating } = comparison;
-  // TXT und CNAME sind die Typen der DNS-Einträge. Dort geht es darum, ob
-  // eine Änderung angekommen ist — nicht um GeoDNS. Das ändert die Hinweise.
-  const entry = countsMissingAnswers(activeType);
+  // Außer bei Adressen geht es darum, ob eine Änderung angekommen ist — nicht
+  // um GeoDNS. Das ändert die Hinweise.
+  const entry = countsMissingAnswers(type);
+  const requery = requeryWithin(comparison);
 
-  // Die Antworten eines DNS-Eintrags sind zu lang für die Zeile: ein
-  // DKIM-Schlüssel hat rund 410 Zeichen, ein CNAME zum Anbieter oft 60 — auf
-  // dem Handy blieb neben ihm vom Resolver-Namen nur „Clou…“. Jede
-  // verschiedene Antwort steht deshalb einmal unter der Liste, die Zeilen
-  // verweisen mit einem Buchstaben darauf. Die Mehrheitsantwort heißt „A“.
+  // Außer bei Adressen sind die Antworten zu lang für die Zeile: ein
+  // DKIM-Schlüssel hat rund 410 Zeichen, ein CNAME zum Anbieter oft 60, ein
+  // NS-Set acht Hostnamen — auf dem Handy blieb neben ihnen vom Resolver-Namen
+  // nur „Clou…“. Jede verschiedene Antwort steht deshalb einmal unter der
+  // Liste, die Zeilen verweisen mit einem Buchstaben darauf. Die
+  // Mehrheitsantwort heißt „A“.
   const groups = useMemo(() => {
     if (!entry) return [];
     const withValues = answers.filter((a) => a.key !== '' && a.status !== 'error');
@@ -81,67 +153,58 @@ export function PropagationView({ results, types }: PropagationViewProps) {
     });
   }, [entry, answers, consensusKey]);
   const letterFor = (key: string) => groups.find((g) => g.key === key)?.letter;
+  const consensusSize = answers.find((a) => a.key === consensusKey)?.values.length ?? 0;
 
   const answeredWithoutError = answers.some((a) => !a.result.error);
 
   return (
-    <div className="space-y-4">
-      {availableTypes.length > 1 && (
-        <div className="flex items-center gap-1.5">
-          {availableTypes.map((t) => (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={activeType === t}
-              onClick={() => setActiveType(t)}
-              className="chip"
-            >
-              {t}
-            </button>
+    <div className="card">
+      {type === 'SOA' && (
+        <p className="mb-4 text-xs text-fg-subtle">
+          {t('Verglichen wird die Seriennummer, der dritte Wert im SOA.')}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+        {answers.map((answer, i) => (
+          <ResolverRow
+            key={answer.result.resolver.id}
+            answer={answer}
+            type={type}
+            letter={letterFor(answer.key)}
+            delay={i * 0.04}
+          />
+        ))}
+      </div>
+
+      {groups.length > 0 && (
+        <div className="mt-5 space-y-4">
+          {groups.map((group) => (
+            <AnswerGroup
+              key={group.key}
+              letter={group.letter}
+              values={group.values}
+              resolvers={group.resolvers}
+              // „Mehrheit“ und „weicht ab“ nur, wenn es etwas zu
+              // unterscheiden gibt. Sind alle gleich, sagt das der Hinweis.
+              status={deviating === 0 ? undefined : group.isConsensus ? 'consensus' : 'deviating'}
+            />
           ))}
         </div>
       )}
 
-      <div className="card">
-        <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-          {answers.map((answer, i) => (
-            <ResolverRow
-              key={answer.result.resolver.id}
-              answer={answer}
-              type={activeType}
-              letter={letterFor(answer.key)}
-              delay={i * 0.04}
-            />
-          ))}
-        </div>
-
-        {groups.length > 0 && (
-          <div className="mt-5 space-y-4">
-            {groups.map((group) => (
-              <AnswerGroup
-                key={group.key}
-                letter={group.letter}
-                values={group.values}
-                resolvers={group.resolvers}
-                // „Mehrheit“ und „weicht ab“ nur, wenn es etwas zu
-                // unterscheiden gibt. Sind alle gleich, sagt das der Hinweis.
-                status={deviating === 0 ? undefined : group.isConsensus ? 'consensus' : 'deviating'}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Hinweis in einem Panel statt hinter einer Trennlinie. Der Ton folgt
-            dem Befund: Abweichung ist eine Warnung (gelb), Konsens ein OK. */}
-        {deviating > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted"
-          >
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-            <span>
+      {/* Hinweis in einem Panel statt hinter einer Trennlinie. Der Ton folgt
+          dem Befund: Abweichung ist eine Warnung (gelb), Konsens ein OK. */}
+      {deviating > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+          <div className="space-y-1">
+            <p>
               {entry
                 ? t(
                     '{count} von {total} Resolvern weichen ab — eine Änderung ist noch nicht überall angekommen. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).',
@@ -151,48 +214,73 @@ export function PropagationView({ results, types }: PropagationViewProps) {
                     '{count} von {total} Resolvern weichen ab — möglicherweise noch nicht propagiert, oder absichtlich GeoDNS / Anycast.',
                     { count: deviating, total: compared }
                   )}
-            </span>
-          </motion.div>
-        )}
-
-        {deviating === 0 && consensusKey !== undefined && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted"
-          >
-            <Check className="mt-0.5 size-4 shrink-0 text-success" />
-            <span>
-              {entry
-                ? t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type: activeType })
-                : t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')}
-            </span>
-          </motion.div>
-        )}
-
-        {consensusKey === undefined && answeredWithoutError && (
-          <div className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted">
-            <Minus className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-            <span>
-              {t('Kein Resolver liefert einen {types} unter diesem Namen.', {
-                types: typeList(types, language),
-              })}
-            </span>
+            </p>
+            {/* Nur mit TTL von jedem abweichenden Resolver — sonst ließe sich
+                „spätestens“ nicht sagen (requeryWithin). Gezählt ab der
+                Abfrage, nicht ab jetzt: Die Ansicht bleibt stehen, solange
+                der Report offen ist. */}
+            {requery !== undefined && (
+              <p>
+                {t(
+                  'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.',
+                  { duration: formatDuration(requery) }
+                )}
+              </p>
+            )}
           </div>
-        )}
+        </motion.div>
+      )}
 
-        {/* Was der Vergleich zeigen kann (#132). Neun Anbieter sind kein
-            Blick um die Welt: Anycast schickt jede Anfrage ins nächste
-            Rechenzentrum. Kein Status, deshalb leise am Ende. */}
-        <p className="mt-4 text-xs leading-relaxed text-fg-subtle">
-          {t(
-            'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.'
-          )}
-        </p>
-      </div>
+      {deviating === 0 && consensusKey !== undefined && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted"
+        >
+          <Check className="mt-0.5 size-4 shrink-0 text-success" />
+          <span>
+            {/* Ein NS-, MX- oder CAA-Satz hat meist mehrere Records. */}
+            {!entry
+              ? t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')
+              : consensusSize > 1
+                ? t('Alle Resolver liefern dieselben {type}-Records — sauber propagiert.', { type })
+                : t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type })}
+          </span>
+        </motion.div>
+      )}
+
+      {consensusKey === undefined && answeredWithoutError && (
+        <div className="panel mt-5 flex items-start gap-2.5 py-3 text-sm text-fg-muted">
+          <Minus className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
+          <span>
+            {t('Kein Resolver liefert einen {types} unter diesem Namen.', {
+              types: typeList(emptyTypes, language),
+            })}
+          </span>
+        </div>
+      )}
+
+      {/* Was der Vergleich zeigen kann (#132). Neun Anbieter sind kein
+          Blick um die Welt: Anycast schickt jede Anfrage ins nächste
+          Rechenzentrum. Kein Status, deshalb leise am Ende. */}
+      <p className="mt-4 text-xs leading-relaxed text-fg-subtle">
+        {t(
+          'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.'
+        )}
+      </p>
     </div>
   );
+}
+
+/**
+ * Zeitspanne für „spätestens … nach dieser Abfrage“, aufgerundet: lieber eine
+ * Minute zu spät als zu früh. Die Einheiten heißen in beiden Sprachen gleich.
+ */
+function formatDuration(seconds: number): string {
+  if (seconds < 90) return `${formatNumber(seconds)} s`;
+  if (seconds < 90 * 60) return `${formatNumber(Math.ceil(seconds / 60))} min`;
+  return `${formatNumber(Math.ceil(seconds / 3600))} h`;
 }
 
 /** „TXT- oder CNAME-Record“, „A- oder AAAA-Record“ — englisch „TXT or CNAME record“. */
@@ -215,7 +303,7 @@ function ResolverRow({
   letter: string | undefined;
   delay: number;
 }) {
-  const { result, values, status } = answer;
+  const { result, values, status, ttl } = answer;
 
   return (
     <motion.div
@@ -224,14 +312,20 @@ function ResolverRow({
       transition={{ duration: 0.3, delay }}
       className="flex items-center justify-between gap-4 text-sm"
     >
+      {/* Antwortzeit und TTL unter dem Namen: In einer Zeile mit dem Namen
+          blieben auf dem Handy und bei zwei Spalten (md bis xl) nur
+          „Cloudfl…“ und eine abgeschnittene IP übrig. */}
       <div className="flex min-w-0 items-center gap-2">
         <span className="shrink-0 text-base">{result.resolver.flag}</span>
-        <span className="truncate text-fg-muted">
-          {result.resolver.name}
-        </span>
-        <span className="shrink-0 text-xs tabular-nums text-fg-subtle">
-          {result.responseTimeMs}ms
-        </span>
+        <div className="min-w-0">
+          <p className="truncate text-fg-muted">{result.resolver.name}</p>
+          <p className="text-xs tabular-nums text-fg-subtle">
+            {result.responseTimeMs}ms
+            {/* Verbleibende TTL wie in der Records-Liste. Unbekannt (etwa
+                ein „gibt es nicht“ ohne SOA): weggelassen statt geraten. */}
+            {ttl !== null && ` · TTL ${ttl}s`}
+          </p>
+        </div>
       </div>
       {countsMissingAnswers(type) && !result.error ? (
         <AnswerBadge letter={letter} status={status} />
@@ -263,7 +357,7 @@ function InlineValues({
   return (
     <span
       className={cn(
-        'flex min-w-0 max-w-[60%] items-center justify-end gap-1.5 text-right font-mono text-[13px]',
+        'flex min-w-0 max-w-[70%] items-center justify-end gap-1.5 text-right font-mono text-[13px]',
         result.error
           ? 'font-medium text-danger'
           : values.length === 0 && !isMismatch
@@ -280,7 +374,7 @@ function InlineValues({
       ) : (
         <span className="flex min-w-0 flex-wrap justify-end gap-x-2 gap-y-1">
           {values.map((value) =>
-            // Nur Adressen haben IP-Details. TXT und CNAME stehen ohnehin
+            // Nur Adressen haben IP-Details. Alle anderen Typen stehen
             // unter der Liste (AnswerGroup) und kommen hier nur mit Fehler an.
             type === 'A' || type === 'AAAA' ? (
               <IpAddressLink key={value} ip={value} className="text-[13px] text-inherit" />

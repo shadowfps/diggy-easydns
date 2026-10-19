@@ -104,6 +104,7 @@ export interface WhoisSection {
 }
 export interface PropagationSection {
   propagation: ResolverResult[];
+  /** Mit `type` immer leer: der Befund gehört zu den Standard-Typen (#131). */
   findings: Finding[];
 }
 export interface TechStackSection {
@@ -121,8 +122,13 @@ export function lookupRecords(domain: string): Promise<LookupCore> {
   });
 }
 
-export function lookupPropagation(domain: string): Promise<PropagationSection> {
-  return getJson(`/api/lookup/propagation?domain=${dq(domain)}`, {
+/**
+ * Ohne `type` die Standard-Typen des Namens — so lädt der Report. Mit `type`
+ * nur dieser, auf Wunsch im Propagation-Tab (#131).
+ */
+export function lookupPropagation(domain: string, type?: RecordType): Promise<PropagationSection> {
+  const typeParam = type ? `&type=${encodeURIComponent(type)}` : '';
+  return getJson(`/api/lookup/propagation?domain=${dq(domain)}${typeParam}`, {
     error: 'propagation_failed',
     message: t('Propagation-Check fehlgeschlagen'),
   });

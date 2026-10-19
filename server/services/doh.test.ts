@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DOH_RESOLVERS, dohQuery, parseDohTxt } from './doh.js';
+import { DOH_RESOLVERS, dohQuery, negativeCacheTtl, parseDohTxt } from './doh.js';
 import { QUESTION_NAME, name, parseQuery, pointer, response, txt, u16 } from '../test/dnsMessage.js';
 
 /**
@@ -207,5 +207,89 @@ describe('dohQuery — Wireformat', () => {
       'TXT dkim.provider.net v=DKIM1; p=MIIBIjANBgkq',
     ]);
     expect(dkim.status).toBe(0);
+  });
+});
+
+/**
+ * #131: Wie lange ein Resolver „gibt es nicht“ noch weitergibt. Werte wie
+ * echte Antworten: Cloudflare schickt das SOA mit, AdGuard nicht.
+ */
+describe('negativeCacheTtl', () => {
+  const soa = (TTL: number, data: string) => [{ name: 'example.com.', type: 6, TTL, data }];
+
+  it('nimmt das Kleinere aus TTL und MINIMUM des SOA (RFC 2308)', () => {
+    // Die TTL zählt im Cache herunter …
+    expect(
+      negativeCacheTtl(soa(605, 'ns-1707.awsdns-21.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400'))
+    ).toBe(605);
+    // … und ist nie länger als MINIMUM.
+    expect(negativeCacheTtl(soa(7200, 'ns1.example. h.example. 1 7200 900 1209600 300'))).toBe(300);
+  });
+
+  it('rät nicht, wenn das SOA fehlt oder unlesbar ist', () => {
+    expect(negativeCacheTtl(undefined)).toBeUndefined();
+    expect(negativeCacheTtl([])).toBeUndefined();
+    expect(negativeCacheTtl([{ name: 'example.com.', type: 2, TTL: 60, data: 'ns1.example.' }])).toBeUndefined();
+    expect(negativeCacheTtl(soa(60, 'ns1.example. h.example. 1'))).toBeUndefined();
+  });
+});
+
+describe('dohQuery — Negativ-TTL', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubBody(body: unknown) {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body))));
+  }
+
+  const authority = [
+    { name: 'example.com.', type: 6, TTL: 900, data: 'ns1.example. h.example. 1 7200 900 1209600 3600' },
+  ];
+
+  it('meldet sie bei NODATA', async () => {
+    stubBody({ Status: 0, Authority: authority });
+    const result = await dohQuery(DOH_RESOLVERS[0], 'example.com', 'AAAA');
+    expect(result.records).toEqual([]);
+    expect(result.negativeTtl).toBe(900);
+  });
+
+  it('meldet sie, wenn nur die CNAME-Kette ankommt', async () => {
+    stubBody({
+      Status: 0,
+      Answer: [{ name: 'www.example.com.', type: 5, TTL: 300, data: 'example.net.' }],
+      Authority: authority,
+    });
+    const result = await dohQuery(DOH_RESOLVERS[0], 'www.example.com', 'MX');
+    expect(result.negativeTtl).toBe(900);
+  });
+
+  it('lässt sie weg, wenn es einen Eintrag gibt oder kein SOA', async () => {
+    stubBody({
+      Status: 0,
+      Answer: [{ name: 'example.com.', type: 1, TTL: 60, data: '192.0.2.1' }],
+      Authority: authority,
+    });
+    expect(await dohQuery(DOH_RESOLVERS[0], 'example.com', 'A')).not.toHaveProperty('negativeTtl');
+
+    // AdGuard: `Answer: null` und kein Authority-Abschnitt.
+    stubBody({ Status: 0, Answer: null });
+    expect(await dohQuery(DOH_RESOLVERS[0], 'example.com', 'AAAA')).not.toHaveProperty('negativeTtl');
+  });
+
+  /** #132: Quad9, OpenDNS, Control D und DNS4EU antworten im Wireformat. */
+  it('meldet sie auch bei Anbietern mit Wireformat', async () => {
+    const wire = DOH_RESOLVERS.find((r) => r.format === 'wire')!;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const question = parseQuery(Buffer.from(new URL(input).searchParams.get('dns')!, 'base64url'));
+        const soa = [...name('ns1.example'), ...name('h.example'), ...[1, 7200, 900, 1209600, 3600].flatMap((n) => [...u16(n >>> 16), ...u16(n & 0xffff)])];
+        return new Response(response({ question, rcode: 3, authority: [{ name: 'example.com', type: 6, ttl: 900, rdata: soa }] }));
+      })
+    );
+
+    const result = await dohQuery(wire, 'nichts.example.com', 'AAAA');
+    expect(result.records).toEqual([]);
+    expect(result.status).toBe(3);
+    expect(result.negativeTtl).toBe(900);
   });
 });
