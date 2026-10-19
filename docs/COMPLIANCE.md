@@ -4,7 +4,8 @@ Technische Bestandsaufnahme, keine Rechtsberatung. Sie beschreibt, was der Code
 tatsächlich tut, und ordnet das den einschlägigen Regelwerken zu. Die
 rechtliche Bewertung gehört fachlich geprüft.
 
-**Stand:** 8. September 2026 · **Bezug:** Commit-Stand von PR #34
+**Stand:** 8. September 2026, DSGVO-Teil ergänzt am 19. Oktober 2026 (#125) ·
+**Bezug:** Commit-Stand von PR #34
 
 ---
 
@@ -99,7 +100,7 @@ technischen Fakten:
 | Prüfsumme über Absender+Nachricht (Duplikatserkennung) | `contactSpamGuard.ts` | 5 min |
 | Empfänger-Sperre für Auto-Replies | `contactSpamGuard.ts` | 24 h |
 | Kontaktanfrage | per SMTP an den Betreiber | im Postfach |
-| Lookup-History, Theme, Sprache (nur bei Wahl im Menü) | `localStorage` im Browser | bis der Nutzer löscht |
+| Lookup-History; Theme und Sprache nur nach Wahl im Menü (#125, #86) | `localStorage` im Browser | bis der Nutzer löscht |
 
 **Keine automatisierte Entscheidungsfindung im Sinne von Art. 22 DSGVO.** Der
 Health-Score bewertet die technische Konfiguration einer Domain, nicht eine
@@ -117,10 +118,72 @@ LDI NRW, Kavalleriestraße 2–4, 40213 Düsseldorf.
 **Drittlandübermittlung:** Die Checks fragen unter anderem Dienste in den USA
 ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app). Übermittelt wird
 dabei die abgefragte Domain bzw. IP-Adresse — die Anfragen gehen vom Server aus,
-nicht aus dem Browser des Nutzers, dessen IP bleibt also hier. Zu beachten: eine
-abgefragte Domain kann im Einzelfall selbst personenbezogen sein (etwa
-`vorname-nachname.de`).
+nicht aus dem Browser des Nutzers, dessen IP erfahren diese Dienste also nicht.
+Zu beachten: eine abgefragte Domain kann im Einzelfall selbst personenbezogen
+sein (etwa `vorname-nachname.de`). Davon getrennt ist Cloudflare als
+Reverse-Proxy (siehe unten): dort kommt jede Besucher-IP an, die Übermittlung
+stützt sich auf den Angemessenheitsbeschluss (Art. 45 DSGVO), nicht auf Art. 49.
 
-Nach dem Umstieg auf lokal gehostete Schriften (#13) baut die Seite beim
-Aufruf **keine** Verbindung zu Dritten mehr auf. Nachprüfbar: das gebaute
-`dist/index.html` und `dist/assets/*.css` enthalten keine Fremd-Host-Referenz.
+Nach dem Umstieg auf lokal gehostete Schriften (#13) lädt die Seite beim
+Aufruf **nichts** mehr von Dritten. Nachprüfbar: das gebaute `dist/index.html`
+und `dist/assets/*.css` enthalten keine Fremd-Host-Referenz. Ausgeliefert wird
+sie über Cloudflare (siehe unten); dazu kommen bei Verbindungsfehlern die
+NEL-Berichte an `a.nel.cloudflare.com`.
+
+### Cloudflare vor der Seite (#125)
+
+diggydns.cloud läuft über Cloudflare als Reverse-Proxy/CDN (Antwort-Header
+`server: cloudflare`, `cf-ray … FRA`). Cloudflare nimmt die TLS-Verbindung
+entgegen und sieht damit jede Besucher-IP, die Verbindungsdaten und die Inhalte
+der Anfragen (Suchbegriffe, Kontaktformular). Das steht nicht im Code, sondern
+in der DNS-Konfiguration der Domain — wer den Proxy abschaltet oder den Anbieter
+wechselt, muss `/datenschutz` mitziehen.
+
+Angaben im Datenschutztext, geprüft am 19. Oktober 2026:
+
+| Angabe | Quelle |
+|---|---|
+| Cloudflare, Inc., 101 Townsend St., San Francisco, CA 94107, USA | [Datenschutzrichtlinie](https://www.cloudflare.com/privacypolicy/) (gültig ab 4. November 2025), [Self-Serve Subscription Agreement](https://www.cloudflare.com/terms/), [DPA](https://www.cloudflare.com/cloudflare-customer-dpa/) |
+| Cloudflare ist Auftragsverarbeiter für Customer Logs und die durchgeleiteten Inhalte, im Übrigen nach eigener Aussage Verantwortlicher | Datenschutzrichtlinie; DPA |
+| Zertifiziert nach EU-U.S. DPF, UK Extension und Swiss-U.S. DPF, Nicht-HR-Daten abgedeckt; Status „Active - Re-certification under Review“ | [Eintrag auf dataprivacyframework.gov](https://www.dataprivacyframework.gov/participant/5666) |
+| Angemessenheitsbeschluss vom 10. Juli 2023 für Organisationen im EU-U.S. DPF | [EU-Kommission, Adequacy decisions](https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/adequacy-decisions_en) |
+| Entfällt die Zertifizierung, stützt sich Cloudflare auf Standardvertragsklauseln | Datenschutzrichtlinie |
+| Speicherdauer: keine festen Fristen, „consistent with the business purposes“ oder für gesetzliche Pflichten | Datenschutzrichtlinie |
+| Network Error Logging: Fehlerberichte an `a.nel.cloudflare.com`, Client-IP nur für die Dauer der Anfrage, für die Zone abschaltbar | [Cloudflare-Doku zu NEL](https://developers.cloudflare.com/network-error-logging/) |
+| Keine Cookies | eigene Prüfung: kein `Set-Cookie` auf `/`, `/datenschutz`, `/lookup/…`, `/api/health` |
+
+**Cookies hängen an der Cloudflare-Konfiguration.** Cloudflare setzt laut
+[Cookie-Liste](https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/)
+`__cf_bm` bei Bot Fight Mode oder Bot Management, `cf_clearance` bei
+JavaScript-Erkennung und Challenges, weitere bei Rate Limiting, Waiting Room
+oder Always Online. Wird eines davon eingeschaltet, stimmt „Cookies setzt die
+Seite nicht, auch nicht über Cloudflare“ nicht mehr.
+
+**Network Error Logging.** Cloudflare schickt die Header `NEL` und `Report-To`
+mit (`success_fraction` 0, `max_age` 7 Tage). Der Browser hinterlegt daraufhin
+eine Richtlinie und meldet fehlgeschlagene Verbindungen an
+`a.nel.cloudflare.com` — die einzige Verbindung, die der Browser ohne Klick zu
+einem anderen Host als diggydns.cloud aufbaut. Ob die hinterlegte Richtlinie
+unter § 25 TDDDG fällt, ist rechtlich nicht geprüft. Abschalten lässt sich NEL
+laut Cloudflare per Schalter im Dashboard oder über die API
+(`PATCH /zones/{zone_id}/settings/nel`); dann entfällt auch der Absatz dazu in
+`/datenschutz`.
+
+**Für die rechtliche Prüfung (#36):** Aus dem Verkehr leitet Cloudflare
+„Network Data“ ab — laut Datenschutzrichtlinie etwa Fehlerraten, Anfragevolumen
+und IP-Bedrohungswerte, gespeichert unter anderem, um Angriffe zu erkennen.
+Sie gehören nicht zu den Daten, für die sich Cloudflare dort als
+Auftragsverarbeiter einordnet. Der Datenschutztext beschreibt nur die
+Auftragsverarbeitung; ob diese eigene Verarbeitung dort erwähnt werden muss,
+ist nicht geprüft.
+
+**Offener Punkt:** Der Datenschutztext nennt Cloudflare als Auftragsverarbeiter
+nach Art. 28 DSGVO. Ob ein Auftragsverarbeitungsvertrag für das Konto vorliegt,
+unter dem diggydns.cloud läuft, ist nicht geprüft. Laut Cloudflare ist das DPA
+per Verweis Teil des Self-Serve Subscription Agreement, das auch kostenlose
+Dienste umfasst ([Trust Hub](https://www.cloudflare.com/trust-hub/gdpr/),
+[Terms](https://www.cloudflare.com/terms/)). Bitte prüfen, dass das Konto
+diesem Vertrag unterliegt — oder einem eigenen mit DPA —, und die geltende
+Fassung (Version 6.4 vom 3. April 2026) ablegen. Die Formulierung behauptet
+keinen Abschluss, die Pflicht besteht aber unabhängig davon. Der DPF-Status ist
+regelmäßig nachzuprüfen.

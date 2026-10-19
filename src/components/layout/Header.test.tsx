@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Header } from './Header';
@@ -42,5 +42,31 @@ describe('Sprachumschalter', () => {
       screen.getByRole('button', { name: 'English' })
     );
     expect(screen.getByRole('group', { name: 'Theme' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Theme-Umschalter im Menü (#125): gespeichert wird erst die Wahl, nicht
+ * schon das Theme, das beim Laden aus der Systemeinstellung kommt.
+ */
+describe('Theme-Umschalter', () => {
+  afterEach(() => {
+    window.localStorage.removeItem('diggy-theme');
+    document.documentElement.classList.remove('dark');
+  });
+
+  it('speichert das Theme erst, wenn es im Menü gewählt wird', async () => {
+    render(<Header />);
+    expect(window.localStorage.getItem('diggy-theme')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Menü öffnen' }));
+    expect(screen.getByRole('button', { name: 'Light mode' })).toHaveAttribute('aria-pressed', 'true');
+    expect(window.localStorage.getItem('diggy-theme')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dark mode' }));
+
+    expect(screen.getByRole('button', { name: 'Dark mode' })).toHaveAttribute('aria-pressed', 'true');
+    expect(document.documentElement).toHaveClass('dark');
+    expect(window.localStorage.getItem('diggy-theme')).toBe('dark');
   });
 });
