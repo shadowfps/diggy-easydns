@@ -86,8 +86,8 @@
           "id": "cloudflare",
           "name": "Cloudflare",
           "ip": "1.1.1.1",
-          "country": "Global",
-          "flag": "🌐",
+          "country": "US",
+          "flag": "🇺🇸",
           "provider": "Cloudflare"
         },
         "records": [
@@ -95,28 +95,28 @@
             "type": "A",
             "name": "example.com",
             "value": "172.66.147.243",
-            "ttl": 82
+            "ttl": 134
           },
           {
             "type": "A",
             "name": "example.com",
             "value": "104.20.23.154",
-            "ttl": 82
+            "ttl": 134
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::6814:179a",
-            "ttl": 155
+            "ttl": 68
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::ac42:93f3",
-            "ttl": 155
+            "ttl": 68
           }
         ],
-        "responseTimeMs": 18
+        "responseTimeMs": 695
       },
       {
         "resolver": {
@@ -131,14 +131,14 @@
           {
             "type": "A",
             "name": "example.com",
-            "value": "104.20.23.154",
-            "ttl": 281
+            "value": "172.66.147.243",
+            "ttl": 300
           },
           {
             "type": "A",
             "name": "example.com",
-            "value": "172.66.147.243",
-            "ttl": 281
+            "value": "104.20.23.154",
+            "ttl": 300
           },
           {
             "type": "AAAA",
@@ -153,13 +153,13 @@
             "ttl": 300
           }
         ],
-        "responseTimeMs": 121
+        "responseTimeMs": 695
       },
       {
         "resolver": {
           "id": "adguard",
           "name": "AdGuard",
-          "ip": "94.140.14.14",
+          "ip": "94.140.14.140",
           "country": "CY",
           "flag": "🇨🇾",
           "provider": "AdGuard"
@@ -169,36 +169,36 @@
             "type": "A",
             "name": "example.com",
             "value": "104.20.23.154",
-            "ttl": 175
+            "ttl": 167
           },
           {
             "type": "A",
             "name": "example.com",
             "value": "172.66.147.243",
-            "ttl": 175
-          },
-          {
-            "type": "AAAA",
-            "name": "example.com",
-            "value": "2606:4700:10::6814:179a",
-            "ttl": 41
+            "ttl": 167
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::ac42:93f3",
-            "ttl": 41
+            "ttl": 263
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 263
           }
         ],
-        "responseTimeMs": 178
+        "responseTimeMs": 679
       },
       {
         "resolver": {
           "id": "dns-sb",
           "name": "DNS.SB",
           "ip": "185.222.222.222",
-          "country": "HK",
-          "flag": "🇭🇰",
+          "country": "DE",
+          "flag": "🇩🇪",
           "provider": "DNS.SB"
         },
         "records": [
@@ -206,28 +206,28 @@
             "type": "A",
             "name": "example.com",
             "value": "172.66.147.243",
-            "ttl": 29
+            "ttl": 221
           },
           {
             "type": "A",
             "name": "example.com",
             "value": "104.20.23.154",
-            "ttl": 29
+            "ttl": 221
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::6814:179a",
-            "ttl": 280
+            "ttl": 42
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::ac42:93f3",
-            "ttl": 280
+            "ttl": 42
           }
         ],
-        "responseTimeMs": 376
+        "responseTimeMs": 693
       },
       {
         "resolver": {
@@ -243,28 +243,176 @@
             "type": "A",
             "name": "example.com",
             "value": "104.20.23.154",
-            "ttl": 238
+            "ttl": 299
           },
           {
             "type": "A",
             "name": "example.com",
             "value": "172.66.147.243",
-            "ttl": 238
-          },
-          {
-            "type": "AAAA",
-            "name": "example.com",
-            "value": "2606:4700:10::6814:179a",
-            "ttl": 58
+            "ttl": 299
           },
           {
             "type": "AAAA",
             "name": "example.com",
             "value": "2606:4700:10::ac42:93f3",
-            "ttl": 58
+            "ttl": 300
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 300
           }
         ],
-        "responseTimeMs": 134
+        "responseTimeMs": 723
+      },
+      {
+        "resolver": {
+          "id": "quad9",
+          "name": "Quad9",
+          "ip": "9.9.9.10",
+          "country": "CH",
+          "flag": "🇨🇭",
+          "provider": "Quad9"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 255
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 255
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 228
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 228
+          }
+        ],
+        "responseTimeMs": 705
+      },
+      {
+        "resolver": {
+          "id": "opendns",
+          "name": "OpenDNS",
+          "ip": "208.67.222.2",
+          "country": "US",
+          "flag": "🇺🇸",
+          "provider": "Cisco"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 297
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 297
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 95
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 95
+          }
+        ],
+        "responseTimeMs": 728
+      },
+      {
+        "resolver": {
+          "id": "controld",
+          "name": "Control D",
+          "ip": "76.76.2.0",
+          "country": "CA",
+          "flag": "🇨🇦",
+          "provider": "Control D"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 248
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 248
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 219
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 219
+          }
+        ],
+        "responseTimeMs": 772
+      },
+      {
+        "resolver": {
+          "id": "dns4eu",
+          "name": "DNS4EU",
+          "ip": "86.54.11.100",
+          "country": "CZ",
+          "flag": "🇨🇿",
+          "provider": "Whalebone"
+        },
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 184
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 184
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::ac42:93f3",
+            "ttl": 11
+          },
+          {
+            "type": "AAAA",
+            "name": "example.com",
+            "value": "2606:4700:10::6814:179a",
+            "ttl": 11
+          }
+        ],
+        "responseTimeMs": 768
       }
     ],
     "findings": [
@@ -272,7 +420,11 @@
         "id": "propagation-consistent",
         "severity": "success",
         "title": "Konsistente Propagation",
-        "description": "Alle 5 Resolver liefern dasselbe Ergebnis.",
+        "key": "propagation-consistent",
+        "description": "Alle 9 Resolver liefern dasselbe Ergebnis.",
+        "params": {
+          "count": 9
+        },
         "category": "dns"
       }
     ]

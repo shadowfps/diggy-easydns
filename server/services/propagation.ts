@@ -161,14 +161,45 @@ export async function propagationSection(
 ): Promise<PropagationSectionResult> {
   if (!type) {
     const types = propagationTypes(domain);
-    const propagation = await cached(`propagation:${domain}`, ttlMs, () =>
-      queryAllResolvers(domain, { types })
-    );
+    const propagation = await cachedResolvers(`propagation:${domain}`, ttlMs, domain, types);
     return { propagation, findings: propagationFindings(propagation, types) };
   }
 
-  const propagation = await cached(`propagation:${type}:${domain}`, ttlMs, () =>
-    queryAllResolvers(domain, { types: [type] })
-  );
+  const propagation = await cachedResolvers(`propagation:${type}:${domain}`, ttlMs, domain, [type]);
   return { propagation, findings: [], type };
+}
+
+/**
+ * Die Antworten aus dem Cache — mit den TTLs von jetzt.
+ *
+ * Die TTL zählt im Resolver weiter herunter, während die Antwort hier bis zu
+ * `ttlMs` liegt. Unverändert ausgeliefert hieße „verbleibende TTL“ bis zu eine
+ * Minute zu viel, und wer nach 30 s erneut prüft, sähe dieselben Zahlen.
+ */
+async function cachedResolvers(
+  key: string,
+  ttlMs: number,
+  domain: string,
+  types: RecordType[]
+): Promise<ResolverResult[]> {
+  const { results, at } = await cached(key, ttlMs, async () => {
+    const results = await queryAllResolvers(domain, { types });
+    return { results, at: Date.now() };
+  });
+  return agedResults(results, Math.floor((Date.now() - at) / 1000));
+}
+
+/** Zieht `seconds` von jeder TTL ab, nicht unter 0. Das Original bleibt unverändert. */
+export function agedResults(results: ResolverResult[], seconds: number): ResolverResult[] {
+  if (seconds <= 0) return results;
+  const age = (ttl: number) => Math.max(0, ttl - seconds);
+  return results.map((result) => {
+    const records = result.records.map((rec) => (rec.ttl === null ? rec : { ...rec, ttl: age(rec.ttl) }));
+    if (!result.negativeTtl) return { ...result, records };
+    const negativeTtl: Partial<Record<RecordType, number>> = {};
+    for (const [recordType, ttl] of Object.entries(result.negativeTtl) as [RecordType, number][]) {
+      negativeTtl[recordType] = age(ttl);
+    }
+    return { ...result, records, negativeTtl };
+  });
 }

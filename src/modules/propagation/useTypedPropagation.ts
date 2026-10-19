@@ -44,6 +44,10 @@ export function useTypedPropagation(
 
   useEffect(() => {
     if (!enabled || loaded.get(report)?.has(type)) return;
+    // Gescheitert: erst „Erneut versuchen“ fragt wieder. Sonst stünde nach
+    // einem Typwechsel zurück der alte Fehler samt Knopf da, während im
+    // Hintergrund schon neu gefragt wird.
+    if (failure?.report === report && failure.type === type) return;
     let stale = false;
 
     lookupPropagation(domain, type)
@@ -60,7 +64,7 @@ export function useTypedPropagation(
     return () => {
       stale = true;
     };
-  }, [enabled, report, domain, type, attempt]);
+  }, [enabled, report, domain, type, attempt, failure]);
 
   return {
     results,

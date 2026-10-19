@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
+import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
 import { UncheckedBadge } from '@/components/ui/Unchecked';
 import type { DeKey } from '@/i18n/de';
 import { errorText, useI18n } from '@/i18n';
@@ -83,10 +84,14 @@ export function AuthoritativeBlock({
             </button>
           </div>
         ) : (
-          <p role="status" className="mt-4 flex items-center gap-2 text-sm text-fg-muted">
-            <Loader2 className="size-4 shrink-0 animate-spin" />
-            {t('Autoritative Nameserver werden gefragt…')}
-          </p>
+          <>
+            {/* Angesagt über LoadingAnnouncement, die Anzeige ist aria-hidden (#108). */}
+            <LoadingAnnouncement>{t('Autoritative Nameserver werden gefragt…')}</LoadingAnnouncement>
+            <p aria-hidden="true" className="mt-4 flex items-center gap-2 text-sm text-fg-muted">
+              <Loader2 className="size-4 shrink-0 animate-spin" />
+              {t('Autoritative Nameserver werden gefragt…')}
+            </p>
+          </>
         )}
       </section>
     );

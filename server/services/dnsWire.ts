@@ -8,14 +8,15 @@
  * (`10 mail.example.com.`, `"stück 1" "stück 2"`). doh.ts behandelt danach
  * beide Formate gleich, auch beim Zusammensetzen der TXT-Stücke.
  *
- * Eigener Code statt Bibliothek: Gebraucht werden eine Frage und der
- * Answer-Abschnitt für ein Dutzend Typen. Eine Bibliothek wie dns-packet
+ * Eigener Code statt Bibliothek: Gebraucht werden eine Frage, der
+ * Answer-Abschnitt für ein Dutzend Typen und das SOA im Authority-Abschnitt. Eine Bibliothek wie dns-packet
  * (MIT) liefert Objekte, die trotzdem in die Textform der JSON-API übersetzt
  * werden müssten — als neue Laufzeit-Abhängigkeit für rund 200 Zeilen.
  *
  * Die Antwort kommt von außen. Jeder Zugriff ist gegen die Länge geprüft,
- * Kompressionszeiger dürfen nur zurück zeigen; eine kaputte oder
- * abgeschnittene Nachricht wirft `DnsWireError`, statt Werte zu erfinden.
+ * Kompressionszeiger dürfen nur zurück zeigen und nicht in den Kopf; eine
+ * kaputte oder abgeschnittene Nachricht wirft `DnsWireError`, statt Werte zu
+ * erfinden.
  */
 
 /** Eine kaputte, abgeschnittene oder unpassende DNS-Nachricht. */
@@ -26,7 +27,7 @@ export class DnsWireError extends Error {
   }
 }
 
-/** Ein Eintrag aus dem Answer-Abschnitt, Felder wie in der JSON-API. */
+/** Ein Eintrag aus dem Answer- oder Authority-Abschnitt, Felder wie in der JSON-API. */
 export interface DnsAnswer {
   name: string;
   type: number;
@@ -49,10 +50,17 @@ export interface DnsResponse {
   CD?: boolean;
   Question?: { name: string; type: number }[];
   Answer?: DnsAnswer[];
+  /**
+   * Bei „gibt es nicht“ (NXDOMAIN/NODATA) steht hier das SOA der Zone — die
+   * Negativ-TTL hängt daran (negativeCacheTtl in doh.ts, #131).
+   */
+  Authority?: DnsAnswer[];
 }
 
 const CLASS_IN = 1;
 const TYPE_OPT = 41;
+/** Länge des Kopfs (ID, Flags, vier Zähler). */
+const HEADER = 12;
 /** Größer kann eine DNS-Nachricht nicht sein (16-Bit-Länge bei TCP). */
 const MAX_MESSAGE = 65_535;
 const MAX_NAME = 255;
@@ -74,7 +82,7 @@ export function encodeQuery(
 ): Uint8Array {
   const qname = encodeName(name);
   const opt = options.dnssec ? 11 : 0;
-  const msg = new Uint8Array(12 + qname.length + 4 + opt);
+  const msg = new Uint8Array(HEADER + qname.length + 4 + opt);
   const view = new DataView(msg.buffer);
 
   view.setUint16(0, 0); // ID
@@ -82,8 +90,8 @@ export function encodeQuery(
   view.setUint16(4, 1); // QDCOUNT
   view.setUint16(10, options.dnssec ? 1 : 0); // ARCOUNT
 
-  msg.set(qname, 12);
-  let o = 12 + qname.length;
+  msg.set(qname, HEADER);
+  let o = HEADER + qname.length;
   view.setUint16(o, type);
   view.setUint16(o + 2, CLASS_IN);
   o += 4;
@@ -123,8 +131,8 @@ function encodeName(name: string): Uint8Array {
 }
 
 /**
- * Liest eine Antwort. Ausgewertet werden Kopf, Frage und Answer-Abschnitt;
- * Authority und Additional braucht diggy nicht.
+ * Liest eine Antwort. Ausgewertet werden Kopf, Frage, Answer- und
+ * Authority-Abschnitt; Additional braucht diggy nicht.
  *
  * `question` prüft, dass die Antwort zur gestellten Frage gehört — ein
  * Resolver oder Proxy, der eine fremde Antwort liefert, darf nicht als
@@ -135,15 +143,16 @@ export function decodeResponse(
   question?: { name: string; type: number }
 ): DnsResponse {
   if (bytes.length > MAX_MESSAGE) throw new DnsWireError('länger als 65535 Bytes');
-  if (bytes.length < 12) throw new DnsWireError('kürzer als der Kopf');
+  if (bytes.length < HEADER) throw new DnsWireError('kürzer als der Kopf');
   const reader = new Reader(bytes);
 
   const flags = reader.u16(2);
   if (!(flags & 0x8000)) throw new DnsWireError('keine Antwort (QR-Bit fehlt)');
   const qdcount = reader.u16(4);
   const ancount = reader.u16(6);
+  const nscount = reader.u16(8);
 
-  let o = 12;
+  let o = HEADER;
   const questions: { name: string; type: number }[] = [];
   for (let i = 0; i < qdcount; i++) {
     const { name, next } = reader.name(o);
@@ -160,8 +169,27 @@ export function decodeResponse(
     }
   }
 
-  const answers: DnsAnswer[] = [];
-  for (let i = 0; i < ancount; i++) {
+  const answer = readRecords(reader, o, ancount);
+  const authority = readRecords(reader, answer.next, nscount);
+
+  return {
+    Status: flags & 0x000f,
+    TC: Boolean(flags & 0x0200),
+    RD: Boolean(flags & 0x0100),
+    RA: Boolean(flags & 0x0080),
+    AD: Boolean(flags & 0x0020),
+    CD: Boolean(flags & 0x0010),
+    Question: questions,
+    Answer: answer.records,
+    Authority: authority.records,
+  };
+}
+
+/** `count` Einträge ab `offset`; `next` ist die Stelle hinter dem letzten. */
+function readRecords(reader: Reader, offset: number, count: number): { records: DnsAnswer[]; next: number } {
+  const records: DnsAnswer[] = [];
+  let o = offset;
+  for (let i = 0; i < count; i++) {
     const { name, next } = reader.name(o);
     reader.need(next, 10);
     const type = reader.u16(next);
@@ -172,19 +200,9 @@ export function decodeResponse(
     reader.need(start, rdlength);
     o = start + rdlength;
     if (cls !== CLASS_IN) continue;
-    answers.push({ name, type, TTL: ttl, data: formatRdata(reader, type, start, rdlength) });
+    records.push({ name, type, TTL: ttl, data: formatRdata(reader, type, start, rdlength) });
   }
-
-  return {
-    Status: flags & 0x000f,
-    TC: Boolean(flags & 0x0200),
-    RD: Boolean(flags & 0x0100),
-    RA: Boolean(flags & 0x0080),
-    AD: Boolean(flags & 0x0020),
-    CD: Boolean(flags & 0x0010),
-    Question: questions,
-    Answer: answers,
-  };
+  return { records, next: o };
 }
 
 function fqdn(name: string): string {
@@ -240,6 +258,8 @@ class Reader {
       if ((len & 0xc0) === 0xc0) {
         const target = this.u16(pos) & 0x3fff;
         if (target >= pos) throw new DnsWireError('Kompressionszeiger zeigt nicht zurück');
+        // Namen stehen erst hinter dem Kopf; dort hinein zeigt kein gültiger Zeiger.
+        if (target < HEADER) throw new DnsWireError('Kompressionszeiger zeigt in den Kopf');
         if (++jumps > MAX_POINTER_JUMPS) throw new DnsWireError('zu viele Kompressionszeiger');
         if (next < 0) next = pos + 2;
         pos = target;

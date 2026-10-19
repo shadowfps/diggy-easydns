@@ -48,8 +48,8 @@ const ui: Dictionary = {
     'Certificate, issuer and expiry date — before your visitors see a warning.',
   'Sind die Antworten signiert, und hält die Vertrauenskette?':
     'Are the answers signed, and does the chain of trust hold?',
-  'Fünf öffentliche Resolver im Vergleich: Ist eine Änderung überall angekommen?':
-    'Five public resolvers side by side: has your change arrived everywhere?',
+  'Neun öffentliche Resolver im Vergleich: Ist eine Änderung bei allen angekommen?':
+    'Nine public resolvers side by side: has your change reached all of them?',
   'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.':
     'Registrar, term and status — before a domain quietly expires.',
   'Kennst du schon {converter} by diggy?': 'Have you tried {converter} by diggy?',
@@ -147,8 +147,8 @@ const ui: Dictionary = {
   'Chain of Trust valide': 'Chain of trust valid',
   Algorithmus: 'Algorithm',
   unbekannt: 'unknown',
-  'DS- und DNSKEY-Records vorhanden, von Cloudflare und Quad9 validiert.':
-    'DS and DNSKEY records present, validated by Cloudflare and Quad9.',
+  'DS- und DNSKEY-Records vorhanden, Signatur über Cloudflare und Google geprüft.':
+    'DS and DNSKEY records present, signature checked via Cloudflare and Google.',
   'Chain unterbrochen': 'Chain broken',
   'Die Domain hat einen DNSKEY, aber der Parent-DS-Record fehlt. Resolver können die Signatur nicht prüfen → DNSSEC ist effektiv aus. Beim Registrar den DS-Record nachtragen.':
     'The domain has a DNSKEY, but the DS record in the parent zone is missing. Resolvers can’t verify the signature → DNSSEC is effectively off. Add the DS record at your registrar.',
@@ -275,6 +275,8 @@ const ui: Dictionary = {
   },
   'Alle Resolver liefern denselben {type}-Record — sauber propagiert.':
     'All resolvers return the same {type} record — fully propagated.',
+  'Alle Resolver liefern dieselben {type}-Records — sauber propagiert.':
+    'All resolvers return the same {type} records — fully propagated.',
   'Kein Resolver liefert einen {types} unter diesem Namen.':
     'No resolver returns any {types} under this name.',
   '{type}-Record': '{type} record',
@@ -286,12 +288,12 @@ const ui: Dictionary = {
   'weicht ab': 'differs',
   'Gekürzt zeigen': 'Show shortened',
   'Ganzen Wert zeigen ({count} Zeichen)': 'Show full value ({count} characters)',
+  'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.':
+    'diggy asks from Germany. Each provider answers from its nearest data center (anycast): you see the caches of different providers in one place, not a worldwide spread. The flag shows where the provider is based.',
   'Record-Typ': 'Record type',
   '{type}-Records werden bei allen Resolvern abgefragt…': 'Asking every resolver for {type} records…',
   'Verglichen wird die Seriennummer, der dritte Wert im SOA.':
     'Compared by serial number, the third value in the SOA.',
-  'Abweichende Resolver fragen laut TTL spätestens in {duration} neu nach.':
-    'Going by their TTL, the differing resolvers will ask again within {duration}.',
   'Erwarteter Wert': 'Expected value',
   'Erwarteten Wert löschen': 'Clear expected value',
   'Öffentliche Resolver': 'Public resolvers',
@@ -368,6 +370,8 @@ const ui: Dictionary = {
   'keine öffentliche Adresse': 'no public address',
   'keine Adresse': 'no address',
   'gerade zu oft gefragt': 'asked too often',
+  'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.':
+    'Going by their TTL, the differing resolvers will query the nameservers again within {duration} of this check.',
 
   // ─── PageSpeed ───────────────────────────────────────────────────────
   'Scan abgeschlossen': 'Scan complete',

@@ -20,6 +20,7 @@ import {
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
 import { errorText, formatNumber, t, useI18n, type Language } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
 import { useTypedPropagation } from './useTypedPropagation';
@@ -122,7 +123,13 @@ export function PropagationView({
         </EmptyState>
       ) : (
         <div className="card">
-          <p role="status" className="flex items-center gap-2 text-sm text-fg-muted">
+          {/* Angesagt über LoadingAnnouncement, die Anzeige ist aria-hidden:
+              Eine Live-Region, die schon mit Text eingefügt wird, sagen nicht
+              alle Screenreader an (#108). Je Typ eine Ansage. */}
+          <LoadingAnnouncement key={type}>
+            {t('{type}-Records werden bei allen Resolvern abgefragt…', { type })}
+          </LoadingAnnouncement>
+          <p aria-hidden="true" className="flex items-center gap-2 text-sm text-fg-muted">
             <Loader2 className="size-4 shrink-0 animate-spin" />
             {t('{type}-Records werden bei allen Resolvern abgefragt…', { type })}
           </p>
@@ -250,6 +257,7 @@ function Comparison({
     });
   }, [entry, answers]);
   const letterFor = (key: string) => groups.find((g) => g.key === key)?.letter;
+  const consensusSize = answers.find((a) => a.key === consensusKey)?.values.length ?? 0;
 
   const answeredWithoutError = answers.some((a) => !a.result.error);
 
@@ -308,12 +316,15 @@ function Comparison({
           <div className="space-y-1">
             <p>{deviationText(basis.kind, entry, deviating, compared)}</p>
             {/* Nur mit TTL von jedem abweichenden Resolver — sonst ließe sich
-                „spätestens“ nicht sagen (requeryWithin). */}
+                „spätestens“ nicht sagen (requeryWithin). Gezählt ab der
+                Abfrage, nicht ab jetzt: Die Ansicht bleibt stehen, solange
+                der Report offen ist. */}
             {requery !== undefined && (
               <p>
-                {t('Abweichende Resolver fragen laut TTL spätestens in {duration} neu nach.', {
-                  duration: formatDuration(requery),
-                })}
+                {t(
+                  'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.',
+                  { duration: formatDuration(requery) }
+                )}
               </p>
             )}
           </div>
@@ -329,13 +340,16 @@ function Comparison({
         >
           <Check className="mt-0.5 size-4 shrink-0 text-success" />
           <span>
+            {/* Ein NS-, MX- oder CAA-Satz hat meist mehrere Records. */}
             {basis.kind === 'authoritative'
               ? t('Alle Resolver liefern die Antwort der autoritativen Nameserver — sauber propagiert.')
               : basis.kind === 'expected'
-              ? t('Alle Resolver liefern den erwarteten Wert.')
-              : entry
-              ? t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type })
-              : t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')}
+                ? t('Alle Resolver liefern den erwarteten Wert.')
+                : !entry
+                  ? t('Alle Resolver liefern dasselbe Ergebnis — DNS sauber propagiert.')
+                  : consensusSize > 1
+                    ? t('Alle Resolver liefern dieselben {type}-Records — sauber propagiert.', { type })
+                    : t('Alle Resolver liefern denselben {type}-Record — sauber propagiert.', { type })}
           </span>
         </motion.div>
       )}
@@ -350,6 +364,15 @@ function Comparison({
           </span>
         </div>
       )}
+
+      {/* Was der Vergleich zeigen kann (#132). Neun Anbieter sind kein
+          Blick um die Welt: Anycast schickt jede Anfrage ins nächste
+          Rechenzentrum. Kein Status, deshalb leise am Ende. */}
+      <p className="mt-4 text-xs leading-relaxed text-fg-subtle">
+        {t(
+          'diggy fragt aus Deutschland. Die Anbieter antworten jeweils aus ihrem nächstgelegenen Rechenzentrum (Anycast): Du siehst die Caches verschiedener Anbieter an einem Ort, keine weltweite Verteilung. Die Flagge zeigt den Sitz des Anbieters.'
+        )}
+      </p>
     </section>
   );
 }
@@ -381,8 +404,8 @@ function deviationText(basis: PropagationBasis['kind'], entry: boolean, count: n
 }
 
 /**
- * Zeitspanne für „spätestens in …“, aufgerundet: lieber eine Minute zu spät
- * als zu früh. Die Einheiten heißen in beiden Sprachen gleich.
+ * Zeitspanne für „spätestens … nach dieser Abfrage“, aufgerundet: lieber eine
+ * Minute zu spät als zu früh. Die Einheiten heißen in beiden Sprachen gleich.
  */
 function formatDuration(seconds: number): string {
   if (seconds < 90) return `${formatNumber(seconds)} s`;

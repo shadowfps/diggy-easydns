@@ -230,6 +230,20 @@ describe('PropagationView — Hosts', () => {
     expect(typeButton('CNAME')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText(/DNS sauber propagiert/)).toBeInTheDocument();
   });
+
+  /**
+   * #132: Neun Anbieter wirken wie ein Blick um die Welt. Per Anycast antwortet
+   * aber jeder aus seinem Rechenzentrum nahe dem Server — das muss dastehen,
+   * auch wenn ein Resolver ausfällt.
+   */
+  it('sagt, von wo aus gefragt wird und was die Flagge bedeutet', () => {
+    render(<View results={results([[['A', '192.0.2.1']], { error: 'Timeout' }])} types={HOST} />);
+
+    const hint = screen.getByText(/diggy fragt aus Deutschland/);
+    expect(hint).toHaveTextContent(/nächstgelegenen Rechenzentrum \(Anycast\)/);
+    expect(hint).toHaveTextContent(/keine weltweite Verteilung/);
+    expect(hint).toHaveTextContent(/Die Flagge zeigt den Sitz des Anbieters/);
+  });
 });
 
 describe('PropagationView — Typauswahl (#131)', () => {
@@ -259,6 +273,12 @@ describe('PropagationView — Typauswahl (#131)', () => {
   });
 
   it('fragt einen Typ, den der Report nicht mitlädt, erst bei Auswahl ab', async () => {
+    vi.mocked(api.lookupAuthoritative).mockImplementation(async (domain, type) => ({
+      domain,
+      type,
+      nameservers: [],
+      error: 'lookup_failed',
+    }));
     let answer!: (value: Awaited<ReturnType<typeof api.lookupPropagation>>) => void;
     vi.mocked(api.lookupPropagation).mockReturnValue(new Promise((resolve) => (answer = resolve)));
     render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
@@ -266,10 +286,13 @@ describe('PropagationView — Typauswahl (#131)', () => {
 
     await userEvent.click(typeButton('MX'));
     expect(api.lookupPropagation).toHaveBeenCalledWith('example.com', 'MX');
-    // Zwei Ladevorgänge, zwei Status: Resolver und Nameserver (#133).
-    expect(screen.getAllByRole('status').map((s) => s.textContent)).toContain(
-      'MX-Records werden bei allen Resolvern abgefragt…'
+    // Eine Ansage: Die Live-Region kommt leer, der Text danach (#108). Die
+    // Nameserver (#133) haben ihre eigene, solange sie laden — hier sind sie
+    // schon da.
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('MX-Records werden bei allen Resolvern abgefragt')
     );
+    expect(screen.getAllByRole('status')).toHaveLength(1);
 
     answer({
       propagation: results([
@@ -284,7 +307,8 @@ describe('PropagationView — Typauswahl (#131)', () => {
     // Priorität und Ziel, wie im Zonefile.
     expect(group).toHaveTextContent('10 mx1.example.net');
     expect(group).toHaveTextContent('20 mx2.example.net');
-    expect(screen.getByText(/Alle Resolver liefern denselben MX-Record/)).toBeInTheDocument();
+    // Zwei MX: Mehrzahl.
+    expect(screen.getByText('Alle Resolver liefern dieselben MX-Records — sauber propagiert.')).toBeInTheDocument();
     expect(screen.getByText('20ms · TTL 300s')).toBeInTheDocument();
     expect(screen.getByText('20ms · TTL 120s')).toBeInTheDocument();
   });
@@ -326,6 +350,32 @@ describe('PropagationView — Typauswahl (#131)', () => {
     expect(api.lookupPropagation).toHaveBeenCalledTimes(2);
   });
 
+  /*
+   * Nach einem Fehler und einem Typwechsel zurück stand der alte Fehler samt
+   * Knopf da, während im Hintergrund schon neu gefragt wurde.
+   */
+  it('fragt nach einem Fehler erst auf Wunsch erneut, auch nach einem Typwechsel', async () => {
+    vi.mocked(api.lookupPropagation).mockImplementation(async (_domain, type) => {
+      if (type === 'MX') throw new Error('Propagation-Check fehlgeschlagen');
+      return {
+        propagation: results([{ records: [{ type: 'NS', value: 'ns1.example.net', ttl: 3600 }] }]),
+        findings: [],
+      };
+    });
+    render(<View results={results([[]])} types={HOST} initial="MX" />);
+    expect(await screen.findByText('Propagation-Check fehlgeschlagen')).toBeInTheDocument();
+
+    await userEvent.click(typeButton('NS'));
+    expect(await screen.findByText(/denselben NS-Record/)).toBeInTheDocument();
+    await userEvent.click(typeButton('MX'));
+    expect(screen.getByRole('button', { name: 'Erneut versuchen' })).toBeInTheDocument();
+    expect(vi.mocked(api.lookupPropagation).mock.calls.map(([, type]) => type)).toEqual(['MX', 'NS']);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+    await waitFor(() => expect(api.lookupPropagation).toHaveBeenCalledTimes(3));
+    expect(await screen.findByText('Propagation-Check fehlgeschlagen')).toBeInTheDocument();
+  });
+
   it('vergleicht das SOA über die Seriennummer und sagt das dazu', async () => {
     vi.mocked(api.lookupPropagation).mockResolvedValue({
       propagation: results([
@@ -343,7 +393,7 @@ describe('PropagationView — Typauswahl (#131)', () => {
     expect(screen.getByRole('region', { name: 'Antwort B' })).toHaveTextContent('2026101800');
     // 245 s aufgerundet auf volle Minuten.
     expect(
-      screen.getByText('Abweichende Resolver fragen laut TTL spätestens in 5 min neu nach.')
+      screen.getByText('Laut TTL fragen die abweichenden Resolver spätestens 5 min nach dieser Abfrage wieder bei den Nameservern nach.')
     ).toBeInTheDocument();
   });
 });
@@ -365,7 +415,7 @@ describe('PropagationView — TTL (#131)', () => {
     expect(screen.getByText(/kein Eintrag · weicht ab/)).toBeInTheDocument();
     expect(screen.getByText('20ms · TTL 40s')).toBeInTheDocument();
     expect(
-      screen.getByText('Abweichende Resolver fragen laut TTL spätestens in 40 s neu nach.')
+      screen.getByText('Laut TTL fragen die abweichenden Resolver spätestens 40 s nach dieser Abfrage wieder bei den Nameservern nach.')
     ).toBeInTheDocument();
   });
 
@@ -385,7 +435,7 @@ describe('PropagationView — TTL (#131)', () => {
     expect(screen.getByText(/kein Eintrag · weicht ab/)).toBeInTheDocument();
     expect(screen.getAllByText(/· TTL \d+s$/)).toHaveLength(2);
     expect(screen.getAllByText('20ms')).toHaveLength(1);
-    expect(screen.queryByText(/fragen laut TTL/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fragen die abweichenden Resolver/)).not.toBeInTheDocument();
   });
 
   it('fasst nichts zusammen, wenn alle Resolver übereinstimmen', () => {
@@ -401,7 +451,7 @@ describe('PropagationView — TTL (#131)', () => {
 
     expect(screen.getByText('20ms · TTL 60s')).toBeInTheDocument();
     expect(screen.getByText('20ms · TTL 3600s')).toBeInTheDocument();
-    expect(screen.queryByText(/fragen laut TTL/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fragen die abweichenden Resolver/)).not.toBeInTheDocument();
   });
 
   it('nennt die größte TTL unter den abweichenden Resolvern', () => {
@@ -419,7 +469,7 @@ describe('PropagationView — TTL (#131)', () => {
 
     // 7000 s sind knapp zwei Stunden — aufgerundet, nie abgerundet.
     expect(
-      screen.getByText('Abweichende Resolver fragen laut TTL spätestens in 2 h neu nach.')
+      screen.getByText('Laut TTL fragen die abweichenden Resolver spätestens 2 h nach dieser Abfrage wieder bei den Nameservern nach.')
     ).toBeInTheDocument();
   });
 });

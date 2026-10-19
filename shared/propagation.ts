@@ -175,9 +175,10 @@ export interface ResolverAnswer {
   status: ResolverStatus;
   /**
    * Verbleibende TTL in Sekunden, wie der Resolver sie meldet: die kleinste
-   * der verglichenen Records — nach ihr fragt er neu. Bei „kein Eintrag“ die
-   * des Negativ-Caches, sofern der Resolver das SOA dazu mitliefert
-   * (`negativeTtl`). `null`: unbekannt, und immer bei einem Fehler.
+   * der verglichenen Records — nach ihr fragt er sie neu. Bei „kein Eintrag“
+   * die des Negativ-Caches, sofern der Resolver das SOA dazu mitliefert
+   * (`negativeTtl`). `null`: unbekannt, und immer bei einem Fehler. Ein CNAME
+   * davor zählt hier nicht mit, wohl aber in `requeryWithin`.
    */
   ttl: number | null;
 }
@@ -306,6 +307,10 @@ export function defaultPropagationType<T extends RecordType>(results: ResolverRe
  * In wie vielen Sekunden die abweichenden Resolver spätestens neu fragen: die
  * größte verbleibende TTL unter ihnen.
  *
+ * Folgt der Name einem CNAME, zählt dessen TTL mit (`answerExpiresIn`). Ist
+ * der CNAME das, was sich geändert hat, liefert der Resolver bis zu seinem
+ * Ablauf die Records des alten Ziels — auch wenn die selbst nur kurz gelten.
+ *
  * `undefined`, wenn keiner abweicht — oder einer keine TTL nennt: Dann ließe
  * sich „spätestens“ nicht sagen. Ob sie danach den neuen Stand liefern, sagt
  * die Zahl nicht; manche Resolver kappen TTLs oder liefern bei Störungen
@@ -316,10 +321,28 @@ export function requeryWithin(comparison: PropagationComparison): number | undef
   const deviating = comparison.answers.filter((a) => a.status === 'mismatch');
   let latest = -1;
   for (const answer of deviating) {
-    if (answer.ttl === null) return undefined;
-    latest = Math.max(latest, answer.ttl);
+    const expiresIn = answerExpiresIn(answer, comparison.type);
+    if (expiresIn === null) return undefined;
+    latest = Math.max(latest, expiresIn);
   }
   return latest < 0 ? undefined : latest;
+}
+
+/**
+ * Bis die ganze Antwort eines Resolvers abgelaufen ist: ihre TTL, und die
+ * des längsten CNAMEs davor. Beim Typ CNAME selbst gibt es keine Kette — die
+ * Abfrage folgt ihm nicht.
+ */
+function answerExpiresIn(answer: ResolverAnswer, type: RecordType): number | null {
+  if (answer.ttl === null) return null;
+  if (type === 'CNAME') return answer.ttl;
+  let latest = answer.ttl;
+  for (const rec of answer.result.records) {
+    if (rec.type !== 'CNAME') continue;
+    if (rec.ttl === null) return null;
+    latest = Math.max(latest, rec.ttl);
+  }
+  return latest;
 }
 
 /** Ob bei diesem Typ ein Resolver ohne Antwort als Abweichung zählt. */

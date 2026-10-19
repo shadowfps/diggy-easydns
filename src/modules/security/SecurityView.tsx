@@ -238,7 +238,7 @@ function DnssecCard({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: Rea
         <Row label={t('Algorithmus')} value={dnssec.algorithm ?? t('unbekannt')} mono />
         <Row
           label="Status"
-          value={t('DS- und DNSKEY-Records vorhanden, von Cloudflare und Quad9 validiert.')}
+          value={t('DS- und DNSKEY-Records vorhanden, Signatur über Cloudflare und Google geprüft.')}
         />
       </dl>
     );
