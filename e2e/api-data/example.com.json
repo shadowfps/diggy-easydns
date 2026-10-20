@@ -554,5 +554,185 @@
         "confidence": "high"
       }
     ]
+  },
+  "authoritative": {
+    "domain": "example.com",
+    "type": "A",
+    "zone": "example.com",
+    "nameservers": [
+      {
+        "host": "elliott.ns.cloudflare.com",
+        "ip": "108.162.195.228",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 84
+      },
+      {
+        "host": "elliott.ns.cloudflare.com",
+        "ip": "162.159.44.228",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 79
+      },
+      {
+        "host": "elliott.ns.cloudflare.com",
+        "ip": "2606:4700:58::a29f:2ce4",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 81
+      },
+      {
+        "host": "elliott.ns.cloudflare.com",
+        "ip": "2803:f800:50::6ca2:c3e4",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 82
+      },
+      {
+        "host": "hera.ns.cloudflare.com",
+        "ip": "108.162.192.162",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 80
+      },
+      {
+        "host": "hera.ns.cloudflare.com",
+        "ip": "172.64.32.162",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 83
+      },
+      {
+        "host": "hera.ns.cloudflare.com",
+        "ip": "2606:4700:50::adf5:3aa2",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 79
+      },
+      {
+        "host": "hera.ns.cloudflare.com",
+        "ip": "2803:f800:50::6ca2:c0a2",
+        "records": [
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "172.66.147.243",
+            "ttl": 300
+          },
+          {
+            "type": "A",
+            "name": "example.com",
+            "value": "104.20.23.154",
+            "ttl": 300
+          }
+        ],
+        "serial": "2416374680",
+        "primary": "elliott.ns.cloudflare.com",
+        "responseTimeMs": 82
+      }
+    ],
+    "state": "agreed",
+    "values": [
+      "104.20.23.154",
+      "172.66.147.243"
+    ]
   }
 }

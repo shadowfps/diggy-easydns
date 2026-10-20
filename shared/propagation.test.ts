@@ -461,3 +461,54 @@ describe('defaultPropagationType', () => {
     expect(defaultPropagationType([], propagationTypes('_dmarc.example.com'))).toBe('TXT');
   });
 });
+
+/**
+ * #133: Eine Zone bei mehreren Anbietern — github.com liegt bei NS1 und
+ * Route 53. Jeder zählt seine Seriennummer selbst (NS1 1656468023, Route 53
+ * immer 1); welche ein Resolver liefert, hängt davon ab, wen er gefragt hat.
+ */
+describe('comparePropagation — SOA bei mehreren Anbietern (#133)', () => {
+  const ns1 = (serial: string) => ({ type: 'SOA' as const, value: `dns1.p08.nsone.net. hostmaster.nsone.net. ${serial} 43200 7200 1209600 3600`, ttl: 3600 });
+  const r53 = (serial: string) => ({ type: 'SOA' as const, value: `ns-1707.awsdns-21.co.uk. awsdns-hostmaster.amazon.com. ${serial} 7200 900 1209600 86400`, ttl: 900 });
+
+  it('vergleicht Seriennummern nur unter Resolvern mit demselben Primary', () => {
+    const c = comparePropagation(
+      [
+        full('cloudflare', [r53('1')]),
+        full('google', [r53('1')]),
+        full('adguard', [ns1('1656468023')]),
+        full('dns-sb', [ns1('1656468023')]),
+        full('nextdns', [ns1('1656468023')]),
+      ],
+      'SOA'
+    );
+    expect(c.answers.map((a) => a.status)).toEqual(['match', 'match', 'match', 'match', 'match']);
+    expect(c).toMatchObject({ deviating: 0, compared: 5, soaPrimaries: 2 });
+  });
+
+  it('erkennt einen veralteten Stand beim selben Anbieter weiter', () => {
+    const c = comparePropagation(
+      [
+        full('cloudflare', [ns1('1656468023')]),
+        full('google', [r53('1')]),
+        full('adguard', [ns1('1656468023')]),
+        full('dns-sb', [ns1('1656460000')]),
+      ],
+      'SOA'
+    );
+    expect(c.answers.map((a) => a.status)).toEqual(['match', 'match', 'match', 'mismatch']);
+  });
+
+  it('zählt einen Resolver ohne SOA weiter als Abweichung', () => {
+    const c = comparePropagation(
+      [full('cloudflare', [ns1('1656468023')]), full('google', [r53('1')]), full('adguard', [])],
+      'SOA'
+    );
+    expect(c.answers.map((a) => a.status)).toEqual(['match', 'match', 'mismatch']);
+  });
+
+  it('nennt keine Anbieter, wenn es nur einen gibt', () => {
+    const c = comparePropagation([full('cloudflare', [ns1('7')]), full('google', [ns1('7')])], 'SOA');
+    expect(c).not.toHaveProperty('soaPrimaries');
+  });
+});

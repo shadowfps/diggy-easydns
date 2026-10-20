@@ -666,5 +666,134 @@
         "confidence": "medium"
       }
     ]
+  },
+  "authoritative": {
+    "domain": "github.com",
+    "type": "A",
+    "zone": "github.com",
+    "nameservers": [
+      {
+        "host": "dns1.p08.nsone.net",
+        "ip": "198.51.44.8",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.3",
+            "ttl": 60
+          }
+        ],
+        "serial": "1656468023",
+        "primary": "dns1.p08.nsone.net",
+        "responseTimeMs": 20
+      },
+      {
+        "host": "dns2.p08.nsone.net",
+        "ip": "198.51.45.8",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.3",
+            "ttl": 60
+          }
+        ],
+        "serial": "1656468023",
+        "primary": "dns1.p08.nsone.net",
+        "responseTimeMs": 22
+      },
+      {
+        "host": "dns3.p08.nsone.net",
+        "ip": "198.51.44.72",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.3",
+            "ttl": 60
+          }
+        ],
+        "serial": "1656468023",
+        "primary": "dns1.p08.nsone.net",
+        "responseTimeMs": 20
+      },
+      {
+        "host": "dns4.p08.nsone.net",
+        "ip": "198.51.45.72",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.4",
+            "ttl": 60
+          }
+        ],
+        "serial": "1656468023",
+        "primary": "dns1.p08.nsone.net",
+        "responseTimeMs": 22
+      },
+      {
+        "host": "ns-1283.awsdns-32.org",
+        "ip": "205.251.197.3",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "20.250.119.67",
+            "ttl": 60
+          }
+        ],
+        "serial": "1",
+        "primary": "ns-1707.awsdns-21.co.uk",
+        "responseTimeMs": 17
+      },
+      {
+        "host": "ns-1707.awsdns-21.co.uk",
+        "ip": "205.251.198.171",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.4",
+            "ttl": 60
+          }
+        ],
+        "serial": "1",
+        "primary": "ns-1707.awsdns-21.co.uk",
+        "responseTimeMs": 15
+      },
+      {
+        "host": "ns-421.awsdns-52.com",
+        "ip": "205.251.193.165",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "20.250.119.67",
+            "ttl": 60
+          }
+        ],
+        "serial": "1",
+        "primary": "ns-1707.awsdns-21.co.uk",
+        "responseTimeMs": 17
+      },
+      {
+        "host": "ns-520.awsdns-01.net",
+        "ip": "205.251.194.8",
+        "records": [
+          {
+            "type": "A",
+            "name": "github.com",
+            "value": "140.82.121.3",
+            "ttl": 60
+          }
+        ],
+        "serial": "1",
+        "primary": "ns-1707.awsdns-21.co.uk",
+        "responseTimeMs": 19
+      }
+    ],
+    "state": "values",
+    "values": []
   }
 }

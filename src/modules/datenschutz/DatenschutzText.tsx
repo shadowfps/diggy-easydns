@@ -155,7 +155,7 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
         </p>
         <p className="mt-3">
           Ergebnisse werden serverseitig kurz zwischengespeichert, damit dieselbe
-          Abfrage nicht mehrfach nach außen geht — 60 Sekunden für DNS-Ergebnisse,
+          Abfrage nicht mehrfach nach außen geht — bis zu 60 Sekunden für DNS-Ergebnisse,
           30 Minuten für IP-Details, 15 Minuten für PageSpeed, 6 Stunden für
           VirusTotal. Danach verfallen sie. Es gibt keine dauerhafte Speicherung von
           Suchanfragen und keine Zuordnung zu Personen.
@@ -195,8 +195,8 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
             </thead>
             <tbody className="text-fg-muted">
               <Row service="Cloudflare" purpose="Reverse-Proxy/CDN: Auslieferung und Schutz der Seite, bei jedem Aufruf" region="USA" />
-              <Row service="Cloudflare (DNS-Resolver)" purpose="TTL der DNS-Records, DNSSEC-Prüfung, Propagations-Vergleich" region="USA" />
-              <Row service="Google Public DNS" purpose="DNSSEC-Prüfung, Propagations-Vergleich" region="USA" />
+              <Row service="Cloudflare (DNS-Resolver)" purpose="TTL der DNS-Records, DNSSEC-Prüfung, Propagations-Vergleich, Nameserver der Zone ermitteln" region="USA" />
+              <Row service="Google Public DNS" purpose="DNSSEC-Prüfung, Propagations-Vergleich, Nameserver der Zone ermitteln (falls Cloudflare ausfällt)" region="USA" />
               <Row service="NextDNS, OpenDNS (Cisco)" purpose="Propagations-Vergleich" region="USA" />
               <Row service="Quad9" purpose="Propagations-Vergleich" region="Schweiz" />
               <Row service="Control D" purpose="Propagations-Vergleich" region="Kanada" />
@@ -206,13 +206,16 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
               <Row service="VirusTotal (Google)" purpose="Reputations-Check — nur auf Klick" region="USA" />
               <Row service="ipwhois.app" purpose="Geolocation und ASN zu einer IP-Adresse" region="EU" />
               <Row service="Der Zielserver selbst" purpose="TLS-Zertifikat und Tech-Stack-Erkennung" region="je nach Domain" />
+              <Row service="Die Nameserver der abgefragten Domain" purpose="Stand der Zone direkt abfragen (DNS über Port 53) — nur im Propagation-Tab" region="je nach Domain" />
             </tbody>
           </table>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-fg-subtle">
           Für den Propagations-Vergleich fragt der Server jeden Namen bei allen
           genannten DNS-Resolvern gleichzeitig ab; jeder erhält dabei nur den Namen und
-          den Record-Typ. PageSpeed und VirusTotal laufen nicht automatisch — sie
+          den Record-Typ. Im Propagation-Tab fragt er zusätzlich die Nameserver, die für
+          die Domain eingetragen sind — welche das sind, legt ihr Inhaber fest; auch sie
+          erhalten nur Namen und Record-Typ. PageSpeed und VirusTotal laufen nicht automatisch — sie
           starten erst, wenn du den jeweiligen Tab öffnest und den Check ausdrücklich
           anstößt.
         </p>

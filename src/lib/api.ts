@@ -1,4 +1,5 @@
 import type {
+  AuthoritativeResult,
   DetectedTech,
   DnsRecord,
   DnssecInfo,
@@ -131,6 +132,14 @@ export function lookupPropagation(domain: string, type?: RecordType): Promise<Pr
   return getJson(`/api/lookup/propagation?domain=${dq(domain)}${typeParam}`, {
     error: 'propagation_failed',
     message: t('Propagation-Check fehlgeschlagen'),
+  });
+}
+
+/** Die autoritativen Nameserver der Zone, direkt gefragt — nur im Propagation-Tab (#133). */
+export function lookupAuthoritative(domain: string, type: RecordType): Promise<AuthoritativeResult> {
+  return getJson(`/api/lookup/authoritative?domain=${dq(domain)}&type=${encodeURIComponent(type)}`, {
+    error: 'authoritative_failed',
+    message: t('Abfrage der autoritativen Nameserver fehlgeschlagen'),
   });
 }
 

@@ -157,6 +157,20 @@ const checks = [
     '/api/lookup/propagation?domain=example.com&type=SRV',
     (res, body) => res.status === 400 && JSON.parse(body).error === 'invalid_record_type',
   ],
+  // Autoritative Nameserver (#133): Typ ist Pflicht, Domain wie überall —
+  // beides abgelehnt, bevor eine Abfrage hinausgeht.
+  [
+    '/api/lookup/authoritative?domain=example.com',
+    (res, body) => res.status === 400 && JSON.parse(body).error === 'invalid_record_type',
+  ],
+  [
+    '/api/lookup/authoritative?domain=example.com&type=ANY',
+    (res, body) => res.status === 400 && JSON.parse(body).error === 'invalid_record_type',
+  ],
+  [
+    '/api/lookup/authoritative?domain=127.0.0.1&type=A',
+    (res, body) => res.status === 400 && JSON.parse(body).error === 'invalid_domain',
+  ],
   // Zwei Pfadsegmente nach dem Präfix — der Wildcard muss auch die tragen.
   // Der Vergleich hat (noch) keine eigene Vorschau: das gebaute HTML.
   ['/compare/example.com/github.com', (res, body) => res.status === 200 && body === indexHtml],

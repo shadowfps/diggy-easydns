@@ -59,6 +59,10 @@ for (const domain of DOMAINS) {
   for (const section of SECTIONS) {
     data[section] = await get(`/api/lookup/${section}?domain=${q}`);
   }
+  // Die autoritativen Nameserver fragt erst der Propagation-Tab (#133), für
+  // den Typ, den er zeigt — bei beiden Domains A. Braucht ausgehendes DNS
+  // über Port 53; ohne steht in den Testdaten „nicht prüfbar“.
+  data.authoritative = await get(`/api/lookup/authoritative?domain=${q}&type=A`);
 
   // Jede angezeigte IP lädt ihren Besitzer nach (IpOwnerLabel).
   const records = [

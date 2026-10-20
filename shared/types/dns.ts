@@ -130,6 +130,83 @@ export interface ResolverResult {
   negativeTtl?: Partial<Record<RecordType, number>>;
 }
 
+/**
+ * Warum ein autoritativer Nameserver nicht prüfbar war (#133). Wie bei
+ * `LookupFailure` eine Aussage über die Abfrage, nicht über die Domain.
+ *
+ * - `timeout`: keine Antwort in der Zeit — auch, wenn Port 53 vom Server aus
+ *   gesperrt ist
+ * - `network`: Verbindung scheiterte (kein Weg zum Ziel, Port zu, kein IPv6)
+ * - `refused` / `servfail`: der Nameserver lehnte ab (REFUSED) oder meldete
+ *   einen Fehler (SERVFAIL, FORMERR …)
+ * - `not_authoritative`: er antwortete, aber nicht als zuständiger Server
+ *   (AA-Bit fehlt): Verweis an andere Server, oder eine Antwort aus einem
+ *   Cache — eine „lahme Delegation“
+ * - `invalid_response`: Antwort unlesbar oder passt nicht zur Frage
+ * - `blocked`: der Name zeigt nur auf nicht-öffentliche Adressen — nicht gefragt
+ * - `no_address`: keine Adresse ermittelbar
+ * - `rate_limited`: diese Adresse wurde in der letzten Minute zu oft gefragt
+ * - `no_ipv6`: der diggy-Server hat kein IPv6 — die IPv6-Adresse wurde nicht
+ *   gefragt, oder die Frage scheiterte schon am Verbinden
+ */
+export type AuthoritativeFailure =
+  | 'timeout'
+  | 'network'
+  | 'refused'
+  | 'servfail'
+  | 'not_authoritative'
+  | 'invalid_response'
+  | 'blocked'
+  | 'no_address'
+  | 'rate_limited'
+  | 'no_ipv6';
+
+/** Antwort eines autoritativen Nameservers, direkt über Port 53 gefragt (#133). */
+export interface AuthoritativeServer {
+  /** Name aus dem NS-Record, ohne Punkt am Ende. */
+  host: string;
+  /** Die gefragte Adresse — fehlt bei `blocked` und `no_address`. */
+  ip?: string;
+  /**
+   * Records aus dem Answer-Abschnitt: der gefragte Typ, dazu ein CNAME, dem
+   * der Name folgt. Leer bei einem Fehler und bei „gibt es nicht“.
+   */
+  records: DnsRecord[];
+  /** Seriennummer aus dem SOA der Zone, wie dieser Server es führt. */
+  serial?: string;
+  /**
+   * Primary aus dem SOA (MNAME). Seriennummern sind nur unter Servern
+   * desselben Primary vergleichbar: Zonen bei zwei Anbietern führt jeder mit
+   * eigener Zählung (Route 53 immer mit 1).
+   */
+  primary?: string;
+  responseTimeMs: number;
+  error?: AuthoritativeFailure;
+}
+
+/** Antwort von `/api/lookup/authoritative`. */
+export interface AuthoritativeResult {
+  domain: string;
+  type: RecordType;
+  /** Die zuständige Zone; fehlt, wenn sie sich nicht ermitteln ließ. */
+  zone?: string;
+  /** Je gefragter Adresse ein Eintrag — höchstens acht. */
+  nameservers: AuthoritativeServer[];
+  /** Weitere Nameserver der Zone, die über der Obergrenze lagen und nicht gefragt wurden. */
+  omitted?: number;
+  /**
+   * Die Nameserver haben IPv6-Adressen, gefragt wurde aber nur über IPv4:
+   * Der diggy-Server hat kein IPv6.
+   */
+  ipv6Skipped?: true;
+  /**
+   * Die Zone oder ihre Nameserver ließen sich nicht ermitteln: `no_zone` —
+   * kein NS-Record bis hinauf zur registrierbaren Domain; `lookup_failed` —
+   * die Abfrage dafür scheiterte.
+   */
+  error?: 'no_zone' | 'lookup_failed';
+}
+
 export interface SslInfo {
   valid: boolean;
   issuer: string;

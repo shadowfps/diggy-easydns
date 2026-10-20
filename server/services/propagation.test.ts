@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { agedResults, propagationSection, propagationTypeQuery, queryAllResolvers } from './propagation.js';
+import {
+  agedResults,
+  MIN_RESOLVER_CACHE_MS,
+  propagationSection,
+  propagationTypeQuery,
+  queryAllResolvers,
+  shortestTtl,
+} from './propagation.js';
 import { propagationFindings } from './reportBuilder.js';
 import { DOH_RESOLVERS } from './doh.js';
 import { comparePropagation, propagationTypes } from '../../shared/propagation.js';
@@ -562,6 +569,64 @@ describe('propagationSection — TTL aus dem Cache', () => {
     // Der Eintrag im Cache bleibt, wie er ist.
     expect(first.propagation[0].records[0].ttl).toBe(300);
     expect((await propagationSection('aged.section.example', options)).propagation[0].records[0].ttl).toBe(258);
+  });
+
+  /**
+   * #133: Eine Antwort mit TTL 20 lag bis zu 60 s im Cache und stand danach
+   * als „TTL 0s“ da — obwohl der Resolver längst neu gefragt haben kann.
+   */
+  it('hält Antworten nicht länger als ihre kürzeste TTL', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
+    const calls = stubDoh((_url, type) =>
+      type === 1 ? [{ name: 'short.section.example.', type: 1, TTL: 20, data: '192.0.2.1' }] : []
+    );
+    const options = { type: 'A' as const, ttlMs: 60_000 };
+
+    await propagationSection('short.section.example', options);
+    vi.setSystemTime(new Date('2026-10-19T12:00:19.900Z'));
+    const cachedAnswer = await propagationSection('short.section.example', options);
+    expect(calls).toHaveLength(DOH_RESOLVERS.length);
+    expect(cachedAnswer.propagation[0].records[0].ttl).toBe(1);
+
+    vi.setSystemTime(new Date('2026-10-19T12:00:25Z'));
+    const fresh = await propagationSection('short.section.example', options);
+    expect(calls).toHaveLength(DOH_RESOLVERS.length * 2);
+    expect(fresh.propagation[0].records[0].ttl).toBe(20);
+  });
+
+  /** Sonst ginge bei TTL 0 jeder Aufruf erneut an alle Resolver — auch ein Reload Sekunden später. */
+  it('cached auch bei TTL 0 wenigstens MIN_RESOLVER_CACHE_MS', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
+    const calls = stubDoh((_url, type) =>
+      type === 1 ? [{ name: 'zero.section.example.', type: 1, TTL: 0, data: '192.0.2.1' }] : []
+    );
+    const options = { type: 'A' as const, ttlMs: 60_000 };
+
+    await propagationSection('zero.section.example', options);
+    vi.setSystemTime(new Date(Date.parse('2026-10-19T12:00:00Z') + MIN_RESOLVER_CACHE_MS - 100));
+    const cachedAnswer = await propagationSection('zero.section.example', options);
+    expect(calls).toHaveLength(DOH_RESOLVERS.length);
+    expect(cachedAnswer.propagation[0].records[0].ttl).toBe(0);
+
+    vi.setSystemTime(new Date(Date.parse('2026-10-19T12:00:00Z') + MIN_RESOLVER_CACHE_MS + 100));
+    await propagationSection('zero.section.example', options);
+    expect(calls).toHaveLength(DOH_RESOLVERS.length * 2);
+  });
+});
+
+describe('shortestTtl', () => {
+  it('nimmt Records und Negativ-TTLs, ohne beide unbegrenzt', () => {
+    const result = (ttl: number | null, negativeTtl?: ResolverResult['negativeTtl']): ResolverResult => ({
+      resolver: { id: 'x', name: 'X', ip: '0.0.0.0', country: 'X', flag: '', provider: 'X' },
+      records: [{ type: 'A', name: 'example.com', value: '192.0.2.1', ttl }],
+      responseTimeMs: 10,
+      ...(negativeTtl && { negativeTtl }),
+    });
+    expect(shortestTtl([result(300), result(60, { AAAA: 30 })])).toBe(30);
+    expect(shortestTtl([result(null)])).toBe(Infinity);
+    expect(shortestTtl([])).toBe(Infinity);
   });
 });
 

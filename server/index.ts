@@ -21,6 +21,7 @@ import { BlockedTargetError } from './lib/safeTarget.js';
 import { upstreamErrorStatus } from './lib/upstreamError.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
 import { propagationSection, propagationTypeQuery } from './services/propagation.js';
+import { AuthoritativeBusyError, authoritativeSection } from './services/authoritative.js';
 import { PROPAGATION_RECORD_TYPES } from '../shared/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
@@ -345,6 +346,29 @@ const techStackConcurrency = concurrencyLimit(
   8,
   'Es laufen gerade zu viele Tech-Stack-Prüfungen. Bitte kurz warten.'
 );
+
+/**
+ * Autoritative Nameserver (#133): Jede Abfrage schickt bis zu 16 DNS-Fragen
+ * an Adressen, die der Inhaber der Domain über seine NS-Records bestimmt.
+ * Ein eigener Bucket, deutlich unter dem Basis-Limit: Normale Nutzung sind
+ * ein paar Typen pro Report, 30 pro Minute reichen dafür. Dazu ein Deckel,
+ * weil eine Abfrage mit stummen Nameservern einige Sekunden läuft. Je
+ * Ziel-Adresse und für die laufenden Prüfungen selbst — auch nach einem
+ * Abbruch durch den Client — begrenzt authoritative.ts zusätzlich, über alle
+ * Nutzer.
+ */
+const authoritativeLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  message: 'Zu viele Abfragen an autoritative Nameserver. Bitte kurz warten.',
+});
+const authoritativeConcurrency = concurrencyLimit(
+  8,
+  'Es laufen gerade zu viele Abfragen an autoritative Nameserver. Bitte kurz warten.'
+);
+
+/** Kurz: Wer nach einer Änderung neu prüft, will den Stand von jetzt (#133). */
+const AUTHORITATIVE_TTL_MS = 15_000;
 
 // Health VOR dem Limiter: der Docker-Healthcheck fragt alle 30 s an und darf
 // nie durch fremden Traffic in ein 429 laufen — sonst gilt der Container als
@@ -692,6 +716,49 @@ app.get('/api/lookup/propagation', async (req: Request, res: Response) => {
   } catch (error) {
     sectionError(res, 'propagation_failed', error);
   }
+});
+
+/**
+ * Autoritative Nameserver der Zone, direkt über Port 53 gefragt (#133).
+ *
+ * Ein eigener Endpoint statt `?authoritative=1` an der Propagation: Den
+ * Standard-Report (Befund, Score) betrifft er nicht, und die Ansicht fragt
+ * ihn erst, wenn der Propagation-Tab offen ist. Getrennt lädt die
+ * Resolver-Liste weiter sofort, auch wenn Nameserver schweigen oder Port 53
+ * gesperrt ist — sonst wartete sie auf deren Timeout. Und Rate-Limit, Cache
+ * und Fehler bleiben je Check für sich.
+ *
+ * `type` ist Pflicht: Die Ansicht fragt den Typ, den sie zeigt.
+ */
+app.get('/api/lookup/authoritative', authoritativeLimiter, async (req: Request, res: Response) => {
+  const domain = resolveDomainParam(req, res, 'dns');
+  if (!domain) return;
+
+  const type = propagationTypeQuery(req.query.type);
+  if (!type) {
+    const input = forMessage(String(req.query.type ?? ''));
+    const types = PROPAGATION_RECORD_TYPES.join(', ');
+    return res.status(400).json({
+      error: 'invalid_record_type',
+      message: `"${input}" ist kein Record-Typ, den die Propagation vergleicht (${types}).`,
+      params: { input, types },
+    });
+  }
+
+  // Der Deckel erst nach der Prüfung: Eine ungültige Anfrage soll keinen
+  // Platz belegen.
+  authoritativeConcurrency(req, res, async () => {
+    try {
+      res.json(await authoritativeSection(domain, type, AUTHORITATIVE_TTL_MS));
+    } catch (error) {
+      if (error instanceof AuthoritativeBusyError) {
+        res.setHeader('Retry-After', '30');
+        res.status(503).json({ error: 'server_busy', message: error.message });
+        return;
+      }
+      sectionError(res, 'authoritative_failed', error);
+    }
+  });
 });
 
 app.get('/api/lookup/dnssec', async (req: Request, res: Response) => {

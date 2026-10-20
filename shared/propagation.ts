@@ -193,6 +193,12 @@ export interface PropagationComparison {
   compared: number;
   /** Davon abweichend. */
   deviating: number;
+  /**
+   * Nur beim SOA und nur, wenn es mehr als einer ist: wie viele Primaries
+   * (MNAME) die Resolver nennen — mehrere Anbieter, jeder mit eigener
+   * Seriennummer (siehe `comparePropagation`).
+   */
+  soaPrimaries?: number;
 }
 
 /**
@@ -251,11 +257,39 @@ export function comparePropagation(
     }
   }
 
+  // Beim SOA zählt jeder Anbieter seine Seriennummer selbst: github.com
+  // liegt bei NS1 (1656468023) und Route 53 (immer 1), und welche ein
+  // Resolver liefert, hängt davon ab, wen er gefragt hat. Verglichen wird
+  // deshalb nur unter Resolvern mit demselben Primary (MNAME) — sonst stünde
+  // jede Zone bei zwei Anbietern dauerhaft als „abweichend“ da.
+  const byPrimary = new Map<string, string>();
+  if (type === 'SOA' && consensusKey !== undefined && consensusKey !== '') {
+    const counts = new Map<string, Map<string, number>>();
+    for (const a of candidates) {
+      if (a.key === '') continue;
+      const primary = soaPrimary(a.values[0]);
+      const keys = counts.get(primary) ?? new Map<string, number>();
+      keys.set(a.key, (keys.get(a.key) ?? 0) + 1);
+      counts.set(primary, keys);
+    }
+    for (const [primary, keys] of counts) {
+      let best = -1;
+      for (const [key, count] of keys) {
+        if (count > best) {
+          best = count;
+          byPrimary.set(primary, key);
+        }
+      }
+    }
+  }
+
   const answers: ResolverAnswer[] = raw.map((a) => {
     let status: ResolverStatus;
     if (a.result.error) status = 'error';
     else if (consensusKey === undefined || (a.key === '' && !presenceCounts)) status = 'empty';
-    else status = a.key === consensusKey ? 'match' : 'mismatch';
+    else if (byPrimary.size > 0 && a.key !== '') {
+      status = a.key === byPrimary.get(soaPrimary(a.values[0])) ? 'match' : 'mismatch';
+    } else status = a.key === consensusKey ? 'match' : 'mismatch';
     return { ...a, status };
   });
 
@@ -265,7 +299,13 @@ export function comparePropagation(
     consensusKey,
     compared: consensusKey === undefined ? 0 : candidates.length,
     deviating: answers.filter((a) => a.status === 'mismatch').length,
+    ...(byPrimary.size > 1 && { soaPrimaries: byPrimary.size }),
   };
+}
+
+/** Primary (MNAME) eines SOA in Anzeigeform — das erste Feld, normalisiert. */
+function soaPrimary(value: string | undefined): string {
+  return comparableHost(value?.trim().split(/\s+/)[0] ?? '');
 }
 
 /** Siehe `ResolverAnswer.ttl`. */
