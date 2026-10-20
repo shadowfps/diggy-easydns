@@ -290,7 +290,11 @@ describe('Datenschutzhinweise', () => {
     const compliance = readFileSync(new URL('../../docs/COMPLIANCE.md', import.meta.url), 'utf8');
     for (const [tld, registry] of Object.entries(FIXED_REGISTRIES)) {
       const name = registry.operator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      expect(privacy, tld).toMatch(new RegExp(`<Row service="(?:[^"]*\\W)?${name}\\b[^"]*" purpose="[^"]*WHOIS`));
+      // WHOIS-Report und Verfügbarkeits-Check teilen sich resolveRegistry:
+      // Wer für das eine gefragt wird, wird es auch für das andere.
+      expect(privacy, tld).toMatch(
+        new RegExp(`<Row service="(?:[^"]*\\W)?${name}\\b[^"]*" purpose="[^"]*WHOIS[^"]*Verfügbarkeits-Check`)
+      );
       if (registry.rdap) expect(compliance, tld).toContain(registry.rdap);
       if (registry.whois) expect(compliance, tld).toContain(registry.whois.host);
     }
