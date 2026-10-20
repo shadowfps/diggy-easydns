@@ -17,8 +17,9 @@
  *   node scripts/check-propagation-live.mjs http://127.0.0.1:3781
  *   node scripts/check-propagation-live.mjs https://diggydns.cloud
  *
- * Die API hält jede Antwort 60 s im Cache. Wer mehrere Läufe will, wartet
- * dazwischen eine Minute — sonst kommt dieselbe Antwort noch einmal.
+ * Die API hält jede Antwort bis zu 60 s im Cache (nicht länger als ihre
+ * kürzeste TTL, mindestens 5 s). Wer mehrere Läufe will, wartet dazwischen
+ * eine Minute — sonst kommt womöglich dieselbe Antwort noch einmal.
  */
 
 const CASES = [
