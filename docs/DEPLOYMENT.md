@@ -26,6 +26,23 @@ ein Resolver nicht antwortet. In der CI läuft er bewusst nicht, weil er an neun
 fremden Diensten hängt. Anlass war #137: Unter Node 24, der Version im Image,
 antworteten Quad9 und DNS4EU nie. Auf dem Mac mit Node 26 lief alles.
 
+Dasselbe für WHOIS und den Verfügbarkeits-Check (#105): Erreicht der Server
+die Registries per RDAP und über WHOIS auf Port 43?
+
+```bash
+node scripts/check-whois-live.mjs http://127.0.0.1:3001
+node scripts/check-whois-live.mjs https://diggydns.cloud
+```
+
+Er fragt neun Domains ab — RDAP laut IANA-Bootstrap (.com, .dev, .co.uk),
+DENIC, Identity Digital (.io), Port 43 für .at, .it und .eu, dazu .ch, das
+bewusst ohne Abfrage bleibt — und prüft je Domain, welche Quelle geantwortet
+hat. Danach die Verfügbarkeit einer zufälligen freien und einer vergebenen
+.io-Domain. Er endet mit Fehler, wenn eine Erwartung nicht stimmt; scheitern
+alle drei Port-43-Abfragen, ist Port 43 ausgehend vermutlich gesperrt. Die
+API hält WHOIS-Ergebnisse 60 s im Cache, auch „nicht verfügbar“ — für einen
+zweiten Lauf eine Minute warten.
+
 Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
 
 ```text
