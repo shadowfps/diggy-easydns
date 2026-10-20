@@ -82,8 +82,12 @@ function sessionFor(origin: string): http2.ClientHttp2Session {
   // Die Gegenseite nimmt keine neuen Streams mehr an; laufende enden noch.
   session.on('goaway', drop);
   session.on('close', drop);
-  // close() lässt laufende Streams zu Ende laufen und schließt dann.
-  session.setTimeout(IDLE_MS, () => session.close());
+  // close() lässt laufende Streams zu Ende laufen und schließt dann. Die
+  // Leerlaufzeit zählt erst, wenn die Verbindung steht: Ein close() während
+  // des Aufbaus brach jede wartende Anfrage ab, sobald sie stand
+  // (ERR_HTTP2_GOAWAY_SESSION) — bei einem Aufbau über 2 s, obwohl ihr
+  // Timeout noch lief. Bis dahin begrenzen ihn die Anfragen (release).
+  session.once('connect', () => session.setTimeout(IDLE_MS, () => session.close()));
   return session;
 }
 
@@ -176,6 +180,10 @@ export function http2Get(url: string, { headers = {}, signal }: Http2GetInit): P
         else settle(() => reject(new Error(`${target.host}: Antwort größer als 1 MiB`)));
       });
       stream.on('end', () => {
+        if (truncated(stream, responseHeaders, size)) {
+          fail(closedBeforeResponse());
+          return;
+        }
         let response: Response;
         try {
           response = toResponse(responseHeaders, Buffer.concat(chunks));
@@ -188,6 +196,20 @@ export function http2Get(url: string, { headers = {}, signal }: Http2GetInit): P
     });
     stream.end();
   });
+}
+
+/**
+ * Ob die Antwort vor ihrem Ende abbrach. Node meldet 'end' auch dann, wenn
+ * die Verbindung mittendrin zugeht oder der Server den Stream abbricht — der
+ * halbe Body sähe sonst aus wie ein ganzer. In diesen Fällen ist der Stream
+ * hier schon zerstört oder trägt einen RST-Code; nach einer vollständigen
+ * Antwort nicht, Node zerstört ihn erst nach 'end'. Ein RST_STREAM mit
+ * NO_ERROR mitten im Body verrät sich nur über content-length.
+ */
+function truncated(stream: http2.ClientHttp2Stream, headers: http2.IncomingHttpHeaders, size: number): boolean {
+  if (stream.destroyed || stream.rstCode !== http2.constants.NGHTTP2_NO_ERROR) return true;
+  const declared = headers['content-length'];
+  return declared !== undefined && Number(declared) !== size;
 }
 
 /**

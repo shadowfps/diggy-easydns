@@ -1,4 +1,5 @@
 import https from 'node:https';
+import type { Http2ServerRequest } from 'node:http2';
 import net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -43,6 +44,37 @@ async function failure(promise: Promise<unknown>): Promise<{ message: string; co
   expect(error).toBeInstanceOf(TypeError);
   const { message, cause } = error as TypeError;
   return { message, code: (cause as { code?: unknown } | undefined)?.code };
+}
+
+/**
+ * TCP-Proxy vor `origin`, der jede Verbindung erst nach `delayMs` durchreicht
+ * — ein langsamer Verbindungsaufbau, etwa nach einem verlorenen Paket.
+ */
+async function delayingProxy(origin: string, delayMs: number) {
+  const { port: upstream } = new URL(origin);
+  const sockets: net.Socket[] = [];
+  const proxy = net.createServer((client) => {
+    sockets.push(client);
+    client.on('error', () => {});
+    client.pause();
+    setTimeout(() => {
+      const up = net.connect(Number(upstream), '127.0.0.1', () => {
+        client.pipe(up).pipe(client);
+        client.resume();
+      });
+      sockets.push(up);
+      up.on('error', () => client.destroy());
+    }, delayMs);
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const { port } = proxy.address() as AddressInfo;
+  return {
+    origin: `https://127.0.0.1:${port}`,
+    close: async () => {
+      for (const socket of sockets) socket.destroy();
+      await new Promise((resolve) => proxy.close(resolve));
+    },
+  };
 }
 
 /** Offene TCP-Sockets des Prozesses — Client und Testserver zusammen. */
@@ -117,6 +149,25 @@ describe('http2Get — Verbindungsfehler wie bei fetch', () => {
       message: 'fetch failed',
       code: CLOSED_BEFORE_RESPONSE,
     });
+  });
+
+  /**
+   * Bricht die Antwort nach dem Kopf ab, beendet Node den Stream mit 'end'
+   * wie eine vollständige. Ohne Prüfung kam der halbe Body als Antwort
+   * zurück: ein Parse-Fehler statt eines neuen Versuchs.
+   */
+  it.each<[string, (req: Http2ServerRequest) => void]>([
+    ['die Verbindung mittendrin zugeht (FIN)', () => server!.sockets.at(-1)!.end()],
+    ['die Gegenseite den Stream abbricht (RST_STREAM CANCEL)', (req) => req.stream.close(8)],
+    // RST_STREAM NO_ERROR sieht aus wie ein reguläres Ende; nur die Länge verrät es.
+    ['weniger kommt, als content-length ankündigt', (req) => req.stream.close(0)],
+  ])('meldet eine Antwort, die abbricht, weil %s, ebenso', async (_label, cut) => {
+    server = await startH2Server((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/dns-json', 'content-length': '100' });
+      res.write('{"Status":0,"Ans');
+      setTimeout(() => cut(req), 20);
+    });
+    expect((await failure(get(`${server.origin}/resolve`))).code).toBe(CLOSED_BEFORE_RESPONSE);
   });
 
   it('meldet einen Stream, der ohne Fehlercode und ohne Antwort endet, ebenso', async () => {
@@ -286,6 +337,24 @@ describe('http2Get — Verbindungen', () => {
     await get(`${server.origin}/zwei`);
 
     expect(server.sockets).toHaveLength(2);
+  }, LONG_TEST);
+
+  /**
+   * Die Leerlaufzeit zählt erst ab dem Verbindungsaufbau. Lief sie schon
+   * währenddessen, schloss Node die Sitzung in dem Moment, in dem sie stand,
+   * und jede wartende Anfrage scheiterte mit ERR_HTTP2_GOAWAY_SESSION — ohne
+   * neuen Versuch und obwohl ihr Timeout noch Zeit ließ. Ein verlorenes SYN
+   * kostet allein schon eine Sekunde.
+   */
+  it('wartet einen Verbindungsaufbau ab, der länger dauert als die Leerlaufzeit', async () => {
+    server = await startH2Server((_req, res) => res.end('ok'));
+    const proxy = await delayingProxy(server.origin, IDLE_MS + 500);
+    try {
+      const res = await http2Get(`${proxy.origin}/dns-query`, { signal: AbortSignal.timeout(IDLE_MS + 5000) });
+      expect(await res.text()).toBe('ok');
+    } finally {
+      await proxy.close();
+    }
   }, LONG_TEST);
 
   it('öffnet nach einem GOAWAY der Gegenseite eine neue Verbindung', async () => {

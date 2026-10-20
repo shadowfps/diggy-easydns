@@ -127,6 +127,22 @@ describe('dohQuery über HTTP/2 (#137)', () => {
     expect(server.sockets).toHaveLength(4);
   });
 
+  /** Vorher kam der halbe Body als Antwort an: „Nachricht endet vorzeitig“ statt eines neuen Versuchs. */
+  it('versucht es nach einer mittendrin abgebrochenen Antwort erneut', async () => {
+    let requests = 0;
+    server = await startH2Server((req, res) => {
+      if (++requests > 1) return answerA(req, res);
+      res.writeHead(200, { 'content-type': 'application/dns-message' });
+      res.write(Buffer.from([0, 0, 0x81, 0x80, 0, 1, 0, 1]));
+      setTimeout(() => server!.sockets.at(-1)!.end(), 20);
+    });
+
+    const result = await dohQuery(local('quad9'), 'example.com', 'A');
+
+    expect(result.records).toEqual(A_RECORD);
+    expect(requests).toBe(2);
+  });
+
   it('wiederholt eine HTTP-Fehlerantwort nicht', async () => {
     server = await startH2Server((_req, res) => {
       res.writeHead(503);
