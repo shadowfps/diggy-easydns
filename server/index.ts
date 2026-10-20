@@ -628,8 +628,9 @@ app.get('/api/domain-check', availabilityLimiter, async (req: Request, res: Resp
   }
 
   try {
-    // Bis zu 10 RDAP-Abfragen pro Aufruf — der Cache verhindert, dass ein
-    // erneutes Absenden derselben Suche die Registries nochmal belastet.
+    // Bis zu 10 Registry-Abfragen (RDAP oder WHOIS) pro Aufruf — der Cache
+    // verhindert, dass ein erneutes Absenden derselben Suche die Registries
+    // nochmal belastet.
     const result = await cached(`availability:${query.toLowerCase()}`, LOOKUP_TTL_MS, () =>
       checkDomainsAvailability(query)
     );
