@@ -66,6 +66,11 @@ export async function cached<T>(
   options: {
     /** Ob der Wert ein gemeldeter Ausfall ist — der wird nur kurz gecacht. */
     failed?: (value: T) => boolean;
+    /**
+     * Höchstens so lange (ms) gültig, je nach Wert — etwa, weil die Antwort
+     * selbst früher abläuft als `ttlMs`. Nie länger als `ttlMs`.
+     */
+    maxTtlMs?: (value: T) => number;
   } = {}
 ): Promise<T> {
   const hit = store.get(key);
@@ -80,7 +85,8 @@ export async function cached<T>(
 
   const pending = produce()
     .then((value) => {
-      remember(key, options.failed?.(value) ? Math.min(ttlMs, FAILED_TTL_MS) : ttlMs, value);
+      const base = options.failed?.(value) ? Math.min(ttlMs, FAILED_TTL_MS) : ttlMs;
+      remember(key, Math.max(0, Math.min(base, options.maxTtlMs?.(value) ?? base)), value);
       return value;
     })
     .finally(() => {

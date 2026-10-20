@@ -294,6 +294,89 @@ const ui: Dictionary = {
   '{type}-Records werden bei allen Resolvern abgefragt…': 'Asking every resolver for {type} records…',
   'Verglichen wird die Seriennummer, der dritte Wert im SOA.':
     'Compared by serial number, the third value in the SOA.',
+  'Erwarteter Wert': 'Expected value',
+  'Erwarteten Wert löschen': 'Clear expected value',
+  'Öffentliche Resolver': 'Public resolvers',
+  'Verglichen mit der Mehrheit der Resolver': 'Compared with the majority of resolvers',
+  'Verglichen mit den autoritativen Nameservern': 'Compared with the authoritative name servers',
+  'Verglichen mit dem erwarteten Wert — er muss in der Antwort stehen':
+    'Compared with the expected value — it has to be in the answer',
+  'Alle Resolver liefern die Antwort der autoritativen Nameserver — sauber propagiert.':
+    'All resolvers return the authoritative name servers’ answer — fully propagated.',
+  'Alle Resolver liefern den erwarteten Wert.': 'All resolvers return the expected value.',
+  'Noch ohne den erwarteten Wert: {count} von {total} Resolvern.': {
+    one: '{count} of {total} resolvers doesn’t return the expected value yet.',
+    other: '{count} of {total} resolvers don’t return the expected value yet.',
+  },
+  'Noch nicht auf dem Stand der autoritativen Nameserver: {count} von {total} Resolvern. Resolver geben den alten Stand weiter, bis ihr Cache abläuft (TTL).': {
+    one: '{count} of {total} resolvers doesn’t return the authoritative name servers’ answer yet — it keeps serving the old state until its cache expires (TTL).',
+    other:
+      '{count} of {total} resolvers don’t return the authoritative name servers’ answer yet — they keep serving the old state until their cache expires (TTL).',
+  },
+  'Andere Antwort als die autoritativen Nameserver: {count} von {total} Resolvern — noch nicht propagiert, oder GeoDNS / Anycast.': {
+    one: '{count} of {total} resolvers doesn’t return the authoritative name servers’ answer — not propagated yet, or GeoDNS / Anycast.',
+    other:
+      '{count} of {total} resolvers don’t return the authoritative name servers’ answer — not propagated yet, or GeoDNS / Anycast.',
+  },
+  'wie autoritativ': 'matches authoritative',
+  'erwartet': 'expected',
+  'Autoritative Nameserver': 'Authoritative name servers',
+  'Zone {zone} · direkt gefragt über Port 53': 'Zone {zone} · asked directly on port 53',
+  'Direkt gefragt über Port 53': 'Asked directly on port 53',
+  'Abfrage der autoritativen Nameserver fehlgeschlagen': 'Querying the authoritative name servers failed',
+  'Autoritative Nameserver werden gefragt…': 'Asking the authoritative name servers…',
+  'Für diesen Namen ließ sich keine Zone finden — auf dem Weg nach oben gibt es keinen NS-Record.':
+    'No zone found for this name — there’s no NS record on the way up.',
+  'Die Nameserver der Zone ließen sich gerade nicht ermitteln.':
+    'The zone’s name servers couldn’t be determined right now.',
+  'Verglichen wird deshalb mit der Mehrheit der Resolver.':
+    'So the resolvers are compared with their majority instead.',
+  'Die Nameserver liefern den erwarteten Wert.': 'The name servers return the expected value.',
+  'Noch ohne den erwarteten Wert: {count} von {total} Nameservern — dort ist die Änderung nicht angekommen.': {
+    one: '{count} of {total} name servers doesn’t return the expected value — the change hasn’t reached it yet.',
+    other: '{count} of {total} name servers don’t return the expected value — the change hasn’t reached them yet.',
+  },
+  'Nicht gefragt: {count} von {total} Nameservern, höchstens acht je Abfrage.':
+    'Not asked: {count} of {total} name servers, at most eight per check.',
+  'Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.':
+    'Asked over IPv4 only: the diggy server has no IPv6.',
+  'einig': 'agree',
+  'uneinig': 'disagree',
+  'verschieden': 'differ',
+  'Die Nameserver sind sich einig — die Resolver werden mit ihrer Antwort verglichen.':
+    'The name servers agree — the resolvers are compared with their answer.',
+  'Die Nameserver sind sich einig: Unter diesem Namen gibt es keinen {type}-Record.':
+    'The name servers agree: there’s no {type} record under this name.',
+  'Die Nameserver sind uneinig: Ihre Seriennummern weichen ab — eine Änderung ist noch nicht auf allen angekommen.':
+    'The name servers disagree: their serial numbers differ — a change hasn’t reached all of them yet.',
+  'Die Nameserver sind uneinig: Sie liefern unterschiedliche Werte.':
+    'The name servers disagree: they return different values.',
+  'Die Nameserver gehören zu {count} Anbietern, jeder mit eigener Seriennummer — aktuell ist ein Resolver, der eine davon liefert.':
+    'The name servers belong to {count} providers, each with its own serial number — a resolver is up to date if it returns one of them.',
+  'Die Zone liegt bei {count} Anbietern, jeder mit eigener Seriennummer — kein Fehler.':
+    'The zone is served by {count} providers, each with its own serial number — not an error.',
+  'alle {count} Nameserver': 'all {count} name servers',
+  'Die Zone liegt bei {count} Anbietern mit eigener Seriennummer — verglichen wird je Anbieter (Primary im SOA).':
+    'The zone is served by {count} providers with their own serial numbers — compared per provider (primary in the SOA).',
+  'Alle Resolver liefern die Seriennummer ihres Anbieters — sauber propagiert.':
+    'All resolvers return their provider’s serial number — fully propagated.',
+  'Die Nameserver liefern unterschiedliche Adressen — bei Lastverteilung oder GeoDNS üblich.':
+    'The name servers return different addresses — common with load balancing or GeoDNS.',
+  '{name} ist ein CNAME auf {target} — den {type}-Record liefern dessen Nameserver.':
+    '{name} is a CNAME to {target} — its name servers serve the {type} record.',
+  'Kein Nameserver hat geantwortet — vom diggy-Server aus ist DNS über Port 53 womöglich gesperrt.':
+    'No name server answered — DNS on port 53 may be blocked from the diggy server.',
+  'Kein Nameserver hat brauchbar geantwortet.': 'No name server gave a usable answer.',
+  'keine Antwort': 'no answer',
+  'nicht erreichbar': 'unreachable',
+  'lehnt ab (REFUSED)': 'refuses (REFUSED)',
+  'Fehler (SERVFAIL)': 'error (SERVFAIL)',
+  'nicht zuständig': 'not authoritative',
+  'Antwort unlesbar': 'unreadable answer',
+  'keine öffentliche Adresse': 'no public address',
+  'keine Adresse': 'no address',
+  'gerade zu oft gefragt': 'asked too often',
+  'diggy ohne IPv6': 'no IPv6 at diggy',
   'Laut TTL fragen die abweichenden Resolver spätestens {duration} nach dieser Abfrage wieder bei den Nameservern nach.':
     'Going by their TTL, the differing resolvers will query the nameservers again within {duration} of this check.',
 

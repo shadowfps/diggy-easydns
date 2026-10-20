@@ -95,7 +95,7 @@ technischen Fakten:
 
 | Was | Wo im Code | Speicherdauer |
 |---|---|---|
-| Abgefragte Domain/IP im Server-Cache | `server/lib/cache.ts` | 60 s, IP-Details 30 min, PageSpeed 15 min, VirusTotal 6 h |
+| Abgefragte Domain/IP im Server-Cache | `server/lib/cache.ts` | bis 60 s (Propagation höchstens bis zur kürzesten TTL, mindestens 5 s; autoritative Nameserver 15 s), IP-Details 30 min, PageSpeed 15 min, VirusTotal 6 h |
 | IP-Zähler für Rate-Limits | `server/lib/rateLimit.ts`, `contactSpamGuard.ts` | max. 24 h, nur im Arbeitsspeicher |
 | Prüfsumme über Absender+Nachricht (Duplikatserkennung) | `contactSpamGuard.ts` | 5 min |
 | Empfänger-Sperre für Auto-Replies | `contactSpamGuard.ts` | 24 h |
@@ -210,6 +210,33 @@ dieselbe Adresse.
   damit stand Quad9 in 1 von 20 Checks mit frischen Verbindungen als Fehler da
   (mit nur einem neuen Versuch in 4 von 15). Ob das Rechenzentrum dasselbe
   sieht, zeigt erst der Betrieb.
+
+### Autoritative Nameserver (#133)
+
+Im Propagation-Tab fragt der Server die Nameserver der Zone direkt über DNS
+(Port 53, UDP, bei gekürzter Antwort TCP; `server/services/authoritative.ts`,
+`dnsPort53.ts`). Welche das sind, steht in den NS-Records der Domain — der
+Inhaber bestimmt sie, sie können überall stehen. Übermittelt werden der Name
+und der Record-Typ, vom Server aus. Zone und Adressen der Nameserver ermittelt
+der Server über Cloudflare-DoH (Google, falls Cloudflare ausfällt), nicht über
+den Resolver des Containers. In der Empfänger-Tabelle von `/datenschutz` als
+„Die Nameserver der abgefragten Domain“, Sitz „je nach Domain“ — wie „Der
+Zielserver selbst“ bei TLS und Tech-Stack.
+
+Gefragt wird nur, wenn der Tab offen ist; der Report lädt nichts davon. Nur
+öffentliche Adressen (dieselbe Liste wie `safeTarget.ts`), höchstens acht, je
+Adresse zwei Fragen, je Ziel-Adresse höchstens 120 Fragen pro Minute über
+alle Nutzer, höchstens acht Prüfungen zugleich (belegt, bis sie fertig sind —
+auch wenn der Client abbricht); die Route hat ein eigenes Rate-Limit (30/min
+je IP).
+
+**Offener Punkt:** In Produktion (Container bei mittwald hinter Cloudflare)
+ist ausgehendes DNS über Port 53 nicht zugesagt. Ist es gesperrt, zeigt der
+Tab „nicht prüfbar“, und es geht nichts nach außen außer den DoH-Abfragen.
+Hat der Container kein IPv6 (keine Schnittstelle mit IPv6-Adresse außer
+Loopback und Link-local), fragt der Server nur die IPv4-Adressen der
+Nameserver und sagt das im Tab — eine Aussage über diggy, nicht über die
+Domain.
 
 ### Cloudflare vor der Seite (#125)
 

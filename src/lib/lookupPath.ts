@@ -52,10 +52,22 @@ export function buildDocumentTitle(
  * Link-Vorschau und alle bisherigen Permalinks hängen am Pfad
  * `/lookup/<domain>` und bleiben so unverändert. Gelesen wird er mit
  * `propagationTypeFromSearch` (lib/propagation.ts).
+ *
+ * Ein erwarteter Wert (#133) reist nur mit dem Typ: Er gehört zu ihm
+ * (`?propagation=A&expected=192.0.2.1`) — wer den Link öffnet, sieht genau
+ * den Vergleich, den der Absender sah.
  */
-export function lookupPathFor(domain: string, propagationType?: PropagationRecordType | null): string {
+export function lookupPathFor(
+  domain: string,
+  propagationType?: PropagationRecordType | null,
+  expected?: string
+): string {
   const path = `/lookup/${encodeURIComponent(domain)}`;
-  return propagationType ? `${path}?propagation=${propagationType}` : path;
+  if (!propagationType) return path;
+  const value = expected?.trim();
+  return value
+    ? `${path}?propagation=${propagationType}&expected=${encodeURIComponent(value)}`
+    : `${path}?propagation=${propagationType}`;
 }
 
 /**

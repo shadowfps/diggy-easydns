@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { DnsRecord, RecordType, ResolverResult } from '@/types/dns';
+import type { AuthoritativeResult, DnsRecord, RecordType, ResolverResult } from '@/types/dns';
 import { defaultPropagationType, type PropagationRecordType } from '@/lib/propagation';
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   lookupPropagation: vi.fn(),
+  lookupAuthoritative: vi.fn(),
 }));
 
 const api = await import('@/lib/api');
@@ -66,19 +67,22 @@ function results(answers: Answer[]): ResolverResult[] {
   });
 }
 
-/** Wie in App.tsx: der gewählte Typ steht außerhalb der Ansicht. */
+/** Wie in App.tsx: gewählter Typ und erwarteter Wert stehen außerhalb der Ansicht. */
 function View({
   results: data,
   types,
   initial,
   onTypeChange,
+  expected: initialExpected = '',
 }: {
   results: ResolverResult[];
   types: PropagationRecordType[];
   initial?: PropagationRecordType;
   onTypeChange?: (type: PropagationRecordType) => void;
+  expected?: string;
 }) {
   const [type, setType] = useState(initial ?? defaultPropagationType(data, types));
+  const [expected, setExpected] = useState(initialExpected);
   return (
     <PropagationView
       domain="example.com"
@@ -88,7 +92,10 @@ function View({
       onTypeChange={(next) => {
         onTypeChange?.(next);
         setType(next);
+        setExpected('');
       }}
+      expected={expected}
+      onExpectedChange={setExpected}
     />
   );
 }
@@ -101,6 +108,9 @@ const typeButton = (name: string) =>
 
 beforeEach(() => {
   vi.mocked(api.lookupPropagation).mockReset();
+  // Ohne eigene Antwort bleiben die Nameserver beim Laden: Die Resolver
+  // vergleichen dann wie vor #133 mit ihrer Mehrheit.
+  vi.mocked(api.lookupAuthoritative).mockReset().mockReturnValue(new Promise(() => {}));
 });
 
 describe('PropagationView — TXT', () => {
@@ -263,6 +273,12 @@ describe('PropagationView — Typauswahl (#131)', () => {
   });
 
   it('fragt einen Typ, den der Report nicht mitlädt, erst bei Auswahl ab', async () => {
+    vi.mocked(api.lookupAuthoritative).mockImplementation(async (domain, type) => ({
+      domain,
+      type,
+      nameservers: [],
+      error: 'lookup_failed',
+    }));
     let answer!: (value: Awaited<ReturnType<typeof api.lookupPropagation>>) => void;
     vi.mocked(api.lookupPropagation).mockReturnValue(new Promise((resolve) => (answer = resolve)));
     render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
@@ -270,7 +286,9 @@ describe('PropagationView — Typauswahl (#131)', () => {
 
     await userEvent.click(typeButton('MX'));
     expect(api.lookupPropagation).toHaveBeenCalledWith('example.com', 'MX');
-    // Eine Ansage: Die Live-Region kommt leer, der Text danach (#108).
+    // Eine Ansage: Die Live-Region kommt leer, der Text danach (#108). Die
+    // Nameserver (#133) haben ihre eigene, solange sie laden — hier sind sie
+    // schon da.
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent('MX-Records werden bei allen Resolvern abgefragt')
     );
@@ -453,5 +471,338 @@ describe('PropagationView — TTL (#131)', () => {
     expect(
       screen.getByText('Laut TTL fragen die abweichenden Resolver spätestens 2 h nach dieser Abfrage wieder bei den Nameservern nach.')
     ).toBeInTheDocument();
+  });
+});
+
+/* ─── #133: autoritative Nameserver und erwarteter Wert ─────────────────── */
+
+type Server = AuthoritativeResult['nameservers'][number];
+
+function nameserver(host: string, records: [RecordType, string][], extra: Partial<Server> = {}): Server {
+  if (extra.error) return { host, ip: extra.ip ?? '192.0.2.53', records: [], responseTimeMs: 2500, error: extra.error };
+  return {
+    host,
+    ip: '192.0.2.53',
+    records: records.map(([type, value]) => ({ type, name: 'example.com', value, ttl: 3600 })),
+    serial: '2026101901',
+    primary: 'ns1.example.net',
+    responseTimeMs: 18,
+    ...extra,
+  };
+}
+
+function authoritative(type: RecordType, servers: Server[], extra: Partial<AuthoritativeResult> = {}): AuthoritativeResult {
+  return { domain: 'example.com', type, zone: 'example.com', nameservers: servers, ...extra };
+}
+
+const authBlock = () => screen.findByRole('region', { name: 'Autoritative Nameserver' });
+const resolverCard = () => screen.getByRole('region', { name: 'Öffentliche Resolver' });
+
+describe('PropagationView — autoritative Nameserver (#133)', () => {
+  it('fragt die Nameserver für den gezeigten Typ, beim Typwechsel neu, nach einem Tab-Wechsel nicht', async () => {
+    vi.mocked(api.lookupAuthoritative).mockImplementation(async (_domain, type) => authoritative(type, []));
+    vi.mocked(api.lookupPropagation).mockResolvedValue({ propagation: results([[]]), findings: [] });
+    const report = results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }]);
+
+    const view = render(<View results={report} types={HOST} />);
+    expect(api.lookupAuthoritative).toHaveBeenCalledWith('example.com', 'A');
+    await userEvent.click(typeButton('MX'));
+    expect(api.lookupAuthoritative).toHaveBeenLastCalledWith('example.com', 'MX');
+    view.unmount();
+
+    render(<View results={report} types={HOST} />);
+    await authBlock();
+    expect(api.lookupAuthoritative).toHaveBeenCalledTimes(2);
+  });
+
+  it('vergleicht die Resolver mit den einigen Nameservern statt mit der Mehrheit', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('TXT', [
+        nameserver('ns1.example.net', [['TXT', NEW_KEY]]),
+        nameserver('ns2.example.net', [['TXT', NEW_KEY]], { ip: '198.51.100.53' }),
+      ])
+    );
+    // Die Mehrheit hat noch den alten Schlüssel.
+    render(
+      <View
+        results={results([[['TXT', OLD_KEY]], [['TXT', OLD_KEY]], [['TXT', NEW_KEY]], [['TXT', OLD_KEY]], [['TXT', NEW_KEY]]])}
+        types={DNS_ENTRY}
+      />
+    );
+
+    const block = await authBlock();
+    expect(await within(block).findByText('einig')).toBeInTheDocument();
+    expect(within(block).getByText('ns1.example.net')).toBeInTheDocument();
+    expect(within(block).getByText('192.0.2.53')).toBeInTheDocument();
+    expect(within(block).getAllByText('SOA 2026101901')).toHaveLength(2);
+    expect(within(block).getByText(/Die Nameserver sind sich einig/)).toBeInTheDocument();
+    expect(within(block).getByRole('region', { name: 'Antwort 1' })).toHaveTextContent(/NEUESENDEwIDAQAB/);
+
+    const card = resolverCard();
+    expect(within(card).getByText('Verglichen mit den autoritativen Nameservern')).toBeInTheDocument();
+    expect(
+      within(card).getByText(/Noch nicht auf dem Stand der autoritativen Nameserver: 3 von 5 Resolvern/)
+    ).toBeInTheDocument();
+    // Die Antwort der Nameserver steht vorn, mit Wort statt nur Farbe.
+    const first = within(card).getByRole('region', { name: 'Antwort A' });
+    expect(first).toHaveTextContent(/NEUESENDEwIDAQAB/);
+    expect(within(first).getByText('wie autoritativ')).toBeInTheDocument();
+    expect(within(within(card).getByRole('region', { name: 'Antwort B' })).getByText('weicht ab')).toBeInTheDocument();
+  });
+
+  it('zeigt uneinige Nameserver deutlich und vergleicht dann mit der Mehrheit', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('TXT', [
+        nameserver('ns1.example.net', [['TXT', NEW_KEY]], { serial: '2026101902' }),
+        nameserver('ns2.example.net', [['TXT', OLD_KEY]], { serial: '2026101901', ip: '198.51.100.53' }),
+        nameserver('ns3.example.net', [['TXT', NEW_KEY]], { serial: '2026101902', ip: '203.0.113.53' }),
+      ])
+    );
+    render(<View results={results([[['TXT', OLD_KEY]], [['TXT', OLD_KEY]], [['TXT', NEW_KEY]]])} types={DNS_ENTRY} />);
+
+    const block = await authBlock();
+    expect(await within(block).findByText('uneinig')).toBeInTheDocument();
+    expect(within(block).getByText(/Ihre Seriennummern weichen ab/)).toBeInTheDocument();
+    // Die abweichende Seriennummer und Antwort tragen Wort und Icon.
+    expect(within(block).getByText('SOA 2026101901').closest('.badge')).toHaveClass('badge-warning');
+    expect(within(block).getByText('Antwort 2 · weicht ab')).toBeInTheDocument();
+    expect(within(resolverCard()).getByText('Verglichen mit der Mehrheit der Resolver')).toBeInTheDocument();
+    expect(within(resolverCard()).getByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
+  });
+
+  it('nennt mehrere Anbieter mit eigener Seriennummer neutral — keine Uneinigkeit', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('TXT', [
+        nameserver('dns1.p08.nsone.net', [['TXT', NEW_KEY]], { serial: '1656468023', primary: 'dns1.p08.nsone.net' }),
+        nameserver('ns-421.awsdns-52.com', [['TXT', NEW_KEY]], { serial: '1', primary: 'ns-1707.awsdns-21.co.uk' }),
+      ])
+    );
+    render(<View results={results([[['TXT', NEW_KEY]]])} types={DNS_ENTRY} />);
+
+    const block = await authBlock();
+    expect(await within(block).findByText('einig')).toBeInTheDocument();
+    expect(within(block).getByText(/Die Zone liegt bei 2 Anbietern/)).toBeInTheDocument();
+    expect(within(block).queryByText('uneinig')).not.toBeInTheDocument();
+    expect(block.querySelector('.badge-warning')).toBeNull();
+  });
+
+  it('zeigt verschiedene Adressen der Nameserver als Hinweis, nicht als Warnung', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('A', [
+        nameserver('ns1.example.net', [['A', '140.82.121.3']]),
+        nameserver('ns2.example.net', [['A', '140.82.121.4']], { ip: '198.51.100.53' }),
+      ])
+    );
+    render(<View results={results([{ records: [{ type: 'A', value: '140.82.121.3', ttl: 60 }] }])} types={HOST} />);
+
+    const block = await authBlock();
+    expect(await within(block).findByText('verschieden')).toBeInTheDocument();
+    expect(within(block).getByText(/bei Lastverteilung oder GeoDNS üblich/)).toBeInTheDocument();
+    expect(block.querySelector('.text-warning')).toBeNull();
+  });
+
+  it('zeigt „nicht prüfbar“ mit Grund, wenn Port 53 gesperrt ist — die Resolver bleiben', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('A', [
+        nameserver('ns1.example.net', [], { error: 'timeout' }),
+        nameserver('ns2.example.net', [], { error: 'network', ip: '2001:db8::53' }),
+      ])
+    );
+    render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
+
+    const block = await authBlock();
+    expect(await within(block).findByText('nicht prüfbar')).toBeInTheDocument();
+    expect(within(block).getByText('keine Antwort')).toBeInTheDocument();
+    expect(within(block).getByText('nicht erreichbar')).toBeInTheDocument();
+    expect(within(block).getByText(/DNS über Port 53 womöglich gesperrt/)).toBeInTheDocument();
+    expect(within(resolverCard()).getByText(/Alle Resolver liefern dasselbe Ergebnis/)).toBeInTheDocument();
+  });
+
+  /** In einem Container ohne IPv6 — eine Aussage über diggy, nicht über die Nameserver. */
+  it('sagt, wenn der diggy-Server kein IPv6 hat, statt Nameserver als unerreichbar zu zeigen', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative(
+        'A',
+        [
+          nameserver('ns1.example.net', [['A', '192.0.2.1']]),
+          nameserver('ns2.example.net', [], { error: 'no_ipv6', ip: '2606:4700:4700::1111' }),
+        ],
+        { ipv6Skipped: true }
+      )
+    );
+    render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
+
+    const block = await authBlock();
+    expect(await within(block).findByText('diggy ohne IPv6')).toBeInTheDocument();
+    expect(within(block).getByText('Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.')).toBeInTheDocument();
+    expect(within(block).queryByText('nicht erreichbar')).toBeNull();
+    expect(within(block).getByText('einig')).toBeInTheDocument();
+  });
+
+  it('sagt, wenn sich die Zone nicht ermitteln ließ', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(authoritative('A', [], { zone: undefined, error: 'no_zone' }));
+    render(<View results={results([[]])} types={HOST} />);
+    const block = await authBlock();
+    expect(await within(block).findByText(/keine Zone finden/)).toBeInTheDocument();
+    expect(within(block).getByText('nicht prüfbar')).toBeInTheDocument();
+  });
+
+  it('zeigt einen gescheiterten Abruf mit erneutem Versuch', async () => {
+    vi.mocked(api.lookupAuthoritative)
+      .mockRejectedValueOnce(new Error('Zu viele Abfragen an autoritative Nameserver.'))
+      .mockResolvedValueOnce(authoritative('A', [nameserver('ns1.example.net', [['A', '192.0.2.1']])]));
+    render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
+
+    const block = await authBlock();
+    expect(await within(block).findByText('Zu viele Abfragen an autoritative Nameserver.')).toBeInTheDocument();
+    await userEvent.click(within(block).getByRole('button', { name: 'Erneut versuchen' }));
+    expect(await within(block).findByText('einig')).toBeInTheDocument();
+  });
+
+  it('nennt einen CNAME aus der Zone hinaus', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('TXT', [
+        {
+          ...nameserver('ns1.example.net', []),
+          records: [{ type: 'CNAME', name: 'example.com', value: 'dkim.provider.example', ttl: 300 }],
+        },
+      ])
+    );
+    render(<View results={results([[['TXT', NEW_KEY]]])} types={DNS_ENTRY} />);
+    const block = await authBlock();
+    expect(await within(block).findByText(/ist ein CNAME auf/)).toBeInTheDocument();
+    expect(within(block).getByText('dkim.provider.example').parentElement).toHaveTextContent('→ dkim.provider.example');
+    expect(within(block).getByText(/ist ein CNAME auf dkim.provider.example/)).toBeInTheDocument();
+  });
+
+  it('fasst die Adressen eines Nameservers zusammen, solange sie dasselbe antworten', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('A', [
+        nameserver('hera.ns.cloudflare.com', [['A', '192.0.2.1']], { ip: '172.64.32.162' }),
+        nameserver('hera.ns.cloudflare.com', [['A', '192.0.2.1']], { ip: '2803:f800:50::6ca2:c0a2' }),
+        nameserver('elliott.ns.cloudflare.com', [['A', '192.0.2.1']], { ip: '162.159.44.228' }),
+        nameserver('elliott.ns.cloudflare.com', [['A', '192.0.2.9']], { ip: '2803:f800:50::6ca2:c3e4' }),
+      ])
+    );
+    render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
+    const block = await authBlock();
+    await within(block).findByText('verschieden');
+    expect(within(block).getAllByText('hera.ns.cloudflare.com')).toHaveLength(1);
+    // Antworten zwei Adressen verschieden, steht jede für sich.
+    expect(within(block).getAllByText('elliott.ns.cloudflare.com')).toHaveLength(2);
+  });
+});
+
+describe('PropagationView — erwarteter Wert (#133)', () => {
+  it('hebt Resolver und Nameserver ohne den erwarteten Wert hervor — normalisiert wie der Vergleich', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('MX', [
+        nameserver('ns1.example.net', [['MX', '10 mx.new.example']]),
+        nameserver('ns2.example.net', [['MX', '10 mx.old.example']], { serial: '2026101900', ip: '198.51.100.53' }),
+      ])
+    );
+    vi.mocked(api.lookupPropagation).mockResolvedValue({
+      propagation: results([
+        { records: [{ type: 'MX', value: 'mx.new.example', priority: 10, ttl: 300 }] },
+        { records: [{ type: 'MX', value: 'mx.old.example', priority: 10, ttl: 300 }] },
+      ]),
+      findings: [],
+    });
+    render(<View results={results([[]])} types={HOST} initial="MX" />);
+    const block = await authBlock();
+    await within(block).findByText('uneinig');
+    await screen.findByRole('region', { name: 'Öffentliche Resolver' });
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Erwarteter Wert' }), 'MX.New.Example.');
+
+    const card = resolverCard();
+    expect(
+      await within(card).findByText('Verglichen mit dem erwarteten Wert — er muss in der Antwort stehen')
+    ).toBeInTheDocument();
+    expect(within(card).getByText('Noch ohne den erwarteten Wert: 1 von 2 Resolvern.')).toBeInTheDocument();
+    expect(within(within(card).getByRole('region', { name: 'Antwort A' })).getByText('erwartet')).toBeInTheDocument();
+    expect(
+      within(block).getByText('Noch ohne den erwarteten Wert: 1 von 2 Nameservern — dort ist die Änderung nicht angekommen.')
+    ).toBeInTheDocument();
+
+    // Leeren: wieder gegen die Mehrheit, die Nameserver sind uneinig.
+    await userEvent.click(screen.getByRole('button', { name: 'Erwarteten Wert löschen' }));
+    expect(await within(card).findByText('Verglichen mit der Mehrheit der Resolver')).toBeInTheDocument();
+  });
+
+  it('übernimmt einen Wert von außen (Link) und bestätigt, wenn alle ihn liefern', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('AAAA', [nameserver('ns1.example.net', [['AAAA', '2001:db8::1']])])
+    );
+    render(
+      <View
+        results={results([
+          { records: [{ type: 'AAAA', value: '2001:db8::1', ttl: 60 }] },
+          { records: [{ type: 'AAAA', value: '2001:db8::1', ttl: 60 }] },
+        ])}
+        types={HOST}
+        initial="AAAA"
+        expected="2001:DB8:0:0:0:0:0:1"
+      />
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Erwarteter Wert' })).toHaveValue('2001:DB8:0:0:0:0:0:1');
+    expect(within(resolverCard()).getByText('Alle Resolver liefern den erwarteten Wert.')).toBeInTheDocument();
+    expect(await within(await authBlock()).findByText('Die Nameserver liefern den erwarteten Wert.')).toBeInTheDocument();
+  });
+
+  /** Den Wert liefern dann die Nameserver des Ziels — „nicht angekommen“ wäre falsch. */
+  it('misst einen CNAME aus der Zone hinaus nicht am erwarteten Wert', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(
+      authoritative('A', [
+        {
+          ...nameserver('ns1.example.net', []),
+          records: [{ type: 'CNAME', name: 'example.com', value: 'cdn.provider.example', ttl: 300 }],
+        },
+      ])
+    );
+    render(
+      <View
+        results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])}
+        types={HOST}
+        expected="192.0.2.1"
+      />
+    );
+    const block = await authBlock();
+    expect(await within(block).findByText(/ist ein CNAME auf cdn.provider.example/)).toBeInTheDocument();
+    expect(within(block).queryByText(/erwarteten Wert/)).toBeNull();
+    expect(block.querySelector('.text-warning')).toBeNull();
+    expect(within(resolverCard()).getByText('Alle Resolver liefern den erwarteten Wert.')).toBeInTheDocument();
+  });
+
+  it('zählt gegen den erwarteten Wert auch Resolver ohne Eintrag als abweichend', () => {
+    render(
+      <View
+        results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }, { records: [] }])}
+        types={HOST}
+        expected="192.0.2.1"
+      />
+    );
+    expect(within(resolverCard()).getByText('Noch ohne den erwarteten Wert: 1 von 2 Resolvern.')).toBeInTheDocument();
+  });
+});
+
+describe('PropagationView — SOA bei mehreren Anbietern (#133)', () => {
+  it('steht nicht als gestört da, auch wenn die Nameserver nicht prüfbar sind', async () => {
+    vi.mocked(api.lookupAuthoritative).mockResolvedValue(authoritative('SOA', [], { error: 'lookup_failed' }));
+    vi.mocked(api.lookupPropagation).mockResolvedValue({
+      propagation: results([
+        { records: [{ type: 'SOA', value: 'ns-1707.awsdns-21.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400', ttl: 900 }] },
+        { records: [{ type: 'SOA', value: 'dns1.p08.nsone.net. hostmaster.nsone.net. 1656468023 43200 7200 1209600 3600', ttl: 3600 }] },
+        { records: [{ type: 'SOA', value: 'dns1.p08.nsone.net. hostmaster.nsone.net. 1656468023 43200 7200 1209600 3600', ttl: 3600 }] },
+      ]),
+      findings: [],
+    });
+    render(<View results={results([[]])} types={HOST} initial="SOA" />);
+
+    const card = await screen.findByRole('region', { name: 'Öffentliche Resolver' });
+    expect(within(card).getByText(/Die Zone liegt bei 2 Anbietern mit eigener Seriennummer/)).toBeInTheDocument();
+    expect(within(card).getByText('Alle Resolver liefern die Seriennummer ihres Anbieters — sauber propagiert.')).toBeInTheDocument();
+    expect(within(card).queryByText(/weicht ab/)).not.toBeInTheDocument();
   });
 });

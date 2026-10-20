@@ -111,6 +111,31 @@ describe('cached', () => {
     }
   });
 
+  /** #133: Eine Antwort, die selbst früher abläuft, bleibt nicht die volle TTL. */
+  it('kürzt die TTL je Wert mit maxTtlMs, verlängert sie aber nie', async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const produce = async () => ({ expiresInMs: 20_000, call: ++calls });
+      const maxTtlMs = (value: { expiresInMs: number }) => value.expiresInMs;
+
+      await cached('short', 60_000, produce, { maxTtlMs });
+      vi.setSystemTime(Date.now() + 19_000);
+      expect((await cached('short', 60_000, produce, { maxTtlMs })).call).toBe(1);
+      vi.setSystemTime(Date.now() + 2_000);
+      expect((await cached('short', 60_000, produce, { maxTtlMs })).call).toBe(2);
+
+      // Länger als ttlMs nie.
+      await cached('long', 5_000, async () => ({ expiresInMs: 600_000 }), { maxTtlMs });
+      vi.setSystemTime(Date.now() + 6_000);
+      let fresh = false;
+      await cached('long', 5_000, async () => ((fresh = true), { expiresInMs: 600_000 }), { maxTtlMs });
+      expect(fresh).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('hält verschiedene Keys auseinander', async () => {
     expect(await cached('a', 5_000, async () => 'A')).toBe('A');
     expect(await cached('b', 5_000, async () => 'B')).toBe('B');

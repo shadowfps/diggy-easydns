@@ -212,6 +212,7 @@ export type ApiErrorCode =
   | 'invalid_record_type'
   | 'lookup_failed'
   | 'propagation_failed'
+  | 'authoritative_failed'
   | 'dnssec_failed'
   | 'ssl_failed'
   | 'mail_failed'
