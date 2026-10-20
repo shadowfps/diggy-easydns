@@ -11,7 +11,8 @@
  * Jeder Parser kennt genau ein „gefunden“ (der Domain-Block nennt die
  * gefragte Domain) und genau ein „nicht gefunden“ (der feste Satz der
  * Registry). Alles andere — Sperre, Rate-Limit, ein geändertes Format —
- * wirft. Eine unbekannte Antwort darf nie als „frei“ durchgehen.
+ * wirft. Eine unbekannte Antwort darf nie als „frei“ durchgehen, auch keine,
+ * die neben dem „nicht gefunden“ eine Sperre meldet.
  */
 
 import type { WhoisInfo } from '../types.js';
@@ -37,9 +38,11 @@ export class WhoisTextError extends Error {
 }
 
 /**
- * Typische Sätze für Sperren und Rate-Limits. Geprüft wird erst, wenn weder
- * „gefunden“ noch „nicht gefunden“ passt — die Nutzungsbedingungen von
- * whois.nic.io erwähnen „too many queries“ in jeder Antwort.
+ * Typische Sätze für Sperren und Rate-Limits. Geprüft bei jeder Antwort, die
+ * nicht „gefunden“ ist — bei .io nur vor der Zeile „>>> Last update“: Die
+ * Nutzungsbedingungen danach erwähnen „too many queries“. Die Hinweise von
+ * nic.at, Registro .it und EURid enthalten keinen der Sätze (Stand
+ * 20.10.2026).
  */
 const REFUSAL_PATTERNS = [
   /not permitted/i,
@@ -62,11 +65,25 @@ const REFUSAL_PATTERNS = [
  * Kontaktdaten enthalten.
  */
 function rejectUnrecognized(text: string): never {
+  rejectRefusal(text);
+  throw new WhoisTextError(`unbekannte Antwort (${text.length} Zeichen)`, false);
+}
+
+function rejectRefusal(text: string): void {
   for (const pattern of REFUSAL_PATTERNS) {
     const match = text.match(pattern);
     if (match) throw new WhoisTextError(`abgelehnt („${match[0]}“)`, true);
   }
-  throw new WhoisTextError(`unbekannte Antwort (${text.length} Zeichen)`, false);
+}
+
+/**
+ * „Nicht gefunden“ — es sei denn, dieselbe Antwort meldet eine Sperre. Ein
+ * Server, der drosselt und trotzdem den Satz für freie Domains schickt, darf
+ * kein „frei“ ergeben.
+ */
+function notFound(response: string): WhoisTextResult {
+  rejectRefusal(response);
+  return { found: false };
 }
 
 /* ─── .io: ICANN-Format (Identity Digital) ───────────────────────────── */
@@ -115,10 +132,12 @@ export const parseIcannWhois: WhoisTextParser = (text, domain) => {
     }
   }
 
+  // Ab „>>>“ folgen Stand und Nutzungsbedingungen, nicht mehr die Antwort.
+  const response = text.split(/^>>>/m)[0];
   if (sameDomain(name, domain)) return { found: true, fields };
   // whois.nic.io trennt Zeilen mit CRLF — `$` allein passt vor `\r` nicht.
-  if (/^Domain not found\.\r?$/m.test(text)) return { found: false };
-  return rejectUnrecognized(text);
+  if (/^Domain not found\.\r?$/m.test(response)) return notFound(response);
+  return rejectUnrecognized(response);
 };
 
 /* ─── .at: nic.at ────────────────────────────────────────────────────── */
@@ -165,7 +184,7 @@ export const parseNicAt: WhoisTextParser = (text, domain) => {
     if (sameDomain(name, domain)) return { found: true, fields };
   }
 
-  if (/^% nothing found\s*$/m.test(text)) return { found: false };
+  if (/^% nothing found\s*$/m.test(text)) return notFound(text);
   return rejectUnrecognized(text);
 };
 
@@ -228,7 +247,7 @@ export const parseNicIt: WhoisTextParser = (text, domain) => {
     }
   }
 
-  if (sameDomain(name, domain)) return available ? { found: false } : { found: true, fields };
+  if (sameDomain(name, domain)) return available ? notFound(text) : { found: true, fields };
   return rejectUnrecognized(text);
 };
 
@@ -277,7 +296,7 @@ export const parseEurid: WhoisTextParser = (text, domain) => {
     }
   }
 
-  if (sameDomain(name, domain)) return available ? { found: false } : { found: true, fields };
+  if (sameDomain(name, domain)) return available ? notFound(text) : { found: true, fields };
   return rejectUnrecognized(text);
 };
 

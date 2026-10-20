@@ -315,6 +315,17 @@ describe('Verfügbarkeit über die festen Registries', () => {
     expect(await statusOf(domain, domain)).toMatchObject({ status });
   });
 
+  it('eine Sperre neben „nicht gefunden“ ist unklar, nicht frei', async () => {
+    registryResponse = () => new Response(null, { status: 404 });
+    port43Mock.mockResolvedValue('% Quota exceeded\n% nothing found\n');
+    expect(await statusOf('diggy-frei-1.at', 'diggy-frei-1.at')).toEqual({
+      domain: 'diggy-frei-1.at',
+      status: 'unknown',
+      source: 'whois.nic.at',
+    });
+    expect(console.warn).toHaveBeenCalledWith('[whois] whois.nic.at diggy-frei-1.at: abgelehnt („exceeded“)');
+  });
+
   it('.ch: unklar, ohne zu fragen', async () => {
     registryResponse = () => new Response(null, { status: 404 });
     expect(await statusOf('switch.ch', 'switch.ch')).toEqual({ domain: 'switch.ch', status: 'unknown' });

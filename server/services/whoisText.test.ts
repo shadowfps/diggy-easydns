@@ -170,6 +170,21 @@ describe('Sperren und unbekannte Antworten', () => {
     });
   }
 
+  /*
+   * Ein Server, der drosselt und dabei trotzdem den Satz für freie Domains
+   * schickt, darf kein „frei“ ergeben (Befund aus dem Codex-Review). Die
+   * Hinweise der Registries selbst lösen das nicht aus: at- und
+   * eu-not-found.txt tragen sie ungekürzt.
+   */
+  it.each<[string, WhoisTextParser, string, string]>([
+    ['.io', parseIcannWhois, 'diggy-frei-1.io', 'WHOIS LIMIT EXCEEDED - SEE WWW.PIR.ORG/WHOIS FOR DETAILS\r\nDomain not found.\r\n'],
+    ['.at', parseNicAt, 'diggy-frei-1.at', '% Quota exceeded\n% nothing found\n'],
+    ['.it', parseNicIt, 'diggy-frei-1.it', 'Too many requests, please try again later.\nDomain: diggy-frei-1.it\nStatus: AVAILABLE\n'],
+    ['.eu', parseEurid, 'diggy-frei-1.eu', '%% Excessive querying, grace period of 60 seconds.\nDomain: diggy-frei-1.eu\nStatus: AVAILABLE\n'],
+  ])('%s: wirft bei einer Sperre neben „nicht gefunden“', (_tld, parse, domain, text) => {
+    expect(() => parse(text, domain)).toThrow(expect.objectContaining({ refused: true }));
+  });
+
   it('nennt im Fehler nur das Stichwort, nicht den Text der Antwort', () => {
     expect(() => parseNicAt('% Quota exceeded for 192.0.2.1\n', 'example.at')).toThrow('abgelehnt („exceeded“)');
   });
