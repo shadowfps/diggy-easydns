@@ -1,0 +1,4 @@
+Domain not found.
+>>> Last update of WHOIS database: 2026-10-20T14:26:06Z <<<
+
+Terms of Use: Access to WHOIS information is provided to assist persons in determining the contents of a domain name registration record in the registry database. [gekürzt] Queries to the Whois services are throttled. If too many queries are received from a single IP address within a specified time, the service will begin to reject further queries for a period of time to prevent disruption of Whois service access. [gekürzt]

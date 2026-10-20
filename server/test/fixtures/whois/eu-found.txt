@@ -1,0 +1,42 @@
+% The WHOIS service offered by EURid and the access to the records
+% in the EURid WHOIS database are provided for information purposes
+% only. It allows persons to check whether a specific domain name
+% [Hinweise von EURid gekürzt]
+% WHOIS europa.eu
+Domain: europa.eu
+Script: LATIN
+
+Registrant:
+        NOT DISCLOSED!
+        Visit www.eurid.eu for the web-based WHOIS.
+
+Technical:
+        Organisation: ClearMedia NV
+        Language: nl
+        Email: REDACTED
+
+Registrar:
+        Name: ClearMedia NV
+        Website: https://www.clearmedia.be
+
+Name servers:
+        ns4az1.europa.eu (54.154.94.36)
+        ns4az1.europa.eu (2a05:d018:c5f:3701:cc8a:9177:b28:c034)
+        ans2.cw.net
+        ns3bru.europa.eu (2a01:7080:14:101::2)
+        ns3bru.europa.eu (147.67.250.4)
+        ns2bru.europa.eu (147.67.250.3)
+        ns3lux.europa.eu (147.67.12.4)
+        ns3lux.europa.eu (2a01:7080:24:101::2)
+        ns4az2.europa.eu (34.255.155.194)
+        ns4az2.europa.eu (2a05:d018:c5f:3702:4df4:7b41:c0a1:34e4)
+        ns1bru.europa.eu (147.67.250.2)
+        ans1.cw.net
+        ns1lux.europa.eu (147.67.12.2)
+        ns2lux.europa.eu (147.67.12.3)
+
+Keys:
+        flags:KSK protocol:3 algorithm:RSA_SHA256 pubKey:[gekürzt]
+        flags:KSK protocol:3 algorithm:RSA_SHA256 pubKey:[gekürzt]
+
+Please visit www.eurid.eu for more info.

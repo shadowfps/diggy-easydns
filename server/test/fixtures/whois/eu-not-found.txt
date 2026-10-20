@@ -1,0 +1,8 @@
+% The WHOIS service offered by EURid and the access to the records
+% in the EURid WHOIS database are provided for information purposes
+% only. It allows persons to check whether a specific domain name
+% [Hinweise von EURid gekürzt]
+% WHOIS diggy-frei-8317465.eu
+Domain: diggy-frei-8317465.eu
+Script: LATIN
+Status: AVAILABLE
