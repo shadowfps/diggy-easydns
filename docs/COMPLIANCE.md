@@ -4,7 +4,8 @@ Technische Bestandsaufnahme, keine Rechtsberatung. Sie beschreibt, was der Code
 tatsächlich tut, und ordnet das den einschlägigen Regelwerken zu. Die
 rechtliche Bewertung gehört fachlich geprüft.
 
-**Stand:** 8. September 2026, DSGVO-Teil ergänzt am 19. Oktober 2026 (#125, #132) ·
+**Stand:** 8. September 2026, DSGVO-Teil ergänzt am 19. Oktober 2026 (#125, #132) und
+20. Oktober 2026 (#105) ·
 **Bezug:** Commit-Stand von PR #34
 
 ---
@@ -33,7 +34,7 @@ programmierten Regeln:
 | Tech-Stack-Erkennung | Abgleich gegen eine fest hinterlegte Liste von Regex-Mustern | `server/services/techstack.ts` |
 | SPF/DKIM/DMARC-Bewertung | Regeln aus RFC 7208, RFC 6376 und RFC 7489, hart kodiert | `server/services/mailAudit.ts`, `shared/dmarc.ts` |
 | DNSSEC-Status | Auswertung von DS-/DNSKEY-Existenz und AD-Flag | `server/services/dnssec.ts` |
-| Verfügbarkeits-Check | HTTP-Statuscode der RDAP-Antwort (404 = frei) | `server/services/domainAvailability.ts` |
+| Verfügbarkeits-Check | HTTP-Statuscode der RDAP-Antwort (404 = frei) bzw. der feste „nicht gefunden“-Satz der Registry über WHOIS (Port 43) | `server/services/domainAvailability.ts`, `server/services/whoisText.ts` |
 
 Es gibt kein Modell, keine Trainingsdaten, keine Gewichte, keine Inferenz und
 keine Anpassung des Verhaltens nach der Inbetriebnahme. Die
@@ -116,9 +117,10 @@ Mittwald CM Service GmbH & Co. KG, Königsberger Straße 4–6, 32339 Espelkamp 
 LDI NRW, Kavalleriestraße 2–4, 40213 Düsseldorf.
 
 **Drittlandübermittlung:** Die Checks fragen unter anderem Dienste in den USA
-ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app), für den
-Propagations-Vergleich außerdem DoH-Resolver in der Schweiz und in Kanada
-(siehe „DoH-Resolver“ unten). Übermittelt wird
+ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app, für WHOIS und
+Verfügbarkeit die Registries der gängigen gTLDs und Identity Digital für .io),
+für den Propagations-Vergleich außerdem DoH-Resolver in der Schweiz und in
+Kanada (siehe „DoH-Resolver“ und „WHOIS und Verfügbarkeit“ unten). Übermittelt wird
 dabei die abgefragte Domain bzw. IP-Adresse — die Anfragen gehen vom Server aus,
 nicht aus dem Browser des Nutzers, dessen IP erfahren diese Dienste also nicht.
 Zu beachten: eine abgefragte Domain kann im Einzelfall selbst personenbezogen
@@ -210,6 +212,65 @@ dieselbe Adresse.
   damit stand Quad9 in 1 von 20 Checks mit frischen Verbindungen als Fehler da
   (mit nur einem neuen Versuch in 4 von 15). Ob das Rechenzentrum dasselbe
   sieht, zeigt erst der Betrieb.
+
+### WHOIS und Verfügbarkeit (#105)
+
+WHOIS-Report und Verfügbarkeits-Check fragen die Registry der Endung direkt
+(`server/services/registry.ts`). Welche das ist, steht im RDAP-Bootstrap der
+IANA (`https://data.iana.org/rdap/dns.json`, RFC 9224), den der Server beim
+ersten Bedarf lädt und 24 Stunden im Speicher hält
+(`server/lib/rdapBootstrap.ts`). Den Abruf der Liste sieht data.iana.org
+(ICANN, USA, über Cloudflare); er enthält nichts über eine Abfrage. Jede
+Registry bekommt die abgefragte Domain, vom Server aus. Bis #105 ging fast
+alles über rdap.org, das pro IP drosselt.
+
+| Endung | Weg | Endpunkt | Betreiber, Sitz | Quelle |
+|---|---|---|---|---|
+| laut Bootstrap (rund 1 200) | RDAP | Basis-URL aus dem Bootstrap, nur `https:` | je nach Endung; für die Vorschläge des Verfügbarkeits-Checks Verisign (.com, .net), Public Interest Registry (.org), Google Registry (.app, .dev), alle USA | Bootstrap |
+| .de | RDAP | `https://rdap.denic.de/` | DENIC eG, Frankfurt am Main, Deutschland | [Impressum](https://www.denic.de/impressum) |
+| .io | RDAP, Rückfall WHOIS | `https://rdap.identitydigital.services/rdap/`, `whois.nic.io` | Identity Digital Inc., Bellevue (Washington), USA — betreibt die Registry-Technik für .io | [Wikipedia](https://en.wikipedia.org/wiki/Identity_Digital), Nutzungsbedingungen in der WHOIS-Antwort |
+| .at | WHOIS (Port 43) | `whois.nic.at` | nic.at GmbH, Salzburg, Österreich | [Impressum](https://www.nic.at/de/impressum) |
+| .it | WHOIS (Port 43) | `whois.nic.it` | Registro .it, Istituto di Informatica e Telematica del CNR, Pisa, Italien | [nic.it](https://www.nic.it/en/about-us) |
+| .eu | WHOIS (Port 43) | `whois.eu` | EURid vzw, Diegem, Belgien | [eurid.eu](https://eurid.eu/en/) |
+| .ch | keine Abfrage | Hinweis auf `https://www.nic.ch/whois/` in der WHOIS-Ansicht | — | whois.nic.ch: „Requests of this client are not permitted“ |
+| sonst ohne Eintrag (.co, .me, .li …) | keine Abfrage | — | — | rdap.org antwortet dort ebenfalls 404 (geprüft für .co, .me, .ch, .at) |
+| alle ohne feste Registry, solange der Bootstrap nicht ladbar ist | RDAP | `https://rdap.org/`, für .com/.net `https://rdap.verisign.com/` | rdap.org: Gavin Brown (privat), gehostet bei Fly.io hinter Cloudflare, beide USA | [about.rdap.org](https://about.rdap.org/), Antwort-Header `via: fly.io`, `server: cloudflare` |
+
+Stand der Tabelle: 20. Oktober 2026. Ein Test (`registry.test.ts`) verlangt,
+dass jede feste Registry in der Empfänger-Tabelle von `/datenschutz` und mit
+ihrem Endpunkt hier steht.
+
+**Was ausgewertet wird:** Registrierung, Ablauf, letzte Änderung, Status,
+Registrar (ein Unternehmen), Nameserver, DNSSEC. Die WHOIS-Antworten von .at
+und .it enthalten auch Inhaber und Kontakte (Namen, Anschrift, Telefon,
+E-Mail); die Parser in `server/services/whoisText.ts` lesen nur den
+Domain-Block bzw. die Abschnitte „Registrar“ und „Nameservers“ und
+überspringen die Kontaktblöcke. Nichts davon wird gespeichert, ausgegeben oder
+geloggt; das Log nennt nur Host, Domain und Grund (bei einer Sperre das
+Stichwort).
+
+**Grenzen:** Weiterleitungen von RDAP-Diensten nur auf `https:` und, mit
+Bootstrap, nur auf dessen Hosts und die festen Registries
+(`fetchRdap` in `server/lib/rdap.ts`). Port 43 nur zu den festen Hosts oben,
+die Abfrage ist eine geprüfte Domain plus CRLF, Timeout 3 s für den Aufbau und
+5 s (Report) bzw. 6 s (Verfügbarkeit) insgesamt, höchstens 64 KiB Antwort
+(`server/lib/whoisPort43.ts`).
+
+**Offene Punkte:**
+
+- Port 43 ausgehend aus dem mittwald-Container ist nicht zugesagt. Prüfen
+  nach dem Deploy mit `scripts/check-whois-live.mjs` (docs/DEPLOYMENT.md).
+  Ist er gesperrt, zeigen .at, .it und .eu „nicht verfügbar“ bzw. „unklar“,
+  .io bleibt über RDAP erreichbar.
+- Die Zeiten von nic.at und Registro .it tragen keine Zone; angenommen ist
+  die Ortszeit (Europe/Vienna bzw. Europe/Rome).
+- Die Nutzungsbedingungen von nic.at, EURid und Identity Digital verbieten
+  automatisierte Massenabfragen. diggy fragt je Nutzereingabe eine Domain und
+  hält das Ergebnis 60 s im Cache; wie streng die Registries über Port 43
+  drosseln, ist nicht bekannt.
+- Art. 49 Abs. 1 lit. b DSGVO auch für Registries in Drittländern ohne
+  Angemessenheitsbeschluss (je nach Endung) — wie bei Zielserver und
+  Nameservern rechtlich nicht geprüft.
 
 ### Autoritative Nameserver (#133)
 
