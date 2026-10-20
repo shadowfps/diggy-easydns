@@ -271,10 +271,36 @@ die Abfrage ist eine geprüfte Domain plus CRLF, Timeout 3 s für den Aufbau und
   .io bleibt über RDAP erreichbar.
 - Die Zeiten von nic.at und Registro .it tragen keine Zone; angenommen ist
   die Ortszeit (Europe/Vienna bzw. Europe/Rome).
-- Die Nutzungsbedingungen von nic.at, EURid und Identity Digital verbieten
-  automatisierte Massenabfragen. diggy fragt je Nutzereingabe eine Domain und
-  hält das Ergebnis 60 s im Cache; wie streng die Registries über Port 43
-  drosseln, ist nicht bekannt.
+- Nutzungsbedingungen der Registries ohne RDAP-Eintrag (gelesen am
+  20.10.2026, rechtlich nicht bewertet). Sie regeln nicht nur die Menge der
+  Abfragen, sondern auch, ob die Daten weitergegeben werden dürfen. Ob die
+  Anzeige im Report und der 60-s-Cache darunter fallen, muss der Betreiber
+  klären:
+  - **nic.at:** Einzelabfragen sind frei. Laut Hinweis in jeder WHOIS-Antwort
+    darf ohne „prior permission of NIC.AT“ nichts „reproduced, stored in a
+    retrieval system, or transmitted“ werden, außer für „agreed Internet
+    operational purposes“; die
+    [WHOIS-Policy](https://www.nic.at/en/my-at-domain/domain-search/whois-policy)
+    behält die Weitergabe an die Öffentlichkeit nic.at vor.
+  - **Registro .it:** Zugang „purely for consultation“, keine
+    Weiterverwendung „in any re-elaborated form … without authorization“
+    ([WHOIS-Policy 2.2, §7](https://www.nic.it/sites/default/files/documenti/2022/Whois_policy_v_2_2_.pdf)).
+    Für die Verfügbarkeit gibt es den DAS `das.nic.it`, Port 4343, der nur
+    den Status liefert
+    ([Technical Guidelines 3.3, §16.6](https://www.nic.it/sites/default/files/documenti/2026/Synchronous_Technical_Guidelines_v3.3_0.pdf));
+    diggy nutzt ihn nicht.
+  - **EURid:** Die Prüfung, ob eine Domain frei ist, nennt der Hinweis in
+    jeder WHOIS-Antwort ausdrücklich als Zweck. Verboten ist die Entnahme
+    eines „substantial part“, und „any reproduction and/or transmission of
+    data for commercial purposes“ gilt immer als solche.
+  - **Identity Digital:** Ausgeschlossen sind „high volume, automated“
+    Abfragen; für WHOIS gelten 10 Abfragen pro Sekunde je IP
+    ([WHOIS-FAQ](https://www.identity.digital/help-articles/whois-faq)), für
+    RDAP ist keine Zahl genannt.
+
+  diggy fragt je Nutzereingabe eine Domain und hält das Ergebnis 60 s im
+  Cache. Eine eigene Drosselung je Registry gibt es nicht, und außer bei
+  Identity Digital ist kein Limit dokumentiert.
 - Art. 49 Abs. 1 lit. b DSGVO auch für Registries in Drittländern ohne
   Angemessenheitsbeschluss (je nach Endung) — wie bei Zielserver und
   Nameservern rechtlich nicht geprüft.

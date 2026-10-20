@@ -355,4 +355,17 @@ describe('Datenschutzhinweise', () => {
     }
     expect(privacy).toMatch(/<Row service="rdap\.org" purpose="[^"]*nur[^"]*"/);
   });
+
+  /**
+   * Über Port 43 regeln die Bedingungen der Registry auch, ob die Daten
+   * angezeigt oder gespeichert werden dürfen — das muss der Betreiber
+   * bewerten. COMPLIANCE.md fasst sie je Registry zusammen.
+   */
+  it('nennen in COMPLIANCE.md die Nutzungsbedingungen jeder Registry, die über Port 43 gefragt wird', () => {
+    const compliance = readFileSync(new URL('../../docs/COMPLIANCE.md', import.meta.url), 'utf8');
+    for (const [tld, registry] of Object.entries(FIXED_REGISTRIES)) {
+      if (!registry.whois) continue;
+      expect(compliance, tld).toContain(`- **${registry.operator}:**`);
+    }
+  });
 });
