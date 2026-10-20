@@ -87,7 +87,7 @@ async function queryWhoisServer(
 async function queryRdap(
   step: Extract<RegistryStep, { kind: 'rdap' }>,
   domain: string,
-  allowHost: (host: string) => boolean,
+  allowHost: (host: string) => boolean | Promise<boolean>,
   timeoutMs: number
 ): Promise<StepResult> {
   const ctrl = new AbortController();

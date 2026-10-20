@@ -10,6 +10,13 @@ import { lookupIpDetails } from './ipDetails.js';
 import { lookupWhois } from './whois.js';
 
 vi.mock('./dnsLookup.js', () => ({ lookupPtrRecords: vi.fn().mockResolvedValue([]) }));
+// Ohne Bootstrap prüft registry.ts das Ziel einer Weiterleitung per
+// Namensauflösung — im Test eine feste öffentliche Adresse statt Netz.
+vi.mock('node:dns', async (importOriginal) => {
+  const dns = await importOriginal<typeof import('node:dns')>();
+  const lookup = vi.fn(async () => [{ address: '199.19.56.1', family: 4 }]);
+  return { ...dns, promises: { ...dns.promises, lookup } };
+});
 // Port 43 prüfen whoisPort43.test.ts und registry.test.ts; hier nie ins Netz.
 vi.mock('../lib/whoisPort43.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/whoisPort43.js')>()),

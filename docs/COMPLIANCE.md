@@ -254,9 +254,11 @@ Domain-Block bzw. die Abschnitte „Registrar“ und „Nameservers“ und
 geloggt; das Log nennt nur Host, Domain und Grund (bei einer Sperre das
 Stichwort).
 
-**Grenzen:** Weiterleitungen von RDAP-Diensten nur auf `https:` und, mit
-Bootstrap, nur auf dessen Hosts und die festen Registries
-(`fetchRdap` in `server/lib/rdap.ts`). Port 43 nur zu den festen Hosts oben,
+**Grenzen:** Weiterleitungen von RDAP-Diensten nur auf `https:` ohne eigenen
+Port, höchstens drei, und mit Bootstrap nur auf dessen Hosts und die festen
+Registries (`fetchRdap` in `server/lib/rdap.ts`). Ohne Bootstrap kennt nur
+rdap.org das Ziel; dann nur auf Namen (keine IP-Literale), die ausschließlich
+auf öffentliche Adressen zeigen (`server/services/registry.ts`). Port 43 nur zu den festen Hosts oben,
 die Abfrage ist eine geprüfte Domain plus CRLF, Timeout 3 s für den Aufbau und
 5 s (Report) bzw. 6 s (Verfügbarkeit) insgesamt, höchstens 64 KiB Antwort
 (`server/lib/whoisPort43.ts`).

@@ -64,6 +64,7 @@ describe('parseRdapBootstrap', () => {
     'http://rdap.example/',
     'ftp://rdap.example/',
     'https://user:pass@rdap.example/',
+    'https://rdap.example:8443/',
     'https://rdap.example/?redirect=http://intern/',
     'https://rdap.example/#x',
     'kein url',

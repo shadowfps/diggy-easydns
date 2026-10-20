@@ -50,11 +50,24 @@ describe('fetchRdap', () => {
   it.each([
     ['http:', 'http://rdap.example/domain/example.org', 'Weiterleitung auf http://rdap.example abgelehnt'],
     ['fremden Host', 'https://169.254.169.254/latest/meta-data/', 'Weiterleitung auf 169.254.169.254 abgelehnt'],
-    ['localhost', 'https://localhost:3002/api', 'Weiterleitung auf localhost abgelehnt'],
+    ['localhost', 'https://localhost/api', 'Weiterleitung auf localhost abgelehnt'],
+    ['localhost mit Port', 'https://localhost:3002/api', 'Weiterleitung auf https://localhost:3002 abgelehnt'],
     ['Zugangsdaten', 'https://user:pw@rdap.example/', 'Weiterleitung auf https://rdap.example abgelehnt'],
+    // Erlaubter Host, aber ein anderer Dienst auf demselben Rechner.
+    ['einen eigenen Port', 'https://rdap.example:8443/admin', 'Weiterleitung auf https://rdap.example:8443 abgelehnt'],
   ])('lehnt eine Weiterleitung auf %s ab, ohne sie aufzurufen', async (_name, location, message) => {
     fetchMock.mockResolvedValueOnce(redirect(location));
     await expect(fetchRdap('https://rdap.org/domain/example.org', { signal, allowHost })).rejects.toThrow(message);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('wartet auf eine asynchrone Prüfung des Ziels', async () => {
+    fetchMock.mockResolvedValueOnce(redirect('https://rdap.example/domain/x.org'));
+    const check = vi.fn(async () => false);
+    await expect(fetchRdap('https://rdap.org/domain/x.org', { signal, allowHost: check })).rejects.toThrow(
+      'Weiterleitung auf rdap.example abgelehnt'
+    );
+    expect(check).toHaveBeenCalledExactlyOnceWith('rdap.example');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

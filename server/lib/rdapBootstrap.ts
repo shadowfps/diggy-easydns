@@ -131,7 +131,7 @@ export function parseRdapBootstrap(data: unknown): RdapBootstrap {
   return { services, hosts: new Set([...services.values()].map((url) => new URL(url).hostname)) };
 }
 
-/** Basis-URL, wenn sie `https:` ist und nichts außer Host und Pfad trägt. */
+/** Basis-URL, wenn sie `https:` ist und nichts außer Host und Pfad trägt (auch keinen Port). */
 function httpsBase(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   let url: URL;
@@ -140,7 +140,7 @@ function httpsBase(value: unknown): string | undefined {
   } catch {
     return undefined;
   }
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) return undefined;
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash) return undefined;
   if (!url.pathname.endsWith('/')) url.pathname += '/';
   return url.href;
 }

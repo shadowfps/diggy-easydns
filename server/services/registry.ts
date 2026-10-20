@@ -21,8 +21,10 @@
  * Domain steht nur kodiert im Pfad bzw. als geprüfte Zeile auf Port 43.
  */
 
+import { isIP } from 'node:net';
 import { registryWebLookup } from '../../shared/registryWebLookup.js';
 import { findRdapBase, getRdapBootstrap, rdapDomainUrl } from '../lib/rdapBootstrap.js';
+import { resolvePublicHost } from '../lib/safeTarget.js';
 import { parseEurid, parseIcannWhois, parseNicAt, parseNicIt, type WhoisTextParser } from './whoisText.js';
 
 export const RDAP_ORG_BASE = 'https://rdap.org/';
@@ -78,7 +80,7 @@ export type RegistryRoute =
       /** Der Reihe nach; der nächste nur, wenn der vorige scheiterte. */
       steps: RegistryStep[];
       /** Erlaubte Ziele für RDAP-Weiterleitungen. */
-      allowHost: (host: string) => boolean;
+      allowHost: (host: string) => boolean | Promise<boolean>;
     }
   | { kind: 'web-only'; url: string }
   | { kind: 'none' };
@@ -92,9 +94,12 @@ export async function resolveRegistry(input: string): Promise<RegistryRoute> {
   const tld = domain.slice(domain.lastIndexOf('.') + 1);
 
   const bootstrap = await getRdapBootstrap();
-  // Mit Bootstrap nur bekannte Registries; ohne ihn folgt rdap.org seiner
-  // eigenen Liste, das Ziel muss dann nur https sein (fetchRdap).
-  const allowHost = (host: string) => FIXED_HOSTS.has(host) || !bootstrap || bootstrap.hosts.has(host);
+  // Mit Bootstrap nur bekannte Registries. Ohne ihn leitet rdap.org nach
+  // seiner eigenen Liste weiter, die hier niemand kennt — dann wenigstens
+  // ein Name, der nur auf öffentliche Adressen zeigt (fetchRdap verlangt
+  // zusätzlich https auf dem Standard-Port).
+  const allowHost = (host: string) =>
+    FIXED_HOSTS.has(host) || (bootstrap ? bootstrap.hosts.has(host) : isPublicName(host));
   const query = (steps: RegistryStep[]): RegistryRoute => ({ kind: 'query', steps, allowHost });
 
   const base = bootstrap && findRdapBase(bootstrap, domain);
@@ -113,6 +118,17 @@ export async function resolveRegistry(input: string): Promise<RegistryRoute> {
 
   if (bootstrap) return { kind: 'none' };
   return query([rdapStep(Object.hasOwn(WITHOUT_BOOTSTRAP, tld) ? WITHOUT_BOOTSTRAP[tld] : RDAP_ORG_BASE, domain)]);
+}
+
+/** Kein IP-Literal, kein einzelnes Label, und alle Adressen öffentlich. */
+async function isPublicName(host: string): Promise<boolean> {
+  if (host.startsWith('[') || isIP(host) !== 0 || !host.includes('.')) return false;
+  try {
+    await resolvePublicHost(host);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function rdapStep(base: string, domain: string): RegistryStep {

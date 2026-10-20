@@ -31,14 +31,15 @@ export interface RdapFetchResult {
  * GET auf einen RDAP-Dienst, Weiterleitungen nur auf erlaubte Ziele (#105).
  *
  * `fetch` folgte jeder Weiterleitung, auch auf `http:` oder eine interne
- * Adresse. Hier geht es nur weiter, wenn das Ziel `https:` ist und
- * `allowHost` den Host kennt — bei direkten Abfragen die Hosts aus dem
- * IANA-Bootstrap und die festen Registries. Sonst wirft es, die Antwort des
- * Sprungs wird verworfen.
+ * Adresse. Hier geht es nur weiter, wenn das Ziel `https:` auf dem
+ * Standard-Port ist und `allowHost` den Host zulässt — mit Bootstrap dessen
+ * Hosts und die festen Registries, ohne ihn Namen mit öffentlichen Adressen
+ * (services/registry.ts). Sonst wirft es, die Antwort des Sprungs wird
+ * verworfen.
  */
 export async function fetchRdap(
   url: string,
-  { signal, allowHost }: { signal: AbortSignal; allowHost: (host: string) => boolean }
+  { signal, allowHost }: { signal: AbortSignal; allowHost: (host: string) => boolean | Promise<boolean> }
 ): Promise<RdapFetchResult> {
   let current = url;
   for (let hops = 0; ; hops += 1) {
@@ -52,10 +53,11 @@ export async function fetchRdap(
     if (!location) throw new Error(`HTTP ${response.status} ohne Ziel`);
     if (hops >= MAX_REDIRECTS) throw new Error('zu viele Weiterleitungen');
     const next = new URL(location, current);
-    if (next.protocol !== 'https:' || next.username || next.password) {
+    // Kein Dienst im IANA-Bootstrap nennt einen eigenen Port (Stand 30.9.2026).
+    if (next.protocol !== 'https:' || next.username || next.password || next.port) {
       throw new Error(`Weiterleitung auf ${next.protocol}//${next.host} abgelehnt`);
     }
-    if (!allowHost(next.hostname)) throw new Error(`Weiterleitung auf ${next.hostname} abgelehnt`);
+    if (!(await allowHost(next.hostname))) throw new Error(`Weiterleitung auf ${next.hostname} abgelehnt`);
     current = next.href;
   }
 }

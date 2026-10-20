@@ -121,7 +121,7 @@ async function checkSingleDomain(domain: string, timeoutMs = 6000): Promise<Doma
 async function rdapAvailability(
   step: Extract<RegistryStep, { kind: 'rdap' }>,
   domain: string,
-  allowHost: (host: string) => boolean,
+  allowHost: (host: string) => boolean | Promise<boolean>,
   timeoutMs: number
 ): Promise<DomainAvailabilityStatus | undefined> {
   const { url } = step;

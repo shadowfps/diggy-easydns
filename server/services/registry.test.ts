@@ -14,6 +14,21 @@ vi.mock('../lib/whoisPort43.js', async (importOriginal) => ({
   queryPort43: vi.fn(),
 }));
 
+// Namensauflösung für Weiterleitungen ohne Bootstrap: feste Antworten.
+const ADDRESSES: Record<string, string> = {
+  'rdap.publicinterestregistry.org': '199.19.56.1',
+  'internal.example.net': '10.0.0.5',
+  'metadata.example.net': '169.254.169.254',
+};
+vi.mock('node:dns', async (importOriginal) => {
+  const dns = await importOriginal<typeof import('node:dns')>();
+  const lookup = vi.fn(async (host: string) => {
+    if (!(host in ADDRESSES)) throw Object.assign(new Error(`getaddrinfo ENOTFOUND ${host}`), { code: 'ENOTFOUND' });
+    return [{ address: ADDRESSES[host], family: 4 }];
+  });
+  return { ...dns, promises: { ...dns.promises, lookup } };
+});
+
 const fetchMock = vi.fn<typeof fetch>();
 const port43Mock = vi.mocked(queryPort43);
 const FIXTURES = new URL('../test/fixtures/whois/', import.meta.url);
@@ -100,6 +115,35 @@ describe('resolveRegistry', () => {
     expect(route.allowHost('rdap.org')).toBe(false);
     expect(route.allowHost('169.254.169.254')).toBe(false);
     expect(route.allowHost('localhost')).toBe(false);
+  });
+
+  it('erlaubt ohne Bootstrap nur Namen mit öffentlichen Adressen auf dem Standard-Port', async () => {
+    bootstrapResponse = () => new Response(null, { status: 503 });
+    const route = await resolveRegistry('example.org');
+    if (route.kind !== 'query') throw new Error('erwartet: query');
+    // Die festen Registries und was rdap.org für .org nennt.
+    expect(await route.allowHost('rdap.verisign.com')).toBe(true);
+    expect(await route.allowHost('rdap.publicinterestregistry.org')).toBe(true);
+    // IP-Literale, interne Namen, nicht auflösbare Namen.
+    for (const host of ['169.254.169.254', '127.0.0.1', '[::1]', 'localhost', 'internal.example.net', 'metadata.example.net', 'nicht-da.example.net']) {
+      expect(await route.allowHost(host), host).toBe(false);
+    }
+
+    // Auch über fetchRdap: Weiterleitungen von rdap.org auf interne Ziele laufen nicht.
+    for (const location of [
+      'https://169.254.169.254/latest/meta-data/',
+      'https://internal.example.net/admin',
+      'https://rdap.publicinterestregistry.org:8443/admin',
+    ]) {
+      fetchMock.mockClear();
+      registryResponse = (url) =>
+        url.startsWith(RDAP_ORG_BASE)
+          ? new Response(null, { status: 302, headers: { location } })
+          : Response.json({ objectClassName: 'domain' });
+      clearCache();
+      expect(await lookupWhois('example.org'), location).toBeNull();
+      expect(registryCalls(), location).toEqual(['https://rdap.org/domain/example.org']);
+    }
   });
 
   it.each([
