@@ -80,3 +80,31 @@ describe('WhoisView – Kalender-Erinnerung', () => {
     expect(calendarButton()).not.toBeInTheDocument();
   });
 });
+
+describe('WhoisView – ohne Daten (#105)', () => {
+  it('verweist für .ch auf die Web-Abfrage der Registry', () => {
+    render(<WhoisView domain="www.switch.ch" />);
+    expect(screen.getByText(/Die Registry von \.ch sperrt automatische Abfragen/)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Web-Abfrage/ });
+    expect(link).toHaveAttribute('href', 'https://www.nic.ch/whois/');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('bleibt für andere Endungen beim allgemeinen Hinweis', () => {
+    render(<WhoisView domain="example.co" />);
+    expect(screen.getByText('Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+});
+
+describe('WhoisView – DNSSEC', () => {
+  it.each([
+    [true, 'delegiert'],
+    [false, 'nicht delegiert'],
+    // .eu über WHOIS sagt nichts zu DNSSEC — dann keine Behauptung.
+    [undefined, 'keine Angabe'],
+  ])('zeigt %s als „%s“', (dnssecDelegated, label) => {
+    render(<WhoisView domain="example.eu" whois={{ ...whois, dnssecDelegated }} />);
+    expect(screen.getByText(label, { exact: true })).toBeInTheDocument();
+  });
+});

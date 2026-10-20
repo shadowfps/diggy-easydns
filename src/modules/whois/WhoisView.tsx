@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Building2, Server, ShieldCheck, ShieldOff, Lock, AlertCircle } from 'lucide-react';
+import { Building2, Server, ShieldCheck, ShieldOff, ShieldQuestion, Lock, AlertCircle, ArrowUpRight } from 'lucide-react';
 import type { WhoisInfo } from '@/types/dns';
+import { registryWebLookup } from '@shared/registryWebLookup';
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -60,9 +61,27 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
   const { tRich, formatDate } = useI18n();
 
   if (!whois) {
+    // .ch: Die Registry sperrt automatisierte Abfragen, der Server fragt gar
+    // nicht erst (#105). Der Satz allein ließe offen, wo es die Daten gibt.
+    const webLookup = registryWebLookup(domain);
     return (
       <EmptyState icon={<AlertCircle className="size-5" />} title={t('WHOIS / RDAP nicht verfügbar')}>
-        {t('Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.')}
+        {webLookup
+          ? tRich('Die Registry von .{tld} sperrt automatische Abfragen. Die Daten zeigt ihre {link}.', {
+              tld: webLookup.tld,
+              link: (
+                <a
+                  href={webLookup.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="link inline-flex items-center gap-1"
+                >
+                  {t('Web-Abfrage')}
+                  <ArrowUpRight className="size-3.5 shrink-0" />
+                </a>
+              ),
+            })
+          : t('Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.')}
       </EmptyState>
     );
   }
@@ -232,17 +251,25 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
           <p className="mt-4 text-sm text-fg-subtle">{t('Keine Status-Codes.')}</p>
         )}
 
+        {/* Ohne Angabe der Registry (.eu über WHOIS, #105) wäre „nicht
+            delegiert“ eine Behauptung, die niemand gemacht hat. */}
         <div className="mt-5 flex items-center gap-2 border-t border-line-subtle pt-4 text-sm">
           {whois.dnssecDelegated ? (
             <ShieldCheck className="size-4 shrink-0 text-success" />
-          ) : (
+          ) : whois.dnssecDelegated === false ? (
             <ShieldOff className="size-4 shrink-0 text-fg-subtle" />
+          ) : (
+            <ShieldQuestion className="size-4 shrink-0 text-fg-subtle" />
           )}
           <span className="text-fg-muted">
             {tRich('DNSSEC bei Registry: {status}', {
               status: (
                 <span className={whois.dnssecDelegated ? 'font-medium text-success' : 'text-fg-subtle'}>
-                  {whois.dnssecDelegated ? t('delegiert') : t('nicht delegiert')}
+                  {whois.dnssecDelegated
+                    ? t('delegiert')
+                    : whois.dnssecDelegated === false
+                      ? t('nicht delegiert')
+                      : t('keine Angabe')}
                 </span>
               ),
             })}
