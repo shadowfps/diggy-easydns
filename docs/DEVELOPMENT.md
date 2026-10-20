@@ -102,7 +102,10 @@ Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
   Cache-Verhalten, Score-Aggregation und die Token-Prüfung des
   Kontaktformulars. Dazu ein Integrationstest gegen eine echte Express-App,
   der prüft, dass das Rate-Limit hinter einem Reverse-Proxy nicht per
-  `X-Forwarded-For` umgehbar ist.
+  `X-Forwarded-For` umgehbar ist, und die DoH-Abfragen gegen einen lokalen
+  HTTP/2-Server, der HTTP/1.1 ablehnt wie Quad9 und DNS4EU (#137). Die CI
+  testet dafür mit derselben Node-Hauptversion wie das Image; ein Test hält
+  beide gleich.
 - **client** (`jsdom`) — Routing samt Zurück-Button, Tab-Semantik und
   Tastatur-Bedienung, die Zustandsübergänge des Kontaktformulars, Error
   Boundaries, Focus-Trap und das Verhalten bei `prefers-reduced-motion`.

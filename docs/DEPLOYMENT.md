@@ -12,6 +12,20 @@ docker build -t diggy:local .
 docker run --rm -p 3001:3001 --env-file .env diggy:local
 ```
 
+Ob aus dem Image heraus alle Resolver der Propagation antworten, zeigt der
+Live-Check — vor dem Merge gegen den lokalen Container, nach dem Deploy gegen
+die Seite:
+
+```bash
+node scripts/check-propagation-live.mjs http://127.0.0.1:3001
+node scripts/check-propagation-live.mjs https://diggydns.cloud
+```
+
+Er fragt fünf Kombinationen aus Domain und Typ ab und endet mit Fehler, wenn
+ein Resolver nicht antwortet. In der CI läuft er bewusst nicht, weil er an neun
+fremden Diensten hängt. Anlass war #137: Unter Node 24, der Version im Image,
+antworteten Quad9 und DNS4EU nie. Auf dem Mac mit Node 26 lief alles.
+
 Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
 
 ```text

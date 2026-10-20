@@ -1,7 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DOH_RESOLVERS, dohQuery, negativeCacheTtl, parseDohTxt } from './doh.js';
+import { http2Get, type Http2GetInit } from '../lib/http2Get.js';
 import { QUESTION_NAME, name, parseQuery, pointer, response, txt, u16 } from '../test/dnsMessage.js';
+
+vi.mock('../lib/http2Get.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/http2Get.js')>()),
+  http2Get: vi.fn(),
+}));
+
+/** Ersetzt den DoH-Transport (HTTP/2, lib/http2Get.ts) — Aufruf wie `fetch`. */
+function stubTransport(fn: (url: string, init: Http2GetInit) => Promise<Response>) {
+  vi.mocked(http2Get).mockImplementation(fn);
+}
 
 /**
  * DoH liefert TXT als '"chunk1" "chunk2"'. Der Zusammenbau muss stimmen, weil
@@ -158,7 +169,7 @@ describe('DOH_RESOLVERS', () => {
 
 describe('dohQuery — Wireformat', () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.mocked(http2Get).mockReset();
   });
 
   const quad9 = DOH_RESOLVERS.find((r) => r.format === 'wire')!;
@@ -166,14 +177,11 @@ describe('dohQuery — Wireformat', () => {
   /** Antwortet auf die Anfrage im Wireformat mit den angegebenen Einträgen. */
   function stubWire(answers: (question: { name: string; type: number }) => Parameters<typeof response>[0]['answers']) {
     const requests: { url: string; accept: string | null }[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string, init: RequestInit) => {
-        requests.push({ url: input, accept: new Headers(init.headers).get('accept') });
-        const question = parseQuery(Buffer.from(new URL(input).searchParams.get('dns')!, 'base64url'));
-        return new Response(response({ question, answers: answers(question) }));
-      })
-    );
+    stubTransport(async (input: string, init: Http2GetInit) => {
+      requests.push({ url: input, accept: new Headers(init.headers).get('accept') });
+      const question = parseQuery(Buffer.from(new URL(input).searchParams.get('dns')!, 'base64url'));
+      return new Response(response({ question, answers: answers(question) }));
+    });
     return requests;
   }
 
@@ -235,10 +243,10 @@ describe('negativeCacheTtl', () => {
 });
 
 describe('dohQuery — Negativ-TTL', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => vi.mocked(http2Get).mockReset());
 
   function stubBody(body: unknown) {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body))));
+    stubTransport(async () => new Response(JSON.stringify(body)));
   }
 
   const authority = [
@@ -278,14 +286,11 @@ describe('dohQuery — Negativ-TTL', () => {
   /** #132: Quad9, OpenDNS, Control D und DNS4EU antworten im Wireformat. */
   it('meldet sie auch bei Anbietern mit Wireformat', async () => {
     const wire = DOH_RESOLVERS.find((r) => r.format === 'wire')!;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string) => {
-        const question = parseQuery(Buffer.from(new URL(input).searchParams.get('dns')!, 'base64url'));
-        const soa = [...name('ns1.example'), ...name('h.example'), ...[1, 7200, 900, 1209600, 3600].flatMap((n) => [...u16(n >>> 16), ...u16(n & 0xffff)])];
-        return new Response(response({ question, rcode: 3, authority: [{ name: 'example.com', type: 6, ttl: 900, rdata: soa }] }));
-      })
-    );
+    stubTransport(async (input: string) => {
+      const question = parseQuery(Buffer.from(new URL(input).searchParams.get('dns')!, 'base64url'));
+      const soa = [...name('ns1.example'), ...name('h.example'), ...[1, 7200, 900, 1209600, 3600].flatMap((n) => [...u16(n >>> 16), ...u16(n & 0xffff)])];
+      return new Response(response({ question, rcode: 3, authority: [{ name: 'example.com', type: 6, ttl: 900, rdata: soa }] }));
+    });
 
     const result = await dohQuery(wire, 'nichts.example.com', 'AAAA');
     expect(result.records).toEqual([]);

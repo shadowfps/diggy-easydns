@@ -12,11 +12,24 @@ import { DOH_RESOLVERS } from './doh.js';
 import { comparePropagation, propagationTypes } from '../../shared/propagation.js';
 import type { ResolverResult } from '../types.js';
 import { parseQuery, rdataFromJson, response } from '../test/dnsMessage.js';
+import { CLOSED_BEFORE_RESPONSE, http2Get, type Http2GetInit } from '../lib/http2Get.js';
 
 /**
- * Die Resolver werden über `fetch` gemockt: geprüft wird, was wir fragen und
- * wie wir die Antworten zusammensetzen — nicht das Netz.
+ * Die Resolver werden über ihren Transport gemockt (lib/http2Get.ts, Aufruf
+ * wie `fetch`): geprüft wird, was wir fragen und wie wir die Antworten
+ * zusammensetzen — nicht das Netz. Den Transport selbst prüfen
+ * http2Get.test.ts und doh.http2.test.ts gegen einen lokalen HTTP/2-Server.
  */
+
+vi.mock('../lib/http2Get.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/http2Get.js')>()),
+  http2Get: vi.fn(),
+}));
+
+/** Ersetzt den DoH-Transport (HTTP/2, lib/http2Get.ts) — Aufruf wie `fetch`. */
+function stubTransport(fn: (url: string, init: Http2GetInit) => Promise<Response>) {
+  vi.mocked(http2Get).mockImplementation(fn);
+}
 
 const DKIM = 's1._domainkey.example.com';
 const KEY_PART_1 = 'v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A';
@@ -40,37 +53,34 @@ function stubDoh(
   authority: (resolverUrl: string, type: number) => Answer[] | undefined = () => undefined
 ) {
   const calls: { url: string; type: number; format: 'json' | 'wire' }[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: string) => {
-      const url = new URL(input);
-      const base = `${url.origin}${url.pathname}`;
-      const dns = url.searchParams.get('dns');
-      if (dns) {
-        const question = parseQuery(Buffer.from(dns, 'base64url'));
-        calls.push({ url: base, type: question.type, format: 'wire' });
-        const raw = (a: Answer) => ({ name: a.name, type: a.type, ttl: a.TTL, rdata: rdataFromJson(a.type, a.data) });
-        const body = response({
-          rcode: status(base),
-          question,
-          answers: answer(base, question.type).map(raw),
-          authority: authority(base, question.type)?.map(raw),
-        });
-        return new Response(body, { headers: { 'content-type': 'application/dns-message' } });
-      }
-      const type = Number(url.searchParams.get('type'));
-      calls.push({ url: base, type, format: 'json' });
-      const soa = authority(base, type);
-      return new Response(JSON.stringify({ Status: status(base), Answer: answer(base, type), ...(soa && { Authority: soa }) }), {
-        headers: { 'content-type': 'application/dns-json' },
+  stubTransport(async (input: string) => {
+    const url = new URL(input);
+    const base = `${url.origin}${url.pathname}`;
+    const dns = url.searchParams.get('dns');
+    if (dns) {
+      const question = parseQuery(Buffer.from(dns, 'base64url'));
+      calls.push({ url: base, type: question.type, format: 'wire' });
+      const raw = (a: Answer) => ({ name: a.name, type: a.type, ttl: a.TTL, rdata: rdataFromJson(a.type, a.data) });
+      const body = response({
+        rcode: status(base),
+        question,
+        answers: answer(base, question.type).map(raw),
+        authority: authority(base, question.type)?.map(raw),
       });
-    })
-  );
+      return new Response(body, { headers: { 'content-type': 'application/dns-message' } });
+    }
+    const type = Number(url.searchParams.get('type'));
+    calls.push({ url: base, type, format: 'json' });
+    const soa = authority(base, type);
+    return new Response(JSON.stringify({ Status: status(base), Answer: answer(base, type), ...(soa && { Authority: soa }) }), {
+      headers: { 'content-type': 'application/dns-json' },
+    });
+  });
   return calls;
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.mocked(http2Get).mockReset();
   vi.useRealTimers();
 });
 
@@ -304,27 +314,24 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
   const urlOf = (id: string) => DOH_RESOLVERS.find((r) => r.id === id)!.url;
 
   it('liefert ein Ergebnis je Resolver, auch wenn einzelne scheitern', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string) => {
-        if (input.startsWith(urlOf('quad9'))) throw new TypeError('fetch failed');
-        if (input.startsWith(urlOf('opendns'))) return new Response('busy', { status: 503 });
-        // Abgeschnitten: Kopf ohne Rest
-        if (input.startsWith(urlOf('controld'))) {
-          return new Response(new Uint8Array([0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0, 3]));
-        }
-        // Antwort auf eine andere Frage
-        if (input.startsWith(urlOf('dns4eu'))) {
-          return new Response(
-            response({
-              question: { name: 'andere.example.org', type: 1 },
-              answers: [{ name: 'andere.example.org', type: 1, rdata: [198, 51, 100, 7] }],
-            })
-          );
-        }
-        return healthy(input);
-      })
-    );
+    stubTransport(async (input: string) => {
+      if (input.startsWith(urlOf('quad9'))) throw new TypeError('fetch failed');
+      if (input.startsWith(urlOf('opendns'))) return new Response('busy', { status: 503 });
+      // Abgeschnitten: Kopf ohne Rest
+      if (input.startsWith(urlOf('controld'))) {
+        return new Response(new Uint8Array([0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0, 3]));
+      }
+      // Antwort auf eine andere Frage
+      if (input.startsWith(urlOf('dns4eu'))) {
+        return new Response(
+          response({
+            question: { name: 'andere.example.org', type: 1 },
+            answers: [{ name: 'andere.example.org', type: 1, rdata: [198, 51, 100, 7] }],
+          })
+        );
+      }
+      return healthy(input);
+    });
 
     const types = propagationTypes(HOST);
     const results = await queryAllResolvers(HOST, { types });
@@ -348,15 +355,12 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
   });
 
   it('bricht einen hängenden Resolver nach dem Timeout ab, ohne auf ihn zu warten', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string, init: RequestInit) => {
-        if (!input.startsWith(urlOf('dns4eu'))) return healthy(input);
-        return new Promise<Response>((_resolve, reject) => {
-          init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
-        });
-      })
-    );
+    stubTransport(async (input: string, init: Http2GetInit) => {
+      if (!input.startsWith(urlOf('dns4eu'))) return healthy(input);
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      });
+    });
 
     const start = Date.now();
     const results = await queryAllResolvers(HOST, { types: ['A'], timeoutMs: 100 });
@@ -366,7 +370,7 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
     expect(results.filter((r) => !r.error)).toHaveLength(DOH_RESOLVERS.length - 1);
   });
 
-  /** So meldet fetch (undici) einen Netzwerkfehler: TypeError, Grund in `cause`. */
+  /** So meldet der Transport (wie fetch) einen Netzwerkfehler: TypeError, Grund in `cause`. */
   function fetchFailed(code: string): TypeError {
     return new TypeError('fetch failed', { cause: Object.assign(new Error(code), { code }) });
   }
@@ -378,18 +382,15 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
    */
   it('versucht es nach Verbindungsabbrüchen bis zu dreimal neu', async () => {
     const attempts = new Map<string, number>();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string) => {
-        const id = DOH_RESOLVERS.find((r) => input.startsWith(r.url))!.id;
-        const n = (attempts.get(id) ?? 0) + 1;
-        attempts.set(id, n);
-        if (id === 'quad9' && n <= 2) throw fetchFailed('ECONNRESET');
-        if (id === 'controld') throw fetchFailed('UND_ERR_SOCKET');
-        if (id === 'opendns') return new Response('busy', { status: 503 });
-        return healthy(input);
-      })
-    );
+    stubTransport(async (input: string) => {
+      const id = DOH_RESOLVERS.find((r) => input.startsWith(r.url))!.id;
+      const n = (attempts.get(id) ?? 0) + 1;
+      attempts.set(id, n);
+      if (id === 'quad9' && n <= 2) throw fetchFailed('ECONNRESET');
+      if (id === 'controld') throw fetchFailed(CLOSED_BEFORE_RESPONSE);
+      if (id === 'opendns') return new Response('busy', { status: 503 });
+      return healthy(input);
+    });
 
     const results = await queryAllResolvers(HOST, { types: ['A'] });
 
@@ -409,17 +410,14 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
    */
   it('wiederholt andere Netzwerkfehler nicht', async () => {
     const attempts = new Map<string, number>();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string) => {
-        const id = DOH_RESOLVERS.find((r) => input.startsWith(r.url))!.id;
-        attempts.set(id, (attempts.get(id) ?? 0) + 1);
-        if (id === 'quad9') throw fetchFailed('ENOTFOUND');
-        if (id === 'dns4eu') throw fetchFailed('CERT_HAS_EXPIRED');
-        if (id === 'controld') throw new TypeError('fetch failed');
-        return healthy(input);
-      })
-    );
+    stubTransport(async (input: string) => {
+      const id = DOH_RESOLVERS.find((r) => input.startsWith(r.url))!.id;
+      attempts.set(id, (attempts.get(id) ?? 0) + 1);
+      if (id === 'quad9') throw fetchFailed('ENOTFOUND');
+      if (id === 'dns4eu') throw fetchFailed('CERT_HAS_EXPIRED');
+      if (id === 'controld') throw new TypeError('fetch failed');
+      return healthy(input);
+    });
 
     const results = await queryAllResolvers(HOST, { types: ['A'] });
 
@@ -430,14 +428,11 @@ describe('queryAllResolvers — ausfallende Resolver', () => {
   });
 
   it('wertet eine gekürzte Antwort (TC) als Fehler statt als anderen Wert', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: string) => {
-        if (!input.startsWith(urlOf('quad9'))) return healthy(input);
-        const dns = new URL(input).searchParams.get('dns')!;
-        return new Response(response({ question: parseQuery(Buffer.from(dns, 'base64url')), flags: 0x0200 }));
-      })
-    );
+    stubTransport(async (input: string) => {
+      if (!input.startsWith(urlOf('quad9'))) return healthy(input);
+      const dns = new URL(input).searchParams.get('dns')!;
+      return new Response(response({ question: parseQuery(Buffer.from(dns, 'base64url')), flags: 0x0200 }));
+    });
 
     const results = await queryAllResolvers(HOST, { types: ['A'] });
     expect(results.find((r) => r.resolver.id === 'quad9')?.error).toBe('quad9: Antwort gekürzt (TC)');

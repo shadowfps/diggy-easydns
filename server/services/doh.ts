@@ -9,9 +9,15 @@
  *
  * Wichtig: Jeder Resolver bekommt seinen eigenen Timeout — ein langsamer
  * Anbieter darf den Cloudflare-Vergleich nicht blockieren.
+ *
+ * Alle Anfragen gehen über HTTP/2 (lib/http2Get.ts), nicht über `fetch`:
+ * Quad9 und DNS4EU nehmen kein HTTP/1.1, und `fetch` spricht in Node 24 nur
+ * das (#137). Auch die übrigen sieben laufen darüber — so fragt diggy in
+ * jeder Node-Version, lokal wie im Image, auf demselben Weg.
  */
 
 import type { DnsRecord, RecordType } from '../types.js';
+import { CLOSED_BEFORE_RESPONSE, http2Get, type Http2GetInit } from '../lib/http2Get.js';
 import { decodeResponse, encodeQuery, type DnsAnswer, type DnsResponse } from './dnsWire.js';
 
 export interface DohResolver {
@@ -267,7 +273,7 @@ export async function dohQuery(
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
   try {
-    const res = await fetchWithRetry(url, {
+    const res = await getWithRetry(url, {
       headers: { accept: wire ? 'application/dns-message' : 'application/dns-json' },
       signal: ctrl.signal,
     });
@@ -312,13 +318,15 @@ export async function dohQuery(
 const CONNECT_ATTEMPTS = 4;
 
 /**
- * Fehlercodes (`cause.code` von fetch), bei denen die Gegenseite die
- * Verbindung abgebrochen hat: zurückgesetzt (auch mitten im TLS-Handshake)
- * oder geschlossen, bevor eine Antwort kam. Ein Name, der sich nicht
- * auflösen lässt, ein falsches Zertifikat oder eine kaputte HTTP-Antwort
- * ändern sich beim nächsten Versuch nicht und werden nicht wiederholt.
+ * Fehlercodes (`cause.code`), bei denen die Gegenseite die Verbindung
+ * abgebrochen hat: zurückgesetzt (auch mitten im TLS-Handshake) oder
+ * geschlossen, bevor die Antwort vollständig war — dazu ein Stream, den sie
+ * unbearbeitet abweist (siehe CLOSED_BEFORE_RESPONSE). Ein Name, der sich
+ * nicht auflösen lässt, ein falsches Zertifikat, ein Server ohne HTTP/2 oder
+ * eine kaputte HTTP-Antwort ändern sich beim nächsten Versuch nicht und
+ * werden nicht wiederholt.
  */
-const CONNECTION_DROPPED = new Set(['ECONNRESET', 'EPIPE', 'ECONNABORTED', 'UND_ERR_SOCKET']);
+const CONNECTION_DROPPED = new Set(['ECONNRESET', 'EPIPE', 'ECONNABORTED', CLOSED_BEFORE_RESPONSE]);
 
 function connectionDropped(error: unknown): boolean {
   const code = (error as { cause?: { code?: unknown } } | undefined)?.cause?.code;
@@ -326,18 +334,18 @@ function connectionDropped(error: unknown): boolean {
 }
 
 /**
- * `fetch` mit neuem Versuch, wenn die Verbindung abbricht, bevor eine
- * Antwort da ist. Ein Abbruch kommt nach wenigen Millisekunden, die Versuche
- * laufen im selben Zeitbudget — ein Timeout wird nicht wiederholt, eine
- * HTTP-Antwort (auch ein Fehlerstatus) ebenso wenig, andere Netzwerkfehler
- * auch nicht.
+ * GET mit neuem Versuch, wenn die Verbindung abbricht, bevor die Antwort da
+ * ist; ist sie weg, baut http2Get eine neue auf. Ein Abbruch kommt nach
+ * wenigen Millisekunden, die Versuche laufen im selben Zeitbudget — ein
+ * Timeout wird nicht wiederholt, eine HTTP-Antwort (auch ein Fehlerstatus)
+ * ebenso wenig, andere Netzwerkfehler auch nicht.
  */
-async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+async function getWithRetry(url: string, init: Http2GetInit): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await fetch(url, init);
+      return await http2Get(url, init);
     } catch (error) {
-      if (init.signal?.aborted || attempt >= CONNECT_ATTEMPTS || !connectionDropped(error)) throw error;
+      if (init.signal.aborted || attempt >= CONNECT_ATTEMPTS || !connectionDropped(error)) throw error;
     }
   }
 }
