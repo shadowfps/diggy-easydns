@@ -206,7 +206,7 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
               <Row service="DENIC" purpose="WHOIS/RDAP und Verfügbarkeits-Check für .de" region="EU" />
               <Row service="Identity Digital" purpose="WHOIS/RDAP und Verfügbarkeits-Check für .io" region="USA" />
               <Row service="nic.at, Registro .it, EURid" purpose="WHOIS für .at, .it und .eu" region="EU" />
-              <Row service="rdap.org" purpose="WHOIS/RDAP und Verfügbarkeits-Check — nur, solange das IANA-Verzeichnis nicht abrufbar ist" region="USA" />
+              <Row service="rdap.org" purpose="Netz und Betreiber zu einer IP-Adresse (IP-Details); WHOIS/RDAP und Verfügbarkeits-Check nur, solange das IANA-Verzeichnis nicht abrufbar ist" region="USA" />
               <Row service="Google PageSpeed Insights" purpose="Performance-Analyse — nur auf Klick" region="USA" />
               <Row service="VirusTotal (Google)" purpose="Reputations-Check — nur auf Klick" region="USA" />
               <Row service="ipwhois.app" purpose="Geolocation und ASN zu einer IP-Adresse" region="EU" />

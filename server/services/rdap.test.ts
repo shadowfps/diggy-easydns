@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import packageJson from '../../package.json' with { type: 'json' };
 import { clearCache } from '../lib/cache.js';
@@ -261,6 +262,21 @@ describe('IP-Details über RDAP', () => {
       : Response.json({ success: true, country: 'US' }));
     expect(await lookupIpDetails('8.8.8.8')).toMatchObject({ country: 'US', source: 'ipwhois.app' });
     expect(console.warn).toHaveBeenCalledExactlyOnceWith(`[rdap] https://rdap.org/ip/8.8.8.8: IP-Details API Fehler (HTTP ${status})`);
+  });
+
+  it('nennt jeden gefragten Dienst in den Datenschutzhinweisen mit der IP-Adresse als Zweck', async () => {
+    // rdap.org fragt die IP-Details auch mit geladenem IANA-Bootstrap (#105) —
+    // „nur als Rückfall“ wäre dort eine falsche Angabe.
+    fetchMock.mockImplementation(async () => Response.json({ success: true, country: 'US' }));
+    await lookupIpDetails('8.8.8.8');
+    const hosts = new Set(fetchMock.mock.calls.map(([url]) => new URL(String(url)).hostname));
+    expect(hosts).toEqual(new Set(['ipwhois.app', 'rdap.org']));
+
+    const privacy = readFileSync(new URL('../../src/modules/datenschutz/DatenschutzText.tsx', import.meta.url), 'utf8');
+    for (const host of hosts) {
+      const name = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      expect(privacy, host).toMatch(new RegExp(`<Row service="${name}" purpose="[^"]*IP-Adresse[^"]*"`));
+    }
   });
 
   it('loggt einen RDAP-Timeout und liefert weiterhin Geo-Daten', async () => {

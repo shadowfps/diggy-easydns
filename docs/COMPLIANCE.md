@@ -117,8 +117,9 @@ Mittwald CM Service GmbH & Co. KG, Königsberger Straße 4–6, 32339 Espelkamp 
 LDI NRW, Kavalleriestraße 2–4, 40213 Düsseldorf.
 
 **Drittlandübermittlung:** Die Checks fragen unter anderem Dienste in den USA
-ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app, für WHOIS und
-Verfügbarkeit die Registries der gängigen gTLDs und Identity Digital für .io),
+ab (Google PageSpeed, VirusTotal, Cloudflare-DoH, ipwhois.app, rdap.org für
+die IP-Details, für WHOIS und Verfügbarkeit die Registries der gängigen gTLDs
+und Identity Digital für .io),
 für den Propagations-Vergleich außerdem DoH-Resolver in der Schweiz und in
 Kanada (siehe „DoH-Resolver“ und „WHOIS und Verfügbarkeit“ unten). Übermittelt wird
 dabei die abgefragte Domain bzw. IP-Adresse — die Anfragen gehen vom Server aus,
@@ -235,6 +236,10 @@ alles über rdap.org, das pro IP drosselt.
 | .ch | keine Abfrage | Hinweis auf `https://www.nic.ch/whois/` in der WHOIS-Ansicht | — | whois.nic.ch: „Requests of this client are not permitted“ |
 | sonst ohne Eintrag (.co, .me, .li …) | keine Abfrage | — | — | rdap.org antwortet dort ebenfalls 404 (geprüft für .co, .me, .ch, .at) |
 | alle ohne feste Registry, solange der Bootstrap nicht ladbar ist | RDAP | `https://rdap.org/`, für .com/.net `https://rdap.verisign.com/` | rdap.org: Gavin Brown (privat), gehostet bei Fly.io hinter Cloudflare, beide USA | [about.rdap.org](https://about.rdap.org/), Antwort-Header `via: fly.io`, `server: cloudflare` |
+
+Unabhängig vom Bootstrap fragen die IP-Details (`server/services/ipDetails.ts`)
+weiter `https://rdap.org/ip/…`; rdap.org bleibt deshalb Empfänger in
+`/datenschutz`.
 
 Stand der Tabelle: 20. Oktober 2026. Ein Test (`registry.test.ts`) verlangt,
 dass jede feste Registry in der Empfänger-Tabelle von `/datenschutz` und mit
