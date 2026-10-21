@@ -190,9 +190,36 @@ describe('HostThrottle – gleiche Abfragen', () => {
   it('fasst gleichzeitige Abfragen derselben Domain zusammen', async () => {
     const throttle = new HostThrottle();
     const task = vi.fn(async () => 'antwort');
-    const [a, b] = await Promise.all([throttle.run('github.io', 5_000, task), throttle.run('github.io', 6_000, task)]);
+    const [a, b] = await Promise.all([throttle.run('github.io', 6_000, task), throttle.run('github.io', 5_000, task)]);
     expect([a, b]).toEqual(['antwort', 'antwort']);
     expect(task).toHaveBeenCalledTimes(1);
+  });
+
+  it('ein späterer Aufrufer mit kürzerer Frist wartet nur bis zu seiner Frist', async () => {
+    const throttle = new HostThrottle();
+    const query = deferred();
+    const first = throttle.run('github.io', 6_000, () => query.promise);
+    const later = throttle.run('github.io', 1_000, () => query.promise);
+    const laterOutcome = expect(later).rejects.toMatchObject({ name: 'TimeoutError' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await laterOutcome;
+    // Der erste läuft weiter und bekommt seine Antwort.
+    query.resolve('antwort');
+    expect(await first).toBe('antwort');
+  });
+
+  it('ein späterer Aufrufer mit längerer Frist erbt nicht das nahe Ende des ersten', async () => {
+    const throttle = new HostThrottle();
+    const firstQuery = deferred();
+    const task = vi.fn((remainingMs: number) => (remainingMs === 1_000 ? firstQuery.promise : Promise.resolve('eigene Antwort')));
+    const first = throttle.run('github.io', 1_000, task);
+    const firstOutcome = expect(first).rejects.toThrow('Timeout');
+    await vi.advanceTimersByTimeAsync(900);
+    // 100 ms vor dem Ende des ersten: ein eigener Lauf mit voller Zeit.
+    expect(await throttle.run('github.io', 6_000, task)).toBe('eigene Antwort');
+    expect(task).toHaveBeenLastCalledWith(6_000);
+    firstQuery.reject(new Error('Timeout'));
+    await firstOutcome;
   });
 
   it('teilt auch den Fehler, ohne unbehandelte Ablehnung', async () => {

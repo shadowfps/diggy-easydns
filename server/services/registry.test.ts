@@ -365,9 +365,13 @@ describe('Drosselung je Host', () => {
   it('fasst gleichzeitige Abfragen derselben Domain zusammen', async () => {
     registryResponse = () => new Response(null, { status: 404 });
     const release = holdPort43();
-    const report = lookupWhois('diggy-frei-1.eu');
+    // Erst die Verfügbarkeit (6 s), dann der Report (5 s): Der Report hängt
+    // sich an, weil die laufende Abfrage nicht vor seiner Frist aufgibt. In
+    // umgekehrter Reihenfolge fragt die Verfügbarkeit selbst — sie soll nicht
+    // das frühere Ende des Reports erben (hostThrottle.test.ts).
     const check = checkDomainsAvailability('diggy-frei-1.eu');
     await vi.waitFor(() => expect(port43Mock).toHaveBeenCalled());
+    const report = lookupWhois('diggy-frei-1.eu');
     // Beide hängen an derselben Abfrage, bevor sie freigegeben wird.
     await new Promise((resolve) => setTimeout(resolve, 10));
     release();
@@ -426,6 +430,7 @@ describe('Drosselung je Host', () => {
     pending.splice(0).forEach((release) => release());
     expect(await Promise.all([...io, ...com])).toEqual([null, null, null, null, null, null]);
   });
+
 });
 
 describe('Datenschutzhinweise', () => {

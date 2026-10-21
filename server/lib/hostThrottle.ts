@@ -15,8 +15,10 @@
  *    einen ThrottleError — der Aufrufer meldet „nicht verfügbar“ bzw.
  *    „unklar“, nie „frei“.
  *  - Gleichzeitige Abfragen derselben Domain beim selben Host teilen sich
- *    eine (`key`). Das Ergebnis wird nicht aufbewahrt: Wiederholungen danach
- *    deckt der Lookup-Cache ab.
+ *    eine (`key`) — aber nur, wenn die laufende nicht vor der Frist des
+ *    neuen Aufrufers aufgibt; der wartet dann höchstens bis zu seiner eigenen
+ *    Frist. Das Ergebnis wird nicht aufbewahrt: Wiederholungen danach deckt
+ *    der Lookup-Cache ab.
  *
  * Wer wartet, belegt nur einen Eintrag in der Warteschlange; bei Timeout
  * oder Abbruch wird er sofort entfernt, ein Timer bleibt nicht hängen.
@@ -49,6 +51,12 @@ export class ThrottleError extends Error {
   }
 }
 
+interface Inflight {
+  promise: Promise<unknown>;
+  /** Bis wann die laufende Abfrage höchstens dauert (ms seit Epoche). */
+  deadline: number;
+}
+
 interface Waiter {
   resolve: (release: () => void) => void;
   reject: (error: Error) => void;
@@ -61,7 +69,7 @@ export class HostThrottle {
   private refilledAt = Date.now();
   private readonly waiting: Waiter[] = [];
   private wake: ReturnType<typeof setTimeout> | undefined;
-  private readonly inflight = new Map<string, Promise<unknown>>();
+  private readonly inflight = new Map<string, Inflight>();
 
   constructor(private readonly options: ThrottleOptions = DEFAULT_THROTTLE) {
     this.tokens = options.burst;
@@ -75,13 +83,21 @@ export class HostThrottle {
   /**
    * Führt `task` aus, sobald Platz ist. `task` bekommt die Zeit, die von
    * `timeoutMs` nach dem Warten übrig ist. Gleichzeitige Aufrufe mit
-   * demselben `key` teilen sich einen Lauf.
+   * demselben `key` teilen sich einen Lauf, solange der nicht vor der Frist
+   * des späteren Aufrufers aufgibt (WHOIS-Report 5 s, Verfügbarkeit 6 s).
+   * Endet der geteilte Lauf erst nach der eigenen Frist, wirft der spätere
+   * Aufrufer pünktlich einen TimeoutError.
    */
   run<T>(key: string, timeoutMs: number, task: (remainingMs: number) => Promise<T>): Promise<T> {
-    const shared = this.inflight.get(key);
-    if (shared) return shared as Promise<T>;
-
     const started = Date.now();
+    const deadline = started + timeoutMs;
+    const shared = this.inflight.get(key);
+    if (shared && shared.deadline >= deadline) {
+      return shared.deadline === deadline
+        ? (shared.promise as Promise<T>)
+        : withDeadline(shared.promise as Promise<T>, timeoutMs);
+    }
+
     // Ohne Warten bekommt die Abfrage die volle Zeit, sonst den Rest.
     const immediate = this.tryTake();
     const slot = immediate
@@ -97,9 +113,10 @@ export class HostThrottle {
         release();
       }
     });
-    this.inflight.set(key, run);
+    const entry: Inflight = { promise: run, deadline };
+    this.inflight.set(key, entry);
     const forget = () => {
-      if (this.inflight.get(key) === run) this.inflight.delete(key);
+      if (this.inflight.get(key) === entry) this.inflight.delete(key);
     };
     // then statt finally: eine Ablehnung soll hier nicht noch einmal als
     // unbehandelt auftauchen, die Aufrufer bekommen sie über `run`.
@@ -195,6 +212,27 @@ export class HostThrottle {
       }, Math.max(1, dueMs));
     }
   }
+}
+
+/** `promise`, aber höchstens `ms` lang — danach ein TimeoutError wie bei fetch. */
+function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const error = new Error('Timeout');
+      error.name = 'TimeoutError';
+      reject(error);
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 const throttles = new Map<string, HostThrottle>();
