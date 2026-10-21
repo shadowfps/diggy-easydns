@@ -1,6 +1,8 @@
 /**
  * Klassisches WHOIS über TCP-Port 43 (RFC 3912) — für Registries ohne RDAP
- * (#105): .at, .it, .eu und .io als Rückfall.
+ * (#105): .eu und .io als Rückfall; .at und .it sind vorbereitet, aber
+ * abgeschaltet (shared/registryWebLookup.ts). Gedrosselt je Host wird in
+ * services/registryQuery.ts, nicht hier.
  *
  * Das Protokoll: Verbindung auf, eine Zeile mit der Domain und CRLF senden,
  * Klartext lesen, bis der Server die Verbindung schließt.

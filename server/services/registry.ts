@@ -3,14 +3,18 @@
  *
  * WHOIS-Report und Verfügbarkeits-Check teilen sich diese Auflösung:
  *
- *  1. Die Endung steht im IANA-Bootstrap → RDAP direkt bei der Registry
+ *  1. Die Endung steht in der Liste der Web-Abfragen
+ *     (shared/registryWebLookup.ts) → keine Abfrage, die Oberfläche verweist
+ *     auf die Web-Abfrage der Registry: .ch sperrt automatisierte Abfragen,
+ *     nic.at und Registro .it erlauben die Weitergabe ihrer Daten nur mit
+ *     Genehmigung. Vor dem Bootstrap: Die Liste ist eine bewusste
+ *     Entscheidung und gilt auch, falls eine dieser Endungen dort auftaucht.
+ *  2. Die Endung steht im IANA-Bootstrap → RDAP direkt bei der Registry
  *     (Verisign für .com, Google für .app/.dev, Nominet für .uk …).
- *  2. Kein Eintrag, aber eine feste Registry → DENIC für .de, Identity
- *     Digital für .io (RDAP, Rückfall WHOIS), nic.at, Registro .it und EURid
- *     über WHOIS auf Port 43. Geprüft am 20.10.2026: Keine dieser Endungen
- *     steht im Bootstrap, alle antworten direkt.
- *  3. Die Registry sperrt automatisierte Abfragen (.ch) → keine Abfrage, die
- *     Oberfläche verweist auf deren Web-Abfrage.
+ *  3. Kein Eintrag, aber eine feste Registry → DENIC für .de, Identity
+ *     Digital für .io (RDAP, Rückfall WHOIS), EURid über WHOIS auf Port 43.
+ *     Geprüft am 20.10.2026: Keine dieser Endungen steht im Bootstrap, alle
+ *     antworten direkt.
  *  4. Sonst, mit geladenem Bootstrap → kein bekannter Dienst, keine Abfrage.
  *     rdap.org kennt nur die Dienste aus dem Bootstrap und antwortet dort mit
  *     404 (geprüft für .co, .me, .ch, .at).
@@ -19,6 +23,8 @@
  *
  * Hosts kommen nur aus dem Bootstrap und aus den festen Listen hier, die
  * Domain steht nur kodiert im Pfad bzw. als geprüfte Zeile auf Port 43.
+ * Jeder WHOIS-Server und die RDAP-Dienste in THROTTLED_RDAP_HOSTS sind je
+ * Host gedrosselt (lib/hostThrottle.ts, services/registryQuery.ts).
  */
 
 import { isIP } from 'node:net';
@@ -38,7 +44,12 @@ export interface FixedRegistry {
   whois?: { host: string; parse: WhoisTextParser };
 }
 
-/** Feste Registries für Endungen ohne Eintrag im IANA-Bootstrap. */
+/**
+ * Feste Registries für Endungen ohne Eintrag im IANA-Bootstrap. .at und .it
+ * stehen hier mit Parser bereit, sind aber über die Liste der Web-Abfragen
+ * abgeschaltet (shared/registryWebLookup.ts) — eine Zeile dort, und sie
+ * laufen wieder.
+ */
 export const FIXED_REGISTRIES: Readonly<Record<string, FixedRegistry>> = {
   de: { operator: 'DENIC', rdap: 'https://rdap.denic.de/' },
   io: {
@@ -57,6 +68,13 @@ const WITHOUT_BOOTSTRAP: Readonly<Record<string, string>> = {
   net: 'https://rdap.verisign.com/net/v1/',
 };
 
+/**
+ * RDAP-Dienste mit dokumentiertem Limit, gedrosselt wie die WHOIS-Server:
+ * Identity Digital nennt 10 Abfragen pro Sekunde je IP
+ * (https://www.identity.digital/help-articles/whois-faq).
+ */
+const THROTTLED_RDAP_HOSTS: ReadonlySet<string> = new Set(['rdap.identitydigital.services']);
+
 const FIXED_HOSTS = new Set(
   [...Object.values(FIXED_REGISTRIES).map((r) => r.rdap), ...Object.values(WITHOUT_BOOTSTRAP)]
     .filter((url): url is string => !!url)
@@ -71,6 +89,8 @@ export type RegistryStep =
       source: string;
       /** rdap.org: ein 404 ohne Weiterleitung heißt „kein Dienst“, nicht „frei“. */
       viaRdapOrg: boolean;
+      /** Je Host gedrosselt (THROTTLED_RDAP_HOSTS). */
+      throttled: boolean;
     }
   | { kind: 'port43'; host: string; source: string; parse: WhoisTextParser };
 
@@ -93,6 +113,9 @@ export async function resolveRegistry(input: string): Promise<RegistryRoute> {
   if (!DOMAIN_PATTERN.test(domain)) return { kind: 'none' };
   const tld = domain.slice(domain.lastIndexOf('.') + 1);
 
+  const web = registryWebLookup(domain);
+  if (web) return { kind: 'web-only', url: web.url };
+
   const bootstrap = await getRdapBootstrap();
   // Mit Bootstrap nur bekannte Registries. Ohne ihn leitet rdap.org nach
   // seiner eigenen Liste weiter, die hier niemand kennt — dann wenigstens
@@ -113,9 +136,6 @@ export async function resolveRegistry(input: string): Promise<RegistryRoute> {
     return query(steps);
   }
 
-  const web = registryWebLookup(domain);
-  if (web) return { kind: 'web-only', url: web.url };
-
   if (bootstrap) return { kind: 'none' };
   return query([rdapStep(Object.hasOwn(WITHOUT_BOOTSTRAP, tld) ? WITHOUT_BOOTSTRAP[tld] : RDAP_ORG_BASE, domain)]);
 }
@@ -132,10 +152,12 @@ async function isPublicName(host: string): Promise<boolean> {
 }
 
 function rdapStep(base: string, domain: string): RegistryStep {
+  const source = new URL(base).hostname;
   return {
     kind: 'rdap',
     url: rdapDomainUrl(base, domain),
-    source: new URL(base).hostname,
+    source,
     viaRdapOrg: base === RDAP_ORG_BASE,
+    throttled: THROTTLED_RDAP_HOSTS.has(source),
   };
 }

@@ -184,6 +184,7 @@ export type DeText =
   | 'WHOIS / RDAP nicht verfügbar'
   | 'Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.'
   | 'Die Registry von .{tld} sperrt automatische Abfragen. Die Daten zeigt ihre {link}.'
+  | 'Die Registry von .{tld} erlaubt die Weitergabe ihrer WHOIS-Daten nur mit Genehmigung. Die Daten zeigt ihre {link}.'
   | 'Web-Abfrage'
   | 'Registrierung'
   | 'Erstellt'

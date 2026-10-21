@@ -90,6 +90,17 @@ describe('WhoisView – ohne Daten (#105)', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
+  it.each([
+    ['orf.at', '.at', 'https://www.nic.at/de/meine-at-domain/domain-suche/whois'],
+    ['www.repubblica.it', '.it', 'https://www.nic.it/en/find-your-it/web-whois'],
+  ])('verweist für %s auf die Web-Abfrage, weil die Weitergabe eine Genehmigung braucht', (domain, tld, url) => {
+    render(<WhoisView domain={domain} />);
+    expect(
+      screen.getByText(new RegExp(`Die Registry von \\${tld} erlaubt die Weitergabe ihrer WHOIS-Daten nur mit Genehmigung`))
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Web-Abfrage/ })).toHaveAttribute('href', url);
+  });
+
   it('bleibt für andere Endungen beim allgemeinen Hinweis', () => {
     render(<WhoisView domain="example.co" />);
     expect(screen.getByText('Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.')).toBeInTheDocument();

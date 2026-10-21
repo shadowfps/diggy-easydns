@@ -1,7 +1,8 @@
 import type { DomainAvailabilityResult, DomainAvailabilityStatus, DomainCheckReport } from '../types.js';
-import { fetchRdap, warnRdapError } from '../lib/rdap.js';
-import { queryPort43, warnWhoisError } from '../lib/whoisPort43.js';
-import { resolveRegistry, type RegistryStep } from './registry.js';
+import { warnRdapError } from '../lib/rdap.js';
+import { warnWhoisError } from '../lib/whoisPort43.js';
+import { resolveRegistry } from './registry.js';
+import { requestRdap, requestWhois, type Port43Step, type RdapStep } from './registryQuery.js';
 
 /** Gängige TLDs für Alternativ-Vorschläge (Reihenfolge wie im UI). */
 const ALT_TLDS = ['de', 'com', 'io', 'net', 'app', 'dev', 'org'] as const;
@@ -110,7 +111,7 @@ async function checkSingleDomain(domain: string, timeoutMs = 6000): Promise<Doma
     source = step.source;
     const status =
       step.kind === 'rdap'
-        ? await rdapAvailability(step, domain, route.allowHost, timeoutMs)
+        ? await rdapAvailability(step, route.allowHost, timeoutMs)
         : await whoisAvailability(step, domain, timeoutMs);
     if (status) return { domain, status, source };
   }
@@ -119,26 +120,23 @@ async function checkSingleDomain(domain: string, timeoutMs = 6000): Promise<Doma
 
 /** `undefined` heißt: gescheitert, der nächste Schritt ist dran. */
 async function rdapAvailability(
-  step: Extract<RegistryStep, { kind: 'rdap' }>,
-  domain: string,
+  step: RdapStep,
   allowHost: (host: string) => boolean | Promise<boolean>,
   timeoutMs: number
 ): Promise<DomainAvailabilityStatus | undefined> {
   const { url } = step;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const { response: res, redirected } = await fetchRdap(url, { signal: controller.signal, allowHost });
+    const answer = await requestRdap(step, allowHost, timeoutMs);
 
-    if (res.status === 404) {
+    if (answer.status === 404) {
       // rdap.org leitet nur weiter; ein 404 ohne Weiterleitung heißt „kein
       // RDAP-Dienst für diese TLD“, nicht „Domain frei“.
-      return step.viaRdapOrg && !redirected ? 'unknown' : 'available';
+      return step.viaRdapOrg && !answer.redirected ? 'unknown' : 'available';
     }
 
-    if (res.ok) {
-      const data = (await res.json()) as { errorCode?: number; objectClassName?: string };
+    if (answer.status >= 200 && answer.status <= 299) {
+      const data = (answer.data ?? {}) as { errorCode?: number; objectClassName?: string };
       if (data.errorCode || data.objectClassName !== 'domain') {
         if (data.errorCode) warnRdapError(url, new Error(`RDAP ${data.errorCode}`));
         return undefined;
@@ -146,26 +144,25 @@ async function rdapAvailability(
       return 'taken';
     }
 
-    warnRdapError(url, new Error(`HTTP ${res.status}`));
+    warnRdapError(url, new Error(`HTTP ${answer.status}`));
     return undefined;
   } catch (error) {
-    warnRdapError(url, error, controller.signal);
+    // Timeout, Netz und Drosselung — „unklar“, nie „frei“.
+    warnRdapError(url, error);
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
 async function whoisAvailability(
-  step: Extract<RegistryStep, { kind: 'port43' }>,
+  step: Port43Step,
   domain: string,
   timeoutMs: number
 ): Promise<DomainAvailabilityStatus | undefined> {
   try {
-    const parsed = step.parse(await queryPort43(step.host, domain, { timeoutMs }), domain);
+    const parsed = await requestWhois(step, domain, timeoutMs);
     return parsed.found ? 'taken' : 'available';
   } catch (error) {
-    // Sperre und Rate-Limit landen hier — „unklar“, nie „frei“.
+    // Sperre, Rate-Limit und Drosselung landen hier — „unklar“, nie „frei“.
     warnWhoisError(step.host, domain, error);
     return undefined;
   }

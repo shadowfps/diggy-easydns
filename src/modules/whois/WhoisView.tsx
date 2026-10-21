@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Building2, Server, ShieldCheck, ShieldOff, ShieldQuestion, Lock, AlertCircle, ArrowUpRight } from 'lucide-react';
 import type { WhoisInfo } from '@/types/dns';
-import { registryWebLookup } from '@shared/registryWebLookup';
+import { registryWebLookup, type RegistryWebLookup } from '@shared/registryWebLookup';
 import { cn } from '@/lib/cn';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -40,6 +40,12 @@ const STATUS_LABELS: Record<string, { label: DeKey; tone: 'ok' | 'warn' | 'bad' 
   serverhold: { label: 'Server-Hold (nicht aufgelöst!)', tone: 'bad' },
 };
 
+/** Warum diggy die Registry nicht fragt — je Grund aus shared/registryWebLookup.ts. */
+const WEB_LOOKUP_TEXT: Record<RegistryWebLookup['reason'], DeKey> = {
+  blocked: 'Die Registry von .{tld} sperrt automatische Abfragen. Die Daten zeigt ihre {link}.',
+  permission: 'Die Registry von .{tld} erlaubt die Weitergabe ihrer WHOIS-Daten nur mit Genehmigung. Die Daten zeigt ihre {link}.',
+};
+
 const STATUS_BADGE: Record<'ok' | 'warn' | 'bad', string> = {
   ok: 'badge-success',
   warn: 'badge-warning',
@@ -61,13 +67,15 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
   const { tRich, formatDate } = useI18n();
 
   if (!whois) {
-    // .ch: Die Registry sperrt automatisierte Abfragen, der Server fragt gar
-    // nicht erst (#105). Der Satz allein ließe offen, wo es die Daten gibt.
+    // .ch, .at, .it: Der Server fragt gar nicht erst (#105) — .ch sperrt
+    // automatisierte Abfragen, nic.at und Registro .it erlauben die
+    // Weitergabe ihrer Daten nur mit Genehmigung. Der Satz allein ließe
+    // offen, wo es die Daten gibt.
     const webLookup = registryWebLookup(domain);
     return (
       <EmptyState icon={<AlertCircle className="size-5" />} title={t('WHOIS / RDAP nicht verfügbar')}>
         {webLookup
-          ? tRich('Die Registry von .{tld} sperrt automatische Abfragen. Die Daten zeigt ihre {link}.', {
+          ? tRich(WEB_LOOKUP_TEXT[webLookup.reason], {
               tld: webLookup.tld,
               link: (
                 <a

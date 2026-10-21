@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import packageJson from '../../package.json' with { type: 'json' };
 import { clearCache } from '../lib/cache.js';
+import { resetHostThrottles } from '../lib/hostThrottle.js';
 import { IANA_RDAP_BOOTSTRAP_URL, resetRdapBootstrap } from '../lib/rdapBootstrap.js';
 import { queryPort43 } from '../lib/whoisPort43.js';
 import { BOOTSTRAP_SAMPLE } from '../test/rdapBootstrap.js';
@@ -33,6 +34,7 @@ const expectedHeaders = {
 beforeEach(() => {
   clearCache();
   resetRdapBootstrap();
+  resetHostThrottles();
   fetchMock.mockReset();
   port43Mock.mockReset();
   port43Mock.mockRejectedValue(new Error('Timeout'));

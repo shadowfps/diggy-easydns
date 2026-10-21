@@ -3,19 +3,22 @@
  *
  * Wen der Server fragt, bestimmt services/registry.ts (#105): die Registry
  * laut IANA-Bootstrap per RDAP, für Endungen ohne Eintrag eine feste
- * Registry — DENIC (.de) und Identity Digital (.io) per RDAP, nic.at, Registro
- * .it und EURid per WHOIS auf Port 43, .io dort als Rückfall. rdap.org nur,
- * solange der Bootstrap nicht ladbar ist. Für .ch und Endungen ohne bekannten
- * Dienst gibt es null, die UI zeigt „nicht verfügbar“.
+ * Registry — DENIC (.de) und Identity Digital (.io) per RDAP, EURid per WHOIS
+ * auf Port 43, .io dort als Rückfall. rdap.org nur, solange der Bootstrap
+ * nicht ladbar ist. Für .ch, .at und .it (nur Web-Abfrage, siehe
+ * shared/registryWebLookup.ts) und Endungen ohne bekannten Dienst gibt es
+ * null, die UI zeigt „nicht verfügbar“. Die Abfragen selbst samt Drosselung
+ * je Host stehen in registryQuery.ts.
  *
  * RDAP ist JSON und braucht keinen Parser je Registry; WHOIS-Klartext lesen
  * die Parser in whoisText.ts, ohne Kontaktdaten auszuwerten.
  */
 
 import type { WhoisInfo } from '../types.js';
-import { fetchRdap, warnRdapError } from '../lib/rdap.js';
-import { queryPort43, warnWhoisError } from '../lib/whoisPort43.js';
-import { resolveRegistry, type RegistryStep } from './registry.js';
+import { warnRdapError } from '../lib/rdap.js';
+import { warnWhoisError } from '../lib/whoisPort43.js';
+import { resolveRegistry } from './registry.js';
+import { requestRdap, requestWhois, type Port43Step, type RdapStep } from './registryQuery.js';
 
 interface RdapEvent {
   eventAction?: string;
@@ -68,13 +71,9 @@ export async function lookupWhois(domain: string, timeoutMs = 5000): Promise<Who
   return null;
 }
 
-async function queryWhoisServer(
-  step: Extract<RegistryStep, { kind: 'port43' }>,
-  domain: string,
-  timeoutMs: number
-): Promise<StepResult> {
+async function queryWhoisServer(step: Port43Step, domain: string, timeoutMs: number): Promise<StepResult> {
   try {
-    const parsed = step.parse(await queryPort43(step.host, domain, { timeoutMs }), domain);
+    const parsed = await requestWhois(step, domain, timeoutMs);
     if (!parsed.found) return null;
     const { registrar, createdAt, expiresAt, updatedAt, nameServers, status, dnssecDelegated } = parsed.fields;
     return { domain, registrar, createdAt, expiresAt, updatedAt, nameServers, status, dnssecDelegated, source: step.source };
@@ -85,28 +84,26 @@ async function queryWhoisServer(
 }
 
 async function queryRdap(
-  step: Extract<RegistryStep, { kind: 'rdap' }>,
+  step: RdapStep,
   domain: string,
   allowHost: (host: string) => boolean | Promise<boolean>,
   timeoutMs: number
 ): Promise<StepResult> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const url = step.url;
 
   try {
-    const { response: res, url: finalUrl } = await fetchRdap(url, { signal: ctrl.signal, allowHost });
+    const answer = await requestRdap(step, allowHost, timeoutMs);
 
-    if (!res.ok) {
+    if (answer.status < 200 || answer.status > 299) {
       // 404 = Domain unbekannt im RDAP oder rdap.org kennt für die TLD keinen
       // Dienst. Beides ist erwartbar und kein Betriebsfehler, also keine
       // Warnung — und endgültig, ein WHOIS-Rückfall wüsste nicht mehr.
-      if (res.status === 404) return null;
-      warnRdapError(url, new Error(`HTTP ${res.status}`));
+      if (answer.status === 404) return null;
+      warnRdapError(url, new Error(`HTTP ${answer.status}`));
       return undefined;
     }
 
-    const data = (await res.json()) as RdapResponse;
+    const data = (answer.data ?? {}) as RdapResponse;
     if (data.errorCode) {
       warnRdapError(url, new Error(`RDAP ${data.errorCode}`));
       return undefined;
@@ -130,7 +127,7 @@ async function queryRdap(
     const dnssecDelegated = data.secureDNS?.delegationSigned;
 
     // Source kommt aus port43 (klassischer WHOIS-Server) als grober Hinweis
-    const source = data.port43 ?? new URL(finalUrl).hostname;
+    const source = data.port43 ?? new URL(answer.url).hostname;
 
     return {
       // Der Server fragt die Apex-Domain ab, nicht den eingegebenen Namen. Ohne
@@ -146,10 +143,8 @@ async function queryRdap(
       source,
     };
   } catch (error) {
-    warnRdapError(url, error, ctrl.signal);
+    warnRdapError(url, error);
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
