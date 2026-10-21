@@ -284,13 +284,17 @@ die Abfrage ist eine geprüfte Domain plus CRLF, Timeout 3 s für den Aufbau und
 
 **Drosselung je Host** (`server/lib/hostThrottle.ts`,
 `server/services/registryQuery.ts`): jeder WHOIS-Server auf Port 43
-(derzeit `whois.eu`, `whois.nic.io`) und `rdap.identitydigital.services`.
-Höchstens 2 Abfragen gleichzeitig, 3 pro Sekunde (Spitze 3), höchstens 6
-Wartende, je höchstens 2 s und so, dass der Abfrage danach noch 1 s bleibt.
-Darüber hinaus sofort ein Fehler: im Report „nicht verfügbar“, im
-Verfügbarkeits-Check „unklar“, nie „frei“. Gleichzeitige Abfragen derselben
-Domain beim selben Host teilen sich eine; aufbewahrt wird danach nichts, der
-WHOIS-Rohtext verlässt die Abfrage nicht. Identity Digital nennt 10 Abfragen
+(derzeit `whois.eu`, `whois.nic.io`), `rdap.identitydigital.services` und,
+nur ohne Bootstrap, `rdap.org` — dessen Weiterleitungen führen unter anderem
+zu Identity Digital, und die Drosselung hält ihren Platz über alle
+Weiterleitungen einer Abfrage. Höchstens 2 Abfragen gleichzeitig, 3 pro
+Sekunde (Spitze 3), höchstens 6 Wartende, je höchstens 2 s und so, dass der
+Abfrage danach noch 1 s bleibt. Darüber hinaus sofort ein Fehler: im Report
+„nicht verfügbar“, im Verfügbarkeits-Check „unklar“, nie „frei“.
+Gleichzeitige Abfragen derselben Domain beim selben Host teilen sich eine,
+solange die laufende nicht vor der Frist des neuen Aufrufers aufgibt; der
+wartet höchstens bis zu seiner eigenen Frist. Aufbewahrt wird danach nichts,
+der WHOIS-Rohtext verlässt die Abfrage nicht. Identity Digital nennt 10 Abfragen
 pro Sekunde je IP; die übrigen Registries nennen keine Zahl.
 
 **Offene Punkte:**

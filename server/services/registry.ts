@@ -69,11 +69,17 @@ const WITHOUT_BOOTSTRAP: Readonly<Record<string, string>> = {
 };
 
 /**
- * RDAP-Dienste mit dokumentiertem Limit, gedrosselt wie die WHOIS-Server:
- * Identity Digital nennt 10 Abfragen pro Sekunde je IP
- * (https://www.identity.digital/help-articles/whois-faq).
+ * RDAP-Dienste mit dokumentiertem Limit, gedrosselt wie die WHOIS-Server.
+ * Die Drosselung gilt für den Host, bei dem eine Abfrage beginnt, und hält
+ * ihren Platz über alle Weiterleitungen:
+ *  - Identity Digital nennt 10 Abfragen pro Sekunde je IP
+ *    (https://www.identity.digital/help-articles/whois-faq).
+ *  - rdap.org (nur ohne Bootstrap) drosselt selbst auf 10 in 10 s und leitet
+ *    unter anderem zu Identity Digital weiter (rund 450 gTLDs wie .agency).
+ *    Ohne eigene Drosselung liefen diese Weiterleitungen an der von Identity
+ *    Digital vorbei.
  */
-const THROTTLED_RDAP_HOSTS: ReadonlySet<string> = new Set(['rdap.identitydigital.services']);
+const THROTTLED_RDAP_HOSTS: ReadonlySet<string> = new Set(['rdap.identitydigital.services', 'rdap.org']);
 
 const FIXED_HOSTS = new Set(
   [...Object.values(FIXED_REGISTRIES).map((r) => r.rdap), ...Object.values(WITHOUT_BOOTSTRAP)]

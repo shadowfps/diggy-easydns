@@ -431,6 +431,30 @@ describe('Drosselung je Host', () => {
     expect(await Promise.all([...io, ...com])).toEqual([null, null, null, null, null, null]);
   });
 
+  it('drosselt ohne Bootstrap auch, was rdap.org zu Identity Digital weiterleitet', async () => {
+    // .agency gehört zu Identity Digital; ohne Bootstrap kennt nur rdap.org
+    // das Ziel (Befund aus dem Codex-Review der zweiten Runde).
+    bootstrapResponse = () => new Response(null, { status: 503 });
+    const pending: (() => void)[] = [];
+    registryResponse = (url) =>
+      url.startsWith(RDAP_ORG_BASE)
+        ? new Response(null, {
+            status: 302,
+            headers: { location: `https://rdap.identitydigital.services/rdap/domain/${url.split('/').pop()}` },
+          })
+        : (new Promise((resolve) => pending.push(() => resolve(new Response(null, { status: 404 })))) as never);
+
+    const lookups = ['a', 'b', 'c', 'd', 'e'].map((label) => lookupWhois(`${label}.agency`));
+    await vi.waitFor(() => expect(pending.length).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Höchstens zwei gleichzeitig bei Identity Digital, wie bei direkten Abfragen.
+    expect(registryCalls().filter((url) => url.includes('identitydigital'))).toHaveLength(2);
+
+    while ((await Promise.race([Promise.all(lookups).then(() => true), new Promise((r) => setTimeout(r, 50, false))])) === false) {
+      pending.splice(0).forEach((release) => release());
+    }
+    expect(await Promise.all(lookups)).toEqual([null, null, null, null, null]);
+  });
 });
 
 describe('Datenschutzhinweise', () => {
