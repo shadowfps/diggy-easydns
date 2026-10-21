@@ -487,7 +487,10 @@ describe('Propagation-Typ im Link', () => {
 
     expect(await typeButton('MX')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('tab', { name: /Propagation/ })).toHaveAttribute('aria-selected', 'true');
-    expect(api.lookupPropagation).toHaveBeenCalledWith('example.com', 'MX');
+    // Die Knöpfe stehen mit dem Commit im DOM, die Abfrage startet erst im
+    // Effect danach. Den holt React in einer eigenen Scheduler-Aufgabe nach;
+    // unter Last kehrt findBy manchmal schon vorher zurück (CI von #140).
+    await waitFor(() => expect(api.lookupPropagation).toHaveBeenCalledWith('example.com', 'MX'));
     // Der Report selbst lädt weiter nur die Standard-Typen.
     expect(api.lookupPropagation).toHaveBeenCalledWith('example.com');
     await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=MX'));
