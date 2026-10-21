@@ -1,0 +1,58 @@
+% Copyright (c)2026 by NIC.AT (1)                                       
+%
+% Restricted rights.
+% [Hinweise von nic.at gekürzt]
+
+domain:            nic.at
+registrar:         
+registrant:        REDACTED
+tech-c:            REDACTED
+nserver:           ns1.nic.at
+remarks:           192.174.68.98
+nserver:           ns1.nic.at
+remarks:           2001:67c:1bc::98
+nserver:           ns10.univie.ac.at
+nserver:           ns2.nic.at
+remarks:           176.97.158.98
+nserver:           ns2.nic.at
+remarks:           2001:67c:10b8::98
+nserver:           ns5.nic.at
+remarks:           194.58.198.32
+nserver:           ns5.nic.at
+remarks:           2a01:3f1:3032::53
+nserver:           ns5.univie.ac.at
+changed:           20200427 16:03:40
+registered:        20000825 20:16:35
+DNSSEC:            Signed
+DS key tag  1:     53116
+algorithm   1:     13
+digest type 1:     2
+digest      1:     ad2d103749d7915a92d5b2eba79db8e01fc41b2452f9bb9930b2649c70eb39fe
+source:            AT-DOM
+
+personname:        REDACTED
+organization:      REDACTED
+street address:    REDACTED
+postal code:       REDACTED
+state or province: REDACTED
+city:              REDACTED
+country:           REDACTED
+phone:             REDACTED
+e-mail:            REDACTED
+nic-hdl:           REDACTED
+changed:           20121116 16:58:21
+source:            AT-DOM
+
+personname:        REDACTED
+organization:      REDACTED
+street address:    REDACTED
+postal code:       REDACTED
+state or province: REDACTED
+city:              REDACTED
+country:           REDACTED
+phone:             REDACTED
+e-mail:            REDACTED
+nic-hdl:           REDACTED
+changed:           20100625 15:57:11
+source:            AT-DOM
+

@@ -350,13 +350,20 @@ export interface WhoisInfo {
   expiresAt?: string;
   /** ISO date — letzte Änderung am Registrar */
   updatedAt?: string;
-  /** Aus dem RDAP-Response übernommene Nameserver */
+  /** Nameserver laut Registry (RDAP oder WHOIS) */
   nameServers?: string[];
   /** EPP-Status-Codes z.B. 'clientTransferProhibited' */
   status?: string[];
-  /** secureDNS.delegationSigned aus RDAP */
+  /**
+   * DNSSEC-Delegation laut Registry: `secureDNS.delegationSigned` aus RDAP bzw.
+   * die DNSSEC-Zeile im WHOIS. Fehlt, wenn die Registry nichts dazu sagt
+   * (.eu über Port 43).
+   */
   dnssecDelegated?: boolean;
-  /** Welcher RDAP-Registry geantwortet hat (für UI-Transparenz) */
+  /**
+   * Wer geantwortet hat (für UI-Transparenz): der RDAP-Host bzw. dessen
+   * `port43`-Angabe, bei Abfragen über Port 43 der WHOIS-Server (#105).
+   */
   source?: string;
 }
 
@@ -488,7 +495,10 @@ export type DomainAvailabilityStatus = 'available' | 'taken' | 'unknown';
 export interface DomainAvailabilityResult {
   domain: string;
   status: DomainAvailabilityStatus;
-  /** RDAP-Registry, die geantwortet hat */
+  /**
+   * Host der Registry, die gefragt wurde (RDAP-Dienst oder WHOIS-Server).
+   * Fehlt, wenn es für die Endung keinen bekannten Dienst gibt (#105).
+   */
   source?: string;
 }
 

@@ -1,0 +1,63 @@
+Domain Name: github.io
+Registry Domain ID: REDACTED
+Registrar WHOIS Server: whois.markmonitor.com
+Registrar URL: http://www.markmonitor.com
+Updated Date: 2026-08-12T09:08:04Z
+Creation Date: 2013-03-08T19:12:48Z
+Registry Expiry Date: 2027-03-08T19:12:48Z
+Registrar: MarkMonitor Inc.
+Registrar IANA ID: 292
+Domain Status: clientDeleteProhibited https://icann.org/epp#clientDeleteProhibited
+Domain Status: clientTransferProhibited https://icann.org/epp#clientTransferProhibited
+Domain Status: clientUpdateProhibited https://icann.org/epp#clientUpdateProhibited
+Registry Registrant ID: REDACTED
+Registrant Name: REDACTED
+Registrant Organization: REDACTED
+Registrant Street: REDACTED
+Registrant City: REDACTED
+Registrant State/Province: REDACTED
+Registrant Postal Code: REDACTED
+Registrant Country: REDACTED
+Registrant Phone: REDACTED
+Registrant Phone Ext: REDACTED
+Registrant Fax: REDACTED
+Registrant Fax Ext: REDACTED
+Registrant Email: REDACTED
+Registry Admin ID: REDACTED
+Admin Name: REDACTED
+Admin Organization: REDACTED
+Admin Street: REDACTED
+Admin City: REDACTED
+Admin State/Province: REDACTED
+Admin Postal Code: REDACTED
+Admin Country: REDACTED
+Admin Phone: REDACTED
+Admin Phone Ext: REDACTED
+Admin Fax: REDACTED
+Admin Fax Ext: REDACTED
+Admin Email: REDACTED
+Registry Tech ID: REDACTED
+Tech Name: REDACTED
+Tech Organization: REDACTED
+Tech Street: REDACTED
+Tech City: REDACTED
+Tech State/Province: REDACTED
+Tech Postal Code: REDACTED
+Tech Country: REDACTED
+Tech Phone: REDACTED
+Tech Phone Ext: REDACTED
+Tech Fax: REDACTED
+Tech Fax Ext: REDACTED
+Tech Email: REDACTED
+Name Server: ns-692.awsdns-22.net
+Name Server: ns-1622.awsdns-10.co.uk
+Name Server: dns1.p05.nsone.net
+Name Server: dns2.p05.nsone.net
+Name Server: dns3.p05.nsone.net
+DNSSEC: unsigned
+URL of the ICANN Whois Inaccuracy Complaint Form: https://icann.org/wicf/
+>>> Last update of WHOIS database: 2026-10-20T14:26:05Z <<<
+
+For more information on Whois status codes, please visit https://icann.org/epp
+
+Terms of Use: Access to WHOIS information is provided to assist persons in determining the contents of a domain name registration record in the registry database. [gekürzt] Queries to the Whois services are throttled. If too many queries are received from a single IP address within a specified time, the service will begin to reject further queries for a period of time to prevent disruption of Whois service access. [gekürzt]

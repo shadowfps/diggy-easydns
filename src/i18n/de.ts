@@ -183,6 +183,9 @@ export type DeText =
   // ─── WHOIS ───────────────────────────────────────────────────────────
   | 'WHOIS / RDAP nicht verfügbar'
   | 'Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.'
+  | 'Die Registry von .{tld} sperrt automatische Abfragen. Die Daten zeigt ihre {link}.'
+  | 'Die Registry von .{tld} erlaubt die Weitergabe ihrer WHOIS-Daten nur mit Genehmigung. Die Daten zeigt ihre {link}.'
+  | 'Web-Abfrage'
   | 'Registrierung'
   | 'Erstellt'
   | 'Läuft ab'
@@ -194,6 +197,7 @@ export type DeText =
   | 'DNSSEC bei Registry: {status}'
   | 'delegiert'
   | 'nicht delegiert'
+  | 'keine Angabe'
   | 'Transfer-Sperre (Client)'
   | 'Transfer-Sperre (Registry)'
   | 'Lösch-Sperre (Client)'

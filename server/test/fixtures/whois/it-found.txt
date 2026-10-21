@@ -1,0 +1,49 @@
+
+*********************************************************************
+* Please note that the following result could be a subgroup of      *
+* the data contained in the database.                               *
+*                                                                   *
+* Additional information can be visualized at:                      *
+* http://web-whois.nic.it                                           *
+*********************************************************************
+
+Domain:             repubblica.it
+Status:             ok
+Signed:             no
+Created:            1996-05-15 00:00:00
+Last Update:        2026-02-01 00:44:11
+Expire Date:        2027-01-16
+
+Registrant
+  Organization:     REDACTED
+  Address:          REDACTED
+  Created:          2020-11-17 18:26:41
+  Last Update:      2026-03-20 06:25:59
+
+Admin Contact
+  Name:             REDACTED
+  Organization:     REDACTED
+  Address:          REDACTED
+  Created:          2020-11-17 18:26:41
+  Last Update:      2026-03-20 06:25:59
+
+Technical Contacts
+  Name:             REDACTED
+  Organization:     REDACTED
+  Address:          REDACTED
+  Created:          2020-11-17 18:26:42
+  Last Update:      2025-03-11 09:56:06
+
+Registrar
+  Organization:     Gandi SAS
+  Name:             GANDI-REG
+  Web:              http://www.gandi.net
+  DNSSEC:           no
+
+
+Nameservers
+  ns-1541.awsdns-00.co.uk
+  ns-1477.awsdns-56.org
+  ns-723.awsdns-26.net
+  ns-353.awsdns-44.com
+

@@ -1,0 +1,41 @@
+% Copyright (c)2026 by NIC.AT (1)                                       
+%
+% Restricted rights.
+% [Hinweise von nic.at gekürzt]
+
+domain:            orf.at
+registrar:         APA-IT Informations Technologie GmbH ( https://nic.at/registrar/658 )
+registrant:        REDACTED
+tech-c:            REDACTED
+nserver:           ns3.apa.at
+nserver:           ns4.apa.net
+changed:           20230801 14:51:59
+registered:        20000825 20:31:02
+source:            AT-DOM
+
+personname:        REDACTED
+organization:      REDACTED
+street address:    REDACTED
+postal code:       REDACTED
+state or province: REDACTED
+city:              REDACTED
+country:           REDACTED
+phone:             REDACTED
+e-mail:            REDACTED
+nic-hdl:           REDACTED
+changed:           20230801 14:48:50
+source:            AT-DOM
+
+personname:        REDACTED
+organization:      REDACTED
+street address:    REDACTED
+postal code:       REDACTED
+state or province: REDACTED
+city:              REDACTED
+country:           REDACTED
+phone:             REDACTED
+e-mail:            REDACTED
+nic-hdl:           REDACTED
+changed:           20241002 10:04:57
+source:            AT-DOM
+

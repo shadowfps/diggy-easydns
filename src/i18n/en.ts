@@ -226,6 +226,11 @@ const ui: Dictionary = {
   'WHOIS / RDAP nicht verfügbar': 'WHOIS / RDAP not available',
   'Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.':
     'This TLD doesn’t support RDAP, or the lookup failed.',
+  'Die Registry von .{tld} sperrt automatische Abfragen. Die Daten zeigt ihre {link}.':
+    'The .{tld} registry blocks automated queries. Its {link} shows the data.',
+  'Die Registry von .{tld} erlaubt die Weitergabe ihrer WHOIS-Daten nur mit Genehmigung. Die Daten zeigt ihre {link}.':
+    'The .{tld} registry only allows its WHOIS data to be passed on with permission. Its {link} shows the data.',
+  'Web-Abfrage': 'web lookup',
   Registrierung: 'Registration',
   Erstellt: 'Created',
   'Läuft ab': 'Expires',
@@ -240,6 +245,7 @@ const ui: Dictionary = {
   'DNSSEC bei Registry: {status}': 'DNSSEC at the registry: {status}',
   delegiert: 'delegated',
   'nicht delegiert': 'not delegated',
+  'keine Angabe': 'not reported',
   'Transfer-Sperre (Client)': 'Transfer lock (client)',
   'Transfer-Sperre (Registry)': 'Transfer lock (registry)',
   'Lösch-Sperre (Client)': 'Delete lock (client)',

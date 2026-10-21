@@ -25,7 +25,7 @@
  */
 
 /** Wird im Footer und im Text als Datumsangabe genutzt. */
-const LAST_UPDATED = '19. Oktober 2026';
+const LAST_UPDATED = '21. Oktober 2026';
 
 interface DatenschutzTextProps {
   onOpenImpressum?: () => void;
@@ -180,9 +180,10 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           übrigen Dienste gilt: Übermittelt wird jeweils nur die abgefragte Domain bzw.
           IP-Adresse. Dienste mit Sitz außerhalb der EU sind gekennzeichnet. Für die
           Schweiz und Kanada hat die EU-Kommission ein angemessenes Datenschutzniveau
-          festgestellt (Art. 45 DSGVO). In die USA stützt sich die Übermittlung auf
-          Art. 49 Abs. 1 lit. b DSGVO (Erforderlichkeit zur Erfüllung des von dir
-          angeforderten Abrufs) und erfolgt ausschließlich auf deine Eingabe hin.
+          festgestellt (Art. 45 DSGVO). In die USA und in andere Drittländer ohne
+          einen solchen Beschluss stützt sich die Übermittlung auf Art. 49 Abs. 1
+          lit. b DSGVO (Erforderlichkeit zur Erfüllung des von dir angeforderten
+          Abrufs) und erfolgt ausschließlich auf deine Eingabe hin.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-136 border-collapse text-left text-sm">
@@ -201,7 +202,11 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
               <Row service="Quad9" purpose="Propagations-Vergleich" region="Schweiz" />
               <Row service="Control D" purpose="Propagations-Vergleich" region="Kanada" />
               <Row service="AdGuard DNS, DNS.SB, DNS4EU" purpose="Propagations-Vergleich" region="EU" />
-              <Row service="rdap.org, DENIC, Verisign" purpose="WHOIS/RDAP und Verfügbarkeits-Check" region="EU / USA" />
+              <Row service="Die Registry der Domain-Endung laut IANA-Verzeichnis — etwa Verisign (.com, .net), Public Interest Registry (.org) und Google (.app, .dev), alle mit Sitz in den USA" purpose="WHOIS/RDAP und Verfügbarkeits-Check" region="je nach Endung" />
+              <Row service="DENIC" purpose="WHOIS/RDAP und Verfügbarkeits-Check für .de" region="EU" />
+              <Row service="Identity Digital" purpose="WHOIS/RDAP und Verfügbarkeits-Check für .io" region="USA" />
+              <Row service="EURid" purpose="WHOIS und Verfügbarkeits-Check für .eu" region="EU" />
+              <Row service="rdap.org" purpose="Netz und Betreiber zu einer IP-Adresse (IP-Details); WHOIS/RDAP und Verfügbarkeits-Check nur, solange das IANA-Verzeichnis nicht abrufbar ist" region="USA" />
               <Row service="Google PageSpeed Insights" purpose="Performance-Analyse — nur auf Klick" region="USA" />
               <Row service="VirusTotal (Google)" purpose="Reputations-Check — nur auf Klick" region="USA" />
               <Row service="ipwhois.app" purpose="Geolocation und ASN zu einer IP-Adresse" region="EU" />
@@ -215,9 +220,16 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           genannten DNS-Resolvern gleichzeitig ab; jeder erhält dabei nur den Namen und
           den Record-Typ. Im Propagation-Tab fragt er zusätzlich die Nameserver, die für
           die Domain eingetragen sind — welche das sind, legt ihr Inhaber fest; auch sie
-          erhalten nur Namen und Record-Typ. PageSpeed und VirusTotal laufen nicht automatisch — sie
-          starten erst, wenn du den jeweiligen Tab öffnest und den Check ausdrücklich
-          anstößt.
+          erhalten nur Namen und Record-Typ. Für WHOIS und den Verfügbarkeits-Check
+          fragt der Server die Registry der jeweiligen Endung direkt; welche das ist,
+          steht im öffentlichen RDAP-Verzeichnis der IANA, das der Server einmal am Tag
+          lädt — dabei geht nichts über deine Abfrage an die IANA. Für .ch, .at und
+          .it fragt er nicht: Die Registry von .ch sperrt automatisierte Abfragen,
+          nic.at und Registro .it erlauben die Weitergabe ihrer Daten nur mit
+          Genehmigung. Die WHOIS-Ansicht verlinkt dann nur die Web-Abfrage der
+          Registry; der Link enthält die Domain nicht. PageSpeed und
+          VirusTotal laufen nicht automatisch — sie starten erst, wenn du den
+          jeweiligen Tab öffnest und den Check ausdrücklich anstößt.
         </p>
       </Section>
 
