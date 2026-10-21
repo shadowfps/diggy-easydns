@@ -515,6 +515,29 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
     expect(api.lookupAuthoritative).toHaveBeenCalledTimes(2);
   });
 
+  /**
+   * Nameserver-Block und Resolver-Vergleich hängen beide am Typ, damit sie beim
+   * Wechsel neu starten. Als Geschwister brauchen sie trotzdem verschiedene
+   * Keys — sonst warnt React bei jedem Render, und beim Abgleich kann es die
+   * beiden verwechseln.
+   */
+  it('gibt Nameserver-Block und Vergleich verschiedene Keys, auch nach einem Typwechsel', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      vi.mocked(api.lookupAuthoritative).mockImplementation(async (_domain, type) => authoritative(type, []));
+      vi.mocked(api.lookupPropagation).mockResolvedValue({ propagation: results([[]]), findings: [] });
+      render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
+      await authBlock();
+      await userEvent.click(typeButton('MX'));
+      await screen.findByRole('region', { name: 'Öffentliche Resolver' });
+
+      const keyWarnings = error.mock.calls.filter((args) => args.some((a) => String(a).includes('same key')));
+      expect(keyWarnings).toEqual([]);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('vergleicht die Resolver mit den einigen Nameservern statt mit der Mehrheit', async () => {
     vi.mocked(api.lookupAuthoritative).mockResolvedValue(
       authoritative('TXT', [

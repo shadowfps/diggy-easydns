@@ -98,9 +98,11 @@ export function PropagationView({
       </div>
 
       {/* Erst der Stand der Zone, dann die Caches: Ist eine Änderung am
-          Nameserver nicht angekommen, sagen die Resolver nichts Neues. */}
+          Nameserver nicht angekommen, sagen die Resolver nichts Neues.
+          Eigener Key-Präfix: Der Vergleich darunter hängt auch am Typ, und
+          Geschwister mit gleichem Key verwechselt React. */}
       <AuthoritativeBlock
-        key={type}
+        key={`authoritative-${type}`}
         type={type}
         domain={domain}
         auth={auth}
