@@ -4,7 +4,9 @@
  * WHOIS auf Port 43? (#105)
  *
  * Seit #105 fragt diggy die Registry der Endung direkt: RDAP laut
- * IANA-Bootstrap, .io bei Identity Digital, .at, .it und .eu über Port 43.
+ * IANA-Bootstrap, .io bei Identity Digital, .eu über Port 43. Für .ch, .at
+ * und .it fragt diggy bewusst niemanden (nur Link auf die Web-Abfrage der
+ * Registry, shared/registryWebLookup.ts) — auch das prüft der Check.
  * Ob ausgehend Port 43 aus dem Rechenzentrum offen ist, zeigen die Tests
  * nicht (sie mocken das Netz) — und lokal ist es offen. Fragt man den
  * laufenden Container, sieht man das Netz, aus dem er wirklich fragt.
@@ -29,11 +31,12 @@ const WHOIS_CASES = [
   ['bbc.co.uk', 'RDAP (Bootstrap)', ['rdap.nominet.uk', 'whois.nic.uk']],
   ['denic.de', 'RDAP (DENIC)', ['rdap.denic.de']],
   ['github.io', 'RDAP (Identity Digital)', ['rdap.identitydigital.services', 'whois.nic.io']],
-  ['orf.at', 'Port 43', ['whois.nic.at']],
-  ['repubblica.it', 'Port 43', ['whois.nic.it']],
   ['europa.eu', 'Port 43', ['whois.eu']],
-  // nic.ch sperrt automatisierte Abfragen: diggy fragt bewusst nicht.
+  // nic.ch sperrt automatisierte Abfragen, nic.at und Registro .it erlauben
+  // die Weitergabe nur mit Genehmigung: diggy fragt bewusst nicht.
   ['switch.ch', 'keine Abfrage', []],
+  ['orf.at', 'keine Abfrage', []],
+  ['repubblica.it', 'keine Abfrage', []],
 ];
 
 const base = (process.argv[2] ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
@@ -92,11 +95,14 @@ console.log(['Domain', 'Weg', 'Ergebnis', 'Registrar', 'Erstellt', 'Ablauf', 'NS
 for (const row of rows) console.log(row.join(' | '));
 
 // Verfügbarkeit: eine sicher freie und eine vergebene .io-Domain — die
-// Endung, die vor #105 immer „Unklar“ war.
-const free = `diggy-frei-${Math.random().toString(36).slice(2, 10)}.io`;
+// Endung, die vor #105 immer „Unklar“ war —, eine freie .eu-Domain (Port 43)
+// und eine .at-Domain, für die diggy nicht fragt.
+const random = Math.random().toString(36).slice(2, 10);
 const availability = [
-  [free, 'available'],
+  [`diggy-frei-${random}.io`, 'available'],
   ['github.io', 'taken'],
+  [`diggy-frei-${random}.eu`, 'available'],
+  [`diggy-frei-${random}.at`, 'unknown'],
 ];
 console.log(`\nVerfügbarkeit über ${base}\n`);
 console.log(['Domain', 'erwartet', 'Ergebnis', 'Quelle'].join(' | '));
@@ -114,7 +120,9 @@ for (const [domain, expected] of availability) {
 
 const port43 = rows.filter(([, route]) => route === 'Port 43');
 if (port43.length > 0 && port43.every(([, , result]) => result.startsWith('FEHLER'))) {
-  console.error('\nKeine Antwort über Port 43: ausgehend vermutlich gesperrt (Server-Log: „[whois] … Timeout“).');
+  console.error(
+    '\nKeine Antwort über Port 43 (whois.eu): ausgehend vermutlich gesperrt (Server-Log: „[whois] … Timeout“).'
+  );
 }
 
 if (failures.length > 0) {

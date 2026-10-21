@@ -35,13 +35,15 @@ node scripts/check-whois-live.mjs https://diggydns.cloud
 ```
 
 Er fragt neun Domains ab — RDAP laut IANA-Bootstrap (.com, .dev, .co.uk),
-DENIC, Identity Digital (.io), Port 43 für .at, .it und .eu, dazu .ch, das
-bewusst ohne Abfrage bleibt — und prüft je Domain, welche Quelle geantwortet
-hat. Danach die Verfügbarkeit einer zufälligen freien und einer vergebenen
-.io-Domain. Er endet mit Fehler, wenn eine Erwartung nicht stimmt; scheitern
-alle drei Port-43-Abfragen, ist Port 43 ausgehend vermutlich gesperrt. Die
-API hält WHOIS-Ergebnisse 60 s im Cache, auch „nicht verfügbar“ — für einen
-zweiten Lauf eine Minute warten.
+DENIC, Identity Digital (.io), Port 43 für .eu, dazu .ch, .at und .it, die
+bewusst ohne Abfrage bleiben (nur Link auf die Web-Abfrage der Registry) —
+und prüft je Domain, welche Quelle geantwortet hat. Danach die Verfügbarkeit
+einer zufälligen freien und einer vergebenen .io-Domain, einer freien
+.eu-Domain (Port 43) und einer .at-Domain (erwartet „unklar“). Er endet mit
+Fehler, wenn eine Erwartung nicht stimmt; scheitert die Port-43-Abfrage für
+europa.eu, ist Port 43 ausgehend vermutlich gesperrt. Die API hält
+WHOIS-Ergebnisse 60 s im Cache, auch „nicht verfügbar“ — für einen zweiten
+Lauf eine Minute warten.
 
 Bei jedem Push auf `main` veröffentlicht GitHub Actions das Image als:
 

@@ -4,8 +4,8 @@ Technische Bestandsaufnahme, keine Rechtsberatung. Sie beschreibt, was der Code
 tatsächlich tut, und ordnet das den einschlägigen Regelwerken zu. Die
 rechtliche Bewertung gehört fachlich geprüft.
 
-**Stand:** 8. September 2026, DSGVO-Teil ergänzt am 19. Oktober 2026 (#125, #132) und
-20. Oktober 2026 (#105) ·
+**Stand:** 8. September 2026, DSGVO-Teil ergänzt am 19. Oktober 2026 (#125, #132),
+20. und 21. Oktober 2026 (#105) ·
 **Bezug:** Commit-Stand von PR #34
 
 ---
@@ -225,15 +225,22 @@ ersten Bedarf lädt und 24 Stunden im Speicher hält
 Registry bekommt die abgefragte Domain, vom Server aus. Bis #105 ging fast
 alles über rdap.org, das pro IP drosselt.
 
+Für .ch, .at und .it fragt der Server niemanden, sondern verlinkt die
+Web-Abfrage der Registry (`shared/registryWebLookup.ts`, die zentrale Liste):
+.ch sperrt automatisierte Abfragen, nic.at und Registro .it erlauben die
+Weitergabe ihrer WHOIS-Daten nur mit Genehmigung (Bedingungen unten). Der
+Link enthält die Domain nicht. Entschieden vom Betreiber am 21. Oktober 2026,
+nach dem Review von #140.
+
 | Endung | Weg | Endpunkt | Betreiber, Sitz | Quelle |
 |---|---|---|---|---|
 | laut Bootstrap (rund 1 200) | RDAP | Basis-URL aus dem Bootstrap, nur `https:` | je nach Endung; für die Vorschläge des Verfügbarkeits-Checks Verisign (.com, .net), Public Interest Registry (.org), Google Registry (.app, .dev), alle USA | Bootstrap |
 | .de | RDAP | `https://rdap.denic.de/` | DENIC eG, Frankfurt am Main, Deutschland | [Impressum](https://www.denic.de/impressum) |
 | .io | RDAP, Rückfall WHOIS | `https://rdap.identitydigital.services/rdap/`, `whois.nic.io` | Identity Digital Inc., Bellevue (Washington), USA — betreibt die Registry-Technik für .io | [Wikipedia](https://en.wikipedia.org/wiki/Identity_Digital), Nutzungsbedingungen in der WHOIS-Antwort |
-| .at | WHOIS (Port 43) | `whois.nic.at` | nic.at GmbH, Salzburg, Österreich | [Impressum](https://www.nic.at/de/impressum) |
-| .it | WHOIS (Port 43) | `whois.nic.it` | Registro .it, Istituto di Informatica e Telematica del CNR, Pisa, Italien | [nic.it](https://www.nic.it/en/about-us) |
 | .eu | WHOIS (Port 43) | `whois.eu` | EURid vzw, Diegem, Belgien | [eurid.eu](https://eurid.eu/en/) |
-| .ch | keine Abfrage | Hinweis auf `https://www.nic.ch/whois/` in der WHOIS-Ansicht | — | whois.nic.ch: „Requests of this client are not permitted“ |
+| .ch | keine Abfrage | Link auf `https://www.nic.ch/whois/` in der WHOIS-Ansicht | — | whois.nic.ch: „Requests of this client are not permitted“ |
+| .at | keine Abfrage (vorbereitet: WHOIS `whois.nic.at`, abgeschaltet) | Link auf `https://www.nic.at/de/meine-at-domain/domain-suche/whois` | nic.at GmbH, Salzburg, Österreich — erhält nichts | Bedingungen unten; [Impressum](https://www.nic.at/de/impressum) |
+| .it | keine Abfrage (vorbereitet: WHOIS `whois.nic.it`, abgeschaltet) | Link auf `https://www.nic.it/en/find-your-it/web-whois` | Registro .it, Istituto di Informatica e Telematica del CNR, Pisa, Italien — erhält nichts | Bedingungen unten; [nic.it](https://www.nic.it/en/about-us) |
 | sonst ohne Eintrag (.co, .me, .li …) | keine Abfrage | — | — | rdap.org antwortet dort ebenfalls 404 (geprüft für .co, .me, .ch, .at) |
 | alle ohne feste Registry, solange der Bootstrap nicht ladbar ist | RDAP | `https://rdap.org/`, für .com/.net `https://rdap.verisign.com/` | rdap.org: Gavin Brown (privat), gehostet bei Fly.io hinter Cloudflare, beide USA | [about.rdap.org](https://about.rdap.org/), Antwort-Header `via: fly.io`, `server: cloudflare` |
 
@@ -241,14 +248,26 @@ Unabhängig vom Bootstrap fragen die IP-Details (`server/services/ipDetails.ts`)
 weiter `https://rdap.org/ip/…`; rdap.org bleibt deshalb Empfänger in
 `/datenschutz`.
 
-Stand der Tabelle: 20. Oktober 2026. Ein Test (`registry.test.ts`) verlangt,
-dass jede feste Registry in der Empfänger-Tabelle von `/datenschutz` und mit
-ihrem Endpunkt hier steht.
+Stand der Tabelle: 21. Oktober 2026. Ein Test (`registry.test.ts`) verlangt,
+dass jede aktive feste Registry in der Empfänger-Tabelle von `/datenschutz`
+und mit ihrem Endpunkt hier steht — und dass die abgeschalteten dort nicht als
+Empfänger stehen.
+
+**.at oder .it einschalten** (etwa nach einer Genehmigung der Registry): die
+Zeile der Endung in `WEB_ONLY` in `shared/registryWebLookup.ts` löschen.
+Parser (`server/services/whoisText.ts`), Fixtures und Tests sind da und laufen
+weiter; der WHOIS-Server steht schon in `FIXED_REGISTRIES`
+(`server/services/registry.ts`). Danach die Registry als Empfänger in
+`/datenschutz` eintragen (samt `LAST_UPDATED`), diese Tabelle und
+`scripts/check-whois-live.mjs` anpassen — `registry.test.ts` scheitert, bis
+das passiert ist. Für die Verfügbarkeit bei .it wäre der DAS (siehe unten)
+die schonendere Wahl.
 
 **Was ausgewertet wird:** Registrierung, Ablauf, letzte Änderung, Status,
-Registrar (ein Unternehmen), Nameserver, DNSSEC. Die WHOIS-Antworten von .at
-und .it enthalten auch Inhaber und Kontakte (Namen, Anschrift, Telefon,
-E-Mail); die Parser in `server/services/whoisText.ts` lesen nur den
+Registrar (ein Unternehmen), Nameserver, DNSSEC. Die WHOIS-Antwort von .eu
+nennt im Abschnitt „Technical“ eine Organisation und eine E-Mail, die von
+.at und .it (abgeschaltet) auch Inhaber und Kontakte (Namen, Anschrift,
+Telefon, E-Mail); die Parser in `server/services/whoisText.ts` lesen nur den
 Domain-Block bzw. die Abschnitte „Registrar“ und „Nameservers“ und
 überspringen die Kontaktblöcke. Nichts davon wird gespeichert, ausgegeben oder
 geloggt; das Log nennt nur Host, Domain und Grund (bei einer Sperre das
@@ -263,19 +282,32 @@ die Abfrage ist eine geprüfte Domain plus CRLF, Timeout 3 s für den Aufbau und
 5 s (Report) bzw. 6 s (Verfügbarkeit) insgesamt, höchstens 64 KiB Antwort
 (`server/lib/whoisPort43.ts`).
 
+**Drosselung je Host** (`server/lib/hostThrottle.ts`,
+`server/services/registryQuery.ts`): jeder WHOIS-Server auf Port 43
+(derzeit `whois.eu`, `whois.nic.io`) und `rdap.identitydigital.services`.
+Höchstens 2 Abfragen gleichzeitig, 3 pro Sekunde (Spitze 3), höchstens 6
+Wartende, je höchstens 2 s und so, dass der Abfrage danach noch 1 s bleibt.
+Darüber hinaus sofort ein Fehler: im Report „nicht verfügbar“, im
+Verfügbarkeits-Check „unklar“, nie „frei“. Gleichzeitige Abfragen derselben
+Domain beim selben Host teilen sich eine; aufbewahrt wird danach nichts, der
+WHOIS-Rohtext verlässt die Abfrage nicht. Identity Digital nennt 10 Abfragen
+pro Sekunde je IP; die übrigen Registries nennen keine Zahl.
+
 **Offene Punkte:**
 
 - Port 43 ausgehend aus dem mittwald-Container ist nicht zugesagt. Prüfen
   nach dem Deploy mit `scripts/check-whois-live.mjs` (docs/DEPLOYMENT.md).
-  Ist er gesperrt, zeigen .at, .it und .eu „nicht verfügbar“ bzw. „unklar“,
-  .io bleibt über RDAP erreichbar.
+  Ist er gesperrt, zeigt .eu „nicht verfügbar“ bzw. „unklar“, .io bleibt
+  über RDAP erreichbar.
 - Die Zeiten von nic.at und Registro .it tragen keine Zone; angenommen ist
-  die Ortszeit (Europe/Vienna bzw. Europe/Rome).
+  die Ortszeit (Europe/Vienna bzw. Europe/Rome). Gilt erst wieder, wenn .at
+  oder .it eingeschaltet werden.
 - Nutzungsbedingungen der Registries ohne RDAP-Eintrag (gelesen am
   20.10.2026, rechtlich nicht bewertet). Sie regeln nicht nur die Menge der
-  Abfragen, sondern auch, ob die Daten weitergegeben werden dürfen. Ob die
-  Anzeige im Report und der 60-s-Cache darunter fallen, muss der Betreiber
-  klären:
+  Abfragen, sondern auch, ob die Daten weitergegeben werden dürfen. Für
+  nic.at und Registro .it hat der Betreiber am 21.10.2026 entschieden: ohne
+  Genehmigung keine Abfrage, nur der Link (siehe oben). Für EURid bleibt
+  offen, ob diggydns.cloud „commercial purposes“ verfolgt:
   - **nic.at:** Einzelabfragen sind frei. Laut Hinweis in jeder WHOIS-Antwort
     darf ohne „prior permission of NIC.AT“ nichts „reproduced, stored in a
     retrieval system, or transmitted“ werden, außer für „agreed Internet
@@ -298,9 +330,9 @@ die Abfrage ist eine geprüfte Domain plus CRLF, Timeout 3 s für den Aufbau und
     ([WHOIS-FAQ](https://www.identity.digital/help-articles/whois-faq)), für
     RDAP ist keine Zahl genannt.
 
-  diggy fragt je Nutzereingabe eine Domain und hält das Ergebnis 60 s im
-  Cache. Eine eigene Drosselung je Registry gibt es nicht, und außer bei
-  Identity Digital ist kein Limit dokumentiert.
+  diggy fragt je Nutzereingabe eine Domain, hält das Ergebnis 60 s im Cache
+  und drosselt je Host (siehe oben). Außer bei Identity Digital ist kein
+  Limit dokumentiert.
 - Art. 49 Abs. 1 lit. b DSGVO auch für Registries in Drittländern ohne
   Angemessenheitsbeschluss (je nach Endung) — wie bei Zielserver und
   Nameservern rechtlich nicht geprüft.

@@ -25,7 +25,7 @@
  */
 
 /** Wird im Footer und im Text als Datumsangabe genutzt. */
-const LAST_UPDATED = '20. Oktober 2026';
+const LAST_UPDATED = '21. Oktober 2026';
 
 interface DatenschutzTextProps {
   onOpenImpressum?: () => void;
@@ -205,7 +205,7 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
               <Row service="Die Registry der Domain-Endung laut IANA-Verzeichnis — etwa Verisign (.com, .net), Public Interest Registry (.org) und Google (.app, .dev), alle mit Sitz in den USA" purpose="WHOIS/RDAP und Verfügbarkeits-Check" region="je nach Endung" />
               <Row service="DENIC" purpose="WHOIS/RDAP und Verfügbarkeits-Check für .de" region="EU" />
               <Row service="Identity Digital" purpose="WHOIS/RDAP und Verfügbarkeits-Check für .io" region="USA" />
-              <Row service="nic.at, Registro .it, EURid" purpose="WHOIS und Verfügbarkeits-Check für .at, .it und .eu" region="EU" />
+              <Row service="EURid" purpose="WHOIS und Verfügbarkeits-Check für .eu" region="EU" />
               <Row service="rdap.org" purpose="Netz und Betreiber zu einer IP-Adresse (IP-Details); WHOIS/RDAP und Verfügbarkeits-Check nur, solange das IANA-Verzeichnis nicht abrufbar ist" region="USA" />
               <Row service="Google PageSpeed Insights" purpose="Performance-Analyse — nur auf Klick" region="USA" />
               <Row service="VirusTotal (Google)" purpose="Reputations-Check — nur auf Klick" region="USA" />
@@ -223,8 +223,11 @@ export default function DatenschutzText({ onOpenImpressum }: DatenschutzTextProp
           erhalten nur Namen und Record-Typ. Für WHOIS und den Verfügbarkeits-Check
           fragt der Server die Registry der jeweiligen Endung direkt; welche das ist,
           steht im öffentlichen RDAP-Verzeichnis der IANA, das der Server einmal am Tag
-          lädt — dabei geht nichts über deine Abfrage an die IANA. Für .ch fragt er
-          nicht, weil die Registry automatisierte Abfragen sperrt. PageSpeed und
+          lädt — dabei geht nichts über deine Abfrage an die IANA. Für .ch, .at und
+          .it fragt er nicht: Die Registry von .ch sperrt automatisierte Abfragen,
+          nic.at und Registro .it erlauben die Weitergabe ihrer Daten nur mit
+          Genehmigung. Die WHOIS-Ansicht verlinkt dann nur die Web-Abfrage der
+          Registry; der Link enthält die Domain nicht. PageSpeed und
           VirusTotal laufen nicht automatisch — sie starten erst, wenn du den
           jeweiligen Tab öffnest und den Check ausdrücklich anstößt.
         </p>
