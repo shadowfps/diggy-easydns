@@ -71,6 +71,20 @@ describe('fetchRdap', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('bricht ab, wenn die Prüfung des Ziels über das Budget hinaus hängt', async () => {
+    // Etwa getaddrinfo ohne Antwort, ohne Bootstrap (services/registry.ts).
+    fetchMock.mockResolvedValueOnce(redirect('https://rdap.example/domain/x.org'));
+    const ctrl = new AbortController();
+    const pending = fetchRdap('https://rdap.org/domain/x.org', {
+      signal: ctrl.signal,
+      allowHost: () => new Promise<boolean>(() => {}),
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    ctrl.abort(new DOMException('Timeout', 'AbortError'));
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('bricht nach drei Weiterleitungen ab', async () => {
     fetchMock.mockImplementation(async () => redirect('https://rdap2.example/loop'));
     await expect(fetchRdap('https://rdap.example/domain/x.org', { signal, allowHost })).rejects.toThrow(

@@ -57,7 +57,33 @@ export async function fetchRdap(
     if (next.protocol !== 'https:' || next.username || next.password || next.port) {
       throw new Error(`Weiterleitung auf ${next.protocol}//${next.host} abgelehnt`);
     }
-    if (!(await allowHost(next.hostname))) throw new Error(`Weiterleitung auf ${next.hostname} abgelehnt`);
+    if (!(await untilAborted(allowHost(next.hostname), signal))) {
+      throw new Error(`Weiterleitung auf ${next.hostname} abgelehnt`);
+    }
     current = next.href;
   }
+}
+
+/**
+ * Wartet auf `check`, aber nicht über `signal` hinaus. Ohne Bootstrap löst
+ * `allowHost` den Namen per getaddrinfo auf — das kennt kein Timeout, und
+ * hinge die Abfrage sonst über ihr Budget hinaus (und hielte ihren Platz in
+ * der Drosselung, lib/hostThrottle.ts).
+ */
+function untilAborted<T>(check: T | Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    Promise.resolve(check).then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      }
+    );
+  });
 }
