@@ -182,12 +182,14 @@ describe('Node-Version der Tests', () => {
   /**
    * Wie ein Anbieter auf `fetch` reagiert, hing an der Node-Version: Node 26
    * handelt HTTP/2 aus, Node 24 nicht. Die Tests oben sagen über Produktion
-   * nur etwas, wenn die CI dieselbe Hauptversion nutzt wie das Image.
+   * nur etwas, wenn die CI dieselbe Version nutzt wie das Image — exakt,
+   * denn auch Patch-Releases tauschen undici aus (so der Sicherheitspatch
+   * 24.22.1). Hebt Dependabot nur das Dockerfile, fällt das hier auf.
    */
-  it('nutzt in der CI dieselbe Node-Hauptversion wie das Produktions-Image', () => {
+  it('nutzt in der CI dieselbe Node-Version wie das Produktions-Image', () => {
     const read = (file: string) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
-    const image = [...read('Dockerfile').matchAll(/^FROM node:(\d+)\b/gm)].map((m) => m[1]);
-    const ci = [...read('.github/workflows/container.yml').matchAll(/node-version:\s*['"]?(\d+)/g)].map((m) => m[1]);
+    const image = [...read('Dockerfile').matchAll(/^FROM node:([\d.]+\d)\b/gm)].map((m) => m[1]);
+    const ci = [...read('.github/workflows/container.yml').matchAll(/node-version:\s*['"]?([\d.]+\d)/g)].map((m) => m[1]);
 
     expect(image.length, 'FROM node:… im Dockerfile').toBeGreaterThan(0);
     expect(ci.length, 'node-version in container.yml').toBeGreaterThan(0);

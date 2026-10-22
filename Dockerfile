@@ -1,6 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS build
+# Node-Version exakt gepinnt, nicht `node:24-alpine`: Das Image wird nur bei
+# einem Push auf main gebaut. Mit dem Sammel-Tag kam ein Node-Sicherheitspatch
+# erst mit dem nächsten Merge in Produktion, und niemand sah, welche Version
+# lief. 24.22.1 schließt die Lücken vom 21.10.2026, darunter CVE-2026-111497:
+# Der Brotli-Decoder, den safeTarget.ts auf Antworten fremder Websites
+# anwendet, schreibt dort über Puffergrenzen. Neue Versionen kommen per
+# Dependabot (docker); die CI (container.yml) muss dieselbe Version nutzen.
+FROM node:24.22.1-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -14,7 +21,7 @@ COPY server ./server
 COPY shared ./shared
 RUN npm run build
 
-FROM node:24-alpine AS runtime
+FROM node:24.22.1-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
