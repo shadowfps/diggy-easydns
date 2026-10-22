@@ -41,6 +41,19 @@ updates:
       - dependency-name: 'typescript'
         versions: ['>=6.1.0']
 
+  # Das Node-Image ist exakt gepinnt (siehe Dockerfile), sonst bliebe es nach
+  # einem Sicherheitspatch auf der alten Version stehen. Täglich, weil Node
+  # Sicherheitsreleases ohne festen Wochentag veröffentlicht. node-version in
+  # container.yml zieht Dependabot NICHT mit — im PR von Hand nachziehen.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: daily
+    ignore:
+      # Majors gehen mit @types/node und der CI zusammen (siehe oben).
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

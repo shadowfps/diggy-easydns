@@ -43,7 +43,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: npm
 
       - name: Install dependencies
@@ -114,7 +114,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 24.22.1
 
       - name: E2E-Tests im Playwright-Image
         run: npm run e2e:docker
@@ -152,7 +152,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: npm
 
       - name: Install dependencies
