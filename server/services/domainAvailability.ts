@@ -7,6 +7,26 @@ import { requestRdap, requestWhois, type Port43Step, type RdapStep } from './reg
 /** Gängige TLDs für Alternativ-Vorschläge (Reihenfolge wie im UI). */
 const ALT_TLDS = ['de', 'com', 'io', 'net', 'app', 'dev', 'org'] as const;
 
+/** Mehr Zeilen zeigt die Ansicht nicht. */
+const MAX_CANDIDATES = 10;
+
+/** Sind diese Endungen beide vergeben, lohnt eine Abwandlung des Namens. */
+const PRIMARY_TLDS = ['com', 'de'] as const;
+
+/**
+ * Abwandlungen des Namens, immer auf .com (#147). Vorher stand `my<name>.com`
+ * bei jeder Suche an zweiter Stelle — auch wenn der Name selbst frei war. Das
+ * wirkte wie ein starres Muster statt wie ein Vorschlag.
+ */
+const NAME_VARIANTS: readonly ((label: string) => string)[] = [
+  (label) => `get${label}`,
+  (label) => `try${label}`,
+  (label) => `${label}hq`,
+  (label) => `${label}app`,
+  (label) => `my${label}`,
+];
+const VARIANT_COUNT = 2;
+
 const LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 interface ParsedQuery {
@@ -74,12 +94,36 @@ export function buildDomainCandidates(label: string, inputDomain?: string): stri
   };
 
   if (inputDomain) add(inputDomain);
-  add(`my${label}.com`);
   for (const tld of ALT_TLDS) {
     add(`${label}.${tld}`);
   }
 
-  return candidates.slice(0, 10);
+  return candidates.slice(0, MAX_CANDIDATES);
+}
+
+/**
+ * Nur wenn der Name auf .com und .de nachweislich vergeben ist. „Unklar“ zählt
+ * nicht: Dann wissen wir nicht, ob der Name selbst noch zu haben ist.
+ */
+export function shouldSuggestVariants(label: string, results: readonly DomainAvailabilityResult[]): boolean {
+  return PRIMARY_TLDS.every(
+    (tld) => results.find((result) => result.domain === `${label}.${tld}`)?.status === 'taken'
+  );
+}
+
+/**
+ * Zwei Abwandlungen je Name. Welche, hängt am Namen: Dieselbe Suche liefert
+ * dieselben Vorschläge, verschiedene Namen bekommen verschiedene. Zu lange
+ * Labels (über 63 Zeichen) fallen weg.
+ */
+export function buildNameVariants(label: string): string[] {
+  const start = [...label].reduce((sum, char) => sum + char.charCodeAt(0), 0) % NAME_VARIANTS.length;
+  const rotated = [...NAME_VARIANTS.slice(start), ...NAME_VARIANTS.slice(0, start)];
+  return rotated
+    .map((variant) => variant(label))
+    .filter(isValidDomainLabel)
+    .slice(0, VARIANT_COUNT)
+    .map((variant) => `${variant}.com`);
 }
 
 export async function checkDomainsAvailability(rawInput: string): Promise<DomainCheckReport> {
@@ -87,6 +131,14 @@ export async function checkDomainsAvailability(rawInput: string): Promise<Domain
   const candidates = buildDomainCandidates(label, inputDomain);
 
   const results = await Promise.all(candidates.map((domain) => checkSingleDomain(domain)));
+
+  // Zweite Runde nur, wenn der Name selbst auf den wichtigsten Endungen weg ist.
+  if (shouldSuggestVariants(label, results)) {
+    const variants = buildNameVariants(label)
+      .filter((domain) => !candidates.includes(domain))
+      .slice(0, MAX_CANDIDATES - results.length);
+    results.push(...(await Promise.all(variants.map((domain) => checkSingleDomain(domain)))));
+  }
 
   return {
     query: rawInput.trim(),

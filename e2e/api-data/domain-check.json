@@ -5,11 +5,6 @@
     "checkedAt": "2026-10-16T14:09:10.631Z",
     "results": [
       {
-        "domain": "mydiggy.com",
-        "status": "taken",
-        "source": "rdap.verisign.com"
-      },
-      {
         "domain": "diggy.de",
         "status": "taken",
         "source": "rdap.denic.de"
@@ -43,6 +38,16 @@
         "domain": "diggy.org",
         "status": "unknown",
         "source": "rdap.org"
+      },
+      {
+        "domain": "diggyhq.com",
+        "status": "available",
+        "source": "rdap.verisign.com"
+      },
+      {
+        "domain": "diggyapp.com",
+        "status": "taken",
+        "source": "rdap.verisign.com"
       }
     ]
   }
