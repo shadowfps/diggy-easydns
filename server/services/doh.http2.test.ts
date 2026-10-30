@@ -189,10 +189,15 @@ describe('Node-Version der Tests', () => {
   it('nutzt in der CI dieselbe Node-Version wie das Produktions-Image', () => {
     const read = (file: string) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
     const image = [...read('Dockerfile').matchAll(/^FROM node:([\d.]+\d)\b/gm)].map((m) => m[1]);
-    const ci = [...read('.github/workflows/container.yml').matchAll(/node-version:\s*['"]?([\d.]+\d)/g)].map((m) => m[1]);
+    const versions = (workflow: string) =>
+      [...read(`.github/workflows/${workflow}`).matchAll(/node-version:\s*['"]?([\d.]+\d)/g)].map((m) => m[1]);
+    const ci = versions('container.yml');
+    // Die Testumgebung (dev.diggydns.cloud) prüft mit derselben Version.
+    const dev = versions('deploy-dev.yml');
 
     expect(image.length, 'FROM node:… im Dockerfile').toBeGreaterThan(0);
     expect(ci.length, 'node-version in container.yml').toBeGreaterThan(0);
-    expect([...new Set([...image, ...ci])]).toEqual([image[0]]);
+    expect(dev.length, 'node-version in deploy-dev.yml').toBeGreaterThan(0);
+    expect([...new Set([...image, ...ci, ...dev])]).toEqual([image[0]]);
   });
 });

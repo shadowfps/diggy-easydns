@@ -226,4 +226,6 @@ export type ApiErrorCode =
   | 'contact_rate_limited'
   | 'contact_challenge_failed'
   | 'contact_invalid_input'
-  | 'contact_failed';
+  | 'contact_failed'
+  | 'site_locked'
+  | 'site_password_wrong';

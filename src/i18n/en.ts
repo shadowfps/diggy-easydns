@@ -31,6 +31,15 @@ const ui: Dictionary = {
   Hauptnavigation: 'Main navigation',
   Einstellungen: 'Settings',
 
+  // ─── Testumgebung (Passwortschutz) ───────────────────────────────────
+  Testversion: 'Preview',
+  Anmelden: 'Sign in',
+  Passwort: 'Password',
+  'Diese Version von diggy ist zum Testen da und noch nicht öffentlich. Gib das Passwort ein, das du bekommen hast.':
+    'This version of diggy is for testing and not public yet. Enter the password you were given.',
+  'Bitte gib das Passwort ein.': 'Please enter the password.',
+  'Anmeldung fehlgeschlagen.': 'Sign-in failed.',
+
   // ─── Startseite ──────────────────────────────────────────────────────
   'Was steckt hinter deiner Domain?': 'What’s behind your domain?',
   'DNS, SSL, Mail-Security und Propagation auf einen Blick.':

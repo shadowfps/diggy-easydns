@@ -200,7 +200,7 @@ export async function sendContactMessage(input: ContactMessageInput): Promise<Co
     from,
     to,
     replyTo: { name: safeName, address: payload.email },
-    subject: `[diggy] Kontakt: ${sanitizeMailSubjectPart(payload.name)}`,
+    subject: `${subjectPrefix()}[diggy] Kontakt: ${sanitizeMailSubjectPart(payload.name)}`,
     text: buildContactEmailText(payload),
     html: buildContactEmailHtml(payload),
   });
@@ -238,4 +238,14 @@ export async function sendContactMessage(input: ContactMessageInput): Promise<Co
   }
 
   return { sent: true };
+}
+
+/**
+ * Vorsatz für den Betreff der Benachrichtigung — `[dev] ` auf der
+ * Testumgebung, damit Testnachrichten im Postfach nicht wie echte aussehen.
+ * Auf diggydns.cloud leer.
+ */
+function subjectPrefix(): string {
+  const prefix = sanitizeMailSubjectPart(process.env.CONTACT_SUBJECT_PREFIX ?? '').trim();
+  return prefix ? `${prefix} ` : '';
 }

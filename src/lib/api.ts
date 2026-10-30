@@ -64,6 +64,9 @@ async function getJson<T>(url: string, fallback: LookupError): Promise<T> {
       // nicht“: `domain_check_failed` meint eine ungültige Eingabe.
       throw new Error(fallback.message);
     }
+    // Testumgebung: Die Sitzung ist abgelaufen (siehe SiteGate.tsx). Neu
+    // laden zeigt wieder die Anmeldung, statt jeden Check scheitern zu lassen.
+    if (res.status === 401 && payload.error === 'site_locked') window.location.reload();
     // ApiError statt Error: der Code reist mit, die Oberfläche kann daran
     // übersetzen (#86). `message` bleibt dieselbe wie bisher.
     throw new ApiError(payload);
@@ -253,4 +256,30 @@ export async function sendContactMessage(
   }
 
   return res.json();
+}
+
+/* ─── Testumgebung (server/lib/siteGate.ts) ───────────────────────────── */
+
+/** Ist dieser Browser auf der Testumgebung angemeldet? */
+export async function fetchSiteGateStatus(): Promise<{ open: boolean }> {
+  const res = await fetch('/api/site-gate');
+  if (!res.ok) throw new Error(t('Anmeldung fehlgeschlagen.'));
+  return res.json();
+}
+
+/** Meldet mit dem Passwort an; der Server setzt das Sitzungs-Cookie. */
+export async function signInToSite(password: string): Promise<void> {
+  const res = await fetch('/api/site-gate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (res.ok) return;
+  let payload: LookupError = { error: 'site_password_wrong', message: t('Anmeldung fehlgeschlagen.') };
+  try {
+    payload = await res.json();
+  } catch {
+    // Keine JSON-Antwort — die eigene Meldung reicht.
+  }
+  throw new ApiError(payload);
 }

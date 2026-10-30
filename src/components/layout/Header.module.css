@@ -100,6 +100,22 @@
   min-width: 0;
 }
 
+/*
+ * „Testversion“ neben der Wortmarke (nur dev.diggydns.cloud). Auf dem Handy
+ * nimmt sie der Suche im Header zu viel Platz — dort zeigt sie nur die Seite
+ * ohne Suche.
+ */
+.preview {
+  display: inline-flex;
+  align-self: center;
+}
+
+@media (max-width: 767.98px) {
+  .header[data-search] .preview {
+    display: none;
+  }
+}
+
 .actions {
   display: flex;
   flex-shrink: 0;

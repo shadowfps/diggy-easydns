@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/errors/ErrorBoundary';
 import { AppErrorFallback } from './components/errors/AppErrorFallback';
+import { SiteGate } from './components/siteGate/SiteGate';
 import { initLanguage } from './i18n';
 /*
  * Flow zuerst, in der geschichteten Fassung: seine Regeln liegen in eigenen
@@ -24,7 +25,10 @@ function render() {
   root.render(
     <StrictMode>
       <ErrorBoundary fallback={({ error }) => <AppErrorFallback error={error} />}>
-        <App />
+        {/* Auf der Testumgebung erst das Passwort (SiteGate.tsx), sonst sofort die App. */}
+        <SiteGate>
+          <App />
+        </SiteGate>
       </ErrorBoundary>
     </StrictMode>
   );

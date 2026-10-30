@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import {
+  Badge,
   Button,
   Content,
   ContextMenu,
@@ -22,6 +23,7 @@ import { IconBrandGithub, IconMoon, IconSun } from '@tabler/icons-react';
 import { useTheme } from '@/hooks/useTheme';
 import { setLanguage, useI18n } from '@/i18n';
 import type { AppView } from '@/lib/lookupPath';
+import { isSiteGated } from '@/lib/siteGate';
 import styles from './Header.module.css';
 
 const GITHUB_URL = 'https://github.com/shadowfps/diggy-easydns';
@@ -54,6 +56,12 @@ export function Header({ view, search }: HeaderProps) {
           <Link href="/" aria-label={t('Zur Startseite')} className={styles.wordmark}>
             diggy
           </Link>
+          {/* Auf der Testumgebung unübersehbar — damit niemand sie für die Live-Seite hält. */}
+          {isSiteGated() && (
+            <span className={styles.preview}>
+              <Badge color="violet">{t('Testversion')}</Badge>
+            </span>
+          )}
           {/* Mit Suche im Header ist für den Slogan kein Platz — die Suche ist wichtiger. */}
           {!search && (
             <Text className={styles.tagline}>

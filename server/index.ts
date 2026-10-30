@@ -20,6 +20,7 @@ import { createIndexRenderer, domainFromLookupPath, lookupPreview, previewOrigin
 import { BlockedTargetError } from './lib/safeTarget.js';
 import { upstreamErrorStatus } from './lib/upstreamError.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
+import { siteGateFromEnv } from './lib/siteGate.js';
 import { propagationSection, propagationTypeQuery } from './services/propagation.js';
 import { AuthoritativeBusyError, authoritativeSection } from './services/authoritative.js';
 import { PROPAGATION_RECORD_TYPES } from '../shared/propagation.js';
@@ -75,7 +76,17 @@ function readDistIndex(): string | null {
   }
 }
 
-const distIndexHtml = readDistIndex();
+/**
+ * Passwortschutz der Testumgebung (lib/siteGate.ts) — nur mit SITE_PASSWORD,
+ * auf diggydns.cloud also aus. Steht vor dem index.html, weil die Sperre dort
+ * ihren Meta-Tag einträgt.
+ */
+const siteGate = siteGateFromEnv();
+
+const distIndexHtml = (() => {
+  const html = readDistIndex();
+  return html && siteGate ? siteGate.markHtml(html) : html;
+})();
 
 /**
  * SHA-256-Hashes aller Inline-`<script>`-Blöcke im gebauten index.html.
@@ -121,8 +132,9 @@ if (proxyHops > 0) app.set('trust proxy', proxyHops);
 
 /**
  * Die CSP ist auf die tatsächlich genutzten Quellen zugeschnitten:
- *  - `style-src` braucht 'unsafe-inline', weil Framer Motion und GSAP
- *    Inline-Styles für Transforms setzen. Ohne das bricht jede Animation.
+ *  - `style-src` braucht 'unsafe-inline': mittwald Flow setzt Inline-Styles
+ *    (Breiten von Skeletons, Position der Tab-Markierung, Overlays) und
+ *    hängt eigene `<style>`-Blöcke an.
  *  - `img-src data:` ist Pflicht für die SVG-Grain-Textur im Body-Background
  *    (src/styles/globals.css).
  *  - Keine Fremd-Hosts: Schriften liegen lokal im Bundle (#13), die App lädt
@@ -188,6 +200,9 @@ if (corsOrigins?.length) {
 }
 
 app.use(express.json({ limit: '64kb' }));
+
+// Die Testumgebung soll in keiner Suchmaschine auftauchen.
+if (siteGate) app.use(siteGate.noIndex);
 
 /**
  * CSRF-Riegel für den einzigen schreibenden Endpoint.
@@ -387,6 +402,21 @@ app.get('/api/health', (_req: Request, res: Response) => {
   }
   res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
 });
+
+/*
+ * Testumgebung: Anmeldung und Sperre vor allen übrigen API-Routen. Health
+ * bleibt oben offen, der Container-Healthcheck meldet sich nicht an.
+ */
+if (siteGate) {
+  const siteLoginLimiter = rateLimit({
+    windowMs: 15 * 60_000,
+    max: 10,
+    message: 'Zu viele Anmeldeversuche. Bitte in ein paar Minuten erneut versuchen.',
+  });
+  app.get('/api/site-gate', siteGate.status);
+  app.post('/api/site-gate', assertSameOrigin, siteLoginLimiter, siteGate.login);
+  app.use('/api', siteGate.guard);
+}
 
 app.use('/api', apiLimiter);
 
@@ -855,7 +885,9 @@ app.get('/api/lookup/techstack', techStackConcurrency, async (req: Request, res:
 });
 
 if (existsSync(distIndex)) {
-  app.use(express.static(distDir));
+  // Mit Sperre liefert die Catch-all-Route auch `/` aus — sonst käme das
+  // index.html ohne den Meta-Tag direkt aus dem Verzeichnis.
+  app.use(express.static(distDir, siteGate ? { index: false } : undefined));
   // Express 5 (path-to-regexp 8) braucht für den Wildcard einen Namen; die
   // geschweiften Klammern machen ihn optional, damit auch `/` passt.
   app.get('/{*splat}', (req: Request, res: Response, next) => {
@@ -872,6 +904,13 @@ if (existsSync(distIndex)) {
       res.set('Cache-Control', 'no-cache');
       res.type('html');
       return res.send(renderLookupIndex(lookupPreview(domain, previewOrigin(req, publicOrigin))));
+    }
+
+    // Testumgebung: das index.html mit Meta-Tag aus dem Speicher.
+    if (siteGate && distIndexHtml) {
+      res.set('Cache-Control', 'no-cache');
+      res.type('html');
+      return res.send(distIndexHtml);
     }
 
     // Mit root prüft sendFile nur unterhalb von dist auf Dotfiles, damit

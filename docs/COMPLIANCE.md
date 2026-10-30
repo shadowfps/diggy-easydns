@@ -142,7 +142,13 @@ und `dist/assets/*.css` enthalten keine Fremd-Host-Referenz. Das Stylesheet
 von mittwald Flow würde seine Schriften von `cdn.mittwald.de` laden; der Build
 entfernt diese Regeln (`vite.config.ts`), diggy liefert dieselben Schriften
 selbst aus, und `npm run size` bricht ab, sobald ein Stylesheet wieder einen
-fremden Host nennt. Ausgeliefert wird
+fremden Host nennt.
+
+Die Testumgebung dev.diggydns.cloud ist nicht öffentlich: Sie fragt ein
+Passwort ab und setzt danach ein technisch notwendiges Sitzungs-Cookie
+(`diggy_site_session`, 30 Tage, ohne personenbezogene Daten — nur Ablaufdatum
+und Signatur). Auf diggydns.cloud gibt es weder Abfrage noch Cookie
+(`docs/DEPLOYMENT.md`, „Testumgebung“). Ausgeliefert wird
 sie über Cloudflare (siehe unten); dazu kommen bei Verbindungsfehlern die
 NEL-Berichte an `a.nel.cloudflare.com`.
 

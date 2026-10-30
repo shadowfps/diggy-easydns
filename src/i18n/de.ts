@@ -38,6 +38,14 @@ export type DeText =
   | 'Hauptnavigation'
   | 'Einstellungen'
 
+  // ─── Testumgebung (Passwortschutz) ───────────────────────────────────
+  | 'Testversion'
+  | 'Anmelden'
+  | 'Passwort'
+  | 'Diese Version von diggy ist zum Testen da und noch nicht öffentlich. Gib das Passwort ein, das du bekommen hast.'
+  | 'Bitte gib das Passwort ein.'
+  | 'Anmeldung fehlgeschlagen.'
+
   // ─── Startseite ──────────────────────────────────────────────────────
   | 'Was steckt hinter deiner Domain?'
   | 'DNS, SSL, Mail-Security und Propagation auf einen Blick.'

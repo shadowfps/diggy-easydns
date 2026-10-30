@@ -390,4 +390,6 @@ export const apiErrors: Record<ApiErrorCode, string> = {
     'The form has expired or was sent too quickly. Please reload the page and try again.',
   contact_invalid_input: 'Please check your name, email address and message.',
   contact_failed: 'Your message couldn’t be sent right now. Please try again later.',
+  site_locked: 'This preview of diggy is password-protected. Please sign in first.',
+  site_password_wrong: 'That password isn’t correct.',
 };
