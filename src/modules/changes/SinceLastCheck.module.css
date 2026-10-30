@@ -1,0 +1,66 @@
+/*
+ * Kopf und Liste der Karte „Seit dem letzten Check“ — nur, was Flow nicht
+ * abdeckt. Abstände aus Flows Skala, Farben aus seinen Tokens.
+ */
+
+/* „(vor 3 Tagen)“ und der Status gehören zur Überschrift, sind aber kein Titel. */
+.ago {
+  font-weight: normal;
+}
+
+.status {
+  display: block;
+  margin-top: var(--size-px--xxs, 2px);
+  font-size: var(--font-size-text--s);
+  font-weight: normal;
+  color: var(--neutral--color--800);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-px--xs);
+  padding-block: var(--size-px--s);
+  border-top: 1px solid var(--neutral--color--300);
+}
+
+@media (min-width: 640px) {
+  .row {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--size-px--m);
+  }
+
+  .marker {
+    flex: 0 0 7rem;
+  }
+}
+
+.description {
+  min-width: 0;
+}
+
+.numbers {
+  font-variant-numeric: tabular-nums;
+}
+
+.records {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--size-px--xxs, 2px) var(--size-px--m);
+}
+
+.value {
+  min-width: 0;
+  color: var(--neutral--color--800);
+}

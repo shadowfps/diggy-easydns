@@ -79,8 +79,8 @@ describe('App auf Englisch', () => {
     expect(screen.getByPlaceholderText('Look up a domain or IP')).toBeInTheDocument();
     expect(screen.getByText('What diggy checks')).toBeInTheDocument();
     expect(screen.getByText('Email protection')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Legal notice' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Privacy policy' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Legal notice/ })).toHaveAttribute('href', '/impressum');
+    expect(screen.getByRole('link', { name: /^Privacy policy/ })).toHaveAttribute('href', '/datenschutz');
     expect(document.documentElement.lang).toBe('en');
   });
 

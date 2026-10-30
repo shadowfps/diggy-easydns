@@ -37,13 +37,20 @@ programmierten Regeln:
 | Verfügbarkeits-Check | HTTP-Statuscode der RDAP-Antwort (404 = frei) bzw. der feste „nicht gefunden“-Satz der Registry über WHOIS (Port 43) | `server/services/domainAvailability.ts`, `server/services/whoisText.ts` |
 
 Es gibt kein Modell, keine Trainingsdaten, keine Gewichte, keine Inferenz und
-keine Anpassung des Verhaltens nach der Inbetriebnahme. Die
-Laufzeit-Abhängigkeiten enthalten keine ML- oder LLM-Bibliothek — nachprüfbar
-über `package.json`:
+keine Anpassung des Verhaltens nach der Inbetriebnahme. Die Abhängigkeiten
+enthalten keine ML- oder LLM-Bibliothek — nachprüfbar über `package.json`.
+Der Server braucht zur Laufzeit nur:
 
 ```
-@fontsource/*, @gsap/react, clsx, cors, dotenv, express, gsap, helmet,
-lucide-react, motion, nodemailer, react, react-dom, tailwind-merge, tldts
+cors, dotenv, express, helmet, nodemailer, tldts
+```
+
+Die Oberfläche bündelt der Build aus diesen Paketen (in `devDependencies`,
+weil der Server sie nicht lädt):
+
+```
+@fontsource/*, @mittwald/flow-react-components, @mittwald/react-use-promise,
+@tabler/icons-react, react, react-dom, react-aria-components, react-hook-form
 ```
 
 Die App bewirbt sich auch nicht als KI-Anwendung; in den UI-Texten kommt keine
@@ -131,7 +138,17 @@ stützt sich auf den Angemessenheitsbeschluss (Art. 45 DSGVO), nicht auf Art. 49
 
 Nach dem Umstieg auf lokal gehostete Schriften (#13) lädt die Seite beim
 Aufruf **nichts** mehr von Dritten. Nachprüfbar: das gebaute `dist/index.html`
-und `dist/assets/*.css` enthalten keine Fremd-Host-Referenz. Ausgeliefert wird
+und `dist/assets/*.css` enthalten keine Fremd-Host-Referenz. Das Stylesheet
+von mittwald Flow würde seine Schriften von `cdn.mittwald.de` laden; der Build
+entfernt diese Regeln (`vite.config.ts`), diggy liefert dieselben Schriften
+selbst aus, und `npm run size` bricht ab, sobald ein Stylesheet wieder einen
+fremden Host nennt.
+
+Die Testumgebung dev.diggydns.cloud ist nicht öffentlich: Sie fragt ein
+Passwort ab und setzt danach ein technisch notwendiges Sitzungs-Cookie
+(`diggy_site_session`, 30 Tage, ohne personenbezogene Daten — nur Ablaufdatum
+und Signatur). Auf diggydns.cloud gibt es weder Abfrage noch Cookie
+(`docs/DEPLOYMENT.md`, „Testumgebung“). Ausgeliefert wird
 sie über Cloudflare (siehe unten); dazu kommen bei Verbindungsfehlern die
 NEL-Berichte an `a.nel.cloudflare.com`.
 

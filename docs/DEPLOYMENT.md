@@ -69,7 +69,7 @@ dem vorherigen Digest. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die
 
 Fehlt eines der SMTP-/Kontakt-Secrets, bricht der Deploy bewusst ab, statt die Stack-Env leer zu überschreiben.
 
-Versions-Tags wie `v0.3.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
+Versions-Tags wie `v0.4.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
 
 - Projekt: `p-nmi5ji`
 - Container-Stack: `86540922-d203-4150-8776-9cc4e22352bd`
@@ -81,9 +81,93 @@ Für manuelles Deployment zuerst prüfen, ob der Ziel-Stack weitere Services ent
 mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
 # DIGGY_IMAGE muss gesetzt sein, sonst fällt die Compose auf :latest zurück
 # und der Rollout bleibt aus. Digest oder Versions-Tag verwenden:
-export DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.3.0
+export DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.4.0
 
 mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file .env
 ```
 
 Beim manuellen Deploy liefert die lokale `.env` die Werte für die `${…}`-Platzhalter in `compose.mittwald.yml` (im CI übernehmen das die GitHub-Secrets). Die Runtime-Secrets gehören nicht ins Image. Da das Repository öffentlich ist, kann auch das GHCR-Package öffentlich betrieben werden; für ein privates Package müssen im mittwald-Projekt Zugangsdaten am bereits vorhandenen `ghcr.io`-Registry-Eintrag hinterlegt werden.
+
+## Testumgebung (dev.diggydns.cloud)
+
+Ein Spiegel von diggydns.cloud zum Testen vor dem Release: gleiches Image,
+gleiche Konfiguration, aber mit Passwortabfrage und ohne Suchmaschinen.
+
+| | Prod | Dev |
+|---|---|---|
+| Adresse | https://diggydns.cloud | https://dev.diggydns.cloud |
+| Stack | `86540922-d203-4150-8776-9cc4e22352bd` (default) | `ec47560f-2662-4d57-800b-3bd4e039b29d` |
+| Ausgerollt von | `main` (`container.yml`) | Branch `dev` (`deploy-dev.yml`) |
+| Image-Tag | `latest`, `sha-…` | `dev`, `sha-…` |
+
+Beide Stacks liegen im selben mStudio-Projekt (`p-nmi5ji`), aber getrennt:
+`mw stack deploy` gleicht immer den ganzen Stack ab, ein Dev-Deploy kann Prod
+so nicht anfassen.
+
+**Ablauf**
+
+1. Lokal prüfen (`npm run verify`, `npm run e2e:docker`).
+2. Den Branch auf `dev` schieben — das rollt aus:
+   ```bash
+   git push origin <branch>:dev            # Branch baut auf dem letzten dev-Stand auf
+   git push --force-with-lease origin <branch>:dev   # anderer Branch als zuletzt
+   ```
+   Auf dev steht immer der zuletzt geschobene Stand.
+3. Testen lassen.
+4. Version in `package.json` anheben (siehe unten), dann wie gewohnt per PR
+   nach `main` — das rollt nach diggydns.cloud aus.
+
+**Version**
+
+Die Versionsnummer steht nur in `package.json`; Footer und `/api/health`
+lesen sie von dort. Dazu kommt automatisch der Commit, aus dem gebaut wurde
+(„v0.4.0 · 085959d“ im Footer, `commit` in `/api/health`) — daran sieht man
+auf dev wie auf Prod, welcher Stand läuft, und ob ein Deploy angekommen ist:
+
+```bash
+curl -s https://dev.diggydns.cloud/api/health   # {"status":"ok",…,"version":"0.4.0","commit":"085959d"}
+```
+
+Hochgezählt wird mit jedem Release nach Prod, im PR nach `main`
+(Semver, solange 0.x: neue Funktionen → Minor, nur Fehlerbehebungen → Patch):
+
+```bash
+npm version minor --no-git-tag-version   # oder: patch
+```
+
+Nach dem Merge optional das Tag setzen — es baut ein unveränderliches Image
+`:vX.Y.Z` (siehe oben): `git tag v0.4.0 <merge-commit> && git push origin v0.4.0`.
+
+**Passwort**
+
+Die Testumgebung startet mit `SITE_PASSWORD` (GitHub-Secret
+`DEV_SITE_PASSWORD`; ohne das Secret bricht der Deploy ab, statt dev offen
+ins Netz zu stellen). Dann sperrt der Server die API, bis sich der Browser
+angemeldet hat, und die App zeigt statt des Reports eine Anmeldung
+(`server/lib/siteGate.ts`, `src/components/siteGate/`). Nach dem Passwort
+setzt der Server ein Sitzungs-Cookie für 30 Tage; ein neues Passwort meldet
+alle ab. Zusätzlich:
+
+- `X-Robots-Tag: noindex, nofollow` auf jeder Antwort,
+- „Testversion“ neben der Wortmarke,
+- `[dev]` im Betreff der Kontakt-Mails (`CONTACT_SUBJECT_PREFIX`),
+- `PUBLIC_ORIGIN` ist `https://dev.diggydns.cloud`.
+
+Ohne `SITE_PASSWORD` (Prod) ist nichts davon aktiv. Das Frontend selbst ist
+auch auf dev ohne Anmeldung abrufbar — der Code ist ohnehin öffentlich, und
+ohne API zeigt die App nichts.
+
+Lokal ausprobieren:
+
+```bash
+SITE_PASSWORD=test PORT=3002 node dist-server/server/index.js
+```
+
+**Einmalig eingerichtet**
+
+- Stack: `mw stack create -p p-nmi5ji -d "dev | dev.diggydns.cloud"`
+- DNS bei Cloudflare: `dev` wie `diggydns.cloud` (A-Record auf die IP des
+  Projekts, proxied).
+- Virtualhost nach dem ersten Deploy:
+  `mw domain virtualhost create -p p-nmi5ji --hostname dev.diggydns.cloud --path-to-container /:<container-id>:3001/tcp`
+

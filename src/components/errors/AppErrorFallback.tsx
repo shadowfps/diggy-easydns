@@ -1,47 +1,48 @@
-import { AlertTriangle } from 'lucide-react';
+import {
+  ActionGroup,
+  Button,
+  Heading,
+  IconDanger,
+  IllustratedMessage,
+  LayoutCard,
+  Link,
+  Text,
+} from '@mittwald/flow-react-components';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useI18n } from '@/i18n';
+import styles from './AppErrorFallback.module.css';
 
 /**
  * Ganzseitiger Fallback — die App als Ganzes ist nicht mehr benutzbar.
  *
  * Aufgebaut wie `EmptyState` mit `tone="danger"`, aber von Hand: der Titel
- * muss hier die `h1` der Seite bleiben (EmptyState setzt eine `h3`), und die
- * Fehlermeldung steht unter den Aktionen.
+ * muss hier die `h1` der Seite bleiben, und die Fehlermeldung steht unter den
+ * Aktionen.
  */
 export function AppErrorFallback({ error }: { error: Error }) {
   const { t } = useI18n();
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="card flex w-full max-w-md flex-col items-center py-10 text-center sm:py-12">
-        <span className="icon-tile icon-tile-danger size-11">
-          <AlertTriangle className="size-5" />
-        </span>
-        <h1 className="mt-4 text-base font-semibold text-fg">{t('Da ist etwas schiefgelaufen')}</h1>
-        <p className="mt-1 text-sm text-fg-muted">
-          {t('Die Ansicht konnte nicht dargestellt werden. Ein Neuladen hilft meistens.')}
-        </p>
-        <div className="mt-5 flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-center">
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="btn btn-primary"
-          >
-            {t('Neu laden')}
-          </button>
-          {/*
-            Die App ist URL-basiert: ein kaputter Permalink würde beim Neuladen
-            wieder in denselben Fehler laufen. Deshalb zusätzlich ein Weg zurück
-            auf die Startseite.
-          */}
-          <a href="/" className="btn btn-secondary">
-            {t('Zur Startseite')}
-          </a>
-        </div>
-        <p className="mt-5 wrap-break-word font-mono text-[11px] text-fg-subtle">
-          {error.message}
-        </p>
-      </div>
+    <div className={styles.page}>
+      <LayoutCard className={styles.card}>
+        <IllustratedMessage color="danger">
+          <IconDanger />
+          <Heading level={1}>{t('Da ist etwas schiefgelaufen')}</Heading>
+          <Text>{t('Die Ansicht konnte nicht dargestellt werden. Ein Neuladen hilft meistens.')}</Text>
+          <ActionGroup>
+            {/*
+              Die App ist URL-basiert: ein kaputter Permalink würde beim Neuladen
+              wieder in denselben Fehler laufen. Deshalb zusätzlich ein Weg zurück
+              auf die Startseite. Ein echter Link — ohne Router: der steht hier
+              selbst nicht mehr.
+            */}
+            <Link href="/">{t('Zur Startseite')}</Link>
+            <Button onPress={() => window.location.reload()}>{t('Neu laden')}</Button>
+          </ActionGroup>
+          <Text className={styles.message}>
+            <small className="mono">{error.message}</small>
+          </Text>
+        </IllustratedMessage>
+      </LayoutCard>
     </div>
   );
 }
@@ -54,23 +55,21 @@ export function AppErrorFallback({ error }: { error: Error }) {
 export function PageErrorFallback() {
   const { t } = useI18n();
   return (
-    <EmptyState
-      tone="danger"
-      icon={<AlertTriangle className="size-5" />}
-      title={t('Diese Seite konnte nicht geladen werden')}
-      action={
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="btn btn-secondary btn-sm"
-        >
-          {t('Neu laden')}
-        </button>
-      }
-      className="mx-auto max-w-2xl"
-    >
-      {t('Meist hilft ein Neuladen, etwa nach einem Update von diggy.')}
-    </EmptyState>
+    <LayoutCard>
+      <EmptyState
+        tone="danger"
+        icon={<IconDanger />}
+        title={t('Diese Seite konnte nicht geladen werden')}
+        headingLevel={1}
+        action={
+          <Button variant="soft" color="secondary" onPress={() => window.location.reload()}>
+            {t('Neu laden')}
+          </Button>
+        }
+      >
+        {t('Meist hilft ein Neuladen, etwa nach einem Update von diggy.')}
+      </EmptyState>
+    </LayoutCard>
   );
 }
 
@@ -88,14 +87,13 @@ export function SectionErrorFallback({ reset }: { error: Error; reset: () => voi
   return (
     <EmptyState
       tone="danger"
-      icon={<AlertTriangle className="size-5" />}
+      icon={<IconDanger />}
       title={t('Dieser Bereich konnte nicht dargestellt werden')}
       action={
-        <button type="button" onClick={reset} className="btn btn-secondary btn-sm">
+        <Button variant="soft" color="secondary" onPress={reset}>
           {t('Erneut versuchen')}
-        </button>
+        </Button>
       }
-      className="py-8 sm:py-8"
     >
       {t('Die übrigen Bereiche des Reports funktionieren weiter.')}
     </EmptyState>

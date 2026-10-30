@@ -14,7 +14,7 @@ import {
  */
 
 const RECORD_TYPES: RecordType[] = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CAA', 'SOA', 'CNAME'];
-const MAIL_TERMS = ['SPF', 'DKIM', 'DMARC', 'MTA-STS', 'BIMI', 'TLS-RPT'] as const;
+const MAIL_TERMS = ['SPF', 'DKIM', 'DMARC', 'MTA-STS', 'BIMI', 'TLS-RPT', 'Reverse DNS'] as const;
 
 function expectWellFormed(explanation: Explanation | undefined) {
   expect(explanation).toBeDefined();

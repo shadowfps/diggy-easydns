@@ -1,0 +1,19 @@
+/* Lange Hostnamen umbrechen statt die Spalte zu sprengen — bevorzugt nach einem Punkt (Hostname). */
+.value {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Die IP ist ein Button (sie öffnet ihre Details). Ihr Text steht bündig unter
+ * der Beschriftung wie die Links darunter — die Hover-Fläche ragt dafür um den
+ * Innenabstand nach links hinaus.
+ */
+.flush {
+  margin-inline-start: calc(-1 * var(--size-px--s));
+}
+
+.stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-px--xs);
+}

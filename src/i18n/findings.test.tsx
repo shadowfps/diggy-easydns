@@ -120,6 +120,15 @@ function everyFinding(): Finding[] {
     ),
     ...mailFindings(mail({}), 'example.com'),
     ...mailFindings(mail({ hasMx: false }), 'example.com'),
+    // Reverse DNS der Mailserver (#147): passt, passt nicht.
+    ...mailFindings(
+      mail({ mxReverse: [{ host: 'mx.example.com', ips: [{ ip: '192.0.2.1', ptr: ['mx.example.com'], confirmed: true }] }] }),
+      'example.com'
+    ),
+    ...mailFindings(
+      mail({ mxReverse: [{ host: 'mx.example.com', ips: [{ ip: '192.0.2.1', ptr: [], confirmed: false }] }] }),
+      'example.com'
+    ),
     ...mailFindings(
       mail({
         spf: spf(
@@ -347,7 +356,7 @@ describe('Ansichten auf Englisch', () => {
         })}
       />
     );
-    const card = screen.getByText('Who may send email in your name?').closest('.card') as HTMLElement;
+    const card = screen.getByText('Who may send email in your name?').closest('section') as HTMLElement;
     expect(within(card).getByText('+all allows any sender — it offers effectively no protection.')).toBeInTheDocument();
     expect(within(card).getByText('has issues')).toBeInTheDocument();
     expect(spfIssueText('Altes Problem')).toBe('Altes Problem');

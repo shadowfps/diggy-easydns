@@ -1,21 +1,22 @@
 import type { ReactNode } from 'react';
-import { motion } from 'motion/react';
 import {
-  Mail,
-  MailX,
-  Check,
-  X,
-  AlertTriangle,
-  ArrowUpRight,
-  CircleHelp,
-  CircleMinus,
-  FileSignature,
-  FileText,
-  Image as ImageIcon,
-  Send,
-} from 'lucide-react';
-import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt } from '@/types/dns';
-import { cn } from '@/lib/cn';
+  AlertBadge,
+  AlertText,
+  Badge,
+  ColumnLayout,
+  Combine,
+  Content,
+  Heading,
+  IconClose,
+  IconMinus,
+  InlineCode,
+  Label,
+  LabeledValue,
+  Link,
+  Section,
+  Text,
+} from '@mittwald/flow-react-components';
+import type { LookupFailure, MailBimi, MailMxReverse, MailMxReverseIp, MailSecurity, MailTlsRpt } from '@/types/dns';
 import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
 import { bimiDmarcGapPhrase, isHttpsUrl } from '@/lib/bimiTlsRpt';
 import {
@@ -24,74 +25,84 @@ import {
   effectiveDmarcPolicy,
   hasDmarcReportUri,
 } from '@/lib/dmarc';
-import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 import { phraseText, spfIssueText, t, useI18n, type DeKey } from '@/i18n';
+import { CopyableValue } from '@/components/ui/CopyableValue';
 import { InfoButton } from '@/components/ui/InfoButton';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { explainMailTerm } from '@/lib/explanations';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
+import styles from './MailView.module.css';
 
 interface MailViewProps {
   mail: MailSecurity;
 }
 
+type Tone = 'neutral' | 'success' | 'warning' | 'danger';
+
+/**
+ * Mail-Schutz als Tab-Inhalt: je Verfahren eine Section, Flow trennt sie mit
+ * einer Linie. Die Reihenfolge folgt der Wichtigkeit — erst, was Fälschungen
+ * verhindert (SPF, DMARC, DKIM), dann der Transportweg, zuletzt die
+ * Empfehlungen.
+ */
 export function MailView({ mail }: MailViewProps) {
   // Ein Null-MX ist ein MX-Record, aber kein Empfang — wie im reportBuilder.
   const receivesMail = mail.hasMx && !mail.nullMx;
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      {mail.nullMx && <NoMailCard mail={mail} />}
-      <SpfCard spf={mail.spf} hasMx={receivesMail} />
-      <DmarcCard dmarc={mail.dmarc} hasMx={receivesMail} />
-      <DkimCard dkim={mail.dkim} noMail={mail.nullMx} />
-      <MtaStsCard mtaSts={mail.mtaSts} noMail={mail.nullMx} />
-      {/* Ältere Antworten kennen BIMI und TLS-RPT nicht — dann keine Karte statt „fehlt“. */}
-      {mail.bimi && <BimiCard bimi={mail.bimi} dmarc={mail.dmarc} noMail={mail.nullMx} />}
-      {mail.tlsRpt && <TlsRptCard tlsRpt={mail.tlsRpt} noMail={mail.nullMx} />}
-    </div>
+    <>
+      {mail.nullMx && <NoMailSection mail={mail} />}
+      <SpfSection spf={mail.spf} hasMx={receivesMail} />
+      <DmarcSection dmarc={mail.dmarc} hasMx={receivesMail} />
+      <DkimSection dkim={mail.dkim} noMail={mail.nullMx} />
+      <MtaStsSection mtaSts={mail.mtaSts} noMail={mail.nullMx} />
+      {/* Ältere Antworten kennen BIMI und TLS-RPT nicht — dann keine Section statt „fehlt“. */}
+      {mail.bimi && <BimiSection bimi={mail.bimi} dmarc={mail.dmarc} noMail={mail.nullMx} />}
+      {mail.tlsRpt && <TlsRptSection tlsRpt={mail.tlsRpt} noMail={mail.nullMx} />}
+      {/* Ohne Mailserver (kein MX, Null-MX) gibt es keinen Reverse DNS zu prüfen. */}
+      {receivesMail && mail.mxReverse && mail.mxReverse.length > 0 && (
+        <MxReverseSection mxReverse={mail.mxReverse} />
+      )}
+    </>
   );
 }
 
 /*
- * Die Töne der Kartenköpfe folgen den Mail-Findings (reportBuilder): ein
- * fehlender SPF-/DMARC-Record ist mit MX eine Warnung, ohne MX nur ein
- * Hinweis; DKIM und MTA-STS fehlen höchstens als Hinweis — und bei einer
- * Domain ohne Mail (Null-MX) gar nicht. BIMI und TLS-RPT sind nur
- * Empfehlungen: grün, wenn sie wirken, sonst neutral. Scheiterte die Abfrage
- * (`lookupFailed`), ist nichts bewertet: neutral und „nicht prüfbar“ statt
- * „fehlt“ (#101).
+ * Die Bewertungen folgen den Mail-Findings (reportBuilder): ein fehlender
+ * SPF-/DMARC-Record ist mit MX eine Warnung, ohne MX nur ein Hinweis; DKIM und
+ * MTA-STS fehlen höchstens als Hinweis — und bei einer Domain ohne Mail
+ * (Null-MX) gar nicht. BIMI und TLS-RPT sind nur Empfehlungen: grün, wenn sie
+ * wirken, sonst neutral. Scheiterte die Abfrage (`lookupFailed`), ist nichts
+ * bewertet: „nicht prüfbar“ statt „fehlt“ (#101).
  */
 
 /* ─── Keine Mails (Null-MX) ──────────────────────────────────────────── */
 
 /**
- * Steht über den vier Karten, weil es die Aussage ist, die alle anderen
+ * Steht über den übrigen Sections, weil es die Aussage ist, die alle anderen
  * einordnet: Diese Domain will keine Mails. Darunter, ob SPF und DMARC das
  * für den Versand absichern (Regel: shared/nullMx.ts).
  */
-function NoMailCard({ mail }: { mail: MailSecurity }) {
+function NoMailSection({ mail }: { mail: MailSecurity }) {
   const { t, tRich } = useI18n();
   const protection = noMailProtection(mail);
 
   return (
-    <Card
-      icon={<MailX className="size-4" />}
-      title={t('Keine Mails (Null-MX)')}
-      subtitle={t('Die Domain nimmt bewusst keine Mails an')}
-      tone={protection.complete ? 'success' : 'neutral'}
-      delay={0}
-      className="md:col-span-2"
-    >
-      <p className="text-sm leading-relaxed text-fg-muted">
+    <Section>
+      <Heading level={2}>{t('Keine Mails (Null-MX)')}</Heading>
+      <Text>
+        <small>{t('Die Domain nimmt bewusst keine Mails an')}</small>
+      </Text>
+      <Text elementType="p">
         {tRich(
           'Der Null-MX {record} (RFC 7505) sagt jedem Absender: Hier kommt keine Mail an. DKIM und MTA-STS braucht die Domain deshalb nicht.',
-          { record: <code className="font-mono text-[13px] text-fg">MX 0 .</code> }
+          { record: <InlineCode>MX 0 .</InlineCode> }
         )}{' '}
         {protection.complete
           ? t('SPF und DMARC sorgen dafür, dass Empfänger Mails in ihrem Namen abweisen.')
           : t('Damit Empfänger auch Mails in ihrem Namen abweisen, gehören SPF -all und DMARC p=reject dazu.')}
-      </p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+      </Text>
+      <ColumnLayout>
         <Stat label="Null-MX" value={t('gesetzt')} tone="success" />
         <Stat
           label="SPF"
@@ -103,8 +114,8 @@ function NoMailCard({ mail }: { mail: MailSecurity }) {
           value={noMailDmarcLabel(mail.dmarc, protection.dmarcReject)}
           tone={protection.dmarcReject ? 'success' : 'neutral'}
         />
-      </div>
-    </Card>
+      </ColumnLayout>
+    </Section>
   );
 }
 
@@ -144,53 +155,32 @@ function noMailDmarcLabel(dmarc: MailSecurity['dmarc'], reject: boolean): string
 
 /* ─── SPF ─────────────────────────────────────────────────────────────── */
 
-function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
+function SpfSection({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
   const { t } = useI18n();
-  const tone: Tone = !spf.present
-    ? hasMx
-      ? 'warning'
-      : 'neutral'
-    : !spf.valid
-    ? 'danger'
-    : spf.issues.length > 0
-    ? 'warning'
-    : 'success';
 
   return (
-    <Card
-      icon={<Send className="size-4" />}
-      title="SPF"
-      subtitle={t('Wer darf in deinem Namen senden?')}
-      tone={tone}
-      delay={0}
-      unchecked={spf.lookupFailed}
-    >
+    <MailSection title="SPF" subtitle={t('Wer darf in deinem Namen senden?')} unchecked={spf.lookupFailed}>
       {!spf.present ? (
         <StatusLine text={t('Kein SPF-Record gefunden')} tone={hasMx ? 'warning' : 'neutral'} />
       ) : (
-        <div className="space-y-3">
-          <CodeBlock>{spf.record}</CodeBlock>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <>
+          <RecordValue record={spf.record ?? ''} />
+          <ColumnLayout>
             <Stat label="Lookups" value={`${spf.lookupCount ?? 0} / 10`} />
             <Stat
               label="Status"
               value={spf.valid ? t('gültig') : t('problematisch')}
               tone={spf.valid ? 'success' : 'danger'}
             />
-          </div>
-          {spf.issues.length > 0 && (
-            <ul className="space-y-1.5">
-              {spf.issues.map((issue, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-fg-muted">
-                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
-                  <span>{spfIssueText(issue, spf.issueDetails?.[i])}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          </ColumnLayout>
+          {spf.issues.map((issue, i) => (
+            <AlertText key={i} status="warning">
+              {spfIssueText(issue, spf.issueDetails?.[i])}
+            </AlertText>
+          ))}
+        </>
       )}
-    </Card>
+    </MailSection>
   );
 }
 
@@ -200,10 +190,10 @@ function SpfCard({ spf, hasMx }: { spf: MailSecurity['spf']; hasMx: boolean }) {
  * Bewertet wie der reportBuilder nach der wirksamen Policy (shared/dmarc.ts):
  * Ein Record ohne gültiges `p=` oder mit ungültigem `sp=` wirkt mit
  * Report-Adresse in `rua=` wie `p=none`, ohne wie gar keiner — ebenso
- * mehrere Records (RFC 7489 §6.6.3). Den Mangel zeigt ein Badge im Kopf —
- * der Record allein sähe sonst nach „DMARC ist da“ aus.
+ * mehrere Records (RFC 7489 §6.6.3). Den Mangel zeigt ein Badge in der
+ * Überschrift — der Record allein sähe sonst nach „DMARC ist da“ aus.
  */
-function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: boolean }) {
+function DmarcSection({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: boolean }) {
   const { t } = useI18n();
   const { policy, flaw } = effectiveDmarcPolicy(dmarc);
   const multiple = flaw?.kind === 'multiple';
@@ -215,21 +205,22 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
   const policyTone: Tone =
     policy === 'reject' || policy === 'quarantine' ? 'success' : policy === 'none' ? 'warning' : tone;
 
+  // Der Mangel trägt die Bewertung der Section: mit MX eine Warnung, ohne MX
+  // nur ein Hinweis — wie ein fehlender Record.
+  const flawLabel = flaw && phraseText(dmarcPolicyFlawLabelPhrase(flaw));
+  const flawBadge =
+    flawLabel &&
+    (tone === 'warning' ? (
+      <AlertBadge status="warning">{flawLabel}</AlertBadge>
+    ) : (
+      <Badge color="neutral">{flawLabel}</Badge>
+    ));
+
   return (
-    <Card
-      icon={<Mail className="size-4" />}
+    <MailSection
       title="DMARC"
       subtitle={t('Was passiert mit Spoofing-Versuchen?')}
-      tone={tone}
-      aside={
-        flaw && (
-          <span className={cn('badge', tone === 'warning' && 'badge-warning')}>
-            <AlertTriangle className="size-3 shrink-0" />
-            {phraseText(dmarcPolicyFlawLabelPhrase(flaw))}
-          </span>
-        )
-      }
-      delay={0.05}
+      status={flawBadge}
       unchecked={dmarc.lookupFailed}
     >
       {!dmarc.present ? (
@@ -238,9 +229,9 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
           tone={hasMx ? 'warning' : 'neutral'}
         />
       ) : (
-        <div className="space-y-3">
+        <>
           <Records records={dmarc.records ?? [dmarc.record ?? '']} />
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <ColumnLayout>
             <Stat
               label="Policy"
               value={policy === null ? t('keine') : flaw ? t('wie {policy}', { policy }) : policy}
@@ -254,27 +245,24 @@ function DmarcCard({ dmarc, hasMx }: { dmarc: MailSecurity['dmarc']; hasMx: bool
               ) : (
                 <Stat label="Reports" value={t('rua ungültig')} />
               ))}
-          </div>
+          </ColumnLayout>
           {flaw && <Issue text={phraseText(dmarcFlawEffectPhrase(policy, flaw))} />}
-        </div>
+        </>
       )}
-    </Card>
+    </MailSection>
   );
 }
 
 /* ─── DKIM ───────────────────────────────────────────────────────────── */
 
-function DkimCard({ dkim, noMail }: { dkim: MailSecurity['dkim']; noMail: boolean }) {
+function DkimSection({ dkim, noMail }: { dkim: MailSecurity['dkim']; noMail: boolean }) {
   const { t } = useI18n();
   const found = dkim.selectors.length > 0;
 
   return (
-    <Card
-      icon={<FileSignature className="size-4" />}
+    <MailSection
       title="DKIM"
       subtitle={t('Welche Selectors signieren ausgehende Mails?')}
-      tone={found ? 'success' : 'neutral'}
-      delay={0.1}
       // Ein gefundener Selector reicht für „aktiv“, auch wenn andere scheiterten.
       // Ohne Mail (Null-MX) ist DKIM nicht nötig — dann zählt keine Probe.
       unchecked={!found && !noMail && dkim.lookupFailed}
@@ -290,65 +278,44 @@ function DkimCard({ dkim, noMail }: { dkim: MailSecurity['dkim']; noMail: boolea
           tone="neutral"
         />
       ) : (
-        <div className="space-y-3">
-          {dkim.selectors.map((s) => (
-            <div key={s.selector} className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Check className="size-3.5 shrink-0 text-success" />
-                <span className="font-mono text-[13px] text-fg">
-                  {s.selector}._domainkey
-                </span>
-              </div>
-              {s.record && (
-                <CodeBlock truncate>{s.record}</CodeBlock>
-              )}
-            </div>
-          ))}
-        </div>
+        dkim.selectors.map((s) => (
+          <LabeledValue key={s.selector}>
+            <Label>
+              <AlertText status="success">{`${s.selector}._domainkey`}</AlertText>
+            </Label>
+            {/* Der Schlüssel ist lang und für die Bewertung unwichtig: eine
+                Zeile, gekürzt — vollständig über den Kopieren-Button. */}
+            {s.record && <RecordValue record={s.record} truncate />}
+          </LabeledValue>
+        ))
       )}
-    </Card>
+    </MailSection>
   );
 }
 
 /* ─── MTA-STS ────────────────────────────────────────────────────────── */
 
-function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail: boolean }) {
+function MtaStsSection({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail: boolean }) {
   const { t } = useI18n();
   return (
-    <Card
-      icon={<Mail className="size-4" />}
+    <MailSection
       title="MTA-STS"
       subtitle={t('Erzwingt TLS für eingehende Mail')}
-      tone={mtaSts.present ? 'success' : 'neutral'}
-      delay={0.15}
       unchecked={!noMail && mtaSts.lookupFailed}
     >
-      <div className="flex items-center gap-2 text-sm">
-        {mtaSts.present ? (
-          <>
-            <Check className="size-4 shrink-0 text-success" />
-            <span className="font-medium text-success">{t('aktiviert')}</span>
-          </>
-        ) : noMail ? (
-          <>
-            <CircleMinus className="size-4 shrink-0 text-fg-subtle" />
-            <span className="text-fg-muted">{t('nicht nötig')}</span>
-          </>
-        ) : (
-          <>
-            <X className="size-4 shrink-0 text-fg-subtle" />
-            <span className="text-fg-muted">{t('nicht eingerichtet')}</span>
-          </>
-        )}
-      </div>
+      {mtaSts.present ? (
+        <AlertText status="success">{t('aktiviert')}</AlertText>
+      ) : (
+        <StatusLine text={noMail ? t('nicht nötig') : t('nicht eingerichtet')} tone={noMail ? 'not-needed' : 'neutral'} />
+      )}
       {!mtaSts.present && (
-        <p className="mt-3 text-sm leading-relaxed text-fg-muted">
+        <Text elementType="p">
           {noMail
             ? t('MTA-STS schützt den Weg eingehender Mails. Diese Domain nimmt per Null-MX keine an — es gibt nichts zu schützen.')
             : t('MTA-STS verhindert Downgrade-Angriffe, bei denen sich Angreifer zwischen Sender und Empfänger setzen und TLS abschalten.')}
-        </p>
+        </Text>
       )}
-    </Card>
+    </MailSection>
   );
 }
 
@@ -359,7 +326,7 @@ function MtaStsCard({ mtaSts, noMail }: { mtaSts: MailSecurity['mtaSts']; noMail
  * Öffnen des Tabs eine Datei von einem fremden Server — das verriete dessen
  * Betreiber, wer gerade nachschaut, und bräuchte eine Ausnahme in der CSP.
  */
-function BimiCard({
+function BimiSection({
   bimi,
   dmarc,
   noMail,
@@ -389,13 +356,10 @@ function BimiCard({
     : 'active';
 
   return (
-    <Card
-      icon={<ImageIcon className="size-4" />}
+    <MailSection
       title="BIMI"
       subtitle={t('Markenlogo neben deinen Mails')}
-      tone={status === 'active' ? 'success' : 'neutral'}
-      aside={<PolicyBadge status={status} />}
-      delay={0.2}
+      status={<PolicyBadge status={status} />}
       // Ohne Mail (Null-MX) ist BIMI nicht nötig — dann zählt keine Abfrage.
       unchecked={!noMail && bimi.lookupFailed}
     >
@@ -405,35 +369,33 @@ function BimiCard({
           tone="not-needed"
         />
       ) : status === 'missing' ? (
-        <div className="space-y-3">
+        <>
           <StatusLine text={t('Kein BIMI-Record auf default._bimi.<domain>')} tone="neutral" />
-          <p className="text-sm leading-relaxed text-fg-muted">
+          <Text elementType="p">
             {dmarcUnknown
               ? t('Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails — vorausgesetzt, DMARC steht auf p=quarantine oder p=reject. Das ließ sich gerade nicht prüfen.')
               : dmarcGap
               ? t('BIMI setzt DMARC mit p=quarantine oder p=reject voraus, jetzt: {gap}. Erst DMARC verschärfen, dann lohnt sich BIMI.', { gap: dmarcGap })
               : t('Mit BIMI zeigen Postfächer dein Markenlogo neben authentifizierten Mails. Die DMARC-Voraussetzung ist erfüllt.')}
-          </p>
-        </div>
+          </Text>
+        </>
       ) : (
-        <div className="space-y-3">
+        <>
           <Records records={bimi.records} />
           {bimi.invalid ? (
             <Issue text={invalidText(bimi)} />
           ) : bimi.declined ? (
-            <p className="text-sm leading-relaxed text-fg-muted">
-              {t('l= und a= sind leer: Die Domain verzichtet ausdrücklich auf ein Logo.')}
-            </p>
+            <Text elementType="p">{t('l= und a= sind leer: Die Domain verzichtet ausdrücklich auf ein Logo.')}</Text>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <ColumnLayout>
                 {bimi.logoUrl && isHttpsUrl(bimi.logoUrl) && <LogoLink url={bimi.logoUrl} />}
                 <Stat
                   label={t('Zertifikat (VMC/CMC)')}
                   value={bimi.evidenceUrl ? t('hinterlegt') : t('keins')}
                   tone={bimi.evidenceUrl ? 'success' : 'neutral'}
                 />
-              </div>
+              </ColumnLayout>
               {dmarcUnknown && (
                 <Issue text={t('Ob Postfächer das Logo zeigen, hängt an DMARC — dessen Abfrage ist gescheitert.')} />
               )}
@@ -444,9 +406,9 @@ function BimiCard({
               )}
             </>
           )}
-        </div>
+        </>
       )}
-    </Card>
+    </MailSection>
   );
 }
 
@@ -461,25 +423,18 @@ function LogoLink({ url }: { url: string }) {
   const file = pathname.split('/').pop() || hostname;
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span className="text-xs text-fg-subtle">Logo</span>
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={url}
-        className="link inline-flex min-w-0 items-center gap-1 text-sm"
-      >
-        <span className="truncate">{file}</span>
-        <ArrowUpRight className="size-3.5 shrink-0" />
-      </a>
-    </div>
+    <LabeledValue>
+      <Label>Logo</Label>
+      <Link href={url} target="_blank" rel="noopener noreferrer" className="wrap-anywhere">
+        {file}
+      </Link>
+    </LabeledValue>
   );
 }
 
 /* ─── TLS-RPT ────────────────────────────────────────────────────────── */
 
-function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean }) {
+function TlsRptSection({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean }) {
   const { t } = useI18n();
   const status: PolicyStatus = !tlsRpt.present
     ? noMail
@@ -490,13 +445,10 @@ function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean })
     : 'active';
 
   return (
-    <Card
-      icon={<FileText className="size-4" />}
+    <MailSection
       title="TLS-RPT"
       subtitle={t('Berichte über gescheiterte TLS-Zustellung')}
-      tone={status === 'active' ? 'success' : 'neutral'}
-      aside={<PolicyBadge status={status} />}
-      delay={0.25}
+      status={<PolicyBadge status={status} />}
       unchecked={!noMail && tlsRpt.lookupFailed}
     >
       {status === 'not-needed' ? (
@@ -505,36 +457,120 @@ function TlsRptCard({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean })
           tone="not-needed"
         />
       ) : status === 'missing' ? (
-        <div className="space-y-3">
+        <>
           <StatusLine text={t('Kein TLS-RPT-Record auf _smtp._tls.<domain>')} tone="neutral" />
-          <p className="text-sm leading-relaxed text-fg-muted">
+          <Text elementType="p">
             {t('Mit TLS-RPT (RFC 8460) melden Absender, wenn die verschlüsselte Zustellung an deine Mailserver scheitert — die Rückmeldung zu MTA-STS.')}
-          </p>
-        </div>
+          </Text>
+        </>
       ) : (
-        <div className="space-y-3">
+        <>
           <Records records={tlsRpt.records} />
           {tlsRpt.invalid ? (
             <Issue text={invalidText(tlsRpt)} />
           ) : (
-            <div className="space-y-1.5">
-              <span className="text-xs text-fg-subtle">{t('Berichte an')}</span>
-              <ul className="space-y-1">
-                {tlsRpt.rua?.map((uri, i) => (
-                  <li key={i} className="break-all font-mono text-[13px] text-fg">
-                    {uri}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <LabeledValue>
+              <Label>{t('Berichte an')}</Label>
+              <Content>
+                <Text>
+                  <ul className={styles.list}>
+                    {tlsRpt.rua?.map((uri, i) => (
+                      <li key={i}>
+                        <InlineCode className="wrap-anywhere">{uri}</InlineCode>
+                      </li>
+                    ))}
+                  </ul>
+                </Text>
+              </Content>
+            </LabeledValue>
           )}
-        </div>
+        </>
       )}
-    </Card>
+    </MailSection>
   );
 }
 
 /* ─── Status von BIMI und TLS-RPT ────────────────────────────────────── */
+
+/* ─── Reverse DNS der Mailserver ─────────────────────────────────────── */
+
+/**
+ * Reverse DNS der Mailserver (FCrDNS, #147): je Server seine IPs, ihr PTR und
+ * ob der Name zurück auf die IP auflöst. Eine Empfehlung wie BIMI und
+ * TLS-RPT — grün, wenn alles passt, sonst ein Hinweis, keine Warnfarbe.
+ * Nicht prüfbare IPs zählen nicht mit.
+ */
+function MxReverseSection({ mxReverse }: { mxReverse: MailMxReverse[] }) {
+  const { t } = useI18n();
+  const checked = mxReverse.flatMap((host) => host.ips).filter((ip) => !ip.unchecked);
+  const incomplete = mxReverse.some((host) => host.unchecked || host.ips.some((ip) => ip.unchecked));
+  // „passt“ nur, wenn alles geprüft ist — sonst bliebe ein Ausfall unsichtbar.
+  const status =
+    checked.length === 0 ? (
+      <UncheckedBadge />
+    ) : !checked.every((ip) => ip.confirmed) ? (
+      <AlertBadge status="info">{t('lückenhaft')}</AlertBadge>
+    ) : incomplete ? (
+      <AlertBadge status="unavailable">{t('unvollständig')}</AlertBadge>
+    ) : (
+      <AlertBadge status="success">{t('passt')}</AlertBadge>
+    );
+
+  return (
+    <MailSection
+      title="Reverse DNS"
+      subtitle={t('Zeigt der PTR jeder Mailserver-IP auf einen Namen, der wieder auf sie auflöst?')}
+      status={status}
+    >
+      {mxReverse.map(({ host, ips, unchecked }) => (
+        <LabeledValue key={host}>
+          <Label>
+            <span className="mono">{host}</span>
+          </Label>
+          <Content>
+            {ips.length === 0 ? (
+              unchecked ? (
+                <AlertText status="unavailable">{t('nicht prüfbar')}</AlertText>
+              ) : (
+                <Text>{t('keine IP-Adresse')}</Text>
+              )
+            ) : (
+              <ul className={styles.reverseList}>
+                {ips.map((ip) => (
+                  <li key={ip.ip} className={styles.reverse}>
+                    <span className="mono">{ip.ip}</span>
+                    {ip.ptr.length > 0 ? (
+                      <span className="mono">
+                        PTR <LookupLink value={ip.ptr[0]} />
+                      </span>
+                    ) : (
+                      <Text>{t('kein PTR')}</Text>
+                    )}
+                    <ReverseStatus ip={ip} />
+                  </li>
+                ))}
+                {unchecked && (
+                  <li>
+                    <AlertText status="unavailable">{t('weitere Adressen nicht prüfbar')}</AlertText>
+                  </li>
+                )}
+              </ul>
+            )}
+          </Content>
+        </LabeledValue>
+      ))}
+    </MailSection>
+  );
+}
+
+function ReverseStatus({ ip }: { ip: MailMxReverseIp }) {
+  const { t } = useI18n();
+  if (ip.unchecked) return <AlertText status="unavailable">{t('nicht prüfbar')}</AlertText>;
+  if (ip.confirmed) return <AlertText status="success">{t('löst zurück auf')}</AlertText>;
+  // Ohne PTR sagt die Zeile davor schon alles.
+  if (ip.ptr.length === 0) return null;
+  return <AlertText status="info">{t('löst nicht zurück auf')}</AlertText>;
+}
 
 type PolicyStatus =
   | 'active'
@@ -546,28 +582,28 @@ type PolicyStatus =
   | 'unknown';
 
 /**
- * Badge mit Icon und Wort, damit der Status nicht an der Farbe hängt. Grün
- * nur, wenn der Record wirkt; alles andere ist ein Hinweis und bleibt
- * neutral — die Form des Icons trägt den Unterschied.
+ * Status in der Überschrift, immer mit Wort. Grün nur, wenn der Record wirkt.
+ * Ein ungültiger oder wirkungsloser Record ist ein Hinweis (Info, keine
+ * Warnfarbe — BIMI und TLS-RPT sind Empfehlungen), eine offene Bewertung
+ * `unavailable` wie „nicht prüfbar“; alles andere neutral.
  */
-const POLICY_BADGE: Record<PolicyStatus, { label: DeKey; icon: ReactNode; className?: string }> = {
-  active: { label: 'aktiv', icon: <Check className="size-3 shrink-0" />, className: 'badge-success' },
-  missing: { label: 'fehlt', icon: <X className="size-3 shrink-0" /> },
-  invalid: { label: 'ungültig', icon: <AlertTriangle className="size-3 shrink-0" /> },
-  ineffective: { label: 'wirkt nicht', icon: <AlertTriangle className="size-3 shrink-0" /> },
-  declined: { label: 'abgemeldet', icon: <CircleMinus className="size-3 shrink-0" /> },
-  'not-needed': { label: 'nicht nötig', icon: <CircleMinus className="size-3 shrink-0" /> },
-  unknown: { label: 'unbekannt', icon: <CircleHelp className="size-3 shrink-0" /> },
+const POLICY_BADGE: Record<PolicyStatus, { label: DeKey; status?: 'success' | 'info' | 'unavailable' }> = {
+  active: { label: 'aktiv', status: 'success' },
+  missing: { label: 'fehlt' },
+  invalid: { label: 'ungültig', status: 'info' },
+  ineffective: { label: 'wirkt nicht', status: 'info' },
+  declined: { label: 'abgemeldet' },
+  'not-needed': { label: 'nicht nötig' },
+  unknown: { label: 'unbekannt', status: 'unavailable' },
 };
 
 function PolicyBadge({ status }: { status: PolicyStatus }) {
   const { t } = useI18n();
   const badge = POLICY_BADGE[status];
-  return (
-    <span className={cn('badge', badge.className)}>
-      {badge.icon}
-      {t(badge.label)}
-    </span>
+  return badge.status ? (
+    <AlertBadge status={badge.status}>{t(badge.label)}</AlertBadge>
+  ) : (
+    <Badge color="neutral">{t(badge.label)}</Badge>
   );
 }
 
@@ -580,146 +616,91 @@ function Records({ records = [] }: { records?: string[] }) {
   return (
     <>
       {records.map((record, i) => (
-        <CodeBlock key={i}>{record}</CodeBlock>
+        <RecordValue key={i} record={record} />
       ))}
     </>
   );
 }
 
+/**
+ * Ein Record zum Nachlesen und Kopieren. Bewusst kein CodeBlock: der bringt
+ * einen ganzen Code-Editor mit, hier steht nur eine Zeile Text.
+ */
+function RecordValue({ record, truncate }: { record: string; truncate?: boolean }) {
+  return <CopyableValue value={record} truncate={truncate} />;
+}
+
 /** Warum ein Record nicht wirkt — ein Hinweis, deshalb ohne Warnfarbe. */
 function Issue({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-2 text-sm text-fg-muted">
-      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-fg-subtle" />
-      <span>{text}</span>
-    </div>
-  );
+  return <AlertText status="info">{text}</AlertText>;
 }
 
 /* ─── Bausteine ──────────────────────────────────────────────────────── */
 
 /**
- * `unchecked`: die Abfrage scheiterte, aus diesem Grund. Dann zeigt die Karte
- * statt ihres Inhalts, dass nichts bewertet ist: neutral, Badge „nicht
- * prüfbar“ und der Grund.
+ * Eine Section je Verfahren: Titel mit Erklärung („?“) und Status in der
+ * Überschrift, darunter die Frage, die es beantwortet.
+ *
+ * `unchecked`: die Abfrage scheiterte, aus diesem Grund. Dann zeigt die
+ * Section statt ihres Inhalts, dass nichts bewertet ist: „nicht prüfbar“ und
+ * der Grund.
  */
-function Card({
-  icon,
+function MailSection({
   title,
   subtitle,
-  tone,
-  aside,
-  delay,
+  status,
   unchecked,
-  className,
   children,
 }: {
-  icon: ReactNode;
   /** Ist der Titel ein Fachbegriff (SPF, BIMI …), steht dahinter ein „?“ mit seiner Erklärung. */
   title: string;
   subtitle: string;
-  tone: Tone;
-  aside?: ReactNode;
-  delay: number;
+  status?: ReactNode;
   unchecked?: LookupFailure | false;
-  className?: string;
   children: ReactNode;
 }) {
   const explanation = explainMailTerm(title);
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay }}
-      className={cn('card', className)}
-    >
-      <CardHeader
-        icon={icon}
-        title={title}
-        info={explanation && <InfoButton term={title} explanation={explanation} />}
-        subtitle={subtitle}
-        tone={unchecked ? 'neutral' : tone}
-        aside={unchecked ? <UncheckedBadge /> : aside}
-      />
-      <div className="mt-4">
-        {unchecked ? <UncheckedLine name={title} reason={unchecked} /> : children}
-      </div>
-    </motion.div>
-  );
-}
-
-function CodeBlock({ children, truncate }: { children: ReactNode; truncate?: boolean }) {
-  return (
-    <pre
-      className={cn(
-        'panel overflow-x-auto py-3 font-mono text-xs text-fg',
-        truncate && 'whitespace-nowrap text-ellipsis overflow-hidden'
-      )}
-    >
-      {children}
-    </pre>
+    <Section>
+      <Heading level={2}>
+        {title}
+        {explanation && <InfoButton term={title} explanation={explanation} />}
+        {unchecked ? <UncheckedBadge /> : status}
+      </Heading>
+      <Text>
+        <small>{subtitle}</small>
+      </Text>
+      {unchecked ? <UncheckedLine name={title} reason={unchecked} /> : children}
+    </Section>
   );
 }
 
 /**
- * Statuszeile in der Karte, wenn ein Record fehlt. Kein `EmptyState`: der ist
- * selbst eine Karte und gehört an die Stelle eines ganzen Abschnitts.
+ * Statuszeile, wenn ein Record fehlt. Kein `EmptyState`: der gehört an die
+ * Stelle eines ganzen Abschnitts.
  *
  * `not-needed`: Der Record fehlt, und das ist richtig so (Domain ohne Mail).
  * Ein eigenes Icon statt des Kreuzes, weil das Kreuz „fehlt“ heißt; die Farbe
  * kann den Unterschied nicht tragen, beide Zeilen sind neutral.
  *
- * Eine gescheiterte Abfrage zeigt die Karte selbst (`unchecked`, #101).
+ * Eine gescheiterte Abfrage zeigt die Section selbst (`unchecked`, #101).
  */
-function StatusLine({
-  text,
-  tone,
-}: {
-  text: string;
-  tone: 'warning' | 'neutral' | 'not-needed';
-}) {
+function StatusLine({ text, tone }: { text: string; tone: 'warning' | 'neutral' | 'not-needed' }) {
+  if (tone === 'warning') return <AlertText status="warning">{text}</AlertText>;
   return (
-    <div
-      className={cn(
-        'flex items-start gap-2 text-sm',
-        tone === 'warning' ? 'font-medium text-warning' : 'text-fg-muted'
-      )}
-    >
-      {tone === 'warning' ? (
-        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-      ) : tone === 'not-needed' ? (
-        <CircleMinus className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-      ) : (
-        <X className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-      )}
-      <span>{text}</span>
-    </div>
+    <Combine>
+      {tone === 'not-needed' ? <IconMinus /> : <IconClose />}
+      <Text>{text}</Text>
+    </Combine>
   );
 }
 
-const STAT_ICON: Record<Tone, ReactNode> = {
-  neutral: null,
-  success: <Check className="size-3.5 shrink-0" />,
-  warning: <AlertTriangle className="size-3.5 shrink-0" />,
-  danger: <X className="size-3.5 shrink-0" />,
-};
-
-const STAT_TEXT: Record<Tone, string> = {
-  neutral: 'text-fg',
-  success: 'font-medium text-success',
-  warning: 'font-medium text-warning',
-  danger: 'font-medium text-danger',
-};
-
-/** Label/Wert-Paar; Statuswerte tragen neben der Farbe ein Icon. */
+/** Beschriftung und Wert; Statuswerte tragen neben der Farbe ein Icon (AlertText). */
 function Stat({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: Tone }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-fg-subtle">{label}</span>
-      <span className={cn('flex items-center gap-1 text-sm', STAT_TEXT[tone])}>
-        {STAT_ICON[tone]}
-        {value}
-      </span>
-    </div>
+    <LabeledValue>
+      <Label>{label}</Label>
+      {tone === 'neutral' ? <Content>{value}</Content> : <AlertText status={tone}>{value}</AlertText>}
+    </LabeledValue>
   );
 }

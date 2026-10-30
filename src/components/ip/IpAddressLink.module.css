@@ -1,0 +1,42 @@
+/* Die IP steht im Fluss eines Werts — kein Abstand nach außen, darf umbrechen. */
+.trigger {
+  max-width: 100%;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.owner {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ptr {
+  min-width: 0;
+}
+
+/* Steht der PTR davor, trennt ein Punkt den Netzbetreiber vom Hostnamen —
+   sonst läse sich „….github.com GitHub, Inc.“ wie ein Wert. */
+.ptr + .owner::before {
+  content: '·';
+  margin-inline-end: var(--size-px--s);
+}
+
+.ip {
+  overflow-wrap: anywhere;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-px--s);
+}
+
+.hosts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--xxs);
+}
+
+.source {
+  align-self: flex-end;
+}

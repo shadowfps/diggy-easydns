@@ -1,0 +1,238 @@
+/*
+ * Vergleich: Seitenkopf, Eingabe, die beiden Seiten, dann die Bereiche.
+ * Flows Komponenten tragen Abstände und Optik; hier stehen nur die Breite der
+ * Seite und die Zeilen der Gegenüberstellung, die je nach Kartenbreite die
+ * Spalten wechseln.
+ */
+.page {
+  display: flex;
+  width: 100%;
+  max-width: 72rem;
+  flex-direction: column;
+  gap: var(--size-px--l);
+  margin-inline: auto;
+}
+
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--xs);
+}
+
+.lead {
+  max-width: 42rem;
+}
+
+.muted {
+  color: var(--neutral--color--800);
+}
+
+/* ── Eingabe ──────────────────────────────────────────────────────────── */
+
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: var(--size-px--s);
+}
+
+.field {
+  min-width: 0;
+}
+
+.swap {
+  justify-self: center;
+}
+
+/* Untereinander tauscht der Pfeil vertikal. */
+.swapIcon {
+  transform: rotate(90deg);
+}
+
+@media (min-width: 768px) {
+  .form {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    gap: var(--size-px--m);
+  }
+
+  .swapIcon {
+    transform: none;
+  }
+}
+
+/* ── Seiten ───────────────────────────────────────────────────────────── */
+
+.side {
+  height: 100%;
+}
+
+.sideName {
+  overflow-wrap: anywhere;
+}
+
+.scoreLine {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--s);
+}
+
+.scoreRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-px--s) var(--size-px--m);
+}
+
+.score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--size-px--xs);
+}
+
+/* Die Zahl ist der Befund — groß, die Farbe trägt das Badge daneben. */
+.scoreValue {
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-px--xs) var(--size-px--m);
+}
+
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-px--xs);
+}
+
+.sideAction {
+  margin-top: auto;
+}
+
+/* ── Gegenüberstellung ────────────────────────────────────────────────── */
+
+/* Die Spalten folgen der Breite der Karte, nicht des Fensters. */
+.rows {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--size-px--s);
+  padding-block: var(--size-px--m);
+  border-top: 1px solid var(--neutral--color--300);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+/* Nebeneinander stehen die Domains im Spaltenkopf, nicht an jeder Zelle. */
+.columnHeads {
+  display: none;
+  padding-block: var(--size-px--s);
+  color: var(--neutral--color--800);
+}
+
+.rowLabel {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-px--s);
+}
+
+.cells {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--size-px--s);
+}
+
+/* Kurze Werte (Fakten) stehen auch schmal nebeneinander. */
+.cells[data-compact] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cell {
+  min-width: 0;
+}
+
+.caption {
+  display: block;
+  margin-bottom: var(--size-px--xxs);
+  overflow: hidden;
+  color: var(--neutral--color--800);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (min-width: 40rem) {
+  .row {
+    grid-template-columns: 10rem minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--size-px--l);
+  }
+
+  .columnHeads {
+    display: grid;
+  }
+
+  .rowLabel {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .cells,
+  .cells[data-compact] {
+    display: contents;
+  }
+
+  /* Für Screenreader bleibt die Domain an der Zelle. */
+  .caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+.values {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.value {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--size-px--s);
+}
+
+.factBlock {
+  min-width: 0;
+}
+
+.fact {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--size-px--xs);
+}

@@ -19,7 +19,6 @@ const ui: Dictionary = {
   // ─── Header, Menü, Footer, Seitentitel ───────────────────────────────
   'Zur Startseite': 'Go to home page',
   'Menü öffnen': 'Open menu',
-  'Menü schließen': 'Close menu',
   History: 'History',
   'Available Check': 'Availability check',
   About: 'About',
@@ -28,14 +27,65 @@ const ui: Dictionary = {
   Datenschutz: 'Privacy policy',
   Rechtliches: 'Legal',
   'Vergleichen': 'Compare',
+  'Menü': 'Menu',
+  Hauptnavigation: 'Main navigation',
+  Einstellungen: 'Settings',
+
+  // ─── Testumgebung (Passwortschutz) ───────────────────────────────────
+  Testversion: 'Preview',
+  Anmelden: 'Sign in',
+  Passwort: 'Password',
+  'Diese Version von diggy ist zum Testen da und noch nicht öffentlich. Gib das Passwort ein, das du bekommen hast.':
+    'This version of diggy is for testing and not public yet. Enter the password you were given.',
+  'Bitte gib das Passwort ein.': 'Please enter the password.',
+  'Anmeldung fehlgeschlagen.': 'Sign-in failed.',
 
   // ─── Startseite ──────────────────────────────────────────────────────
   'Was steckt hinter deiner Domain?': 'What’s behind your domain?',
   'DNS, SSL, Mail-Security und Propagation auf einen Blick.':
     'DNS, SSL, email security and propagation at a glance.',
   'Ohne Fachchinesisch, mit Empfehlungen.': 'No jargon — just clear recommendations.',
-  'Alles, was du wissen musst — in einem Tool.': 'Everything you need to know — in one tool.',
   'Was diggy prüft': 'What diggy checks',
+  'Häufige Fragen':
+    'Frequently asked questions',
+  'Noch eine Frage? Schreib uns über das {kontakt} im Impressum.':
+    'Another question? Write to us via the {kontakt} in the legal notice.',
+  'Was diggy prüft, was es kostet und was mit deinen Suchen passiert.':
+    'What diggy checks, what it costs and what happens to your lookups.',
+  'Datenschutzerklärung':
+    'privacy policy',
+  'Was ist diggy?':
+    'What is diggy?',
+  'diggy prüft eine Domain in einem Rutsch: DNS-Records, Mail-Schutz, SSL-Zertifikat, DNSSEC, Propagation und WHOIS. Statt roher Antworten bekommst du einen Health Score und Empfehlungen, was zu tun ist.':
+    'diggy checks a domain in one go: DNS records, email protection, SSL certificate, DNSSEC, propagation and WHOIS. Instead of raw answers you get a Health Score and recommendations on what to do.',
+  'Kostet diggy etwas, brauche ich ein Konto?':
+    'Does diggy cost anything, do I need an account?',
+  'Nein. diggy ist kostenlos und ohne Anmeldung nutzbar — Domain oder IP-Adresse eingeben, fertig.':
+    'No. diggy is free and works without signing up — enter a domain or IP address, done.',
+  'Wie entsteht der Health Score?':
+    'How is the Health Score calculated?',
+  'Er startet bei 100 Punkten. Ein kritischer Befund kostet 25, eine Warnung 8, ein Hinweis 2 — alle Hinweise zusammen höchstens 6. Was sich nicht prüfen ließ und reine Empfehlungen kosten nichts.':
+    'It starts at 100 points. A critical finding costs 25, a warning 8, a notice 2 — all notices together at most 6. Anything that couldn’t be checked and pure recommendations cost nothing.',
+  'Warum zeigen die Resolver unterschiedliche Werte?':
+    'Why do the resolvers show different values?',
+  'Resolver merken sich Antworten so lange, wie die TTL des Records es erlaubt. Nach einer Änderung liefern manche noch den alten Wert, bis ihr Zwischenspeicher abläuft. diggy vergleicht neun öffentliche Resolver mit dem, was die Nameserver der Domain selbst ausliefern.':
+    'Resolvers keep answers for as long as the record’s TTL allows. After a change, some still return the old value until their cache expires. diggy compares nine public resolvers with what the domain’s own name servers serve.',
+  'Was bedeutet „nicht prüfbar“?':
+    'What does “couldn’t check” mean?',
+  'Eine Abfrage kam nicht durch, etwa wegen einer Zeitüberschreitung oder eines Serverfehlers. diggy sagt das offen, statt zu raten, und zieht dafür keine Punkte ab. Ein neuer Check hilft meistens.':
+    'A query didn’t get through, for example because of a timeout or a server error. diggy says so openly instead of guessing, and doesn’t deduct points for it. Running the check again usually helps.',
+  'Speichert diggy meine Suchen?':
+    'Does diggy store my lookups?',
+  'Nicht dauerhaft. Ergebnisse liegen auf dem Server nur kurz im Zwischenspeicher, damit dieselbe Abfrage nicht mehrfach nach außen geht. Deine letzten zehn Suchen kennt nur dein Browser — für die History. Mehr in der {datenschutz}.':
+    'Not permanently. Results sit in a short-lived cache on the server so the same lookup doesn’t go out twice. Only your browser knows your last ten lookups — for the history. More in the {datenschutz}.',
+  'Wer erfährt, welche Domain ich prüfe?':
+    'Who learns which domain I check?',
+  'Die Dienste, ohne die ein Check nicht geht: öffentliche DNS-Resolver, die Registry der Endung, der Webserver der Domain. Die Anfragen stellt der Server von diggy, nicht dein Browser. PageSpeed (Google) und VirusTotal laufen nur, wenn du sie anklickst. Die vollständige Liste steht in der {datenschutz}.':
+    'The services a check can’t do without: public DNS resolvers, the registry of the domain ending, the domain’s web server. diggy’s server sends these queries, not your browser. PageSpeed (Google) and VirusTotal only run when you click them. The full list is in the {datenschutz}.',
+  'Kann ich einen Report teilen?':
+    'Can I share a report?',
+  'Ja. Jeder Report hat eine eigene Adresse — „Link kopieren“ legt sie in die Zwischenablage. Mit „JSON“ lädst du alle Ergebnisse als Datei herunter.':
+    'Yes. Every report has its own address — “Copy link” puts it on your clipboard. “JSON” downloads all results as a file.',
   'Sechs Bereiche, ein Befund': 'Six areas, one verdict',
   'Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.':
     'Every area counts toward the Health Score. PageSpeed and VirusTotal are one click away.',
@@ -52,10 +102,12 @@ const ui: Dictionary = {
     'Nine public resolvers side by side: has your change reached all of them?',
   'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.':
     'Registrar, term and status — before a domain quietly expires.',
-  'Kennst du schon {converter} by diggy?': 'Have you tried {converter} by diggy?',
-  'Bilder umwandeln, skalieren & komprimieren — direkt im Browser.':
-    'Convert, resize & compress images — right in your browser.',
   'Zu Converter': 'Open converter',
+  '{converter} by diggy': '{converter} by diggy',
+  'Bilder umwandeln und verkleinern, direkt im Browser.': 'Convert and shrink images, right in your browser.',
+  'Open Source': 'Open source',
+  'Mitgestalten erwünscht. Bring deine Idee ein.': 'Contributions welcome. Bring your idea.',
+  'diggy auf GitHub': 'diggy on GitHub',
 
   // ─── Suche ───────────────────────────────────────────────────────────
   'Jetzt deine Anfrage starten': 'Look up a domain or IP',
@@ -63,7 +115,6 @@ const ui: Dictionary = {
   Suchen: 'Search',
   'Zuletzt geprüft': 'Recently checked',
   Beispiele: 'Examples',
-  '{value} in die Suche übernehmen': 'Use {value} in the search',
 
   // ─── Report: Kopf, Tabs, Zustände ────────────────────────────────────
   'Records werden geholt…': 'Fetching records…',
@@ -116,10 +167,12 @@ const ui: Dictionary = {
 
   // ─── Records und Findings ────────────────────────────────────────────
   Alle: 'All',
+  'DNS-Records': 'DNS records',
+  Typ: 'Type',
+  Wert: 'Value',
   Warnung: 'Warning',
   Hinweis: 'Info',
   OK: 'OK',
-  'Snippet kopiert': 'Snippet copied',
   'Snippet kopieren': 'Copy snippet',
   'ohne Punktabzug': 'no deduction',
   'TTL unbekannt': 'TTL unknown',
@@ -212,6 +265,19 @@ const ui: Dictionary = {
   'Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject, jetzt: {gap}.':
     'Inboxes only show the logo with DMARC at p=quarantine or p=reject, currently: {gap}.',
   'Berichte über gescheiterte TLS-Zustellung': 'Reports on failed TLS delivery',
+  'Zeigt der PTR jeder Mailserver-IP auf einen Namen, der wieder auf sie auflöst?':
+    'Does each mail server IP’s PTR point to a name that resolves back to it?',
+  passt: 'matches',
+  lückenhaft: 'has gaps',
+  unvollständig: 'incomplete',
+  'weitere Adressen nicht prüfbar': 'further addresses couldn’t be checked',
+  'keine IP-Adresse': 'no IP address',
+  'kein PTR': 'no PTR',
+  'löst zurück auf': 'resolves back',
+  'löst nicht zurück auf': 'doesn’t resolve back',
+  'Name hinter der IP': 'The name behind the IP',
+  'Zu jeder IP kann ihr Besitzer einen Namen hinterlegen (PTR); löst er wieder auf dieselbe IP auf, heißt das FCrDNS. Viele Mailserver prüfen das beim Absender — fehlt es, landet Mail eher im Spam.':
+    'Whoever owns an IP can attach a name to it (PTR); if that name resolves back to the same IP, that’s FCrDNS. Many mail servers check this for senders — without it, email is more likely to land in spam.',
   'Nicht nötig: Eine Domain ohne Mails (Null-MX) bekommt keine Zustellungen, über die jemand berichten könnte.':
     'Not needed: a domain without email (null MX) receives no deliveries anyone could report on.',
   'Kein TLS-RPT-Record auf _smtp._tls.<domain>': 'No TLS-RPT record at _smtp._tls.<domain>',
@@ -288,6 +354,7 @@ const ui: Dictionary = {
   '{type}-Record': '{type} record',
   '{types}- oder {last}-Record': '{types} or {last} record',
   'Antwort {letter}': 'Answer {letter}',
+  Antwort: 'Answer',
   'kein Eintrag': 'no record',
   '{label} · weicht ab': '{label} · differs',
   'Mehrheit': 'Majority',
@@ -400,6 +467,11 @@ const ui: Dictionary = {
   verbesserungswürdig: 'needs improvement',
   schlecht: 'poor',
   'PageSpeed-Analyse läuft…': 'PageSpeed analysis running…',
+  'Messung für': 'Measure for',
+  'Misst Ladezeit und Core Web Vitals mit Google Lighthouse — mobil oder am Desktop.':
+    'Measures load time and Core Web Vitals with Google Lighthouse — on mobile or desktop.',
+  Optimierung: 'Opportunity',
+  Potenzial: 'Potential',
 
   // ─── VirusTotal ──────────────────────────────────────────────────────
   'Prüft die Domain gegen 80+ Sicherheits-Engines auf Malware, Phishing und Blacklists.':
@@ -429,20 +501,17 @@ const ui: Dictionary = {
   'Werte Reputation aus…': 'Evaluating reputation…',
   'Scan läuft': 'Scan running',
   'VirusTotal-Scan läuft…': 'VirusTotal scan running…',
+  Ergebnis: 'Result',
 
   // ─── IP-Details ──────────────────────────────────────────────────────
   'IP-Lookup': 'IP lookup',
   'Reverse-DNS wird ermittelt…': 'Looking up reverse DNS…',
   'Für diese IP ist kein PTR-Record konfiguriert.': 'No PTR record is configured for this IP.',
   'IP-Details werden geladen…': 'Loading IP details…',
+  'Als eigene Suche öffnen': 'Open as its own lookup',
   'IP-, Netzwerk- und Geolocation-Details': 'IP, network and geolocation details',
   'Details zu {ip} anzeigen': 'Show details for {ip}',
-  'Details zu {ip}': 'Details for {ip}',
-  'IP kopieren:': 'Copy IP:',
-  'IP kopiert': 'IP copied',
   'IP kopieren': 'Copy IP',
-  'Details schließen': 'Close details',
-  Schließen: 'Close',
   'nicht konfiguriert': 'not configured',
   'nicht verfügbar': 'not available',
   Organisation: 'Organization',
@@ -470,6 +539,9 @@ const ui: Dictionary = {
   'gerade eben': 'just now',
   'vor {count} min': '{count} min ago',
   'vor {count} h': '{count} h ago',
+  'Alle Einträge werden aus diesem Browser gelöscht. Das lässt sich nicht rückgängig machen.':
+    'All entries will be removed from this browser. This can’t be undone.',
+  Abbrechen: 'Cancel',
 
   // ─── Available Check ─────────────────────────────────────────────────
   'Finde die passende Domain für dein Projekt — mit Alternativen zu gängigen TLDs.':
@@ -483,9 +555,8 @@ const ui: Dictionary = {
   Verfügbar: 'Available',
   Vergeben: 'Taken',
   Unklar: 'Unclear',
-  'Domain kopieren:': 'Copy domain:',
-  'Domain kopiert': 'Domain copied',
   'Domain kopieren': 'Copy domain',
+  'Bitte gib einen Namen oder eine Domain ein.': 'Please enter a name or a domain.',
   'Du suchst qualitatives Hosting für dein neues Projekt? Dann schau doch mal bei {mittwald} vorbei — Managed Webhosting aus Deutschland, gemacht für Agenturen und Freelancer.':
     'Looking for quality hosting for your new project? Take a look at {mittwald} — managed web hosting from Germany, made for agencies and freelancers.',
 
@@ -601,8 +672,6 @@ const ui: Dictionary = {
   },
   'dem letzten Check': 'your last check',
   'Zeitpunkt unbekannt': 'time unknown',
-  'Ausblenden': 'Hide',
-  'Anzeigen': 'Show',
   'gestiegen': 'up',
   'gefallen': 'down',
   'erneuert': 'renewed',
@@ -806,6 +875,8 @@ const ui: Dictionary = {
   'WHOIS-Lookup fehlgeschlagen': 'WHOIS lookup failed',
   'Tech-Stack-Erkennung fehlgeschlagen': 'Tech stack detection failed',
   'PageSpeed fehlgeschlagen': 'PageSpeed failed',
+  'Google braucht für die Analyse dieser Seite zu lange. Große Seiten schafft PageSpeed nicht immer — versuch es in ein paar Minuten noch einmal.':
+    'Google is taking too long to analyse this page. PageSpeed doesn’t always manage large pages — please try again in a few minutes.',
   'VirusTotal-Scan fehlgeschlagen': 'VirusTotal scan failed',
   'IP-Details fehlgeschlagen': 'Couldn’t load the IP details',
   'Verfügbarkeits-Check fehlgeschlagen': 'Availability check failed',

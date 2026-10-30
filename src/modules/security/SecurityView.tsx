@@ -1,10 +1,20 @@
 import type { ReactNode } from 'react';
-import { motion } from 'motion/react';
-import { Lock, ShieldCheck, ShieldAlert, ShieldOff, ShieldQuestion } from 'lucide-react';
+import {
+  AlertBadge,
+  AlertText,
+  Badge,
+  ColumnLayout,
+  Content,
+  Flex,
+  Heading,
+  InlineCode,
+  Label,
+  LabeledValue,
+  Section,
+  Text,
+} from '@mittwald/flow-react-components';
 import type { DnssecInfo, SslInfo } from '@/types/dns';
 import type { SectionSlice } from '@/hooks/useProgressiveLookup';
-import { cn } from '@/lib/cn';
-import { CardHeader, type Tone } from '@/components/ui/CardHeader';
 import { useI18n } from '@/i18n';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 import { CalendarButton } from '@/components/calendar/CalendarButton';
@@ -18,12 +28,17 @@ interface SecurityViewProps {
   dnssec: SectionSlice<DnssecInfo>;
 }
 
+type Status = 'success' | 'warning' | 'danger';
+
 const NO_DNSSEC: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
 
 /*
  * „nicht prüfbar“ (#101): eine ausgefallene Sektion genauso wie ein Timeout
  * im Check — vorher stand dort „Kein TLS“ bzw. „nicht aktiviert“. `unchecked`
  * ist die Zeile, warum; ohne sie hat der Check ein Ergebnis.
+ *
+ * Tab-Inhalt in der LayoutCard des Reports: je Bereich eine Section, Flow
+ * trennt die beiden mit einer Linie.
  */
 export function SecurityView({ domain, ssl, sslApplicable = true, dnssec }: SecurityViewProps) {
   const { t } = useI18n();
@@ -45,28 +60,31 @@ export function SecurityView({ domain, ssl, sslApplicable = true, dnssec }: Secu
   );
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <SslCard
+    <>
+      <SslSection
         domain={domain}
         ssl={ssl.data ?? undefined}
         applicable={sslApplicable}
         unchecked={sslUnchecked}
       />
-      <DnssecCard dnssec={dnssecInfo} unchecked={dnssecUnchecked} />
-    </div>
+      <DnssecSection dnssec={dnssecInfo} unchecked={dnssecUnchecked} />
+    </>
   );
 }
 
 /* ─── SSL ─────────────────────────────────────────────────────────────── */
 
 /** Dieselben Schwellen wie die SSL-Findings: < 14 Tage Warnung, abgelaufen kritisch. */
-function sslTone(ssl: SslInfo): Tone {
-  if (!ssl.valid || ssl.daysUntilExpiry < 0) return 'danger';
-  if (ssl.daysUntilExpiry < 14) return 'warning';
+function expiryStatus(days: number): Status {
+  if (days < 0) return 'danger';
+  if (days < 14) return 'warning';
   return 'success';
 }
 
-function SslCard({
+/** So viele SANs stehen ausgeschrieben da, der Rest als Zahl. */
+const SHOWN_SANS = 12;
+
+function SslSection({
   domain,
   ssl,
   applicable,
@@ -78,19 +96,15 @@ function SslCard({
   unchecked?: ReactNode;
 }) {
   const { t, formatDate } = useI18n();
+
   if (!applicable) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="card"
-      >
-        <CardHeader icon={<Lock className="size-4" />} title="SSL / TLS" />
-        <p className="mt-4 text-sm leading-relaxed text-fg-muted">
+      <Section>
+        <Heading level={2}>SSL / TLS</Heading>
+        <Text elementType="p">
           {t('Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.')}
-        </p>
-      </motion.div>
+        </Text>
+      </Section>
     );
   }
 
@@ -98,85 +112,63 @@ function SslCard({
     // Der zugehörige Befund (no-ssl) ist eine Warnung, kein kritischer Fehler.
     // Scheiterte nur der Check, ist nichts bewertet: neutral, „nicht prüfbar“.
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="card"
-      >
-        <CardHeader
-          icon={<Lock className="size-4" />}
-          title="SSL / TLS"
-          tone={unchecked ? 'neutral' : 'warning'}
-          aside={unchecked && <UncheckedBadge />}
-        />
-        {unchecked ? (
-          <div className="mt-4">{unchecked}</div>
-        ) : (
-          <div className="mt-4 flex items-center gap-2 text-sm font-medium text-warning">
-            <ShieldOff className="size-4 shrink-0" />
-            <span>{t('Kein TLS auf Port 443 erreichbar')}</span>
-          </div>
-        )}
-      </motion.div>
+      <Section>
+        <Heading level={2}>
+          SSL / TLS
+          {unchecked && <UncheckedBadge />}
+        </Heading>
+        {unchecked || <AlertText status="warning">{t('Kein TLS auf Port 443 erreichbar')}</AlertText>}
+      </Section>
     );
   }
-
-  const tone = sslTone(ssl);
-  const expiryBadge =
-    ssl.daysUntilExpiry < 0
-      ? 'badge-danger'
-      : ssl.daysUntilExpiry < 14
-      ? 'badge-warning'
-      : 'badge-success';
 
   const validFrom = formatDate(ssl.validFrom);
   const validTo = formatDate(ssl.validTo);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="card"
-    >
-      <CardHeader
-        icon={<Lock className="size-4" />}
-        title="SSL / TLS"
-        tone={tone}
-        aside={
-          ssl.valid ? (
-            <span className="badge badge-success">{t('gültig')}</span>
-          ) : (
-            <span className="badge badge-danger">{t('nicht vertrauenswürdig')}</span>
-          )
-        }
-      />
+    <Section>
+      <Heading level={2}>
+        SSL / TLS
+        {ssl.valid ? (
+          <AlertBadge status="success">{t('gültig')}</AlertBadge>
+        ) : (
+          <AlertBadge status="danger">{t('nicht vertrauenswürdig')}</AlertBadge>
+        )}
+      </Heading>
 
-      <dl className="mt-4 space-y-3">
-        <Row label={t('Aussteller')} value={ssl.issuer} />
-        <Row label="Subject" value={ssl.subject} mono />
-        <Row
-          label={t('Gültig')}
-          value={
-            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>
+      <ColumnLayout>
+        <LabeledValue>
+          <Label>{t('Aussteller')}</Label>
+          <Content>{ssl.issuer}</Content>
+        </LabeledValue>
+        <LabeledValue>
+          <Label>Subject</Label>
+          <InlineCode className="wrap-anywhere">{ssl.subject}</InlineCode>
+        </LabeledValue>
+        <LabeledValue>
+          <Label>{t('Gültig')}</Label>
+          <Content>
+            <Flex wrap="wrap" align="center" columnGap="s" rowGap="xs">
+              <Text>
                 {validFrom} – {validTo}
-              </span>
-              <span className={cn('badge', expiryBadge)}>
+              </Text>
+              <AlertBadge status={expiryStatus(ssl.daysUntilExpiry)}>
                 {ssl.daysUntilExpiry < 0
                   ? t('seit {count} Tagen abgelaufen', { count: Math.abs(ssl.daysUntilExpiry) })
                   : t('noch {count} Tage', { count: ssl.daysUntilExpiry })}
-              </span>
-            </span>
-          }
-        />
-        <Row label={t('Protokoll')} value={`${ssl.tlsVersion} · ${ssl.signatureAlgorithm}`} />
-      </dl>
+              </AlertBadge>
+            </Flex>
+          </Content>
+        </LabeledValue>
+        <LabeledValue>
+          <Label>{t('Protokoll')}</Label>
+          <Content>{`${ssl.tlsVersion} · ${ssl.signatureAlgorithm}`}</Content>
+        </LabeledValue>
+      </ColumnLayout>
 
       {/* Für ein abgelaufenes Zertifikat gibt es nichts mehr vorzumerken. */}
       {ssl.daysUntilExpiry >= 0 && (
-        <div className="mt-4">
+        <div>
           <CalendarButton
             reminder={{
               kind: 'certificate',
@@ -189,109 +181,80 @@ function SslCard({
       )}
 
       {ssl.sans.length > 0 && (
-        <div className="mt-5 border-t border-line-subtle pt-5">
-          <div className="text-xs text-fg-subtle">SANs ({ssl.sans.length})</div>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {ssl.sans.slice(0, 12).map((san) => (
-              <span key={san} className="badge font-mono font-normal">
-                {san}
-              </span>
+        <>
+          <Heading level={3}>SANs ({ssl.sans.length})</Heading>
+          <Flex wrap="wrap" align="center" gap="xs">
+            {ssl.sans.slice(0, SHOWN_SANS).map((san) => (
+              <InlineCode key={san}>{san}</InlineCode>
             ))}
-            {ssl.sans.length > 12 && (
-              <span className="self-center text-xs text-fg-subtle">
-                +{ssl.sans.length - 12}
-              </span>
+            {ssl.sans.length > SHOWN_SANS && (
+              <Text>
+                <small>+{ssl.sans.length - SHOWN_SANS}</small>
+              </Text>
             )}
-          </div>
-        </div>
+          </Flex>
+        </>
       )}
-    </motion.div>
+    </Section>
   );
 }
 
 /* ─── DNSSEC ─────────────────────────────────────────────────────────── */
 
-function DnssecCard({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: ReactNode }) {
+function DnssecSection({ dnssec, unchecked }: { dnssec: DnssecInfo; unchecked?: ReactNode }) {
   const { t } = useI18n();
-  let icon = <ShieldOff className="size-4" />;
-  let tone: Tone = 'neutral';
   let statusText = t('inaktiv');
-  let badge = <span className="badge">{t('nicht aktiviert')}</span>;
-  let body = (
-    <p className="text-sm leading-relaxed text-fg-muted">
+  let badge: ReactNode = <Badge color="neutral">{t('nicht aktiviert')}</Badge>;
+  let body: ReactNode = (
+    <Text elementType="p">
       {t('DNSSEC schützt deine Domain gegen DNS-Spoofing. Die meisten Registrare bieten DNSSEC mit einem Klick — beim Hosting-Panel nachsehen.')}
-    </p>
+    </Text>
   );
 
   if (unchecked) {
-    icon = <ShieldQuestion className="size-4" />;
-    statusText = 'unbekannt';
+    statusText = t('unbekannt');
     badge = <UncheckedBadge />;
-    body = <>{unchecked}</>;
+    body = unchecked;
   } else if (dnssec.enabled && dnssec.valid && dnssec.chainOfTrust === 'valid') {
-    icon = <ShieldCheck className="size-4" />;
-    tone = 'success';
     statusText = t('aktiv & valide');
-    badge = <span className="badge badge-success">{t('Chain of Trust valide')}</span>;
+    badge = <AlertBadge status="success">{t('Chain of Trust valide')}</AlertBadge>;
     body = (
-      <dl className="space-y-3">
-        <Row label={t('Algorithmus')} value={dnssec.algorithm ?? t('unbekannt')} mono />
-        <Row
-          label="Status"
-          value={t('DS- und DNSKEY-Records vorhanden, Signatur über Cloudflare und Google geprüft.')}
-        />
-      </dl>
+      <ColumnLayout>
+        <LabeledValue>
+          <Label>{t('Algorithmus')}</Label>
+          {dnssec.algorithm ? <InlineCode>{dnssec.algorithm}</InlineCode> : <Content>{t('unbekannt')}</Content>}
+        </LabeledValue>
+        <LabeledValue>
+          <Label>Status</Label>
+          <Content>{t('DS- und DNSKEY-Records vorhanden, Signatur über Cloudflare und Google geprüft.')}</Content>
+        </LabeledValue>
+      </ColumnLayout>
     );
   } else if (dnssec.enabled && dnssec.chainOfTrust === 'incomplete') {
-    icon = <ShieldAlert className="size-4" />;
-    tone = 'danger';
     statusText = t('Chain unterbrochen');
-    badge = <span className="badge badge-danger">{t('Chain unterbrochen')}</span>;
+    badge = <AlertBadge status="danger">{t('Chain unterbrochen')}</AlertBadge>;
     body = (
-      <p className="text-sm leading-relaxed text-fg-muted">
+      <Text elementType="p">
         {t('Die Domain hat einen DNSKEY, aber der Parent-DS-Record fehlt. Resolver können die Signatur nicht prüfen → DNSSEC ist effektiv aus. Beim Registrar den DS-Record nachtragen.')}
-      </p>
+      </Text>
     );
   } else if (dnssec.enabled && dnssec.chainOfTrust === 'invalid') {
-    icon = <ShieldAlert className="size-4" />;
-    tone = 'danger';
     statusText = 'invalid';
-    badge = <span className="badge badge-danger">{t('Validierung fehlgeschlagen')}</span>;
+    badge = <AlertBadge status="danger">{t('Validierung fehlgeschlagen')}</AlertBadge>;
     body = (
-      <p className="text-sm leading-relaxed text-fg-muted">
+      <Text elementType="p">
         {t('DS und DNSKEY sind da, aber die Chain validiert nicht. Möglicherweise abgelaufene Signaturen oder falsche Schlüssel.')}
-      </p>
+      </Text>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.05 }}
-      className="card"
-    >
-      <CardHeader icon={icon} title={`DNSSEC · ${statusText}`} tone={tone} aside={badge} />
-      <div className="mt-4">{body}</div>
-    </motion.div>
-  );
-}
-
-/* ─── Bausteine ──────────────────────────────────────────────────────── */
-
-/** Eine Zeile der Label/Wert-Liste — dieselbe Form wie in der WHOIS-Ansicht. */
-function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <dt className="w-24 shrink-0 text-xs text-fg-subtle">{label}</dt>
-      <dd
-        className={cn(
-          'min-w-0 flex-1 text-sm text-fg wrap-break-word',
-          mono && 'font-mono text-[13px]'
-        )}
-      >
-        {value}
-      </dd>
-    </div>
+    <Section>
+      <Heading level={2}>
+        {`DNSSEC · ${statusText}`}
+        {badge}
+      </Heading>
+      {body}
+    </Section>
   );
 }

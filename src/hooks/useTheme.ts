@@ -19,7 +19,8 @@ const DARK_QUERY = '(prefers-color-scheme: dark)';
  * unterscheiden, er bleibt also stehen, bis der Nutzer die Websitedaten
  * löscht.
  *
- * Vor dem ersten Paint setzt das Inline-Script in index.html die Klasse aus
+ * Flow liest das Theme aus `data-theme` am html-Element (`light`/`dark`).
+ * Vor dem ersten Paint setzt das Inline-Script in index.html das Attribut aus
  * demselben Eintrag und derselben Media Query; ändert sich die Regel hier,
  * dort mitziehen.
  */
@@ -33,7 +34,7 @@ export function useTheme() {
   const theme = choice ?? system;
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   useEffect(() => {

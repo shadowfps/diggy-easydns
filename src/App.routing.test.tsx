@@ -82,7 +82,27 @@ function setPath(path: string) {
 }
 
 const searchField = () => screen.getByPlaceholderText(/Anfrage starten/);
-const openMenu = () => userEvent.click(screen.getByRole('button', { name: /Menü öffnen/ }));
+/**
+ * Klickt einen Bereich in der Kopfzeile an. Die Navigation sind Links (Flows
+ * HeaderNavigation); in jsdom steht sie neben dem Burger im DOM, weil keine
+ * Media Query sie ausblendet. Flow hängt Link-Namen ein U+200D an — daher der
+ * Vergleich über den Anfang.
+ */
+const navigateTo = (name: string) =>
+  userEvent.click(
+    within(screen.getByRole('navigation', { name: 'Hauptnavigation' })).getByRole('link', {
+      name: new RegExp(`^${name}`),
+    })
+  );
+
+/** Der Record-Typ im Propagation-Tab ist ein Flow-Select: Button mit dem Typ, Optionen im Popover. */
+const typeSelect = () => screen.findByRole('button', { name: /Record-Typ/ });
+const expectType = async (name: string) =>
+  expect(await typeSelect()).toHaveTextContent(new RegExp(`^${name}$`));
+async function chooseType(name: string) {
+  await userEvent.click(await typeSelect());
+  await userEvent.click(await screen.findByRole('option', { name }));
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -115,10 +135,11 @@ describe('Deep-Links beim ersten Laden', () => {
     expect(await screen.findByRole('heading', { name: 'Datenschutz' })).toBeInTheDocument();
   });
 
-  it('öffnet /history direkt', () => {
+  // Nachgeladen wie die Rechtstexte — deshalb findBy.
+  it('öffnet /history direkt', async () => {
     setPath('/history');
     render(<App />);
-    expect(screen.getByRole('heading', { name: /Letzte Suchanfragen/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Letzte Suchanfragen/ })).toBeInTheDocument();
   });
 
   it('führt einen Permalink-Lookup aus', async () => {
@@ -137,11 +158,10 @@ describe('Deep-Links beim ersten Laden', () => {
 describe('Navigation und Zurück-Button', () => {
   it('setzt den Pfad beim Wechsel auf eine statische Route', async () => {
     render(<App />);
-    await openMenu();
-    await userEvent.click(screen.getByRole('button', { name: 'About' }));
+    await navigateTo('About');
 
     expect(window.location.pathname).toBe('/about');
-    expect(screen.getByRole('heading', { name: /Warum diggy existiert/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Warum diggy existiert/ })).toBeInTheDocument();
   });
 
   /**
@@ -150,9 +170,8 @@ describe('Navigation und Zurück-Button', () => {
    */
   it('wendet popstate auf die Ansicht an, nicht nur auf die URL', async () => {
     render(<App />);
-    await openMenu();
-    await userEvent.click(screen.getByRole('button', { name: 'About' }));
-    expect(screen.getByRole('heading', { name: /Warum diggy existiert/ })).toBeInTheDocument();
+    await navigateTo('About');
+    expect(await screen.findByRole('heading', { name: /Warum diggy existiert/ })).toBeInTheDocument();
 
     setPath('/');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -163,8 +182,7 @@ describe('Navigation und Zurück-Button', () => {
 
   it('kommt per popstate auch auf /impressum zurück', async () => {
     render(<App />);
-    await openMenu();
-    await userEvent.click(screen.getByRole('button', { name: 'History' }));
+    await navigateTo('History');
 
     setPath('/impressum');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -193,8 +211,7 @@ describe('Navigation und Zurück-Button', () => {
 
   it('führt einen Lookup erneut aus, wenn man per popstate auf den Permalink zurückkommt', async () => {
     render(<App />);
-    await openMenu();
-    await userEvent.click(screen.getByRole('button', { name: 'About' }));
+    await navigateTo('About');
 
     setPath('/lookup/example.com');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -222,7 +239,9 @@ describe('Suche und History-Einträge', () => {
     push.mockRestore();
   });
 
-  it('legt bei einer Suche INNERHALB der Lookup-Ansicht keinen zweiten Eintrag an', async () => {
+  // #147: Vorher überschrieb eine Suche aus dem Report heraus dessen Eintrag —
+  // Zurück führte auf die Startseite statt zum vorigen Report.
+  it('legt für eine andere Domain aus dem Report heraus einen eigenen Eintrag an', async () => {
     render(<App />);
     await userEvent.type(searchField(), 'example.com{Enter}');
     await waitFor(() => expect(window.location.pathname).toBe('/lookup/example.com'));
@@ -233,8 +252,46 @@ describe('Suche und History-Einträge', () => {
     await userEvent.type(searchField(), 'other.com{Enter}');
 
     await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledWith('other.com'));
+    expect(push).toHaveBeenCalledWith(null, '', '/lookup/other.com');
+    push.mockRestore();
+  });
+
+  it('legt für dieselbe Domain keinen doppelten Eintrag an', async () => {
+    render(<App />);
+    await userEvent.type(searchField(), 'example.com{Enter}');
+    await waitFor(() => expect(window.location.pathname).toBe('/lookup/example.com'));
+
+    const push = vi.spyOn(window.history, 'pushState');
+    await userEvent.clear(searchField());
+    await userEvent.type(searchField(), 'example.com{Enter}');
+
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledTimes(2));
     expect(push).not.toHaveBeenCalled();
     push.mockRestore();
+  });
+
+  it('prüft einen verlinkten Nameserver sofort, und Zurück führt zum vorigen Report', async () => {
+    vi.mocked(api.lookupRecords).mockImplementation(async (domain) => ({
+      domain,
+      timestamp: '2026-09-09T10:00:00.000Z',
+      records:
+        domain === 'example.com'
+          ? [{ type: 'NS', name: domain, value: 'ns1.example.net', ttl: 300 }]
+          : [{ type: 'A', name: domain, value: '93.184.216.34', ttl: 300 }],
+      findings: [],
+    }));
+    render(<App />);
+    await userEvent.type(searchField(), 'example.com{Enter}');
+
+    const records = await screen.findByRole('grid', { name: 'DNS-Records' });
+    await userEvent.click(within(records).getByRole('link', { name: /^ns1\.example\.net/ }));
+
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledWith('ns1.example.net'));
+    expect(window.location.pathname).toBe('/lookup/ns1.example.net');
+
+    window.history.back();
+    await waitFor(() => expect(window.location.pathname).toBe('/lookup/example.com'));
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenLastCalledWith('example.com'));
   });
 
   it('setzt den Dokumenttitel auf die abgefragte Domain', async () => {
@@ -245,8 +302,7 @@ describe('Suche und History-Einträge', () => {
 
   it('setzt den Dokumenttitel je statischer Route', async () => {
     render(<App />);
-    await openMenu();
-    await userEvent.click(screen.getByRole('button', { name: 'About' }));
+    await navigateTo('About');
     await waitFor(() => expect(document.title).toBe('About — diggy'));
   });
 
@@ -293,7 +349,7 @@ describe('Layout', () => {
     await userEvent.type(searchField(), 'example.com{Enter}');
     await screen.findByText('Health Score');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Zur Startseite' }));
+    await userEvent.click(screen.getByRole('link', { name: 'Zur Startseite' }));
     const recent = await screen.findByRole('button', { name: /example\.com/ });
     vi.mocked(api.lookupRecords).mockClear();
     await userEvent.click(recent);
@@ -334,8 +390,7 @@ describe('Scrollen und „Bewegung reduzieren“', () => {
 
   async function gotoAbout() {
     render(<App />);
-    await openMenu();
-    await userEvent.click(screen.getByRole('button', { name: 'About' }));
+    await navigateTo('About');
   }
 
   it('gleitet ohne die Einstellung nach oben', async () => {
@@ -477,15 +532,13 @@ describe('Propagation-Typ im Link', () => {
 
   afterEach(() => setMediaQuery());
 
-  const typeButton = async (name: string) =>
-    within(await screen.findByRole('group', { name: 'Record-Typ' })).getByRole('button', { name });
   const currentUrl = () => `${window.location.pathname}${window.location.search}`;
 
   it('öffnet einen Link mit Typ im Propagation-Tab', async () => {
     setPath('/lookup/example.com?propagation=mx');
     render(<App />);
 
-    expect(await typeButton('MX')).toHaveAttribute('aria-pressed', 'true');
+    await expectType('MX');
     expect(screen.getByRole('tab', { name: /Propagation/ })).toHaveAttribute('aria-selected', 'true');
     // Die Knöpfe stehen mit dem Commit im DOM, die Abfrage startet erst im
     // Effect danach. Den holt React in einer eigenen Scheduler-Aufgabe nach;
@@ -500,7 +553,7 @@ describe('Propagation-Typ im Link', () => {
     setPath('/lookup/example.com?propagation=SRV');
     render(<App />);
 
-    expect(await typeButton('A')).toHaveAttribute('aria-pressed', 'true');
+    await expectType('A');
     expect(screen.getByRole('tab', { name: /Propagation/ })).toHaveAttribute('aria-selected', 'true');
     await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
     expect(api.lookupPropagation).toHaveBeenCalledTimes(1);
@@ -514,7 +567,7 @@ describe('Propagation-Typ im Link', () => {
     await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com?propagation=A'));
 
     const push = vi.spyOn(window.history, 'pushState');
-    await userEvent.click(await typeButton('MX'));
+    await chooseType('MX');
     expect(push).toHaveBeenCalledTimes(1);
     expect(push).toHaveBeenCalledWith(null, '', '/lookup/example.com?propagation=MX');
     expect(await screen.findByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
@@ -523,12 +576,12 @@ describe('Propagation-Typ im Link', () => {
     // Zurück …
     setPath('/lookup/example.com?propagation=A');
     window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(async () => expect(await typeButton('A')).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expectType('A'));
 
     // … und wieder vor: aus dem Zwischenspeicher, ohne neue Abfrage.
     setPath('/lookup/example.com?propagation=MX');
     window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(async () => expect(await typeButton('MX')).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expectType('MX'));
 
     expect(api.lookupRecords).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.lookupPropagation).mock.calls).toEqual([['example.com'], ['example.com', 'MX']]);
@@ -537,7 +590,7 @@ describe('Propagation-Typ im Link', () => {
   it('nimmt den Typ beim Wechsel auf einen anderen Tab aus dem Link', async () => {
     setPath('/lookup/example.com?propagation=NS');
     render(<App />);
-    await typeButton('NS');
+    await expectType('NS');
 
     await userEvent.click(screen.getByRole('tab', { name: /Records/ }));
     await waitFor(() => expect(currentUrl()).toBe('/lookup/example.com'));
@@ -550,11 +603,11 @@ describe('Propagation-Typ im Link', () => {
     render(<App />);
     const findingsTab = await screen.findByRole('tab', { name: /Findings/ });
     await waitFor(() => expect(findingsTab).toHaveTextContent(/\d/));
-    const scoreCard = () => screen.getByRole('heading', { name: 'Health Score' }).closest('.card');
+    const scoreCard = () => screen.getByRole('heading', { name: /^Health Score/ }).closest('section');
     const before = { findings: findingsTab.textContent, score: scoreCard()?.textContent };
 
     await userEvent.click(screen.getByRole('tab', { name: /Propagation/ }));
-    await userEvent.click(await typeButton('MX'));
+    await chooseType('MX');
     expect(await screen.findByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
 
     expect(findingsTab.textContent).toBe(before.findings);
@@ -584,9 +637,8 @@ describe('Erwarteter Wert im Link', () => {
     });
   });
 
-  const field = () => screen.findByRole('textbox', { name: 'Erwarteter Wert' });
-  const typeButton = async (name: string) =>
-    within(await screen.findByRole('group', { name: 'Record-Typ' })).getByRole('button', { name });
+  // Flow markiert das Feld als „(optional)“ — der Name beginnt mit der Beschriftung.
+  const field = () => screen.findByRole('textbox', { name: /^Erwarteter Wert/ });
   const currentUrl = () => `${window.location.pathname}${window.location.search}`;
 
   it('öffnet einen Link mit erwartetem Wert und vergleicht die Resolver damit', async () => {
@@ -620,7 +672,7 @@ describe('Erwarteter Wert im Link', () => {
     expect(push).not.toHaveBeenCalled();
     expect(await screen.findByText('Noch ohne den erwarteten Wert: 1 von 2 Resolvern.')).toBeInTheDocument();
 
-    await userEvent.click(await typeButton('MX'));
+    await chooseType('MX');
     expect(push).toHaveBeenCalledWith(null, '', '/lookup/example.com?propagation=MX');
     expect(await field()).toHaveValue('');
     push.mockRestore();
@@ -629,7 +681,7 @@ describe('Erwarteter Wert im Link', () => {
     setPath('/lookup/example.com?propagation=A&expected=192.0.2.9');
     window.dispatchEvent(new PopStateEvent('popstate'));
     await waitFor(async () => expect(await field()).toHaveValue('192.0.2.9'));
-    expect(await typeButton('A')).toHaveAttribute('aria-pressed', 'true');
+    await expectType('A');
 
     // Leeren: der Wert verschwindet aus dem Link.
     await userEvent.click(screen.getByRole('button', { name: 'Erwarteten Wert löschen' }));

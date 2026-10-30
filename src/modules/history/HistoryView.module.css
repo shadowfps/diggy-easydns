@@ -1,0 +1,36 @@
+/* Textseite: höchstens 48rem breit, zentriert (docs/DESIGN.md). */
+.page {
+  display: flex;
+  width: 100%;
+  max-width: 48rem;
+  flex-direction: column;
+  gap: var(--size-px--l);
+  margin-inline: auto;
+}
+
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--xs);
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--m);
+}
+
+.values {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-px--xxs);
+}
+
+/* Nameserver übernehmen: als Wert lesbar, nicht als Knopf-Fläche. */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-px--xs);
+}

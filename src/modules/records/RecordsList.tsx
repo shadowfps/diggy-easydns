@@ -1,23 +1,49 @@
-import { motion } from 'motion/react';
-import { useState, useMemo } from 'react';
-import { MailX } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  Badge,
+  CounterBadge,
+  Section,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabTitle,
+  Text,
+} from '@mittwald/flow-react-components';
 import type { DnsRecord, RecordType } from '@/types/dns';
-import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
+import { IpAddressLink, IpOwnerLabel, IpPtrLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { InfoButton } from '@/components/ui/InfoButton';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { NULL_MX_EXPLANATION, explainRecordType } from '@/lib/explanations';
 import { isNullMx } from '@/lib/nullMx';
-import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 import { useI18n } from '@/i18n';
+import styles from './RecordsList.module.css';
 
 interface RecordsListProps {
   records: DnsRecord[];
-  onUseDomain?: (domain: string) => void;
 }
 
-export function RecordsList({ records, onUseDomain }: RecordsListProps) {
-  const [filter, setFilter] = useState<RecordType | 'ALL'>('ALL');
-  const reduced = useReducedMotion();
+type Filter = RecordType | 'ALL';
+
+/**
+ * Alle Records, umschaltbar nach Typ.
+ *
+ * Der Filter schaltet den sichtbaren Inhalt um — in Flow sind das Tabs (der
+ * frühere Chip-Umschalter entspräche dem veralteten SegmentedControl). Ist
+ * für die Typen kein Platz, klappt Flow die Leiste selbst zu einer Auswahl
+ * zusammen.
+ *
+ * Flow hält alle Tab-Panels gemountet (nur `inert`). Die Tabelle steht deshalb
+ * nur im gewählten Tab — sonst lägen alle Records mehrfach im DOM, und jede
+ * IP fragte ihren Netzbetreiber je Tab ab.
+ */
+export function RecordsList({ records }: RecordsListProps) {
+  const [filter, setFilter] = useState<Filter>('ALL');
   const { t } = useI18n();
 
   const types = useMemo(() => {
@@ -30,89 +56,109 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
   // steht ein echter daneben, stellen Absender dorthin zu.
   const nullMx = useMemo(() => isNullMx(records.filter((r) => r.type === 'MX')), [records]);
 
-  const filtered = filter === 'ALL' ? records : records.filter((r) => r.type === filter);
+  const table = (key: Filter, shown: () => DnsRecord[]) =>
+    filter === key && <RecordsTable records={shown()} nullMx={nullMx} />;
+
+  return (
+    <Section>
+      <Tabs
+        aria-label={t('Record-Typ')}
+        selectedKey={filter}
+        onSelectionChange={(key) => setFilter(key as Filter)}
+      >
+        <Tab id="ALL">
+          <TabTitle>
+            {t('Alle')}
+            <CounterBadge count={records.length} />
+          </TabTitle>
+          {table('ALL', () => records)}
+        </Tab>
+        {types.map(([type, count]) => (
+          <Tab key={type} id={type}>
+            <TabTitle>
+              {type}
+              <CounterBadge count={count} />
+            </TabTitle>
+            {table(type, () => records.filter((r) => r.type === type))}
+          </Tab>
+        ))}
+      </Tabs>
+    </Section>
+  );
+}
+
+function RecordsTable({ records, nullMx }: { records: DnsRecord[]; nullMx: boolean }) {
+  const { t } = useI18n();
 
   // Das „?“ zur Erklärung steht nur in der ersten Zeile je Typ. An jeder
   // Zeile wären es bei vielen TXT- oder NS-Records ein Dutzend gleiche
   // Fragezeichen untereinander — und ebenso viele Tab-Stopps.
   const explainedRows = new Set<number>();
   const seenTypes = new Set<RecordType>();
-  filtered.forEach((record, i) => {
+  records.forEach((record, i) => {
     if (seenTypes.has(record.type)) return;
     seenTypes.add(record.type);
     explainedRows.add(i);
   });
 
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        <FilterChip active={filter === 'ALL'} onClick={() => setFilter('ALL')}>
-          {t('Alle')} <span className="tabular-nums opacity-60">· {records.length}</span>
-        </FilterChip>
-        {types.map(([type, count]) => (
-          <FilterChip
-            key={type}
-            active={filter === type}
-            onClick={() => setFilter(type)}
-          >
-            {type} <span className="tabular-nums opacity-60">· {count}</span>
-          </FilterChip>
-        ))}
-      </div>
-
-      {/* `overflow-visible`: die Erklärung hängt als Popover an der Typ-Spalte
-          und reicht bei kurzen Listen über den Kartenrand. Mit dem
-          `overflow-hidden` aus card-flush wäre sie dort abgeschnitten; die
-          Zeilen haben keinen Hintergrund, die Rundung braucht es hier nicht. */}
-      <div className="card-flush divide-y divide-line-subtle overflow-visible">
-        {filtered.map((record, i) => {
+    // Typ und TTL so schmal wie ihr längster Inhalt („CNAME ?“, „86400s“):
+    // auf dem Handy bleibt sonst für den Wert kaum ein Drittel der Breite.
+    <Table aria-label={t('DNS-Records')} layout="fixed" verticalAlign="middle">
+      <TableHeader>
+        <TableColumn width="5.5rem">{t('Typ')}</TableColumn>
+        <TableColumn>{t('Wert')}</TableColumn>
+        <TableColumn width="5.5rem" horizontalAlign="end">
+          TTL
+        </TableColumn>
+      </TableHeader>
+      <TableBody>
+        {records.map((record, i) => {
           const hasIpDetails =
             (record.type === 'A' || record.type === 'AAAA') && isInspectableIp(record.value);
           const explanation = explainedRows.has(i) ? explainRecordType(record.type) : undefined;
 
           return (
-            <motion.div
-              key={`${record.type}-${i}-${record.value}`}
-              initial={{ opacity: 0, x: -4 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: staggerDelay(i, 0.03, reduced) }}
-              className="grid grid-cols-[60px_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 sm:px-6"
-            >
-              <span className="flex items-center gap-1 font-mono text-xs font-semibold text-fg-muted">
-                {record.type}
-                {explanation && <InfoButton term={record.type} explanation={explanation} />}
-              </span>
-              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[13px] text-fg">
-                {record.priority !== undefined && (
-                  <span className="mr-2 shrink-0 tabular-nums text-fg-subtle">
-                    {record.priority}
-                  </span>
-                )}
-                {hasIpDetails ? (
-                  <>
-                    <IpAddressLink ip={record.value} className="text-[13px] text-fg" />
-                    <IpOwnerLabel ip={record.value} className="text-xs text-fg-subtle" />
-                  </>
-                ) : record.type === 'NS' && onUseDomain ? (
-                  <NameserverButton value={record.value} onClick={() => onUseDomain(record.value)} />
-                ) : record.type === 'MX' ? (
-                  <MxTarget value={record.value} nullMx={nullMx} />
-                ) : (
-                  // TXT ganz zeigen statt abschneiden: DKIM-Schlüssel, SPF und
-                  // Verifizierungs-Tokens will man lesen und kopieren können.
-                  // `wrap-anywhere` bricht lange Base64-Ketten, bevorzugt aber
-                  // Leerzeichen — anders als `break-all` (#64).
-                  <span className={record.type === 'TXT' ? 'wrap-anywhere' : 'truncate'}>
-                    {record.value}
-                  </span>
-                )}
-              </span>
-              <Ttl ttl={record.ttl} />
-            </motion.div>
+            <TableRow key={`${record.type}-${i}-${record.value}`}>
+              <TableCell>
+                <span className={`mono ${styles.type}`}>
+                  {record.type}
+                  {explanation && <InfoButton term={record.type} explanation={explanation} />}
+                </span>
+              </TableCell>
+              <TableCell>
+                <span className={`mono ${styles.value}`}>
+                  {record.priority !== undefined && (
+                    <span className={styles.priority}>{record.priority}</span>
+                  )}
+                  {hasIpDetails ? (
+                    <>
+                      <IpAddressLink ip={record.value} />
+                      <IpPtrLabel ip={record.value} />
+                      <IpOwnerLabel ip={record.value} />
+                    </>
+                  ) : record.type === 'NS' || record.type === 'CNAME' ? (
+                    // Ein Hostname, den man selbst prüfen will (#147): Link auf seinen Report.
+                    <LookupLink value={record.value} />
+                  ) : record.type === 'MX' ? (
+                    <MxTarget value={record.value} nullMx={nullMx} />
+                  ) : (
+                    // Ganz zeigen statt abschneiden: DKIM-Schlüssel, SPF und
+                    // Verifizierungs-Tokens will man lesen und kopieren können.
+                    // `wrap-anywhere` bricht lange Base64-Ketten, bevorzugt aber
+                    // Leerzeichen (#64).
+                    <span className="wrap-anywhere">{record.value}</span>
+                  )}
+                </span>
+              </TableCell>
+              <TableCell horizontalAlign="end">
+                <Ttl ttl={record.ttl} />
+              </TableCell>
+            </TableRow>
           );
         })}
-      </div>
-    </div>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -126,14 +172,14 @@ function Ttl({ ttl }: { ttl: number | null }) {
   const { t } = useI18n();
   if (ttl === null) {
     return (
-      <span className="text-xs text-fg-subtle" title={t('TTL unbekannt')}>
+      <Text title={t('TTL unbekannt')}>
         <span aria-hidden="true">—</span>
         <span className="sr-only">{t('TTL unbekannt')}</span>
-      </span>
+      </Text>
     );
   }
 
-  return <span className="text-xs tabular-nums text-fg-subtle">{ttl}s</span>;
+  return <Text className={styles.ttl}>{ttl}s</Text>;
 }
 
 /**
@@ -149,47 +195,13 @@ function MxTarget({ value, nullMx }: { value: string; nullMx: boolean }) {
   const { t } = useI18n();
   return (
     <>
-      <span className="truncate">{value || '.'}</span>
+      <span className="wrap-anywhere">{value && !nullMx ? <LookupLink value={value} /> : value || '.'}</span>
       {nullMx && (
-        <span className="inline-flex items-center gap-1">
-          {/* `font-sans`: die Spalte ist Mono, das Badge ist Text. */}
-          <span className="badge font-sans">
-            <MailX className="size-3" aria-hidden />
-            {t('Null-MX — keine Mails')}
-          </span>
+        <span className={styles.nullMx}>
+          <Badge color="neutral">{t('Null-MX — keine Mails')}</Badge>
           <InfoButton term={t('Null-MX')} explanation={NULL_MX_EXPLANATION} />
         </span>
       )}
     </>
-  );
-}
-
-function NameserverButton({ value, onClick }: { value: string; onClick: () => void }) {
-  const { t } = useI18n();
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="min-w-0 truncate text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
-      title={t('{value} in die Suche übernehmen', { value })}
-    >
-      {value}
-    </button>
-  );
-}
-
-function FilterChip({
-  children,
-  active,
-  onClick,
-}: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" aria-pressed={active} onClick={onClick} className="chip">
-      {children}
-    </button>
   );
 }

@@ -120,6 +120,20 @@ describe('sendContactMessage gegen einen echten SMTP-Dialog', () => {
     expect(sessions.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('stellt der Benachrichtigung auf der Testumgebung einen Vorsatz voran', async () => {
+    process.env.CONTACT_SUBJECT_PREFIX = '[dev]';
+    try {
+      await sendContactMessage({
+        name: 'Testerin',
+        email: `dev-${Date.now()}@example.com`,
+        message: 'Eine ausreichend lange Testnachricht.',
+      });
+    } finally {
+      delete process.env.CONTACT_SUBJECT_PREFIX;
+    }
+    expect(sessions[0].data).toMatch(/^Subject: \[dev\] \[diggy\] Kontakt: Testerin/m);
+  });
+
   it('setzt Reply-To auf die Absender-Adresse', async () => {
     const email = `reply-${Date.now()}@example.com`;
     await sendContactMessage({

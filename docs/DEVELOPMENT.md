@@ -7,7 +7,7 @@ kann, steht in der [README](../README.md); wie es ausgerollt wird, in
 
 Weitere Dokumente in diesem Ordner:
 
-- [DESIGN.md](DESIGN.md) — Designregeln (Tokens, Komponenten, Bewegung, Texte)
+- [DESIGN.md](DESIGN.md) — Designregeln: wie diggy mittwald Flow nutzt (Seitenaufbau, Bausteine, Texte)
 - [I18N.md](I18N.md) — Übersetzung: Aufbau, neue Texte, Findings
 - [E2E.md](E2E.md) — Browser-Tests, Referenzbilder aktualisieren
 - [COMPLIANCE.md](COMPLIANCE.md) — Speicherdauern, Rechtsgrundlagen, AI-Act-Prüfung
@@ -16,7 +16,7 @@ Weitere Dokumente in diesem Ordner:
 
 | Bereich | Technologie |
 |---|---|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, Motion, GSAP |
+| Frontend | React 19, TypeScript, Vite, [mittwald Flow](https://flow.mittwald.de) (`@mittwald/flow-react-components`) |
 | Backend | Node.js, Express, TypeScript, Nodemailer |
 | DNS | Native Node.js `dns` + DNS-over-HTTPS (DoH) |
 
@@ -106,9 +106,9 @@ Die Testsuite läuft in zwei Umgebungen (`vitest.workspace.ts`):
   HTTP/2-Server, der HTTP/1.1 ablehnt wie Quad9 und DNS4EU (#137). Die CI
   testet dafür mit derselben Node-Hauptversion wie das Image; ein Test hält
   beide gleich.
-- **client** (`jsdom`) — Routing samt Zurück-Button, Tab-Semantik und
-  Tastatur-Bedienung, die Zustandsübergänge des Kontaktformulars, Error
-  Boundaries, Focus-Trap und das Verhalten bei `prefers-reduced-motion`.
+- **client** (`jsdom`) — Routing samt Zurück-Button, Tabs, Menüs und Overlays
+  (Flow), die Zustandsübergänge des Kontaktformulars, Error Boundaries und
+  das Verhalten bei `prefers-reduced-motion`.
 
 Geschrieben wurden die Frontend-Tests entlang der Pfade, auf denen schon
 einmal ein Defekt saß — nicht nach Abdeckungsquote. `src/test/setup.ts`
@@ -179,7 +179,7 @@ diggy/
 │   ├── components/         # Wiederverwendbare UI-Bausteine, Error Boundaries
 │   ├── modules/            # Feature-Module (Lookup, History, Availability, …)
 │   ├── lib/                # API-Client, History, Routing-Helfer, Utilities
-│   ├── hooks/              # Theme, progressiver Lookup, Reduced-Motion, Focus-Trap
+│   ├── hooks/              # Theme, progressiver Lookup, Reduced-Motion
 │   ├── i18n/               # Übersetzungsmodul, deutsche Quelle, englisches Wörterbuch
 │   └── types/              # Re-Exports
 └── server/

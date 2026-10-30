@@ -21,7 +21,8 @@ describe('FindingsList — Empfehlungen ohne Abzug', () => {
       />
     );
     expect(screen.getAllByText(/ohne Punktabzug/)).toHaveLength(1);
-    const row = screen.getByRole('heading', { name: 'Kein BIMI-Record' }).parentElement;
+    // Der Name der Überschrift enthält ihr Status-Badge — deshalb per Anfang.
+    const row = screen.getByRole('heading', { name: /^Kein BIMI-Record/ }).parentElement;
     expect(row).toHaveTextContent('Mail · ohne Punktabzug');
   });
 });

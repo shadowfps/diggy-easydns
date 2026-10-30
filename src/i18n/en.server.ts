@@ -185,6 +185,16 @@ export const findings: Record<FindingKey, FindingText> = {
     title: 'TLS-RPT active',
     description: 'Reports about problems with encrypted delivery go to {rua}.',
   },
+  'mx-fcrdns-ok': {
+    title: 'Mail servers’ reverse DNS matches',
+    description: 'Every checked mail server IP has a PTR that resolves back to it (FCrDNS).',
+  },
+  'mx-fcrdns-missing': {
+    title: 'Mail server without matching reverse DNS',
+    description:
+      'For {hosts}, the IP’s PTR doesn’t point to a name that resolves back to it (FCrDNS). Harmless for incoming email — but if the same server also sends, many recipients treat this as a spam signal.',
+    fix: 'Whoever owns the IP sets the PTR — your host or provider, usually in the customer panel or on request. It should point to the mail server’s name, which in turn resolves to the IP.',
+  },
   'bimi-needs-dmarc': {
     title: 'BIMI needs a stricter DMARC policy first',
     description:
@@ -380,8 +390,11 @@ export const apiErrors: Record<ApiErrorCode, string> = {
   whois_failed: 'The WHOIS lookup failed.',
   techstack_failed: 'Tech stack detection failed.',
   ip_details_failed: 'Couldn’t load the IP details.',
-  pagespeed_failed:
-    'The PageSpeed analysis failed. Heavy pages sometimes time out — please try again.',
+  pagespeed_failed: 'The PageSpeed analysis failed. Please try again in a few minutes.',
+  pagespeed_timeout:
+    'Google needs more than {seconds} seconds to analyse this page. PageSpeed doesn’t always manage large pages — please try again in a few minutes.',
+  pagespeed_quota: 'The daily quota for PageSpeed analyses is used up. It resets tomorrow.',
+  pagespeed_unreachable: 'Google couldn’t load the page ({reason}).',
   virusscan_failed: 'The VirusTotal scan failed. Please try again in a moment.',
   domain_check_failed: 'Please enter a valid domain name or label, e.g. myproject or myproject.com.',
   contact_not_configured: 'The contact form isn’t set up at the moment.',
@@ -390,4 +403,6 @@ export const apiErrors: Record<ApiErrorCode, string> = {
     'The form has expired or was sent too quickly. Please reload the page and try again.',
   contact_invalid_input: 'Please check your name, email address and message.',
   contact_failed: 'Your message couldn’t be sent right now. Please try again later.',
+  site_locked: 'This preview of diggy is password-protected. Please sign in first.',
+  site_password_wrong: 'That password isn’t correct.',
 };

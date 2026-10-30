@@ -1,28 +1,33 @@
 import { useEffect, useState } from 'react';
+import {
+  AccentBox,
+  AlertBadge,
+  AlertText,
+  BigNumber,
+  Button,
+  ColumnLayout,
+  Header,
+  Heading,
+  IconDanger,
+  IconMonitoring,
+  IllustratedMessage,
+  LoadingSpinner,
+  RadioButton,
+  RadioGroup,
+  Section,
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
+  Text,
+} from '@mittwald/flow-react-components';
 import type { PageSpeedReport, PageSpeedStrategy } from '@/types/dns';
-import { cn } from '@/lib/cn';
-import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
 import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
-import {
-  AlertCircle,
-  AlertTriangle,
-  Check,
-  CheckCircle2,
-  Gauge,
-  ImageOff,
-  Loader2,
-  Monitor,
-  MousePointerClick,
-  Play,
-  Server,
-  Smartphone,
-  Sparkles,
-  Timer,
-  Waypoints,
-} from 'lucide-react';
 
 interface PageSpeedViewProps {
   data: PageSpeedReport | null;
@@ -36,16 +41,20 @@ interface PageSpeedViewProps {
 type MetricTone = 'good' | 'warn' | 'bad' | 'neutral';
 
 /**
- * Lighthouse-Bewertung als Farbe UND Form: Haken, Dreieck, Kreis — wie bei
- * den Findings. Vorher war „verbesserungswürdig“ genauso rot wie „schlecht“.
+ * Lighthouse-Bewertung als Status mit Icon UND Wort — wie bei den Findings.
+ * Vorher war „verbesserungswürdig“ genauso rot wie „schlecht“, und das Wort
+ * stand nur für Screenreader da.
  */
-const METRIC_TONE: Record<MetricTone, { text: string; icon?: typeof Check; label?: DeKey }> = {
-  good: { text: 'text-success', icon: Check, label: 'gut' },
-  warn: { text: 'text-warning', icon: AlertTriangle, label: 'verbesserungswürdig' },
-  bad: { text: 'text-danger', icon: AlertCircle, label: 'schlecht' },
-  neutral: { text: 'text-fg' },
+const METRIC_TONE: Record<Exclude<MetricTone, 'neutral'>, { status: 'success' | 'warning' | 'danger'; label: DeKey }> = {
+  good: { status: 'success', label: 'gut' },
+  warn: { status: 'warning', label: 'verbesserungswürdig' },
+  bad: { status: 'danger', label: 'schlecht' },
 };
 
+/**
+ * Der PageSpeed-Tab: Strategie wählen, Scan anstoßen, Kennzahlen lesen.
+ * Tab-Inhalt in der LayoutCard des Reports — deshalb Sections statt Karten.
+ */
 export function PageSpeedView({
   data,
   loading,
@@ -55,165 +64,122 @@ export function PageSpeedView({
   onRun,
 }: PageSpeedViewProps) {
   useI18n();
+  const idle = !data && !loading && !error;
+
   return (
-    <div className="flex flex-col gap-4">
-      {/* Scan-Block: Titel, Umschalter, Start — darunter Leerlauf, Ladeanzeige
-          oder die Kennzahlen. Die Liste der Optimierungen steht als eigene
-          Karte darunter. */}
-      <div className="card py-10 sm:py-12">
-        <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-          <p className="eyebrow">Speed</p>
-          <h3 className="mt-1.5 text-2xl font-semibold tracking-tight text-fg">PageSpeed Scan</h3>
-
-          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row">
-            <div className="flex gap-1 rounded-full bg-surface-muted p-1">
-              <StrategyButton
-                active={strategy === 'mobile'}
-                icon={<Smartphone className="size-3.5" />}
-                label="Mobile"
-                onClick={() => onStrategyChange('mobile')}
-              />
-              <StrategyButton
-                active={strategy === 'desktop'}
-                icon={<Monitor className="size-3.5" />}
-                label="Desktop"
-                onClick={() => onStrategyChange('desktop')}
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={onRun}
-              disabled={loading}
-              className="btn btn-primary btn-lg min-w-40"
-            >
-              <Play className="size-4 fill-current" />
-              <span>{loading ? 'Scanning' : 'Run Scan'}</span>
-            </button>
-          </div>
-
-          {data && (
-            <span className="badge mt-5">
-              <CheckCircle2 className="size-3" />
-              {t('Scan abgeschlossen')}
-            </span>
+    <>
+      <Section>
+        <Header>
+          <Heading level={2}>
+            PageSpeed Scan
+            {data && <AlertBadge status="success">{t('Scan abgeschlossen')}</AlertBadge>}
+          </Heading>
+          {/* Nach einem Ergebnis oder Fehler: erneut, etwa mit der anderen Strategie. */}
+          {!idle && (
+            <Button variant="soft" color="secondary" onPress={onRun} isPending={loading}>
+              {t('Scan starten')}
+            </Button>
           )}
-        </div>
+        </Header>
 
-        {!data && !loading && !error && <IdleSpeedPanel />}
+        {/* Mobil oder Desktop — eine Einfachauswahl, deshalb RadioGroup.
+            Während des Scans gesperrt: die laufende Messung gilt der alten Wahl. */}
+        <RadioGroup
+          aria-label={t('Messung für')}
+          value={strategy}
+          onChange={(value) => onStrategyChange(value as PageSpeedStrategy)}
+          isDisabled={loading}
+          s={[1, 1]}
+          m={[1, 1]}
+          l={[1, 1, 1, 1]}
+        >
+          <RadioButton value="mobile">Mobile</RadioButton>
+          <RadioButton value="desktop">Desktop</RadioButton>
+        </RadioGroup>
+
+        {idle && (
+          <EmptyState
+            icon={<IconMonitoring />}
+            action={<Button onPress={onRun}>{t('Scan starten')}</Button>}
+          >
+            {t('Misst Ladezeit und Core Web Vitals mit Google Lighthouse — mobil oder am Desktop.')}
+          </EmptyState>
+        )}
 
         {loading && <PageSpeedLoader />}
 
-        {data && (
-          <div className="mx-auto mt-8 grid max-w-4xl grid-cols-2 gap-3 md:grid-cols-3">
-            <MetricPanel
-              icon={<Gauge className="size-3.5" />}
+        {error && !loading && (
+          <EmptyState
+            tone="danger"
+            icon={<IconDanger />}
+            action={
+              <Button variant="soft" color="secondary" onPress={onRun}>
+                {t('Erneut versuchen')}
+              </Button>
+            }
+          >
+            {error}
+          </EmptyState>
+        )}
+
+        {data && !loading && (
+          <ColumnLayout s={[1, 1]} m={[1, 1, 1]} l={[1, 1, 1]}>
+            <Metric
               label="Performance Score"
               value={`${data.performanceScore}`}
               tone={scoreTone(data.performanceScore)}
             />
-            <MetricPanel
-              icon={<Waypoints className="size-3.5" />}
-              label="LCP"
-              value={formatMs(data.metrics.lcpMs)}
-              tone={lcpTone(data.metrics.lcpMs)}
-            />
-            <MetricPanel
-              icon={<MousePointerClick className="size-3.5" />}
-              label="INP"
-              value={formatMs(data.metrics.inpMs)}
-              tone={inpTone(data.metrics.inpMs)}
-            />
-            <MetricPanel
-              icon={<Timer className="size-3.5" />}
-              label="FCP"
-              value={formatMs(data.metrics.fcpMs)}
-              tone={fcpTone(data.metrics.fcpMs)}
-            />
-            <MetricPanel
-              icon={<Server className="size-3.5" />}
-              label="TTFB"
-              value={formatMs(data.metrics.ttfbMs)}
-              tone={ttfbTone(data.metrics.ttfbMs)}
-            />
-            <MetricPanel
-              icon={<ImageOff className="size-3.5" />}
-              label="CLS"
-              value={formatCls(data.metrics.cls)}
-              tone={clsTone(data.metrics.cls)}
-            />
-          </div>
+            <Metric label="LCP" value={formatMs(data.metrics.lcpMs)} tone={lcpTone(data.metrics.lcpMs)} />
+            <Metric label="INP" value={formatMs(data.metrics.inpMs)} tone={inpTone(data.metrics.inpMs)} />
+            <Metric label="FCP" value={formatMs(data.metrics.fcpMs)} tone={fcpTone(data.metrics.fcpMs)} />
+            <Metric label="TTFB" value={formatMs(data.metrics.ttfbMs)} tone={ttfbTone(data.metrics.ttfbMs)} />
+            <Metric label="CLS" value={formatCls(data.metrics.cls)} tone={clsTone(data.metrics.cls)} />
+          </ColumnLayout>
         )}
-      </div>
+      </Section>
 
-      {error && (
-        <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
-          {error}
-        </EmptyState>
-      )}
-
-      {data && <Opportunities items={data.opportunities} />}
-    </div>
+      {data && !loading && <Opportunities items={data.opportunities} />}
+    </>
   );
 }
 
 function Opportunities({ items }: { items: PageSpeedReport['opportunities'] }) {
-  if (items.length === 0) {
-    return (
-      <EmptyState icon={<Sparkles className="size-5" />} title={t('Top Optimierungspotenziale')}>
-        {t('Keine kritischen Opportunities gefunden.')}
-      </EmptyState>
-    );
-  }
-
   return (
-    <div className="card-flush divide-y divide-line-subtle">
-      <CardHeader
-        className="px-5 py-4 sm:px-6"
-        icon={<Sparkles className="size-4" />}
-        title={t('Top Optimierungspotenziale')}
-      />
-      <ul className="divide-y divide-line-subtle">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="flex flex-col gap-0.5 px-5 py-3 text-sm sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6"
-          >
-            <span className="min-w-0 text-fg">{item.title}</span>
-            {item.displayValue ? (
-              <span className="shrink-0 tabular-nums text-fg-muted">{item.displayValue}</span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <Section>
+      <Heading level={2}>{t('Top Optimierungspotenziale')}</Heading>
+      {items.length === 0 ? (
+        <AlertText status="success">{t('Keine kritischen Opportunities gefunden.')}</AlertText>
+      ) : (
+        <Table aria-label={t('Top Optimierungspotenziale')}>
+          <TableHeader>
+            <TableColumn>{t('Optimierung')}</TableColumn>
+            <TableColumn>{t('Potenzial')}</TableColumn>
+          </TableHeader>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.title}</TableCell>
+                <TableCell>{item.displayValue ?? '–'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Section>
   );
 }
 
-function StrategyButton({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
+/** Eine Kennzahl: Wert und Name groß, darunter das Urteil als Status. */
+function Metric({ label, value, tone }: { label: string; value: string; tone: MetricTone }) {
+  const cfg = tone === 'neutral' ? undefined : METRIC_TONE[tone];
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
-        active ? 'bg-accent text-on-accent' : 'text-fg-muted hover:text-fg'
-      )}
-    >
-      {icon}
-      {label}
-    </button>
+    <AccentBox>
+      <BigNumber>
+        <Text>{value}</Text>
+        <Text>{label}</Text>
+      </BigNumber>
+      {cfg && <AlertText status={cfg.status}>{t(cfg.label)}</AlertText>}
+    </AccentBox>
   );
 }
 
@@ -224,25 +190,6 @@ const LOADING_STAGES: DeKey[] = [
   'Analysiere Render-Pfad…',
   'Bereite Ergebnisse auf…',
 ];
-
-function IdleSpeedPanel() {
-  return (
-    <div className="mx-auto mt-8 grid max-w-sm grid-cols-3 gap-3">
-      <SignalTile icon={<Gauge className="size-4" />} label="Score" />
-      <SignalTile icon={<Waypoints className="size-4" />} label="Vitals" />
-      <SignalTile icon={<Sparkles className="size-4" />} label="Audits" />
-    </div>
-  );
-}
-
-function SignalTile({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="panel flex flex-col items-center gap-2 py-5 text-xs text-fg-muted">
-      <span className="text-fg-subtle">{icon}</span>
-      <span>{label}</span>
-    </div>
-  );
-}
 
 function PageSpeedLoader() {
   const [stage, setStage] = useState(0);
@@ -255,68 +202,20 @@ function PageSpeedLoader() {
   }, []);
 
   // Der Ladezustand wird angesagt, nicht nur gezeigt: bei „Bewegung
-  // reduzieren“ stehen Spinner und Balken still (globals.css). Angesagt wird
-  // genau einmal über LoadingAnnouncement; die sichtbare Anzeige ist
-  // aria-hidden, sonst käme jeder Stufenwechsel als neue Ansage. Kein
-  // aria-busy: auf einer Live-Region heißt das „Ansagen zurückhalten, bis busy
-  // wieder false ist“ — das wurde es nie, die Anzeige verschwand einfach.
+  // reduzieren“ steht der Spinner still. Angesagt wird genau einmal über
+  // LoadingAnnouncement; die sichtbare Anzeige ist aria-hidden, sonst käme
+  // jeder Stufenwechsel als neue Ansage. Kein aria-busy: auf einer
+  // Live-Region heißt das „Ansagen zurückhalten, bis busy wieder false ist“ —
+  // das wurde es nie, die Anzeige verschwand einfach.
   return (
-    <div className="mx-auto mt-8 max-w-md">
+    <>
       <LoadingAnnouncement>{t('PageSpeed-Analyse läuft…')}</LoadingAnnouncement>
-      <div className="panel px-6 py-6 text-center" aria-hidden="true">
-        <Loader2 className="mx-auto size-5 animate-spin text-fg" />
-
-        <div className="eyebrow mt-4">{t('Analyse läuft')}</div>
-        <div key={stage} className="mt-1.5 animate-fade-in-up text-sm text-fg">
-          {t(LOADING_STAGES[stage])}
-        </div>
-
-        <div className="mt-5 grid grid-cols-5 gap-2">
-          {[0, 1, 2, 3, 4].map((index) => (
-            <span
-              key={index}
-              className="h-1.5 animate-scan-bar rounded-full bg-fg/20"
-              style={{ animationDelay: `${index * 140}ms` }}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MetricPanel({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone: MetricTone;
-}) {
-  const cfg = METRIC_TONE[tone];
-  const StatusIcon = cfg.icon;
-
-  return (
-    <div className="panel">
-      <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
-        {icon}
-        {label}
-      </div>
-      <div
-        className={cn(
-          'mt-2 flex items-center gap-1.5 text-2xl font-semibold tabular-nums tracking-tight',
-          cfg.text
-        )}
-      >
-        {StatusIcon && <StatusIcon className="size-4 shrink-0" aria-hidden />}
-        {value}
-        {/* Für Screenreader das Urteil als Wort — Farbe und Icon sieht er nicht. */}
-        {cfg.label && <span className="sr-only">({t(cfg.label)})</span>}
-      </div>
-    </div>
+      <IllustratedMessage aria-hidden="true">
+        <LoadingSpinner size="l" />
+        <Heading level={3}>{t('Analyse läuft')}</Heading>
+        <Text>{t(LOADING_STAGES[stage])}</Text>
+      </IllustratedMessage>
+    </>
   );
 }
 

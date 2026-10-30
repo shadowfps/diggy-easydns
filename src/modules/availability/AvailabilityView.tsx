@@ -1,221 +1,190 @@
-import { useState, type FormEvent } from 'react';
-import { motion } from 'motion/react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import {
-  AlertTriangle,
-  ArrowUpRight,
-  Check,
-  CircleHelp,
-  Copy,
-  Globe2,
-  Loader2,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+  AccentBox,
+  ActionGroup,
+  Alert,
+  AlertBadge,
+  Badge,
+  Combine,
+  CopyButton,
+  Heading,
+  Label,
+  LayoutCard,
+  Link,
+  Section,
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
+  Text,
+  TextField,
+} from '@mittwald/flow-react-components';
+import { Field, Form, SubmitButton } from '@mittwald/flow-react-components/react-hook-form';
 import { checkDomainAvailability } from '@/lib/api';
 import type { DomainAvailabilityResult, DomainCheckReport } from '@/types/dns';
-import { cn } from '@/lib/cn';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { errorText, t, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
+import styles from './AvailabilityView.module.css';
 
 const MITTWALD_HOSTING_URL = 'https://www.mittwald.de/webhosting';
 
+interface Values {
+  query: string;
+}
+
+/**
+ * Domain noch frei? Flows Formular-Baustein — `Form` mit react-hook-form,
+ * ein Feld, der Absende-Button; das Ergebnis darunter als Tabelle.
+ */
 export function AvailabilityView() {
-  const [query, setQuery] = useState('');
   const [report, setReport] = useState<DomainCheckReport | null>(null);
-  const [loading, setLoading] = useState(false);
   // Der Fehler selbst — übersetzt wird beim Rendern.
   const [error, setError] = useState<unknown>(null);
   const { tRich } = useI18n();
+  // `Field` statt `typedField(form)`: die Fabrik erzeugte bei jedem Render
+  // eine neue Komponente (react-hooks/static-components).
+  const form = useForm<Values>({ defaultValues: { query: '' } });
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    const trimmed = query.trim();
-    if (!trimmed || loading) return;
-
-    setLoading(true);
+  // Solange die Anfrage läuft, hält `Form` den Button im Ladezustand.
+  const handleSubmit = async ({ query }: Values) => {
     setError(null);
     setReport(null);
-
     try {
-      const result = await checkDomainAvailability(trimmed);
-      setReport(result);
+      setReport(await checkDomainAvailability(query.trim()));
     } catch (err) {
       setError(err);
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="mx-auto w-full max-w-3xl"
-    >
-      <p className="eyebrow flex items-center gap-1.5">
-        <Sparkles className="size-3.5" />
-        {t('Available Check')}
-      </p>
-      <h1 className="page-title mt-2">Domain Generator</h1>
-      <p className="mt-3 text-base text-fg-muted">
-        {t('Finde die passende Domain für dein Projekt — mit Alternativen zu gängigen TLDs.')}
-      </p>
+    <div className={styles.page}>
+      <div className={styles.pageHead}>
+        <Text className="eyebrow">{t('Available Check')}</Text>
+        <Heading level={1}>Domain Generator</Heading>
+        <Text elementType="p">
+          {t('Finde die passende Domain für dein Projekt — mit Alternativen zu gängigen TLDs.')}
+        </Text>
+      </div>
 
-      <div className="mt-8 space-y-4">
-        {/* Dieselbe Form wie das Suchfeld auf der Startseite: gleiche Rolle,
-            gleiche Pille mit Primär-Button rechts. */}
-        <form onSubmit={handleSubmit} className="relative">
-          <label htmlFor="domain-check-input" className="sr-only">
-            Domain
-          </label>
-          <div className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-fg-subtle">
-            <Search className="size-[18px]" />
-          </div>
-          <input
-            id="domain-check-input"
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('meinprojekt oder meinprojekt.de')}
-            autoComplete="off"
-            spellCheck={false}
-            className="h-14 w-full rounded-full border border-line bg-surface pl-12 pr-16 font-mono text-base text-fg shadow-card transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-fg/30 focus:outline-hidden focus:ring-4 focus:ring-fg/6"
-          />
-          <button
-            type="submit"
-            disabled={loading || !query.trim()}
-            className="btn btn-primary btn-icon absolute right-2 top-2"
-            aria-label={t('Prüfen')}
-          >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
-          </button>
-        </form>
+      <LayoutCard>
+        <Form form={form} onSubmit={handleSubmit}>
+          <Section>
+            <Field
+              name="query"
+              rules={{
+                // `required` macht das Feld für Flow zum Pflichtfeld, `validate`
+                // fängt eine Eingabe nur aus Leerzeichen.
+                required: t('Bitte gib einen Namen oder eine Domain ein.'),
+                validate: (value: string) =>
+                  value.trim() !== '' || t('Bitte gib einen Namen oder eine Domain ein.'),
+              }}
+            >
+              <TextField
+                placeholder={t('meinprojekt oder meinprojekt.de')}
+                autoComplete="off"
+                spellCheck="false"
+                inputMode="url"
+              >
+                <Label>Domain</Label>
+              </TextField>
+            </Field>
+            <ActionGroup>
+              {/* Ohne Erfolgs-Haken: das Ergebnis steht gleich darunter. */}
+              <SubmitButton color="primary" showFeedback={false}>
+                {t('Prüfen')}
+              </SubmitButton>
+            </ActionGroup>
+          </Section>
+        </Form>
 
         {error != null && (
-          <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
-            {errorText(error, 'Verfügbarkeits-Check fehlgeschlagen')}
-          </EmptyState>
+          <Section>
+            <Alert status="danger">
+              <Text>{errorText(error, 'Verfügbarkeits-Check fehlgeschlagen')}</Text>
+            </Alert>
+          </Section>
         )}
 
         {report && (
-          <div className="card-flush">
-            <p className="px-5 py-4 text-sm text-fg-muted sm:px-6">
+          <Section>
+            <Heading level={2}>
               {tRich('{count} Vorschläge für {label}', {
                 count: report.results.length,
-                label: <span className="font-mono text-fg">{report.label}</span>,
+                label: <span className="mono">{report.label}</span>,
               })}
-            </p>
-
-            <div className="divide-y divide-line-subtle border-t border-line-subtle">
-              {report.results.map((result, index) => (
-                <AvailabilityRow
-                  key={result.domain}
-                  result={result}
-                  delay={index * 0.04}
-                  highlight={index === 0}
-                />
-              ))}
-            </div>
-
-            <div className="px-5 pb-5 pt-1 sm:px-6 sm:pb-6">
-              <MittwaldHostingHint />
-            </div>
-          </div>
+            </Heading>
+            <Table aria-label={t('{count} Vorschläge für {label}', { count: report.results.length, label: report.label })}>
+              <TableHeader>
+                <TableColumn>Domain</TableColumn>
+                <TableColumn>Status</TableColumn>
+              </TableHeader>
+              <TableBody>
+                {report.results.map((result, index) => (
+                  <AvailabilityRow key={result.domain} result={result} highlight={index === 0} />
+                ))}
+              </TableBody>
+            </Table>
+            <MittwaldHostingHint />
+          </Section>
         )}
-      </div>
-    </motion.div>
+      </LayoutCard>
+    </div>
   );
 }
 
-/** Frei → success, vergeben → neutral, unklar → Warnung. Form des Icons trägt den Status mit. */
+/** Frei → success, vergeben → neutral, unklar → Warnung. Icon und Wort tragen den Status mit. */
 const STATUS_CONFIG: Record<
   DomainAvailabilityResult['status'],
-  { label: DeKey; icon: typeof Check; tile: string; badge: string }
+  { label: DeKey; status: 'success' | 'warning' | null }
 > = {
-  available: { label: 'Verfügbar', icon: Check, tile: 'icon-tile-success', badge: 'badge-success' },
-  taken: { label: 'Vergeben', icon: Globe2, tile: '', badge: '' },
-  unknown: { label: 'Unklar', icon: CircleHelp, tile: 'icon-tile-warning', badge: 'badge-warning' },
+  available: { label: 'Verfügbar', status: 'success' },
+  taken: { label: 'Vergeben', status: null },
+  unknown: { label: 'Unklar', status: 'warning' },
 };
 
-function AvailabilityRow({
-  result,
-  delay,
-  highlight,
-}: {
-  result: DomainAvailabilityResult;
-  delay: number;
-  highlight: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const status = STATUS_CONFIG[result.status];
+function AvailabilityRow({ result, highlight }: { result: DomainAvailabilityResult; highlight: boolean }) {
+  const config = STATUS_CONFIG[result.status];
   useI18n();
-  const StatusIcon = status.icon;
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(result.domain);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
-    } catch {
-      window.prompt(t('Domain kopieren:'), result.domain);
-    }
-  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, delay }}
-      className="flex items-center gap-3 px-5 py-3 sm:px-6"
-    >
-      <span className={cn('icon-tile', status.tile)}>
-        <StatusIcon className="size-4" />
-      </span>
-
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span className={cn('break-all font-mono text-sm text-fg', highlight && 'font-semibold')}>
-          {result.domain}
-        </span>
-        <span className={cn('badge', status.badge)}>{t(status.label)}</span>
-      </div>
-
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="btn btn-ghost btn-sm btn-icon"
-        aria-label={copied ? t('Domain kopiert') : t('Domain kopieren')}
-        title={copied ? t('Domain kopiert') : t('Domain kopieren')}
-      >
-        {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
-      </button>
-    </motion.div>
+    <TableRow>
+      <TableCell>
+        <Combine>
+          <Text className="mono wrap-anywhere">{highlight ? <strong>{result.domain}</strong> : result.domain}</Text>
+          <CopyButton text={result.domain} variant="plain" color="secondary" aria-label={t('Domain kopieren')} />
+        </Combine>
+      </TableCell>
+      <TableCell>
+        {config.status ? (
+          <AlertBadge status={config.status}>{t(config.label)}</AlertBadge>
+        ) : (
+          <Badge color="neutral">{t(config.label)}</Badge>
+        )}
+      </TableCell>
+    </TableRow>
   );
 }
 
+/** Ergänzend, nicht kritisch — deshalb eine AccentBox statt eines Alerts. */
 function MittwaldHostingHint() {
   const { tRich } = useI18n();
   return (
-    <div className="panel">
-      <p className="text-sm leading-relaxed text-fg-muted">
+    <AccentBox>
+      <Text>
         {tRich(
           'Du suchst qualitatives Hosting für dein neues Projekt? Dann schau doch mal bei {mittwald} vorbei — Managed Webhosting aus Deutschland, gemacht für Agenturen und Freelancer.',
           {
             mittwald: (
-              <a
-                href={MITTWALD_HOSTING_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="link inline-flex items-center gap-1"
-              >
+              <Link href={MITTWALD_HOSTING_URL} target="_blank" rel="noopener noreferrer">
                 Mittwald
-                <ArrowUpRight className="size-3.5 shrink-0" />
-              </a>
+              </Link>
             ),
           }
         )}
-      </p>
-    </div>
+      </Text>
+    </AccentBox>
   );
 }

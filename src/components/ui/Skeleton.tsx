@@ -1,83 +1,86 @@
-import { cn } from '@/lib/cn';
+import {
+  ColumnLayout,
+  Heading,
+  LayoutCard,
+  Section,
+  Skeleton,
+  SkeletonText,
+  Text,
+} from '@mittwald/flow-react-components';
 
 /**
- * Skeleton-Loader für die progressiv nachgeladenen Report-Sektionen.
- * Die Presets bilden den Footprint der echten Komponenten grob nach,
- * damit beim Einblenden der Daten kein Layout-Sprung entsteht.
+ * Platzhalter für die progressiv nachgeladenen Report-Sektionen — Flows
+ * Skeleton und SkeletonText. Die Presets bilden den Footprint der echten
+ * Ansichten grob nach, damit beim Einblenden der Daten kein Layout-Sprung
+ * entsteht: im Report stehen sie in der LayoutCard der Tabs, deshalb ohne
+ * eigene Karte (außer, wo die echte Ansicht selbst eine Karte ist).
+ *
+ * Die Skeletons selbst sind für Screenreader ausgeblendet; den Ladezustand
+ * trägt `aria-busy` am umgebenden Element.
  */
 
-/** Basis-Baustein — ein pulsierender Balken. */
-export function Skeleton({ className }: { className?: string }) {
+/** Ein Block aus Überschrift und ein paar Textzeilen. */
+function SectionSkeleton({ lines = 3 }: { lines?: number }) {
+  const widths = ['100%', '80%', '66%', '90%', '50%'];
   return (
-    <div
-      className={cn('animate-pulse rounded-full bg-surface-muted', className)}
-      aria-hidden
-    />
+    <Section>
+      <Heading level={3}>
+        <SkeletonText width="9em" />
+      </Heading>
+      {Array.from({ length: lines }).map((_, i) => (
+        <Text key={i}>
+          <SkeletonText width={widths[i % widths.length]} />
+        </Text>
+      ))}
+    </Section>
   );
 }
 
 /** Platzhalter für den Health-Score (Aggregat — braucht alle Sektionen). */
 export function ScoreCardSkeleton() {
   return (
-    <div className="card flex flex-col">
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-5 w-20" />
-      </div>
-      <Skeleton className="mt-4 h-14 w-28 rounded-panel" />
-      <Skeleton className="mt-5 h-2 w-full" />
-      <div className="mt-4 flex items-center gap-5">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-3 w-14" />
-        ))}
-      </div>
-      <div className="mt-auto pt-5">
-        <div className="flex items-center gap-3 border-t border-line-subtle pt-4">
-          <Skeleton className="size-8 rounded-panel" />
-          <Skeleton className="h-3.5 w-40" />
-        </div>
-      </div>
-    </div>
+    <LayoutCard aria-busy="true">
+      <Section>
+        <Heading level={2}>
+          <SkeletonText width="7em" />
+        </Heading>
+        <Skeleton height="7.5rem" width="7.5rem" />
+        <Text>
+          <SkeletonText width="80%" />
+        </Text>
+        <Text>
+          <SkeletonText width="60%" />
+        </Text>
+      </Section>
+    </LayoutCard>
   );
 }
 
 /**
- * Platzhalter für „Seit dem letzten Check“, solange deren Code nachlädt.
- * Zeilenhöhen wie Titel (20 px) und Status (16 px) der eingeklappten Karte —
- * sonst schöbe ihr Einblenden die Tabs darunter.
+ * Platzhalter für „Seit dem letzten Check“, solange deren Code nachlädt —
+ * so hoch wie die eingeklappte Karte, sonst schöbe ihr Einblenden die Tabs.
  */
-export function SinceLastCheckSkeleton({ className }: { className?: string }) {
+export function SinceLastCheckSkeleton() {
   return (
-    <div className={cn('card flex items-center gap-3', className)}>
-      <Skeleton className="hidden size-9 rounded-panel sm:block" />
-      <div className="min-w-0 flex-1">
-        <div className="flex h-5 items-center">
-          <Skeleton className="h-3.5 w-64 max-w-full" />
-        </div>
-        <div className="mt-0.5 flex h-4 items-center">
-          <Skeleton className="h-3 w-44 max-w-full" />
-        </div>
-      </div>
-    </div>
+    <LayoutCard aria-busy="true">
+      <Text>
+        <SkeletonText width="16em" />
+      </Text>
+      <Text>
+        <small>
+          <SkeletonText width="11em" />
+        </small>
+      </Text>
+    </LayoutCard>
   );
 }
 
-/** N Karten im 2-Spalten-Grid — für Security (2) und Mail (4). */
+/** N Abschnitte — für Security (2) und Mail (4). */
 export function SectionCardsSkeleton({ count = 2 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div aria-busy="true">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="card">
-          <div className="mb-4 flex items-center gap-3">
-            <Skeleton className="size-9 rounded-panel" />
-            <Skeleton className="h-4 w-28" />
-          </div>
-          <div className="space-y-3">
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-4/5" />
-            <Skeleton className="h-3 w-2/3" />
-          </div>
-        </div>
+        <SectionSkeleton key={i} />
       ))}
     </div>
   );
@@ -86,48 +89,40 @@ export function SectionCardsSkeleton({ count = 2 }: { count?: number }) {
 /** Resolver-Zeilen für die Propagation-Ansicht. */
 export function PropagationSkeleton() {
   return (
-    <div className="card">
-      <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-        {/* So viele Zeilen wie Resolver (DOH_RESOLVERS) — die Karte springt dann nicht. */}
+    <Section aria-busy="true">
+      <Heading level={3}>
+        <SkeletonText width="9em" />
+      </Heading>
+      <ColumnLayout s={[1]} m={[1, 1]} l={[1, 1]} rowGap="s">
+        {/* So viele Zeilen wie Resolver (DOH_RESOLVERS) — die Ansicht springt dann nicht. */}
         {Array.from({ length: 9 }).map((_, i) => (
-          <div key={i} className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Skeleton className="size-4" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-            <Skeleton className="h-3 w-24" />
-          </div>
+          <Text key={i}>
+            <SkeletonText width="85%" />
+          </Text>
         ))}
-      </div>
-    </div>
+      </ColumnLayout>
+    </Section>
   );
 }
 
-/** WHOIS/RDAP — eine breite Karte plus zwei schmale. */
+/** WHOIS/RDAP — Registrierung, Status, Nameserver. */
 export function WhoisSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <div className="card md:col-span-2">
-        <div className="mb-4 flex items-center gap-3">
-          <Skeleton className="size-9 rounded-panel" />
-          <Skeleton className="h-4 w-28" />
-        </div>
-        <div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+    <div aria-busy="true">
+      <Section>
+        <Heading level={3}>
+          <SkeletonText width="9em" />
+        </Heading>
+        <ColumnLayout s={[1]} m={[1, 1]} l={[1, 1]} rowGap="s">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-3 w-3/4" />
+            <Text key={i}>
+              <SkeletonText width="75%" />
+            </Text>
           ))}
-        </div>
-      </div>
-      {[0, 1].map((card) => (
-        <div key={card} className="card">
-          <Skeleton className="mb-4 h-4 w-32" />
-          <div className="flex flex-wrap gap-1.5">
-            {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-6 w-20" />
-            ))}
-          </div>
-        </div>
-      ))}
+        </ColumnLayout>
+      </Section>
+      <SectionSkeleton lines={1} />
+      <SectionSkeleton lines={1} />
     </div>
   );
 }
@@ -135,16 +130,27 @@ export function WhoisSkeleton() {
 /** Gestapelte Zeilen — für die (aggregierte) Findings-Liste. */
 export function ListSkeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="card-flush divide-y divide-line-subtle">
+    <div aria-busy="true">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-start gap-4 px-5 py-4 sm:px-6">
-          <Skeleton className="size-9 shrink-0 rounded-panel" />
-          <div className="flex-1 space-y-2.5 pt-1">
-            <Skeleton className="h-3.5 w-1/3" />
-            <Skeleton className="h-3 w-3/4" />
-          </div>
-        </div>
+        <SectionSkeleton key={i} lines={1} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Platzhalter für eine eigene Seite (History, About, Available Check), solange
+ * ihr Chunk lädt: Überschrift und eine Karte, so breit wie die Textseiten.
+ */
+export function PageSkeleton() {
+  return (
+    <div aria-busy="true" style={{ width: '100%', maxWidth: '48rem', marginInline: 'auto' }}>
+      <Heading level={1}>
+        <SkeletonText width="8em" />
+      </Heading>
+      <LayoutCard>
+        <SectionSkeleton lines={3} />
+      </LayoutCard>
     </div>
   );
 }
@@ -160,15 +166,13 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
  */
 export function LegalPageSkeleton() {
   return (
-    <div className="mx-auto min-h-screen w-full max-w-3xl" aria-hidden>
-      <Skeleton className="h-3 w-24" />
-      <Skeleton className="mt-3 h-9 w-56" />
-      <div className="card mt-8 space-y-3">
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-3 w-full" />
-        <Skeleton className="h-3 w-5/6" />
-        <Skeleton className="h-3 w-2/3" />
-      </div>
+    <div aria-busy="true" style={{ minHeight: '100dvh' }}>
+      <Heading level={1}>
+        <SkeletonText width="8em" />
+      </Heading>
+      <LayoutCard>
+        <SectionSkeleton lines={4} />
+      </LayoutCard>
     </div>
   );
 }

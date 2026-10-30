@@ -6,8 +6,9 @@ import { expect, openHome, test, type Theme } from './test';
  * Die Regel stand einmal als `@apply … dark:…` in `::selection`. Tailwind
  * machte daraus `::selection:is()`, einen Selektor, der nie greift — im Dark
  * Mode blieb die helle Regel stehen, und markierter Text wurde schwarz auf
- * Schwarz. Unit-Tests sehen das nicht, weil jsdom kein CSS anwendet; hier
- * rechnet Chrome die echten Farben aus.
+ * Schwarz. Seit Flow kommt sie aus dessen Theme-Tokens (globals.css).
+ * Unit-Tests sehen das nicht, weil jsdom kein CSS anwendet; hier rechnet
+ * Chrome die echten Farben aus.
  *
  * Gemessen wird der Kontrast zwischen Textfarbe und Markierung, die über dem
  * Seitenhintergrund liegt. Die Farben laufen über ein 1×1-Canvas, damit jede
@@ -23,7 +24,10 @@ for (const theme of ['light', 'dark'] as Theme[]) {
 
       const { text, highlight } = await page.evaluate(() => {
         const selection = getComputedStyle(document.body, '::selection');
-        const canvasColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
+        // Hellste Stelle des Seitenhintergrunds: der Anfang von Flows Verlauf.
+        const canvasColor = getComputedStyle(document.documentElement)
+          .getPropertyValue('--color--background-gradient')
+          .match(/#[0-9a-f]{6}|rgba?\([^)]*\)/i)![0];
         const canvas = document.createElement('canvas');
         canvas.width = canvas.height = 1;
         const ctx = canvas.getContext('2d')!;

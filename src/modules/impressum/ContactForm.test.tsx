@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { RouterProvider } from 'react-aria-components';
 import { ContactForm } from './ContactForm';
 
 /**
@@ -39,6 +40,19 @@ async function fillForm(message = 'Eine ausreichend lange Testnachricht.') {
 }
 
 const submit = () => userEvent.click(screen.getByRole('button', { name: /Nachricht senden/ }));
+
+/**
+ * Wartet, bis der Button einen weiteren Versand annimmt. Nach einem Versuch
+ * zeigt Flows SubmitButton kurz Erfolg oder Fehler und nimmt in der Zeit
+ * keine Klicks an — erkennbar an `aria-disabled`, nicht am `disabled`.
+ */
+async function waitUntilReady() {
+  await waitFor(() => {
+    const button = screen.getByRole('button', { name: /Nachricht senden/ });
+    expect(button).toBeEnabled();
+    expect(button).not.toHaveAttribute('aria-disabled', 'true');
+  });
+}
 
 beforeEach(() => {
   fetchContactChallenge.mockReset();
@@ -80,7 +94,8 @@ describe('ContactForm — Absenden', () => {
     await submit();
 
     await screen.findByRole('status');
-    expect(screen.getByLabelText(/Name/)).toHaveValue('');
+    // Flow leert das Formular nach dem Erfolgs-Feedback des Buttons.
+    await waitFor(() => expect(screen.getByLabelText(/Name/)).toHaveValue(''));
     expect(screen.getByLabelText(/Nachricht/)).toHaveValue('');
   });
 
@@ -105,9 +120,7 @@ describe('ContactForm — Absenden', () => {
 
     // Zweiter Versuch muss den NEUEN Token nutzen.
     sendContactMessage.mockResolvedValueOnce({ sent: true });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Nachricht senden/ })).toBeEnabled()
-    );
+    await waitUntilReady();
     await userEvent.type(screen.getByLabelText(/Nachricht/), ' und jetzt lang genug.');
     await submit();
 
@@ -142,9 +155,7 @@ describe('ContactForm — Absenden', () => {
 
     // Und der alte Token trägt den zweiten Versuch.
     sendContactMessage.mockResolvedValueOnce({ sent: true });
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Nachricht senden/ })).toBeEnabled()
-    );
+    await waitUntilReady();
     await submit();
     expect(sendContactMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ token: 'token-1' })
@@ -173,7 +184,8 @@ describe('ContactForm — Absenden', () => {
   /**
    * Die Server-Grenze gilt getrimmt, das native `minLength` zählt roh: neun
    * Zeichen plus Leerzeichen kamen durch die Browser-Prüfung und wurden erst
-   * serverseitig abgelehnt.
+   * serverseitig abgelehnt. Die Meldung steht seit Flow am Feld, nicht über
+   * dem Formular — dort, wo sie zu korrigieren ist.
    */
   it('lehnt eine getrimmt zu kurze Nachricht ohne Request ab', async () => {
     render(<ContactForm />);
@@ -184,7 +196,19 @@ describe('ContactForm — Absenden', () => {
     await userEvent.type(screen.getByLabelText(/Nachricht/), 'neun zeic ');
     await submit();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/mindestens 10 Zeichen/);
+    expect(await screen.findByText(/mindestens 10 Zeichen lang/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Nachricht/)).toHaveAttribute('aria-invalid', 'true');
+    expect(sendContactMessage).not.toHaveBeenCalled();
+  });
+
+  it('verlangt Name, E-Mail und Nachricht, bevor es sendet', async () => {
+    render(<ContactForm />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /senden/ })).toBeEnabled());
+    await submit();
+
+    await waitFor(() => expect(screen.getByLabelText(/Name/)).toHaveAttribute('aria-invalid', 'true'));
+    expect(screen.getByLabelText(/E-Mail/)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/Nachricht/)).toHaveAttribute('aria-invalid', 'true');
     expect(sendContactMessage).not.toHaveBeenCalled();
   });
 
@@ -267,7 +291,7 @@ describe('ContactForm — Rückmeldung an den Nutzer', () => {
   it('zeigt einen Zeichenzähler für die Nachricht', async () => {
     render(<ContactForm />);
     await userEvent.type(screen.getByLabelText(/Nachricht/), 'Hallo');
-    expect(screen.getByText('5 / 5000')).toBeInTheDocument();
+    expect(screen.getByText('5/5000 Zeichen')).toBeInTheDocument();
   });
 
   it('weist auf die fehlenden Zeichen bis zur Mindestlänge hin', async () => {
@@ -295,11 +319,21 @@ describe('ContactForm — Rückmeldung an den Nutzer', () => {
     expect(button).toHaveTextContent(/\d\s*s/);
   });
 
+  /**
+   * Ein voller Seitenwechsel würde die getippte Nachricht verwerfen — der
+   * Link läuft deshalb über den Router der App (RouterProvider).
+   */
   it('verlinkt die Datenschutzseite über das Client-Routing', async () => {
-    const onOpenDatenschutz = vi.fn();
-    render(<ContactForm onOpenDatenschutz={onOpenDatenschutz} />);
+    const navigate = vi.fn();
+    render(
+      <RouterProvider navigate={navigate}>
+        <ContactForm />
+      </RouterProvider>
+    );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Datenschutz' }));
-    expect(onOpenDatenschutz).toHaveBeenCalledTimes(1);
+    const link = screen.getByRole('link', { name: /^Datenschutz/ });
+    expect(link).toHaveAttribute('href', '/datenschutz');
+    await userEvent.click(link);
+    expect(navigate).toHaveBeenCalledWith('/datenschutz', undefined);
   });
 });

@@ -1,7 +1,16 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import {
+  AlertBadge,
+  Badge,
+  Button,
+  Heading,
+  IconChevronDown,
+  IconChevronUp,
+  InlineCode,
+  Text,
+} from '@mittwald/flow-react-components';
 import { useI18n } from '@/i18n';
+import styles from './Propagation.module.css';
 
 /**
  * Ab dieser Länge wird ein Wert gekürzt. Ein DKIM-Schlüssel (RSA 2048)
@@ -28,7 +37,9 @@ export type AnswerGroupBadge = 'consensus' | 'authoritative' | 'expected' | 'dev
 
 /**
  * Eine der verschiedenen Antworten unter einer Liste — Resolver oder
- * Nameserver verweisen mit Buchstabe bzw. Ziffer auf sie.
+ * Nameserver verweisen mit Buchstabe bzw. Ziffer auf sie. Eine Region mit
+ * eigener Unterüberschrift: wer „Antwort B“ in der Zeile liest, springt
+ * direkt hierher.
  */
 export function AnswerGroup({
   letter,
@@ -44,25 +55,21 @@ export function AnswerGroup({
 }) {
   const { t } = useI18n();
   return (
-    <section aria-label={t('Antwort {letter}', { letter })}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-xs font-semibold text-fg">{t('Antwort {letter}', { letter })}</span>
-        <span className="text-xs text-fg-subtle">{members.join(', ')}</span>
-        {badge === 'consensus' && <span className="badge">{t('Mehrheit')}</span>}
-        {badge === 'authoritative' && <span className="badge">{t('wie autoritativ')}</span>}
-        {badge === 'expected' && <span className="badge">{t('erwartet')}</span>}
-        {badge === 'deviating' && (
-          <span className="badge badge-warning">
-            <AlertTriangle className="size-3" />
-            {t('weicht ab')}
-          </span>
-        )}
-      </div>
-      <div className="mt-2 space-y-2">
-        {values.map((value) => (
-          <AnswerValue key={value} value={value} />
-        ))}
-      </div>
+    <section aria-label={t('Antwort {letter}', { letter })} className={styles.group}>
+      <Heading level={3}>
+        {t('Antwort {letter}', { letter })}
+        {badge === 'consensus' && <Badge color="neutral">{t('Mehrheit')}</Badge>}
+        {badge === 'authoritative' && <Badge color="neutral">{t('wie autoritativ')}</Badge>}
+        {badge === 'expected' && <Badge color="neutral">{t('erwartet')}</Badge>}
+        {/* Abweichung mit Wort und Icon — nie nur über die Farbe. */}
+        {badge === 'deviating' && <AlertBadge status="warning">{t('weicht ab')}</AlertBadge>}
+      </Heading>
+      <Text>
+        <small>{members.join(', ')}</small>
+      </Text>
+      {values.map((value) => (
+        <AnswerValue key={value} value={value} />
+      ))}
     </section>
   );
 }
@@ -80,32 +87,35 @@ function AnswerValue({ value }: { value: string }) {
   const long = value.length > LONG_VALUE;
 
   return (
-    <div className="panel py-3">
-      <p className="font-mono text-[13px] text-fg wrap-anywhere">
+    <div className={styles.value}>
+      <InlineCode whiteSpace="pre-wrap" className="wrap-anywhere">
         {long && !expanded ? (
           <>
             {value.slice(0, HEAD)}
-            <span className="text-fg-subtle">…</span>
+            …
             {value.slice(-TAIL)}
           </>
         ) : (
           value
         )}
-      </p>
+      </InlineCode>
       {long && (
-        <button
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((e) => !e)}
-          className="btn btn-ghost btn-sm mt-2 -ml-3"
-        >
-          <ChevronDown
-            className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
-          />
-          {expanded
-            ? t('Gekürzt zeigen')
-            : t('Ganzen Wert zeigen ({count} Zeichen)', { count: value.length })}
-        </button>
+        <div>
+          <Button
+            size="s"
+            variant="plain"
+            color="secondary"
+            aria-expanded={expanded}
+            onPress={() => setExpanded((e) => !e)}
+          >
+            {expanded ? <IconChevronUp /> : <IconChevronDown />}
+            <Text>
+              {expanded
+                ? t('Gekürzt zeigen')
+                : t('Ganzen Wert zeigen ({count} Zeichen)', { count: value.length })}
+            </Text>
+          </Button>
+        </div>
       )}
     </div>
   );

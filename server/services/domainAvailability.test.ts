@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   availabilityStatusLabel,
   buildDomainCandidates,
+  buildNameVariants,
   isValidDomainLabel,
   parseDomainQuery,
+  shouldSuggestVariants,
 } from './domainAvailability.js';
 import type { DomainAvailabilityStatus } from '../types.js';
 
@@ -75,6 +77,41 @@ describe('buildDomainCandidates', () => {
     const candidates = buildDomainCandidates('meinprojekt');
     expect(candidates).toContain('meinprojekt.de');
     expect(candidates).toContain('meinprojekt.com');
+  });
+
+  // #147: `my<name>.com` stand bei jeder Suche an zweiter Stelle.
+  it('schlägt ohne Anlass keine Abwandlung des Namens vor', () => {
+    expect(buildDomainCandidates('meinprojekt', 'meinprojekt.de').every((d) => d.startsWith('meinprojekt.'))).toBe(true);
+  });
+});
+
+describe('Abwandlungen des Namens (#147)', () => {
+  const result = (domain: string, status: DomainAvailabilityStatus) => ({ domain, status });
+
+  it('nur, wenn der Name auf .com und .de vergeben ist', () => {
+    const taken = [result('covern.com', 'taken'), result('covern.de', 'taken'), result('covern.io', 'available')];
+    expect(shouldSuggestVariants('covern', taken)).toBe(true);
+    expect(shouldSuggestVariants('covern', [result('covern.com', 'taken'), result('covern.de', 'available')])).toBe(false);
+    // Unklar heißt: Der Name könnte selbst noch frei sein.
+    expect(shouldSuggestVariants('covern', [result('covern.com', 'taken'), result('covern.de', 'unknown')])).toBe(false);
+  });
+
+  it('liefert zwei .com-Varianten, für denselben Namen immer dieselben', () => {
+    const variants = buildNameVariants('covern');
+    expect(variants).toHaveLength(2);
+    expect(variants.every((d) => d.endsWith('.com') && d.includes('covern'))).toBe(true);
+    expect(buildNameVariants('covern')).toEqual(variants);
+  });
+
+  it('wechselt die Abwandlungen je Name statt immer „my“', () => {
+    const names = ['covern', 'tekknine', 'mittwald', 'diggy', 'example'];
+    const patterns = new Set(names.flatMap((name) => buildNameVariants(name).map((d) => d.replace(name, '*'))));
+    expect(patterns.size).toBeGreaterThan(2);
+  });
+
+  it('lässt Varianten weg, die als Label zu lang wären', () => {
+    const long = 'a'.repeat(61);
+    expect(buildNameVariants(long).every((d) => d.split('.')[0].length <= 63)).toBe(true);
   });
 });
 

@@ -1,6 +1,6 @@
 import { promises as dnsPromises } from 'node:dns';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { analyzeSpf, auditMail, countSpfLookups, summarizeMx } from './mailAudit.js';
+import { analyzeSpf, auditMail, checkMxReverse, countSpfLookups, summarizeMx } from './mailAudit.js';
 
 describe('auditMail: Mail-TXT-Tags', () => {
   beforeEach(() => {
@@ -266,5 +266,111 @@ describe('summarizeMx', () => {
 
   it('meldet fehlende MX als fehlend', () => {
     expect(summarizeMx([])).toEqual({ hasMx: false, nullMx: false });
+  });
+});
+
+/** #147: Zeigt der PTR jeder Mailserver-IP auf einen Namen, der zurück auf sie auflöst? */
+describe('checkMxReverse (FCrDNS)', () => {
+  const mx = (exchange: string, priority = 10) => ({ exchange, priority });
+  const proto = dnsPromises.Resolver.prototype;
+
+  beforeEach(() => {
+    vi.spyOn(proto, 'resolve4').mockRejectedValue(dnsError('ENODATA'));
+    vi.spyOn(proto, 'resolve6').mockRejectedValue(dnsError('ENODATA'));
+    vi.spyOn(proto, 'reverse').mockRejectedValue(dnsError('ENOTFOUND'));
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  /** Ein kleines DNS: Name → Adressen, Adresse → PTR. */
+  function zone(forward: Record<string, string[]>, ptr: Record<string, string[]>) {
+    const lookup = (table: Record<string, string[]>) => async (name: string) => {
+      if (table[name]) return table[name];
+      throw dnsError('ENOTFOUND');
+    };
+    const v4 = Object.fromEntries(Object.entries(forward).map(([k, v]) => [k, v.filter((a) => !a.includes(':'))]).filter(([, v]) => v.length));
+    const v6 = Object.fromEntries(Object.entries(forward).map(([k, v]) => [k, v.filter((a) => a.includes(':'))]).filter(([, v]) => v.length));
+    vi.mocked(proto.resolve4).mockImplementation(lookup(v4) as never);
+    vi.mocked(proto.resolve6).mockImplementation(lookup(v6) as never);
+    vi.mocked(proto.reverse).mockImplementation(lookup(ptr) as never);
+  }
+
+  it('bestätigt einen PTR, der zurück auf die IP auflöst — auch bei IPv6 in anderer Schreibweise', async () => {
+    zone(
+      { 'mx.example.net': ['192.0.2.1', '2001:db8::1'], 'out.example.net': ['192.0.2.1', '2001:DB8:0:0::1'] },
+      { '192.0.2.1': ['out.example.net.'], '2001:db8::1': ['out.example.net'] }
+    );
+    expect(await checkMxReverse([mx('mx.example.net')])).toEqual([
+      {
+        host: 'mx.example.net',
+        ips: [
+          { ip: '192.0.2.1', ptr: ['out.example.net'], confirmed: true },
+          { ip: '2001:db8::1', ptr: ['out.example.net'], confirmed: true },
+        ],
+      },
+    ]);
+  });
+
+  it('widerlegt einen PTR, der woandershin zeigt, und meldet einen fehlenden PTR als leer', async () => {
+    zone(
+      { 'mx1.example.net': ['192.0.2.1'], 'mx2.example.net': ['192.0.2.2'], 'other.example.net': ['198.51.100.9'] },
+      { '192.0.2.1': ['other.example.net'] }
+    );
+    const result = await checkMxReverse([mx('mx1.example.net'), mx('mx2.example.net', 20)]);
+    expect(result).toEqual([
+      { host: 'mx1.example.net', ips: [{ ip: '192.0.2.1', ptr: ['other.example.net'], confirmed: false }] },
+      { host: 'mx2.example.net', ips: [{ ip: '192.0.2.2', ptr: [], confirmed: false }] },
+    ]);
+  });
+
+  it('hält eine gescheiterte Abfrage als nicht prüfbar fest, statt „kein PTR“ zu behaupten', async () => {
+    zone({ 'mx.example.net': ['192.0.2.1'] }, {});
+    vi.mocked(proto.reverse).mockRejectedValue(dnsError('ETIMEOUT'));
+    expect(await checkMxReverse([mx('mx.example.net')])).toEqual([
+      { host: 'mx.example.net', ips: [{ ip: '192.0.2.1', ptr: [], confirmed: false, unchecked: true }] },
+    ]);
+  });
+
+  // Codex-Review: Ein Timeout bei der Adressabfrage erschien als „keine IP-Adresse“.
+  it('hält eine gescheiterte Adressabfrage als nicht prüfbar fest', async () => {
+    zone({}, {});
+    vi.mocked(proto.resolve4).mockRejectedValue(dnsError('ETIMEOUT'));
+    expect(await checkMxReverse([mx('mx.example.net')])).toEqual([{ host: 'mx.example.net', ips: [], unchecked: true }]);
+  });
+
+  it('unterscheidet „keine Adresse“ von einem Ausfall', async () => {
+    zone({}, {});
+    expect(await checkMxReverse([mx('mx.example.net')])).toEqual([{ host: 'mx.example.net', ips: [] }]);
+  });
+
+  // Codex-Review: Nur drei PTR-Namen werden geprüft — passte keiner, hieß es „passt nicht“,
+  // obwohl der vierte zurück auf die IP auflöste.
+  it('widerlegt nicht, solange PTR-Namen über dem Budget ungeprüft bleiben', async () => {
+    zone(
+      {
+        'mx.example.net': ['192.0.2.1'],
+        'a.example.net': ['198.51.100.1'],
+        'b.example.net': ['198.51.100.2'],
+        'c.example.net': ['198.51.100.3'],
+        'd.example.net': ['192.0.2.1'],
+      },
+      { '192.0.2.1': ['a.example.net', 'b.example.net', 'c.example.net', 'd.example.net'] }
+    );
+    const [host] = await checkMxReverse([mx('mx.example.net')]);
+    expect(host.ips[0]).toMatchObject({ confirmed: false, unchecked: true });
+  });
+
+  it('prüft die wichtigsten vier Server, ohne Null-MX und Duplikate', async () => {
+    zone({}, {});
+    const result = await checkMxReverse([
+      mx('', 0),
+      mx('e.example.net', 50),
+      mx('a.example.net', 5),
+      mx('A.example.net.', 5),
+      mx('b.example.net', 10),
+      mx('c.example.net', 20),
+      mx('d.example.net', 30),
+    ]);
+    expect(result.map((host) => host.host)).toEqual(['a.example.net', 'b.example.net', 'c.example.net', 'd.example.net']);
   });
 });

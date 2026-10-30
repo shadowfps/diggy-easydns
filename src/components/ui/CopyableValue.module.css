@@ -1,0 +1,27 @@
+.row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--size-px--s);
+}
+
+/* Als Block, damit Breite und Umbruch an der Spalte hängen statt am Text. */
+.value {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-self: start;
+}
+
+.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -574,7 +574,28 @@
       },
       "tlsRpt": {
         "present": false
-      }
+      },
+      "mxReverse": [
+        {
+          "host": "github-com.mail.protection.outlook.com",
+          "ips": [
+            {
+              "ip": "52.101.60.65",
+              "ptr": [
+                "mail-bn3pr02cu00101.inbound.protection.outlook.com"
+              ],
+              "confirmed": true
+            },
+            {
+              "ip": "52.101.11.17",
+              "ptr": [
+                "mail-sn1pr0501cu00301.inbound.protection.outlook.com"
+              ],
+              "confirmed": true
+            }
+          ]
+        }
+      ]
     },
     "findings": [
       {

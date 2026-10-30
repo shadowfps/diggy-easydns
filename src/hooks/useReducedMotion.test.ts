@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { staggerDelay, useReducedMotion } from './useReducedMotion';
+import { useReducedMotion } from './useReducedMotion';
 
 /**
- * Der Hook trägt alles, was Framer Motions `MotionConfig` nicht sieht: GSAP in
- * SplitText, die setTimeout-Schleife in TextType, die rAF-Schleife in
- * ShinyText und die handgesetzten Stagger-Delays.
- *
- * Der Laufzeitwechsel der Präferenz war in TextType und ShinyText fehlerhaft
- * (Text verdoppelte sich, Glanz fror ein) — beides fand nur ein Review.
+ * Der Hook trägt, was Flow nicht selbst anhält: sanftes Scrollen per JS. Er
+ * muss auch einem Wechsel der Präferenz zur Laufzeit folgen — der war in den
+ * früheren Hero-Animationen fehlerhaft und fiel nur einem Review auf.
  */
 
 type Listener = (event: MediaQueryListEvent) => void;
@@ -61,7 +58,7 @@ describe('useReducedMotion', () => {
     expect(result.current).toBe(true);
   });
 
-  /** Genau der Fall, in dem TextType und ShinyText kaputt waren. */
+  /** Genau der Fall, an dem die früheren Hero-Animationen scheiterten. */
   it('reagiert auf eine Änderung zur Laufzeit', () => {
     const media = installMatchMedia(false);
     const { result } = renderHook(() => useReducedMotion());
@@ -87,26 +84,5 @@ describe('useReducedMotion', () => {
     delete window.matchMedia;
     const { result } = renderHook(() => useReducedMotion());
     expect(result.current).toBe(false);
-  });
-});
-
-describe('staggerDelay', () => {
-  it('staffelt normal', () => {
-    expect(staggerDelay(0, 0.06, false)).toBe(0);
-    expect(staggerDelay(3, 0.06, false)).toBeCloseTo(0.18);
-  });
-
-  /**
-   * `index * step` lief vorher unbegrenzt hoch: bei 15 Findings erschien das
-   * letzte erst nach ~0,9 s.
-   */
-  it('deckelt die Wartezeit', () => {
-    expect(staggerDelay(100, 0.06, false)).toBe(0.4);
-    expect(staggerDelay(100, 0.06, false, 0.2)).toBe(0.2);
-  });
-
-  it('schaltet bei reduzierter Bewegung ganz ab', () => {
-    expect(staggerDelay(0, 0.06, true)).toBe(0);
-    expect(staggerDelay(50, 0.06, true)).toBe(0);
   });
 });

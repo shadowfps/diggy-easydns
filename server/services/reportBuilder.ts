@@ -319,6 +319,7 @@ export function mailFindings(mail: MailSecurity, apexDomain: string): KeyedFindi
   if (!mail.nullMx) {
     findings.push(...tlsRptFindings(mail, apexDomain, receivesMail));
     findings.push(...bimiFindings(mail, apexDomain, receivesMail));
+    findings.push(...mxReverseFindings(mail, receivesMail));
   }
 
   if (mail.nullMx) findings.push(...noMailFindings(mail, apexDomain));
@@ -550,6 +551,50 @@ function withDmarcPolicy(record: string, policy: DmarcPolicy): string {
  * Null-MX), und ist die Abfrage gescheitert, sagen wir nichts: Wir wissen
  * dann nicht, ob er fehlt.
  */
+
+/**
+ * Reverse DNS der Mailserver (FCrDNS, #147). Beim Empfang prüft das kaum ein
+ * Absender — deshalb nur eine Empfehlung ohne Score-Abzug. Verschickt derselbe
+ * Server aber auch, werten viele Empfänger einen fehlenden oder unpassenden
+ * PTR als Spam-Signal.
+ *
+ * Nicht prüfbare Teile zählen nicht dagegen — aber auch nicht dafür: Ist
+ * irgendwo etwas offen, gibt es kein „passt“.
+ */
+function mxReverseFindings(mail: MailSecurity, receivesMail: boolean): KeyedFinding[] {
+  if (!receivesMail || !mail.mxReverse) return [];
+  const checked = mail.mxReverse.flatMap(({ host, ips }) =>
+    ips.filter((ip) => !ip.unchecked).map((ip) => ({ host, confirmed: ip.confirmed }))
+  );
+  if (checked.length === 0) return [];
+  const incomplete = mail.mxReverse.some((host) => host.unchecked || host.ips.some((ip) => ip.unchecked));
+
+  const failing = [...new Set(checked.filter((ip) => !ip.confirmed).map((ip) => ip.host))];
+  if (failing.length === 0) {
+    if (incomplete) return [];
+    return [{
+      id: 'mx-fcrdns-ok',
+      severity: 'success',
+      title: 'Reverse DNS der Mailserver passt',
+      description: 'Jede geprüfte IP der Mailserver hat einen PTR, der wieder auf sie auflöst (FCrDNS).',
+      category: 'mail',
+    }];
+  }
+
+  const hosts = failing.join(', ');
+  return [{
+    id: 'mx-fcrdns-missing',
+    severity: 'info',
+    title: 'Mailserver ohne passenden Reverse DNS',
+    description: `Bei ${hosts} zeigt der PTR der IP nicht auf einen Namen, der wieder auf sie auflöst (FCrDNS). Für eingehende Mail unkritisch — verschickt derselbe Server auch Mail, werten viele Empfänger das als Spam-Signal.`,
+    params: { hosts },
+    fix: {
+      explanation: 'Den PTR setzt, wem die IP gehört — der Hoster oder Provider, meist im Kundenmenü oder auf Anfrage. Er sollte auf den Namen des Mailservers zeigen, der wieder auf die IP auflöst.',
+    },
+    category: 'mail',
+    advisory: true,
+  }];
+}
 
 function tlsRptFindings(mail: MailSecurity, apexDomain: string, receivesMail: boolean): KeyedFinding[] {
   const tlsRpt = mail.tlsRpt;

@@ -20,14 +20,16 @@ import { createIndexRenderer, domainFromLookupPath, lookupPreview, previewOrigin
 import { BlockedTargetError } from './lib/safeTarget.js';
 import { upstreamErrorStatus } from './lib/upstreamError.js';
 import { concurrencyLimit, rateLimit } from './lib/rateLimit.js';
+import { siteGateFromEnv } from './lib/siteGate.js';
 import { propagationSection, propagationTypeQuery } from './services/propagation.js';
 import { AuthoritativeBusyError, authoritativeSection } from './services/authoritative.js';
 import { PROPAGATION_RECORD_TYPES } from '../shared/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
+import { BUILD_INFO } from './lib/buildInfo.js';
 import { auditMail } from './services/mailAudit.js';
 import { lookupWhois } from './services/whois.js';
-import { lookupPageSpeed } from './services/pagespeed.js';
+import { describePageSpeedError, lookupPageSpeed } from './services/pagespeed.js';
 import { scanVirusTotal } from './services/virusscan.js';
 import { isLookupableIpAddress, lookupIpDetails } from './services/ipDetails.js';
 import { detectTechStack } from './services/techstack.js';
@@ -75,7 +77,17 @@ function readDistIndex(): string | null {
   }
 }
 
-const distIndexHtml = readDistIndex();
+/**
+ * Passwortschutz der Testumgebung (lib/siteGate.ts) — nur mit SITE_PASSWORD,
+ * auf diggydns.cloud also aus. Steht vor dem index.html, weil die Sperre dort
+ * ihren Meta-Tag einträgt.
+ */
+const siteGate = siteGateFromEnv();
+
+const distIndexHtml = (() => {
+  const html = readDistIndex();
+  return html && siteGate ? siteGate.markHtml(html) : html;
+})();
 
 /**
  * SHA-256-Hashes aller Inline-`<script>`-Blöcke im gebauten index.html.
@@ -121,8 +133,9 @@ if (proxyHops > 0) app.set('trust proxy', proxyHops);
 
 /**
  * Die CSP ist auf die tatsächlich genutzten Quellen zugeschnitten:
- *  - `style-src` braucht 'unsafe-inline', weil Framer Motion und GSAP
- *    Inline-Styles für Transforms setzen. Ohne das bricht jede Animation.
+ *  - `style-src` braucht 'unsafe-inline': mittwald Flow setzt Inline-Styles
+ *    (Breiten von Skeletons, Position der Tab-Markierung, Overlays) und
+ *    hängt eigene `<style>`-Blöcke an.
  *  - `img-src data:` ist Pflicht für die SVG-Grain-Textur im Body-Background
  *    (src/styles/globals.css).
  *  - Keine Fremd-Hosts: Schriften liegen lokal im Bundle (#13), die App lädt
@@ -188,6 +201,9 @@ if (corsOrigins?.length) {
 }
 
 app.use(express.json({ limit: '64kb' }));
+
+// Die Testumgebung soll in keiner Suchmaschine auftauchen.
+if (siteGate) app.use(siteGate.noIndex);
 
 /**
  * CSRF-Riegel für den einzigen schreibenden Endpoint.
@@ -273,7 +289,7 @@ const LOOKUP_TTL_MS = 60_000;
 /**
  * Eigene, deutlich längere TTLs für die beiden teuren Fremd-API-Checks.
  *
- * Die 60 s der Lookups sind hier sinnlos: ein PageSpeed-Run dauert bis zu 45 s,
+ * Die 60 s der Lookups sind hier sinnlos: ein PageSpeed-Run dauert bis zu 90 s,
  * ein Nutzer, der zwischen Mobile und Desktop hin- und herschaltet, würde jedes
  * Mal einen neuen Call verbrennen. VirusTotal-Daten sind ohnehin träge — das
  * gemeldete last_analysis_date liegt meist Tage zurück.
@@ -325,7 +341,7 @@ const availabilityLimiter = rateLimit({
 });
 
 /**
- * Concurrency-Deckel für die langlaufenden Checks. PageSpeed läuft bis zu 45 s;
+ * Concurrency-Deckel für die langlaufenden Checks. PageSpeed läuft bis zu 90 s;
  * ohne diesen Deckel würden wenige parallele Requests von verschiedenen IPs den
  * Prozess belegen, ohne je ein Rate-Limit zu reißen.
  */
@@ -385,8 +401,23 @@ app.get('/api/health', (_req: Request, res: Response) => {
   if (shuttingDown) {
     return res.status(503).json({ status: 'shutting_down', service: 'diggy-api' });
   }
-  res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
+  res.json({ status: 'ok', service: 'diggy-api', ...BUILD_INFO });
 });
+
+/*
+ * Testumgebung: Anmeldung und Sperre vor allen übrigen API-Routen. Health
+ * bleibt oben offen, der Container-Healthcheck meldet sich nicht an.
+ */
+if (siteGate) {
+  const siteLoginLimiter = rateLimit({
+    windowMs: 15 * 60_000,
+    max: 10,
+    message: 'Zu viele Anmeldeversuche. Bitte in ein paar Minuten erneut versuchen.',
+  });
+  app.get('/api/site-gate', siteGate.status);
+  app.post('/api/site-gate', assertSameOrigin, siteLoginLimiter, siteGate.login);
+  app.use('/api', siteGate.guard);
+}
 
 app.use('/api', apiLimiter);
 
@@ -486,12 +517,9 @@ app.get('/api/pagespeed', rejectCrossSite, pageSpeedLimiter, pageSpeedConcurrenc
     );
     res.json(result);
   } catch (error) {
-    const err = error as Error;
-    const message = err.message || 'PageSpeed-Analyse fehlgeschlagen.';
-    return res.status(upstreamErrorStatus(error)).json({
-      error: 'pagespeed_failed',
-      message,
-    });
+    // Die eigentliche Ursache fürs Log; der Nutzer bekommt eine verständliche Meldung.
+    console.warn(`[pagespeed] ${domain} (${strategy}): ${(error as Error).message || error}`);
+    return res.status(upstreamErrorStatus(error)).json(describePageSpeedError(error));
   }
 });
 
@@ -855,7 +883,9 @@ app.get('/api/lookup/techstack', techStackConcurrency, async (req: Request, res:
 });
 
 if (existsSync(distIndex)) {
-  app.use(express.static(distDir));
+  // Mit Sperre liefert die Catch-all-Route auch `/` aus — sonst käme das
+  // index.html ohne den Meta-Tag direkt aus dem Verzeichnis.
+  app.use(express.static(distDir, siteGate ? { index: false } : undefined));
   // Express 5 (path-to-regexp 8) braucht für den Wildcard einen Namen; die
   // geschweiften Klammern machen ihn optional, damit auch `/` passt.
   app.get('/{*splat}', (req: Request, res: Response, next) => {
@@ -872,6 +902,13 @@ if (existsSync(distIndex)) {
       res.set('Cache-Control', 'no-cache');
       res.type('html');
       return res.send(renderLookupIndex(lookupPreview(domain, previewOrigin(req, publicOrigin))));
+    }
+
+    // Testumgebung: das index.html mit Meta-Tag aus dem Speicher.
+    if (siteGate && distIndexHtml) {
+      res.set('Cache-Control', 'no-cache');
+      res.type('html');
+      return res.send(distIndexHtml);
     }
 
     // Mit root prüft sendFile nur unterhalb von dist auf Dotfiles, damit
@@ -911,7 +948,8 @@ server.on('error', (error: NodeJS.ErrnoException) => {
  * Request-Timeouts. Die AUSGEHENDEN Calls haben alle einen AbortController,
  * der eingehende Request hatte bisher keine Obergrenze: eine langsam gesendete
  * Anfrage konnte einen Connection-Slot dauerhaft halten (Slowloris-Muster).
- * Das Budget deckt den langsamsten Endpoint ab (PageSpeed, bis 45 s).
+ * `requestTimeout` gilt nur fürs Empfangen der Anfrage, nicht für die Antwort —
+ * ein PageSpeed-Run darf länger dauern (bis 90 s, services/pagespeed.ts).
  */
 server.requestTimeout = 60_000;
 server.headersTimeout = 65_000; // muss über requestTimeout liegen

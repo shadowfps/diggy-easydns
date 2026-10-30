@@ -1,0 +1,16 @@
+.page {
+  display: flex;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-px--l);
+}
+
+.card {
+  width: 100%;
+  max-width: 32rem;
+}
+
+.message {
+  overflow-wrap: anywhere;
+}

@@ -1,225 +1,204 @@
-import { motion } from 'motion/react';
+import type { ReactNode } from 'react';
 import {
-  CalendarClock,
-  CheckCircle2,
-  History,
-  Mail,
-  Network,
-  RotateCcw,
-  Server,
-  ShieldX,
-  Trash2,
-} from 'lucide-react';
+  Action,
+  ActionGroup,
+  AlertBadge,
+  Avatar,
+  Button,
+  ColumnLayout,
+  Content,
+  Heading,
+  Icon,
+  IconDelete,
+  IconDomain,
+  IconRefresh,
+  Label,
+  LabeledValue,
+  LayoutCard,
+  Modal,
+  Text,
+  typedList,
+  useModalController,
+} from '@mittwald/flow-react-components';
+import { IconHistory } from '@tabler/icons-react';
 import type { LookupHistoryEntry } from '@/lib/lookupHistory';
-import { cn } from '@/lib/cn';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { verdictFor } from '@/lib/scoring';
 import { formatDate, t, useI18n } from '@/i18n';
+import styles from './HistoryView.module.css';
 
 interface HistoryViewProps {
   entries: LookupHistoryEntry[];
   onRun: (domain: string) => void;
-  onUseDomain?: (domain: string) => void;
   onClear: () => void;
 }
 
-export function HistoryView({ entries, onRun, onUseDomain, onClear }: HistoryViewProps) {
+const HistoryList = typedList<LookupHistoryEntry>();
+
+/**
+ * Die letzten Suchen — Flows Template „Übersichtsseite“: Überschrift, eine
+ * LayoutCard mit der List, je Lookup ein List-Item.
+ *
+ * Suche, Filter und Sortierung der List bleiben weg: es sind höchstens zehn
+ * Einträge, neueste zuerst. Ohne `settingStorageKey` merkt sich die List
+ * nichts — die History bleibt das Einzige, was diggy dafür speichert.
+ */
+export function HistoryView({ entries, onRun, onClear }: HistoryViewProps) {
   useI18n();
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="mx-auto w-full max-w-3xl"
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="eyebrow flex items-center gap-1.5">
-            <History className="size-3.5" />
-            History
-          </p>
-          <h1 className="page-title mt-2">{t('Letzte Suchanfragen')}</h1>
-        </div>
+  const confirmClear = useModalController();
 
-        <button
-          type="button"
-          onClick={onClear}
-          disabled={entries.length === 0}
-          className="btn btn-secondary btn-sm self-start sm:self-auto"
+  return (
+    <div className={styles.page}>
+      <div className={styles.pageHead}>
+        <Text className="eyebrow">History</Text>
+        <Heading level={1}>{t('Letzte Suchanfragen')}</Heading>
+      </div>
+
+      <LayoutCard>
+        <HistoryList.List
+          aria-label={t('Letzte Suchanfragen')}
+          getItemId={(entry) => `${entry.domain}-${entry.lookedUpAt}`}
+          batchSize={20}
+          hidePagination
+          emptyView={
+            <EmptyState icon={<HistoryIcon />} title={t('Noch keine History')}>
+              {t('Erfolgreiche Domain-Lookups erscheinen hier automatisch.')}
+            </EmptyState>
+          }
         >
-          <Trash2 className="size-3.5" />
-          {t('History löschen')}
-        </button>
-      </div>
+          <HistoryList.StaticData data={entries} />
+          <ActionGroup>
+            {/* Die leere List blendet ihre Aktionen selbst aus. */}
+            <Button variant="soft" color="secondary" onPress={() => confirmClear.open()}>
+              <IconDelete />
+              <Text>{t('History löschen')}</Text>
+            </Button>
+          </ActionGroup>
+          <HistoryList.Item textValue={(entry) => entry.domain}>
+            {(entry) => <HistoryItem entry={entry} onRun={onRun} />}
+          </HistoryList.Item>
+        </HistoryList.List>
+      </LayoutCard>
 
-      <div className="mt-8 space-y-4">
-        {entries.length === 0 ? (
-          <EmptyState icon={<History className="size-5" />} title={t('Noch keine History')}>
-            {t('Erfolgreiche Domain-Lookups erscheinen hier automatisch.')}
-          </EmptyState>
-        ) : (
-          // Eine Liste statt je Lookup eine Karte: die Einträge lesen sich als
-          // Verlauf, nicht als zehn lose Kästen.
-          <div className="card-flush divide-y divide-line-subtle">
-            {entries.map((entry, index) => (
-              <HistoryRow
-                key={`${entry.domain}-${entry.lookedUpAt}`}
-                entry={entry}
-                delay={index * 0.04}
-                onRun={() => onRun(entry.domain)}
-                onUseDomain={onUseDomain}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-function HistoryRow({
-  entry,
-  delay,
-  onRun,
-  onUseDomain,
-}: {
-  entry: LookupHistoryEntry;
-  delay: number;
-  onRun: () => void;
-  onUseDomain?: (domain: string) => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay }}
-      className="px-5 py-4 sm:px-6"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <button
-            type="button"
-            onClick={onRun}
-            className="block max-w-full truncate rounded-full text-left font-mono text-sm font-semibold text-fg underline-offset-4 hover:underline"
-          >
-            {entry.domain}
-          </button>
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-fg-subtle">
-            <CalendarClock className="size-3.5" />
-            {formatRelativeTime(entry.lookedUpAt)}
-          </p>
-        </div>
-
-        <div className="shrink-0 text-right">
-          <div className={cn('text-2xl font-semibold tabular-nums tracking-tight', scoreClass(entry.score))}>
-            {entry.score}
-          </div>
-          {/* Aus dem Score statt aus dem gespeicherten Wort: das steht auf
-              Deutsch im Storage und ließe sich sonst nicht übersetzen. */}
-          <div className="max-w-28 truncate text-xs text-fg-subtle">{t(verdictFor(entry.score))}</div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <CoreBlock icon={<Network className="size-3.5" />} label="IP" values={entry.ips} />
-        <CoreBlock icon={<Mail className="size-3.5" />} label="MX" values={entry.mx} />
-        <CoreBlock
-          icon={<Server className="size-3.5" />}
-          label="NS"
-          values={entry.nameservers}
-          onUseValue={onUseDomain}
-        />
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          <StatusPill ok={entry.sslValid} label={entry.sslValid ? sslLabel(entry) : t('SSL fehlt')} />
-          <StatusPill
-            ok={entry.dnssecValid}
-            label={entry.dnssecValid ? t('DNSSEC aktiv') : t('DNSSEC inaktiv')}
-          />
-          <StatusPill
-            ok={entry.dmarcPresent}
-            label={entry.dmarcPresent ? t('DMARC gesetzt') : t('DMARC fehlt')}
-          />
-        </div>
-
-        <button type="button" onClick={onRun} className="btn btn-ghost btn-sm">
-          <RotateCcw className="size-3.5" />
-          {t('Scan erneut')}
-        </button>
-      </div>
-    </motion.div>
-  );
-}
-
-function CoreBlock({
-  icon,
-  label,
-  values,
-  onUseValue,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  values: string[];
-  onUseValue?: (value: string) => void;
-}) {
-  return (
-    <div className="panel min-w-0 p-3">
-      <div className="flex items-center gap-1.5 text-xs text-fg-subtle">
-        {icon}
-        {label}
-      </div>
-      {values.length > 0 ? (
-        <div className="mt-1.5 space-y-1">
-          {values.slice(0, 3).map((value) => (
-            onUseValue ? (
-              <button
-                key={value}
-                type="button"
-                onClick={() => onUseValue(value)}
-                className="block max-w-full truncate rounded-full text-left font-mono text-[13px] text-fg underline-offset-4 hover:underline"
-                title={t('{value} in die Suche übernehmen', { value })}
-              >
-                {value}
-              </button>
-            ) : (
-              <div
-                key={value}
-                className="truncate font-mono text-[13px] text-fg"
-                title={value}
-              >
-                {value}
-              </div>
-            )
-          ))}
-          {values.length > 3 && (
-            <div className="text-xs text-fg-subtle">
-              {t('+{count} weitere', { count: values.length - 3 })}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="mt-1.5 text-xs italic text-fg-subtle">{t('keine Daten')}</div>
-      )}
+      {/* Löschen lässt sich nicht rückgängig machen — Flows Template
+          „Bestätigen“: kurze Rückfrage mit den Folgen. */}
+      <Modal controller={confirmClear}>
+        <Heading>{t('History löschen')}</Heading>
+        <Content>
+          <Text>
+            {t('Alle Einträge werden aus diesem Browser gelöscht. Das lässt sich nicht rückgängig machen.')}
+          </Text>
+        </Content>
+        <ActionGroup>
+          <Action closeModal>
+            <Button color="danger" onPress={onClear}>
+              {t('History löschen')}
+            </Button>
+            <Button variant="soft" color="secondary">
+              {t('Abbrechen')}
+            </Button>
+          </Action>
+        </ActionGroup>
+      </Modal>
     </div>
   );
 }
 
-function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+/** Tabler, weil Flows Bibliothek kein Verlaufs-Icon kennt. */
+function HistoryIcon() {
   return (
-    <span className={cn('badge', ok ? 'badge-success' : 'badge-danger')}>
-      {ok ? <CheckCircle2 className="size-3" /> : <ShieldX className="size-3" />}
-      {label}
-    </span>
+    <Icon>
+      <IconHistory />
+    </Icon>
   );
 }
 
-/** Dieselben Schwellen und Töne wie die ScoreCard: gut, Warnung, kritisch. */
-function scoreClass(score: number): string {
-  if (score >= 65) return 'text-success';
-  if (score >= 40) return 'text-warning';
-  return 'text-danger';
+function HistoryItem({ entry, onRun }: { entry: LookupHistoryEntry; onRun: (domain: string) => void }) {
+  return (
+    <HistoryList.ItemView>
+      <Avatar>
+        <IconDomain />
+      </Avatar>
+      <Heading>
+        <span className="mono">{entry.domain}</span>
+        {/* Aus dem Score statt aus dem gespeicherten Wort: das steht auf
+            Deutsch im Storage und ließe sich sonst nicht übersetzen. */}
+        <AlertBadge status={scoreStatus(entry.score)}>
+          {entry.score} · {t(verdictFor(entry.score))}
+        </AlertBadge>
+      </Heading>
+      <Text>{formatRelativeTime(entry.lookedUpAt)}</Text>
+
+      <Content>
+        <ActionGroup>
+          <Button variant="soft" color="secondary" size="s" onPress={() => onRun(entry.domain)}>
+            <IconRefresh />
+            <Text>{t('Scan erneut')}</Text>
+          </Button>
+        </ActionGroup>
+      </Content>
+
+      <Content slot="bottom">
+        <div className={styles.details}>
+          <ColumnLayout s={[1]} m={[1, 1, 1]} l={[1, 1, 1]} rowGap="m">
+            <CoreValues label="IP" values={entry.ips} />
+            <CoreValues label="MX" values={entry.mx} />
+            <CoreValues label="NS" values={entry.nameservers} />
+          </ColumnLayout>
+          <div className={styles.badges}>
+            <StatusBadge ok={entry.sslValid}>{entry.sslValid ? sslLabel(entry) : t('SSL fehlt')}</StatusBadge>
+            <StatusBadge ok={entry.dnssecValid}>
+              {entry.dnssecValid ? t('DNSSEC aktiv') : t('DNSSEC inaktiv')}
+            </StatusBadge>
+            <StatusBadge ok={entry.dmarcPresent}>
+              {entry.dmarcPresent ? t('DMARC gesetzt') : t('DMARC fehlt')}
+            </StatusBadge>
+          </div>
+        </div>
+      </Content>
+    </HistoryList.ItemView>
+  );
+}
+
+/** Jeder Wert führt auf seinen eigenen Report (#147). */
+function CoreValues({ label, values }: { label: string; values: string[] }) {
+  return (
+    <LabeledValue>
+      <Label>{label}</Label>
+      <Content>
+        {values.length > 0 ? (
+          <div className={styles.values}>
+            {values.slice(0, 3).map((value) => (
+              <Text key={value} className="mono">
+                <LookupLink value={value} />
+              </Text>
+            ))}
+            {values.length > 3 && (
+              <Text>
+                <small>{t('+{count} weitere', { count: values.length - 3 })}</small>
+              </Text>
+            )}
+          </div>
+        ) : (
+          <Text>
+            <small>{t('keine Daten')}</small>
+          </Text>
+        )}
+      </Content>
+    </LabeledValue>
+  );
+}
+
+function StatusBadge({ ok, children }: { ok: boolean; children: ReactNode }) {
+  return <AlertBadge status={ok ? 'success' : 'danger'}>{children}</AlertBadge>;
+}
+
+/** Dieselben Schwellen wie die ScoreCard: gut, Warnung, kritisch. */
+function scoreStatus(score: number): 'success' | 'warning' | 'danger' {
+  if (score >= 65) return 'success';
+  if (score >= 40) return 'warning';
+  return 'danger';
 }
 
 function sslLabel(entry: LookupHistoryEntry): string {

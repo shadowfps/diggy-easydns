@@ -1,0 +1,36 @@
+/* Ring links, die Zählung als Liste daneben; reicht die Breite nicht, darunter. */
+.overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-px--m) var(--size-px--l);
+}
+
+.value {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats {
+  display: grid;
+  gap: var(--size-px--xs);
+}
+
+.stat,
+.unchecked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-px--xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Icon auf Höhe der Beschriftung, der Titel darf umbrechen. */
+.top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-px--s);
+}
+
+.more {
+  display: flex;
+}

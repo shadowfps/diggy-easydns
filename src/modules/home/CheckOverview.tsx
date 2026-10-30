@@ -1,84 +1,97 @@
-import { motion } from 'motion/react';
-import { Globe, Landmark, ListTree, Lock, Mail, ShieldCheck } from 'lucide-react';
+import type { ReactNode } from 'react';
+import {
+  Heading,
+  IconCertificate,
+  IconDnsZone,
+  IconDomain,
+  IconEmail,
+  IconRegistry,
+  IconSecurity,
+  Text,
+} from '@mittwald/flow-react-components';
 import { useI18n, type I18n } from '@/i18n';
+import { SectionIntro } from './SectionIntro';
+import styles from './CheckOverview.module.css';
 
 /**
  * „Was diggy prüft“ auf der Startseite: die sechs Bereiche, die jeder Report
  * bewertet. Wer zum ersten Mal kommt, sieht vor der ersten Suche, was ihn
- * erwartet — vorher stand unter dem Suchfeld nur der Converter-Hinweis.
+ * erwartet.
  *
  * Eine Funktion statt einer Konstante, damit die Texte beim Rendern in der
  * aktiven Sprache entstehen. Die Bereichsnamen sind Fachbegriffe und heißen
  * in beiden Sprachen gleich — bis auf den Mail-Schutz.
  */
-function checks({ t }: I18n) {
+function checks({ t }: I18n): { icon: ReactNode; title: string; text: string }[] {
   return [
     {
-      icon: ListTree,
+      icon: <IconDnsZone />,
       title: 'Records',
       text: t('A, AAAA, MX, NS, TXT, CAA, SOA und CNAME — mit dem Netzbetreiber hinter jeder IP.'),
     },
     {
-      icon: Mail,
+      icon: <IconEmail />,
       title: t('Mail-Schutz'),
       text: t('SPF, DKIM, DMARC und MTA-STS: Kann jemand in deinem Namen Mails fälschen?'),
     },
     {
-      icon: Lock,
+      icon: <IconCertificate />,
       title: 'SSL / TLS',
       text: t('Zertifikat, Aussteller und Ablaufdatum — bevor Besucher eine Warnung sehen.'),
     },
     {
-      icon: ShieldCheck,
+      icon: <IconSecurity />,
       title: 'DNSSEC',
       text: t('Sind die Antworten signiert, und hält die Vertrauenskette?'),
     },
     {
-      icon: Globe,
+      icon: <IconDomain />,
       title: 'Propagation',
       text: t('Neun öffentliche Resolver im Vergleich: Ist eine Änderung bei allen angekommen?'),
     },
     {
-      icon: Landmark,
+      icon: <IconRegistry />,
       title: 'WHOIS / RDAP',
       text: t('Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.'),
     },
   ];
 }
 
+/**
+ * Die sechs Bereiche als Kacheln im Grainy-Gradient-Stil der mittwald-
+ * Promo-Kacheln: Körnung über einem Verlauf mit einem Licht oben rechts, das
+ * Icon groß daneben, Titel und Frage darunter.
+ *
+ * Überzeile, Überschrift und Einleitung stehen über den Kacheln auf dem
+ * Seitenhintergrund — die Kacheln selbst sind die Liste.
+ */
 export function CheckOverview() {
   const i18n = useI18n();
   const { t } = i18n;
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8, transition: { duration: 0.2 } }}
-      transition={{ duration: 0.5, delay: 0.25, ease: 'easeOut' }}
-      aria-labelledby="check-overview-title"
-      className="mx-auto mt-16 max-w-5xl md:mt-24"
-    >
-      <div className="text-center">
-        <p className="eyebrow">{t('Was diggy prüft')}</p>
-        <h2 id="check-overview-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-          {t('Sechs Bereiche, ein Befund')}
-        </h2>
-        <p className="mx-auto mt-2 max-w-xl text-sm text-fg-muted">
-          {t('Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.')}
-        </p>
-      </div>
+    <section aria-labelledby="checks-heading" className={styles.overview}>
+      <SectionIntro
+        id="checks-heading"
+        eyebrow={t('Was diggy prüft')}
+        title={t('Sechs Bereiche, ein Befund')}
+        lead={t('Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.')}
+      />
 
-      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {checks(i18n).map(({ icon: Icon, title, text }) => (
-          <div key={title} className="card">
-            <span className="icon-tile">
-              <Icon className="size-4" />
+      <ul className={styles.tiles}>
+        {checks(i18n).map(({ icon, title, text }) => (
+          <li key={title} className={styles.tile}>
+            <span className={styles.icon} aria-hidden="true">
+              {icon}
             </span>
-            <h3 className="mt-4 text-sm font-semibold text-fg">{title}</h3>
-            <p className="mt-1 text-sm text-fg-muted">{text}</p>
-          </div>
+            <Heading level={3} className={styles.title}>
+              {title}
+            </Heading>
+            <Text elementType="p" className={styles.text}>
+              {text}
+            </Text>
+          </li>
         ))}
-      </div>
-    </motion.section>
+      </ul>
+    </section>
   );
 }

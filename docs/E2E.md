@@ -33,9 +33,9 @@ zweierlei:
   Testdaten. Angehalten wird nur `Date`, per Init-Skript — nicht mit
   `page.clock`: Playwrights Uhr verschiebt auch `performance.now()`, und damit
   starteten die Animationen der Seite verspätet (Begründung in `e2e/test.ts`).
-- **Keine Animationen.** `reducedMotion: 'reduce'` hält Framer Motion, GSAP und
-  den Typewriter an; auch der Health Score steht dann sofort auf dem Endwert
-  (#103). Der Test wartet trotzdem darauf, bevor er misst.
+- **Keine Animationen.** `reducedMotion: 'reduce'` hält Flows Animationen an
+  (Overlays, Tabs, Spinner). Der Test wartet trotzdem auf den Endwert des
+  Health Score, bevor er misst.
 - **Fehler in der Browser-Konsole** lassen den Test scheitern.
 - Keine Retries: ein Fehlschlag ist ein Befund, kein Zufall.
 

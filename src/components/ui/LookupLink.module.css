@@ -1,0 +1,6 @@
+/* In der Schrift der Umgebung (meist `mono`) und umbrechbar wie ein Hostname. */
+.link {
+  max-width: 100%;
+  font-family: inherit;
+  overflow-wrap: anywhere;
+}

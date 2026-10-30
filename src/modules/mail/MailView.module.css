@@ -1,0 +1,20 @@
+.list {
+  margin: 0;
+  padding-inline-start: var(--size-px--m);
+}
+
+/* Reverse DNS: je IP eine Zeile — Adresse, PTR, Ergebnis; auf dem Handy umbrechend. */
+.reverseList {
+  display: grid;
+  gap: var(--size-px--xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reverse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-px--xxs) var(--size-px--m);
+}

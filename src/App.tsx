@@ -1,5 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { I18nProvider, RouterProvider } from 'react-aria-components';
+import {
+  Button,
+  CounterBadge,
+  Heading,
+  Icon,
+  IconCheck,
+  IconDanger,
+  IconDownload,
+  IconLink,
+  LayoutCard,
+  Link,
+  LoadingSpinner,
+  Tab,
+  Tabs,
+  TabTitle,
+  Text,
+  Tooltip,
+  TooltipTrigger,
+} from '@mittwald/flow-react-components';
+import { IconArrowsLeftRight } from '@tabler/icons-react';
 import { Header } from '@/components/layout/Header';
 import { SearchBar } from '@/modules/search/SearchBar';
 import { ScoreCard } from '@/modules/score/ScoreCard';
@@ -8,15 +28,13 @@ import { RecordsList } from '@/modules/records/RecordsList';
 import { FindingsList } from '@/modules/findings/FindingsList';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
-import { HistoryView } from '@/modules/history/HistoryView';
-import { AboutView } from '@/modules/about/AboutView';
-import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
+import { ContributeBanner } from '@/modules/promo/ContributeBanner';
 import { CheckOverview } from '@/modules/home/CheckOverview';
+import { Faq } from '@/modules/home/Faq';
 import { usePreviousCheck } from '@/modules/changes/usePreviousCheck';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
-import { Tabs, type TabId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary';
 import { PageErrorFallback, SectionErrorFallback } from '@/components/errors/AppErrorFallback';
@@ -27,26 +45,13 @@ import {
   WhoisSkeleton,
   ListSkeleton,
   LegalPageSkeleton,
+  PageSkeleton,
   SinceLastCheckSkeleton,
 } from '@/components/ui/Skeleton';
-import { AlertTriangle, ArrowLeftRight, Check, Download, Link2, Loader2 } from 'lucide-react';
-import { lazy, Suspense } from 'react';
+import styles from './App.module.css';
 
-/*
- * Die drei Hero-Komponenten werden nachgeladen.
- *
- * Alle drei erscheinen ausschließlich auf der Startseite im Idle-Zustand. Wer
- * über einen Permalink (/lookup/<domain>) einsteigt, sieht sie nie — hat ihren
- * Code aber bisher im kritischen Pfad geladen. Zusammen bringen sie GSAP
- * (Core, SplitText-Plugin, ScrollTrigger) mit, das bei aktivem "Bewegung
- * reduzieren" sogar geladen, initialisiert und dann bewusst nicht benutzt wurde.
- *
- * SplitText und TextType rendern ihren Text ohnehin als Kind bzw. progressiv,
- * die Fallbacks entsprechen also dem Endzustand.
- */
-const SplitText = lazy(() => import('@/components/ui/SplitText'));
-const TextType = lazy(() => import('@/components/ui/TextType'));
-const ShinyText = lazy(() => import('@/components/ui/ShinyText'));
+/** Die Bereiche des Reports, in der Reihenfolge der Tabs. */
+export type TabId = 'records' | 'propagation' | 'security' | 'mail' | 'findings' | 'whois' | 'speed' | 'virusscan';
 
 /*
  * Die beiden On-Demand-Tabs: sie holen ihre Daten erst, wenn der Nutzer den
@@ -66,20 +71,31 @@ const CompareView = lazy(() =>
 );
 
 /*
+ * Ebenso die übrigen eigenen Seiten. Mit Flow wiegen sie mehr als vorher:
+ * History nutzt Flows List (TanStack Table, MobX, Luxon), der Available Check
+ * Flows Form (react-hook-form, zod). Im kritischen Pfad kosteten sie jeden
+ * Aufruf rund 100 kB gzip, auch wer nur einen Report öffnet.
+ */
+const HistoryView = lazy(() =>
+  import('@/modules/history/HistoryView').then((m) => ({ default: m.HistoryView }))
+);
+const AboutView = lazy(() => import('@/modules/about/AboutView').then((m) => ({ default: m.AboutView })));
+const AvailabilityView = lazy(() =>
+  import('@/modules/availability/AvailabilityView').then((m) => ({ default: m.AvailabilityView }))
+);
+
+/*
  * Der Mail-Tab: Seine Daten lädt der Report sofort, die Ansicht braucht aber
- * erst der Klick auf den Tab. Mit BIMI und TLS-RPT (#83) wäre index.js sonst
- * über sein Budget gewachsen (47,05 → 48,31 kB gzip bei 48 kB Grenze);
- * nachgeladen sind es 3,6 kB, die niemanden beim ersten Report aufhalten.
- * Vorgeladen wird, sobald die Mail-Daten da sind (siehe App) — dann steht die
- * Ansicht beim Klick schon bereit, statt erst ein Skeleton zu zeigen.
+ * erst der Klick auf den Tab. Nachgeladen kostet sie niemanden etwas beim
+ * ersten Report. Vorgeladen wird, sobald die Mail-Daten da sind (siehe App) —
+ * dann steht die Ansicht beim Klick schon bereit, statt erst ein Skeleton zu
+ * zeigen.
  */
 const loadMailView = () => import('@/modules/mail/MailView');
 const MailView = lazy(() => loadMailView().then((m) => ({ default: m.MailView })));
 
 /*
- * Der Propagation-Tab, aus demselben Grund: Mit der Typauswahl, TTL und den
- * Abfragen weiterer Typen (#131) wäre index.js über sein Budget gewachsen
- * (47,05 → 48,30 kB gzip bei 48 kB Grenze). Vorgeladen wird, sobald die
+ * Der Propagation-Tab, aus demselben Grund. Vorgeladen wird, sobald die
  * Propagation-Daten da sind (siehe App).
  */
 const loadPropagationView = () => import('@/modules/propagation/PropagationView');
@@ -89,26 +105,21 @@ const PropagationView = lazy(() =>
 
 /*
  * „Seit dem letzten Check“ erscheint nur bei einem erneuten Check derselben
- * Domain und erst nach dem Report — Vergleichslogik und Texte (rund 3 kB
- * gzip) müssen den ersten Report nicht aufhalten.
+ * Domain und erst nach dem Report — Vergleichslogik und Texte müssen den
+ * ersten Report nicht aufhalten.
  */
 const SinceLastCheck = lazy(() =>
   import('@/modules/changes/SinceLastCheck').then((m) => ({ default: m.SinceLastCheck }))
 );
 
 /*
- * Bundle-Budget (index.js ≤ 48 kB gzip, scripts/check-bundle-size.mjs): mit
- * „Seit dem letzten Check“ (#79) und dem Kalender (#84) lag index.js bei
- * 48,5 kB. Statt
- * die Grenze anzuheben, kommen zwei Dinge aus dem kritischen Pfad, die den
- * ersten Report nicht aufhalten müssen:
+ * Aus dem kritischen Pfad, weil sie den ersten Report nicht aufhalten müssen:
  *
  * - Der Sicherheits-Tab: SSL und DNSSEC lädt der Report sofort, die Ansicht
  *   braucht erst der Klick auf den Tab. Vorgeladen wird, sobald einer der
  *   beiden Checks fertig ist (siehe App) — dann steht sie beim Klick bereit.
- * - Impressum und Datenschutz: reiner Text auf eigenen Seiten, zusammen rund
- *   5 kB gzip, die bisher jeder Aufruf mitlud. Je Seite ein Chunk; bis er
- *   da ist, hält ein bildschirmhoher Platzhalter den Footer unten.
+ * - Impressum und Datenschutz: reiner Text auf eigenen Seiten. Je Seite ein
+ *   Chunk; bis er da ist, hält ein bildschirmhoher Platzhalter den Footer unten.
  */
 const loadSecurityView = () => import('@/modules/security/SecurityView');
 const SecurityView = lazy(() => loadSecurityView().then((m) => ({ default: m.SecurityView })));
@@ -119,9 +130,9 @@ const DatenschutzView = lazy(() =>
   import('@/modules/datenschutz/DatenschutzView').then((m) => ({ default: m.DatenschutzView }))
 );
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
+import { buildLabel } from '@/lib/buildInfo';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { cn } from '@/lib/cn';
 import { isDnsOnlyName } from '@/lib/dnsName';
 import {
   defaultPropagationType,
@@ -135,7 +146,6 @@ import {
   formatExportTimestamp,
   getDomainFromLookupPath,
   lookupPathFor,
-  normalizeSearchDomain,
   sanitizeFilename,
   STATIC_ROUTES,
   type AppView,
@@ -175,9 +185,10 @@ export default function App() {
   // Erwarteter Wert im Propagation-Tab (#133) — gehört zum gezeigten Typ.
   const [propagationExpected, setPropagationExpected] = useState('');
   const [searchValue, setSearchValue] = useState('');
-  const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const [comparePair, setComparePair] = useState<ComparePair>({ left: '', right: '' });
   const initialPathHandledRef = useRef(false);
+  // Die Tab-Leiste — „Alle Findings“ in der Score-Karte holt sie in Sicht.
+  const tabsRef = useRef<HTMLDivElement>(null);
   // applyPath schließt über aktuellen State. Der popstate-Listener wird nur
   // einmal gebunden, greift die Funktion aber über diese Ref ab, damit er
   // nicht auf einer veralteten Closure sitzt.
@@ -241,21 +252,18 @@ export default function App() {
   const handleSearch = (domain: string) => {
     window.scrollTo({ top: 0, behavior: records || ipQuery ? smoothScroll : 'auto' });
     /*
-     * Eintrag nur anlegen, wenn wir NICHT schon auf einem Lookup-Pfad sind.
+     * Jede Suche nach einer anderen Domain ist ein eigener Eintrag im Verlauf
+     * — auch aus einem Report heraus. Vorher überschrieb sie dort den Eintrag
+     * des Reports, und Zurück führte auf die Startseite statt zum vorigen
+     * Report (#147).
      *
-     * Die Bedingung hing vorher an `records || ipQuery` und war damit
-     * inkonsistent: während ein Lookup lädt, ist `records` bereits null (der
-     * Reducer setzt beim Start auf INITIAL), eine Suche in diesem Moment legte
-     * also einen Eintrag an — nach dem Laden dagegen nicht. Und ein erneuter
-     * Versuch derselben Domain nach einem Fehler erzeugte einen doppelten
-     * Eintrag mit identischer URL.
-     *
-     * Der Pfad ist die verlässlichere Quelle: von einer statischen Route aus
-     * pushState, innerhalb der Lookup-Ansicht übernimmt replaceLookupPath.
+     * Entscheidend ist der Pfad, nicht `records`: während ein Lookup lädt, ist
+     * `records` null. Dieselbe Domain noch einmal (ein erneuter Versuch nach
+     * einem Fehler) legt keinen doppelten Eintrag mit gleicher URL an.
      */
-    if (!window.location.pathname.startsWith('/lookup/')) {
-      const target = domain.trim().toLowerCase();
-      if (target) window.history.pushState(null, '', lookupPathFor(target));
+    const target = domain.trim().toLowerCase();
+    if (target && target !== getDomainFromLookupPath(window.location.pathname)) {
+      window.history.pushState(null, '', lookupPathFor(target));
     }
     runLookup(domain);
   };
@@ -433,36 +441,28 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: smoothScroll });
   };
 
+  /**
+   * Ziel aller internen Links (Flows Link, Navigation, Footer): der
+   * RouterProvider fängt den Klick ab und reicht die Adresse hierher. Mit
+   * Strg/Cmd oder Mittelklick öffnet der Browser den Link wie gewohnt im
+   * neuen Tab — das konnten die Buttons vorher nicht.
+   */
+  const handleRouterNavigate = (href: string) => {
+    navigate(new URL(href, window.location.origin).pathname);
+  };
+
   // Aus der Score-Karte: Tab wechseln und die Tab-Leiste in Sicht holen — auf
   // dem Handy liegt sie sonst unter der Schnellübersicht außer Sicht.
   const handleShowFindings = () => {
     setActiveTab('findings');
-    document.getElementById('tab-findings')?.scrollIntoView({ behavior: smoothScroll, block: 'nearest' });
+    tabsRef.current?.scrollIntoView({ behavior: smoothScroll, block: 'nearest' });
   };
 
-  const handleHome = () => navigate('/');
-  const handleHistory = () => navigate('/history');
-  const handleAbout = () => navigate('/about');
-  const handleAvailability = () => navigate('/availability');
-  const handleImpressum = () => navigate('/impressum');
-  const handleDatenschutz = () => navigate('/datenschutz');
   const handleCompare = (left = '', right = '') => navigate(comparePathFor(left, right));
   const handleOpenReport = (domain: string) => navigate(lookupPathFor(domain));
 
   const handleClearHistory = () => {
     clearLookupHistory();
-  };
-
-  const handleUseDomainInSearch = (domain: string) => {
-    const nextValue = normalizeSearchDomain(domain);
-    if (!nextValue) return;
-    setView('lookup');
-    setSearchValue(nextValue);
-    setSearchFocusSignal((value) => value + 1);
-    if (!records && window.location.pathname !== '/') {
-      window.history.pushState(null, '', '/');
-    }
-    window.scrollTo({ top: 0, behavior: smoothScroll });
   };
 
   // Erstes Laden: Deep-Link/Permalink anwenden.
@@ -556,546 +556,477 @@ export default function App() {
     if (hasPropagationData) loadPropagationView().catch(() => {});
   }, [hasPropagationData]);
 
-  return (
-    <div className="min-h-screen flex flex-col relative z-10">
-      <Header
-        onHome={handleHome}
-        onHistory={handleHistory}
-        onAvailability={handleAvailability}
-        onCompare={() => handleCompare()}
-        onAbout={handleAbout}
-        // Auf Report-Seiten wandert die Suche in die Kopfzeile: der Report
-        // beginnt oben, und die Suche bleibt beim Scrollen erreichbar.
-        search={
-          lookupHasOutput ? (
-            <SearchBar
-              variant="compact"
-              value={searchValue}
-              onValueChange={setSearchValue}
-              focusSignal={searchFocusSignal}
-              onSearch={handleSearch}
-              loading={recordsLoading}
-            />
-          ) : undefined
-        }
-      />
+  const showHome = view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery;
+  const headerView = view === 'lookup' ? undefined : view;
 
-      <main
-        className={cn(
-          'flex-1 min-w-0 px-4 sm:px-6 lg:px-8 [overflow-anchor:none]',
-          view !== 'lookup' || lookupHasOutput ? 'py-6 md:py-8' : 'py-12 md:py-20'
-        )}
+  /*
+   * Inhalt eines Report-Tabs — nur für den aktiven.
+   *
+   * Flows `Tab` hält jedes Panel gemountet und blendet die inaktiven nur aus.
+   * Für den Report hieße das: alle nachgeladenen Ansichten (Mail, Propagation,
+   * Security, Speed, Virus Scan) laden sofort, ihre Effekte laufen ohne
+   * geöffneten Tab, und Texte stünden mehrfach im Dokument. Deshalb rendert
+   * nur der gewählte Tab seinen Inhalt.
+   *
+   * Feinere Boundary je Tab: reißt ein Sektions-Renderer ab, bleiben Score,
+   * Schnellübersicht und die anderen Tabs nutzbar. Der Key auf dem Tab sorgt
+   * dafür, dass ein Tab-Wechsel den Fehlerzustand nicht mitschleppt.
+   */
+  const tabContent = (tab: TabId, content: ReactNode) =>
+    activeTab === tab ? (
+      <ErrorBoundary
+        key={`boundary-${tab}`}
+        fallback={({ error, reset }) => <SectionErrorFallback error={error} reset={reset} />}
       >
-        {view === 'history' && (
-          <HistoryView
-            entries={historyEntries}
-            onRun={handleSearch}
-            onUseDomain={handleUseDomainInSearch}
-            onClear={handleClearHistory}
-          />
-        )}
+        {content}
+      </ErrorBoundary>
+    ) : null;
 
-        {view === 'about' && <AboutView />}
-
-        {view === 'availability' && <AvailabilityView />}
-
-        {(view === 'impressum' || view === 'datenschutz') && (
-          // Nachgeladen (siehe oben). Scheitert der Chunk, bleibt die App
-          // drumherum bedienbar, statt ganz in den Fehler zu fallen.
-          <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
-            <Suspense fallback={<LegalPageSkeleton />}>
-              {view === 'impressum' ? (
-                <ImpressumView onOpenDatenschutz={handleDatenschutz} />
-              ) : (
-                <DatenschutzView onOpenImpressum={handleImpressum} />
-              )}
-            </Suspense>
-          </ErrorBoundary>
-        )}
-
-        {view === 'compare' && (
-          <Suspense
-            fallback={
-              <div className="mx-auto w-full max-w-6xl">
-                <SectionCardsSkeleton count={2} />
-              </div>
-            }
-          >
-            <CompareView
-              left={comparePair.left}
-              right={comparePair.right}
-              onCompare={handleCompare}
-              onOpenReport={handleOpenReport}
-            />
-          </Suspense>
-        )}
-
-        {/* Hero / Search */}
-        {/* Kein mode="wait" — sonst kann ein hängender Exit den nächsten
-            Render blockieren. Da ein Loading-Zwischenstate sowieso die
-            Lücke füllt, gibt es kein Overlap-Risiko. */}
-        <AnimatePresence>
-          {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
-            <motion.div
-              key="hero"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, y: -20, pointerEvents: 'none' }}
-              className="mx-auto mb-10 max-w-5xl text-center"
-            >
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="mb-5"
-              >
-                <Suspense
-                  fallback={
-                    <span className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase text-fg">
-                      diggy
-                    </span>
-                  }
-                >
-                  <ShinyText
-                    text="diggy"
-                    className="font-brand font-bold text-5xl md:text-7xl tracking-tight lowercase dark:invert"
-                    color="#111111"
-                    shineColor="#737373"
-                    speed={2.5}
-                    spread={120}
-                    direction="left"
-                  />
-                </Suspense>
-              </motion.div>
-              <div className="mb-3">
-                <Suspense
-                  fallback={
-                    <h1 className="text-4xl md:text-5xl font-medium tracking-tight">
-                      {t('Was steckt hinter deiner Domain?')}
-                    </h1>
-                  }
-                >
-                  {/* key: bei einem Sprachwechsel neu aufbauen — SplitText
-                      zerlegt den Text nur beim Mount in Zeichen. */}
-                  <SplitText
-                    key={language}
-                    text={t('Was steckt hinter deiner Domain?')}
-                    tag="h1"
-                    className="text-4xl md:text-5xl font-medium tracking-tight"
-                    delay={40}
-                    duration={0.9}
-                    ease="power3.out"
-                    splitType="chars"
-                    from={{ opacity: 0, y: 30 }}
-                    to={{ opacity: 1, y: 0 }}
-                    threshold={0.1}
-                    rootMargin="-50px"
-                    textAlign="center"
-                  />
-                </Suspense>
-              </div>
-              <div className="mb-10 max-w-md mx-auto">
-                <Suspense
-                  fallback={
-                    <p className="text-base text-fg-muted">
-                      {t('DNS, SSL, Mail-Security und Propagation auf einen Blick.')}
-                    </p>
-                  }
-                >
-                  <TextType
-                    key={language}
-                    as="p"
-                    className="text-base text-fg-muted"
-                    text={[
-                      t('DNS, SSL, Mail-Security und Propagation auf einen Blick.'),
-                      t('Ohne Fachchinesisch, mit Empfehlungen.'),
-                      t('Alles, was du wissen musst — in einem Tool.'),
-                    ]}
-                    typingSpeed={45}
-                    pauseDuration={2200}
-                    deletingSpeed={25}
-                    cursorCharacter="▍"
-                    cursorClassName="text-fg"
-                    cursorBlinkDuration={0.6}
-                    initialDelay={500}
-                  />
-                </Suspense>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {view === 'lookup' && !lookupHasOutput && (
-          <SearchBar
-            value={searchValue}
-            onValueChange={setSearchValue}
-            focusSignal={searchFocusSignal}
-            autoFocus={autoFocusSearch}
-            onSearch={handleSearch}
-            loading={recordsLoading}
-            recent={historyEntries}
-          />
-        )}
-
-        {/* Was diggy prüft + Promo für das Schwester-Tool — nur auf der
-            Landing-Page (Idle) */}
-        <AnimatePresence>
-          {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
-            <CheckOverview key="check-overview" />
-          )}
-          {view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery && (
-            <ConverterPromo key="converter-promo" />
-          )}
-        </AnimatePresence>
-
-        {/* Loading State — nur bis die Records da sind. Danach übernimmt der
-            Report mit Skeletons für die noch ladenden Sektionen. role="status",
-            damit der Text angesagt wird: bei „Bewegung reduzieren“ steht der
-            Spinner still und trägt den Ladezustand nicht mehr mit. */}
-        <AnimatePresence>
-          {view === 'lookup' && recordsLoading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              role="status"
-              className="mx-auto mt-10 max-w-2xl text-center"
-            >
-              <Loader2 className="mx-auto size-6 animate-spin text-fg" />
-              <p className="mt-3 text-sm text-fg-muted">
-                {t('Records werden geholt…')}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* IP-Adresse → Reverse-DNS/PTR-Ansicht */}
-        {view === 'lookup' && ipQuery && !recordsLoading && <IpResultView ip={ipQuery} />}
-
-        {/* Error */}
-        {view === 'lookup' && recordsErrored && (
-          <div className="mx-auto mt-10 max-w-2xl">
-            <SectionError error={lookup.recordsError} />
-          </div>
-        )}
-
-        {/* Report */}
-        {showReport && report && (
-          <motion.div
-            key={report.domain + report.timestamp}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.24 }}
-            // Ab xl zwei Spalten: links die Zusammenfassung, die beim Scrollen
-            // mitläuft, rechts die Tabs. Darunter ist die rechte Spalte zu
-            // schmal für die zweispaltigen Tab-Inhalte — dort wird gestapelt.
-            className="mx-auto w-full max-w-[110rem] xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-start xl:gap-8"
-          >
-            <aside
-              aria-label={t('Zusammenfassung')}
-              className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:sticky xl:top-20 xl:grid-cols-1"
-            >
-              {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann.
-                  Export und Permalink standen vorher unter allen Tabs am
-                  Seitenende — wer sie suchte, musste erst durchscrollen. */}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:col-span-2 xl:col-span-1 xl:flex-col xl:items-start xl:justify-start">
-                <div className="min-w-0">
-                  <p className="eyebrow">{t('DNS-Report')}</p>
-                  <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
-                    {report.domain}
-                  </h1>
-                  <p className="mt-1.5 text-sm text-fg-muted">
-                    {t('Geprüft am {date}', { date: formatCheckedAt(report.timestamp) })}
-                  </p>
-                </div>
-                {/* Kurze Beschriftungen, damit die drei Aktionen in der
-                    24rem-Spalte und auf dem Handy ab 360 px in eine Zeile
-                    passen — mit „Export JSON“ und „Permalink kopieren“ brach
-                    „Vergleichen“ um und nahm der Seitenspalte die letzte Luft
-                    bei 1440×900. Die ausführliche Fassung steht im Tooltip;
-                    gap-x-1.5 holt die letzten Pixel für 360 px. */}
-                <div className="flex shrink-0 flex-wrap gap-x-1.5 gap-y-2">
-                  <ActionButton
-                    onClick={handleExportJson}
-                    label={t('JSON herunterladen')}
-                    title={t('Report als JSON herunterladen')}
-                  >
-                    <Download className="size-3.5" />
-                    JSON
-                  </ActionButton>
-                  <ActionButton
-                    onClick={handleCopyPermalink}
-                    title={t('Permalink zu diesem Report kopieren')}
-                  >
-                    {permalinkCopied ? <Check className="size-3.5" /> : <Link2 className="size-3.5" />}
-                    {permalinkCopied ? t('Link kopiert') : t('Link kopieren')}
-                  </ActionButton>
-                  <ActionButton
-                    onClick={() => handleCompare(report.domain)}
-                    title={t('Mit einer zweiten Domain vergleichen')}
-                  >
-                    <ArrowLeftRight className="size-3.5" />
-                    {t('Vergleichen')}
-                  </ActionButton>
-                </div>
-              </div>
-
-              {/* Score + Quick Facts */}
-              {lookup.allSettled ? (
-                <ScoreCard
-                  score={lookup.healthScore}
-                  findings={lookup.findings}
-                  failed={lookup.failed}
-                  onShowFindings={handleShowFindings}
+  return (
+    <I18nProvider locale={language === 'en' ? 'en-US' : 'de-DE'}>
+      <RouterProvider navigate={handleRouterNavigate}>
+        <div className={styles.app}>
+          <Header
+            view={headerView}
+            // Auf Report-Seiten wandert die Suche in die Kopfzeile: der Report
+            // beginnt oben, und die Suche bleibt beim Scrollen erreichbar.
+            search={
+              lookupHasOutput ? (
+                <SearchBar
+                  variant="compact"
+                  value={searchValue}
+                  onValueChange={setSearchValue}
+                  onSearch={handleSearch}
+                  loading={recordsLoading}
                 />
-              ) : (
-                <ScoreCardSkeleton />
-              )}
-              <QuickFacts
-                records={report.records}
-                ssl={ssl}
-                dnssec={dnssec}
-                mail={mail}
-                techStack={techStack}
-                onUseDomain={handleUseDomainInSearch}
-              />
-            </aside>
+              ) : undefined
+            }
+          />
 
-            <div className="mt-8 min-w-0 xl:mt-0">
-              {/* Über den Tabs statt in der Seitenspalte: die soll flach
-                  bleiben (docs/DESIGN.md), und hier ist Platz für die Liste.
-                  Beim ersten Lookup einer Domain gibt es nichts zu zeigen. */}
-              {previousCheck && (
-                // Eigene Boundary: scheitert das Nachladen (alter Chunk nach
-                // einem Deploy) oder der Vergleich an kaputten History-Daten,
-                // fehlt nur diese Karte — nicht der ganze Report.
-                <ErrorBoundary key={report.timestamp} fallback={() => null}>
-                  <Suspense fallback={<SinceLastCheckSkeleton className="mb-6" />}>
-                    <SinceLastCheck
-                      previous={previousCheck}
-                      report={report}
-                      failed={lookup.failed}
-                      settled={lookup.allSettled}
-                      className="mb-6"
+          <main className={styles.main} data-home={showHome ? '' : undefined}>
+            {(view === 'history' || view === 'about' || view === 'availability') && (
+              // Nachgeladen (siehe oben), mit derselben Absicherung wie die
+              // Rechtstexte: scheitert der Chunk, bleibt die App bedienbar.
+              <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
+                <Suspense fallback={<PageSkeleton />}>
+                  {view === 'history' && (
+                    <HistoryView
+                      entries={historyEntries}
+                      onRun={handleSearch}
+                      onClear={handleClearHistory}
                     />
+                  )}
+                  {view === 'about' && <AboutView />}
+                  {view === 'availability' && <AvailabilityView />}
+                </Suspense>
+              </ErrorBoundary>
+            )}
+
+            {(view === 'impressum' || view === 'datenschutz') && (
+              // Nachgeladen (siehe oben). Scheitert der Chunk, bleibt die App
+              // drumherum bedienbar, statt ganz in den Fehler zu fallen.
+              <div className={styles.textPage}>
+                <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
+                  <Suspense fallback={<LegalPageSkeleton />}>
+                    {view === 'impressum' ? <ImpressumView /> : <DatenschutzView />}
                   </Suspense>
                 </ErrorBoundary>
-              )}
-
-              {/* Tabs */}
-              <Tabs
-                active={activeTab}
-                onChange={setActiveTab}
-                tabs={[
-                  { id: 'records', label: 'Records', count: report.records.length },
-                  {
-                    id: 'propagation',
-                    label: 'Propagation',
-                    count: propagation.data?.length || undefined,
-                  },
-                  { id: 'security', label: 'Security' },
-                  { id: 'mail', label: 'Mail', count: mailCount },
-                  {
-                    id: 'findings',
-                    label: 'Findings',
-                    count: lookup.allSettled ? lookup.findings.length : undefined,
-                  },
-                  {
-                    id: 'whois',
-                    label: 'WHOIS',
-                    count: whois.status === 'done' && whois.data ? 1 : undefined,
-                  },
-                  // Bei DNS-Einträgen wie `_dmarc.example.com` hätten Speed und
-                  // Virus Scan (brauchen eine Website) nichts zu zeigen.
-                  ...(dnsOnly
-                    ? []
-                    : [
-                        { id: 'speed' as const, label: 'Speed', count: pageSpeed ? 1 : undefined },
-                        {
-                          id: 'virusscan' as const,
-                          label: 'Virus Scan',
-                          count: virusScan
-                            ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
-                            : undefined,
-                        },
-                      ]),
-                ]}
-              />
-
-              {/* Zweite, feinere Boundary: reißt ein Sektions-Renderer ab,
-                  bleiben Score, QuickFacts und die anderen Tabs nutzbar.
-                  key auf activeTab, damit ein Tab-Wechsel den Fehlerzustand
-                  nicht mitschleppt. */}
-              <ErrorBoundary
-                key={`boundary-${activeTab}`}
-                fallback={({ error, reset }) => (
-                  <div className="mt-6">
-                    <SectionErrorFallback error={error} reset={reset} />
-                  </div>
-                )}
-              >
-              <div className="mt-6">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    role="tabpanel"
-                    id={`panel-${activeTab}`}
-                    aria-labelledby={`tab-${activeTab}`}
-                    tabIndex={0}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {/* key pro Domain: RecordsList und PropagationView halten
-                        lokalen Filter-/Typ-State. Ohne Remount blieb der über
-                        einen Domain-Wechsel hinweg stehen — bei
-                        PropagationView führte das zu einer scheinbar leeren
-                        Ansicht, wenn die neue Domain den vorher gewählten
-                        Record-Typ nicht hat. */}
-                    {activeTab === 'records' && (
-                      <RecordsList
-                        key={report.domain}
-                        records={report.records}
-                        onUseDomain={handleUseDomainInSearch}
-                      />
-                    )}
-                    {activeTab === 'propagation' &&
-                      (propagation.status === 'loading' ? (
-                        <PropagationSkeleton />
-                      ) : propagation.status === 'error' ? (
-                        <SectionError error={propagation.error} />
-                      ) : propagation.data && propagation.data.length > 0 ? (
-                        <Suspense fallback={<PropagationSkeleton />}>
-                          <PropagationView
-                            key={report.domain}
-                            domain={report.domain}
-                            results={propagation.data}
-                            types={propagationTypes(report.domain)}
-                            type={shownPropagationType ?? propagationTypes(report.domain)[0]}
-                            onTypeChange={handlePropagationType}
-                            expected={propagationExpected}
-                            onExpectedChange={setPropagationExpected}
-                          />
-                        </Suspense>
-                      ) : (
-                        <Placeholder
-                          title={t('Multi-Resolver-Propagation')}
-                          subtitle={t('Keine Resolver-Antworten — Lookup eventuell fehlgeschlagen.')}
-                        />
-                      ))}
-                    {activeTab === 'findings' &&
-                      (lookup.allSettled ? (
-                        <FindingsList findings={lookup.findings} />
-                      ) : (
-                        <ListSkeleton rows={5} />
-                      ))}
-                    {activeTab === 'security' &&
-                      (securityLoading ? (
-                        <SectionCardsSkeleton count={2} />
-                      ) : (
-                        <Suspense fallback={<SectionCardsSkeleton count={2} />}>
-                          <SecurityView
-                            domain={report.domain}
-                            ssl={ssl}
-                            sslApplicable={!dnsOnly}
-                            dnssec={dnssec}
-                          />
-                        </Suspense>
-                      ))}
-                    {activeTab === 'mail' &&
-                      (mail.status === 'loading' ? (
-                        <SectionCardsSkeleton count={4} />
-                      ) : mail.status === 'error' ? (
-                        <SectionError error={mail.error} />
-                      ) : mailData ? (
-                        <Suspense fallback={<SectionCardsSkeleton count={4} />}>
-                          <MailView mail={mailData} />
-                        </Suspense>
-                      ) : (
-                        <SectionCardsSkeleton count={4} />
-                      ))}
-                    {activeTab === 'whois' &&
-                      (whois.status === 'loading' ? (
-                        <WhoisSkeleton />
-                      ) : whois.status === 'error' ? (
-                        <SectionError error={whois.error} />
-                      ) : (
-                        <WhoisView
-                          domain={report.domain}
-                          whois={whois.data ?? undefined}
-                          onUseDomain={handleUseDomainInSearch}
-                        />
-                      ))}
-                    {activeTab === 'speed' && (
-                      <Suspense fallback={<SectionCardsSkeleton count={2} />}>
-                      <PageSpeedView
-                        data={pageSpeed}
-                        loading={pageSpeedLoading}
-                        error={
-                          pageSpeedError == null
-                            ? null
-                            : errorText(pageSpeedError, 'PageSpeed fehlgeschlagen')
-                        }
-                        strategy={pageSpeedStrategy}
-                        onStrategyChange={setPageSpeedStrategy}
-                        onRun={handleRunPageSpeed}
-                      />
-                      </Suspense>
-                    )}
-                    {activeTab === 'virusscan' && (
-                      <Suspense fallback={<SectionCardsSkeleton count={2} />}>
-                      <VirusScanView
-                        data={virusScan}
-                        loading={virusScanLoading}
-                        error={
-                          virusScanError == null
-                            ? null
-                            : errorText(virusScanError, 'VirusTotal-Scan fehlgeschlagen')
-                        }
-                        onRun={handleRunVirusScan}
-                      />
-                      </Suspense>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
               </div>
-              </ErrorBoundary>
-            </div>
-          </motion.div>
-        )}
-      </main>
+            )}
 
-      <footer className="mt-16 border-t border-line-subtle px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-3 text-xs text-fg-subtle sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>diggy · DNS made friendly</span>
-            <span className="hidden text-line sm:inline" aria-hidden>
-              ·
-            </span>
-            <button
-              type="button"
-              onClick={handleImpressum}
-              className="transition-colors hover:text-fg"
-            >
-              {t('Impressum')}
-            </button>
-            <span className="hidden text-line sm:inline" aria-hidden>
-              ·
-            </span>
-            <button
-              type="button"
-              onClick={handleDatenschutz}
-              className="transition-colors hover:text-fg"
-            >
-              {t('Datenschutz')}
-            </button>
-          </div>
-          <span>v0.3.0</span>
+            {view === 'compare' && (
+              <Suspense
+                fallback={
+                  <LayoutCard>
+                    <SectionCardsSkeleton count={2} />
+                  </LayoutCard>
+                }
+              >
+                <CompareView
+                  left={comparePair.left}
+                  right={comparePair.right}
+                  onCompare={handleCompare}
+                  onOpenReport={handleOpenReport}
+                />
+              </Suspense>
+            )}
+
+            {/* Startseite: Wortmarke, Frage, große Suche, darunter Beispiele
+                oder zuletzt Geprüftes, „Was diggy prüft“ und der Converter. */}
+            {showHome && (
+              <div className={styles.hero}>
+                <span className={styles.heroWordmark} aria-hidden="true">
+                  diggy
+                </span>
+                <Heading level={1} size="xl" wrap="balance" className={styles.heroTitle}>
+                  {t('Was steckt hinter deiner Domain?')}
+                </Heading>
+                <Text elementType="p" align="center" wrap="balance">
+                  {t('DNS, SSL, Mail-Security und Propagation auf einen Blick.')}{' '}
+                  {t('Ohne Fachchinesisch, mit Empfehlungen.')}
+                </Text>
+              </div>
+            )}
+
+            {view === 'lookup' && !lookupHasOutput && (
+              <SearchBar
+                value={searchValue}
+                onValueChange={setSearchValue}
+                autoFocus={autoFocusSearch}
+                onSearch={handleSearch}
+                loading={recordsLoading}
+                recent={historyEntries}
+              />
+            )}
+
+            {showHome && (
+              <div className={styles.homeSections}>
+                <CheckOverview />
+                {/* Zwei Kacheln nebeneinander, wie die mittwald-Promo-Kacheln. */}
+                <div className={styles.promos}>
+                  <ContributeBanner />
+                  <ConverterPromo />
+                </div>
+                <Faq />
+              </div>
+            )}
+
+            {/* Ladezustand — nur bis die Records da sind. Danach übernimmt der
+                Report mit Skeletons für die noch ladenden Sektionen.
+                role="status", damit der Text angesagt wird. */}
+            {view === 'lookup' && recordsLoading && (
+              <div role="status" className={styles.loading}>
+                <LoadingSpinner size="l" />
+                <Text>{t('Records werden geholt…')}</Text>
+              </div>
+            )}
+
+            {/* IP-Adresse → Reverse-DNS/PTR-Ansicht */}
+            {view === 'lookup' && ipQuery && !recordsLoading && <IpResultView ip={ipQuery} />}
+
+            {/* Fehler */}
+            {view === 'lookup' && recordsErrored && (
+              <div className={styles.narrow}>
+                <LayoutCard>
+                  <SectionError error={lookup.recordsError} />
+                </LayoutCard>
+              </div>
+            )}
+
+            {/* Report */}
+            {showReport && report && (
+              <div key={report.domain + report.timestamp} className={styles.report}>
+                {/* Ab 1440 px zwei Spalten: links die Zusammenfassung, die beim
+                    Scrollen mitläuft, rechts die Tabs. Darunter ist die rechte
+                    Spalte zu schmal für die Tab-Leiste — dort wird gestapelt
+                    (App.module.css). */}
+                <aside aria-label={t('Zusammenfassung')} className={styles.summary}>
+                  {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann. */}
+                  <div className={styles.reportHead}>
+                    <div className={styles.reportTitle}>
+                      <Text className="eyebrow">{t('DNS-Report')}</Text>
+                      <Heading level={1} className={`mono ${styles.domain}`}>
+                        {report.domain}
+                      </Heading>
+                      <Text>
+                        <small>{t('Geprüft am {date}', { date: formatCheckedAt(report.timestamp) })}</small>
+                      </Text>
+                    </div>
+                    {/* Kurze Beschriftungen, damit die drei Aktionen in der
+                        Seitenspalte und auf dem Handy in eine Zeile passen. Die
+                        ausführliche Fassung steht ergänzend im Tooltip. */}
+                    <div className={styles.reportActions}>
+                      <TooltipTrigger delay="long">
+                        <Button
+                          size="s"
+                          variant="soft"
+                          color="secondary"
+                          onPress={handleExportJson}
+                          aria-label={t('JSON herunterladen')}
+                        >
+                          <IconDownload />
+                          <Text>JSON</Text>
+                        </Button>
+                        <Tooltip>{t('Report als JSON herunterladen')}</Tooltip>
+                      </TooltipTrigger>
+                      <TooltipTrigger delay="long">
+                        <Button size="s" variant="soft" color="secondary" onPress={handleCopyPermalink}>
+                          {permalinkCopied ? <IconCheck /> : <IconLink />}
+                          <Text>{permalinkCopied ? t('Link kopiert') : t('Link kopieren')}</Text>
+                        </Button>
+                        <Tooltip>{t('Permalink zu diesem Report kopieren')}</Tooltip>
+                      </TooltipTrigger>
+                      <TooltipTrigger delay="long">
+                        <Button
+                          size="s"
+                          variant="soft"
+                          color="secondary"
+                          onPress={() => handleCompare(report.domain)}
+                        >
+                          <Icon>
+                            <IconArrowsLeftRight />
+                          </Icon>
+                          <Text>{t('Vergleichen')}</Text>
+                        </Button>
+                        <Tooltip>{t('Mit einer zweiten Domain vergleichen')}</Tooltip>
+                      </TooltipTrigger>
+                    </div>
+                  </div>
+
+                  {/* Score + Schnellübersicht */}
+                  {lookup.allSettled ? (
+                    <ScoreCard
+                      score={lookup.healthScore}
+                      findings={lookup.findings}
+                      failed={lookup.failed}
+                      onShowFindings={handleShowFindings}
+                    />
+                  ) : (
+                    <ScoreCardSkeleton />
+                  )}
+                  <QuickFacts
+                    records={report.records}
+                    ssl={ssl}
+                    dnssec={dnssec}
+                    mail={mail}
+                    techStack={techStack}
+                  />
+                </aside>
+
+                <div className={styles.details}>
+                  {/* Über den Tabs statt in der Seitenspalte: die soll flach
+                      bleiben (docs/DESIGN.md), und hier ist Platz für die Liste.
+                      Beim ersten Lookup einer Domain gibt es nichts zu zeigen. */}
+                  {previousCheck && (
+                    // Eigene Boundary: scheitert das Nachladen (alter Chunk nach
+                    // einem Deploy) oder der Vergleich an kaputten History-Daten,
+                    // fehlt nur diese Karte — nicht der ganze Report.
+                    <ErrorBoundary key={report.timestamp} fallback={() => null}>
+                      <Suspense fallback={<SinceLastCheckSkeleton />}>
+                        <SinceLastCheck
+                          previous={previousCheck}
+                          report={report}
+                          failed={lookup.failed}
+                          settled={lookup.allSettled}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
+                  )}
+
+                  <div ref={tabsRef} className={styles.tabsAnchor}>
+                    <LayoutCard>
+                      <Tabs
+                        aria-label={t('Report-Bereiche')}
+                        selectedKey={activeTab}
+                        onSelectionChange={(key) => setActiveTab(key as TabId)}
+                      >
+                        <Tab id="records">
+                          <TabTitle>
+                            Records
+                            <TabCount count={report.records.length} />
+                          </TabTitle>
+                          {tabContent(
+                            'records',
+                            // key pro Domain: RecordsList und PropagationView halten
+                            // lokalen Filter-/Typ-State. Ohne Remount blieb der über
+                            // einen Domain-Wechsel hinweg stehen.
+                            <RecordsList
+                              key={report.domain}
+                              records={report.records}
+                            />
+                          )}
+                        </Tab>
+                        <Tab id="propagation">
+                          <TabTitle>
+                            Propagation
+                            <TabCount count={propagation.data?.length || undefined} />
+                          </TabTitle>
+                          {tabContent(
+                            'propagation',
+                            propagation.status === 'loading' ? (
+                              <PropagationSkeleton />
+                            ) : propagation.status === 'error' ? (
+                              <SectionError error={propagation.error} />
+                            ) : propagation.data && propagation.data.length > 0 ? (
+                              <Suspense fallback={<PropagationSkeleton />}>
+                                <PropagationView
+                                  key={report.domain}
+                                  domain={report.domain}
+                                  results={propagation.data}
+                                  types={propagationTypes(report.domain)}
+                                  type={shownPropagationType ?? propagationTypes(report.domain)[0]}
+                                  onTypeChange={handlePropagationType}
+                                  expected={propagationExpected}
+                                  onExpectedChange={setPropagationExpected}
+                                />
+                              </Suspense>
+                            ) : (
+                              <Placeholder
+                                title={t('Multi-Resolver-Propagation')}
+                                subtitle={t('Keine Resolver-Antworten — Lookup eventuell fehlgeschlagen.')}
+                              />
+                            )
+                          )}
+                        </Tab>
+                        <Tab id="security">
+                          <TabTitle>Security</TabTitle>
+                          {tabContent(
+                            'security',
+                            securityLoading ? (
+                              <SectionCardsSkeleton count={2} />
+                            ) : (
+                              <Suspense fallback={<SectionCardsSkeleton count={2} />}>
+                                <SecurityView
+                                  domain={report.domain}
+                                  ssl={ssl}
+                                  sslApplicable={!dnsOnly}
+                                  dnssec={dnssec}
+                                />
+                              </Suspense>
+                            )
+                          )}
+                        </Tab>
+                        <Tab id="mail">
+                          <TabTitle>
+                            Mail
+                            <TabCount count={mailCount} />
+                          </TabTitle>
+                          {tabContent(
+                            'mail',
+                            mail.status === 'loading' ? (
+                              <SectionCardsSkeleton count={4} />
+                            ) : mail.status === 'error' ? (
+                              <SectionError error={mail.error} />
+                            ) : mailData ? (
+                              <Suspense fallback={<SectionCardsSkeleton count={4} />}>
+                                <MailView mail={mailData} />
+                              </Suspense>
+                            ) : (
+                              <SectionCardsSkeleton count={4} />
+                            )
+                          )}
+                        </Tab>
+                        <Tab id="findings">
+                          <TabTitle>
+                            Findings
+                            <TabCount count={lookup.allSettled ? lookup.findings.length : undefined} />
+                          </TabTitle>
+                          {tabContent(
+                            'findings',
+                            lookup.allSettled ? <FindingsList findings={lookup.findings} /> : <ListSkeleton rows={5} />
+                          )}
+                        </Tab>
+                        <Tab id="whois">
+                          <TabTitle>
+                            WHOIS
+                            <TabCount count={whois.status === 'done' && whois.data ? 1 : undefined} />
+                          </TabTitle>
+                          {tabContent(
+                            'whois',
+                            whois.status === 'loading' ? (
+                              <WhoisSkeleton />
+                            ) : whois.status === 'error' ? (
+                              <SectionError error={whois.error} />
+                            ) : (
+                              <WhoisView
+                                domain={report.domain}
+                                whois={whois.data ?? undefined}
+                              />
+                            )
+                          )}
+                        </Tab>
+                        {/* Bei DNS-Einträgen wie `_dmarc.example.com` hätten Speed und
+                            Virus Scan (brauchen eine Website) nichts zu zeigen. */}
+                        {!dnsOnly && (
+                          <Tab id="speed">
+                            <TabTitle>
+                              Speed
+                              <TabCount count={pageSpeed ? 1 : undefined} />
+                            </TabTitle>
+                            {tabContent(
+                              'speed',
+                              <Suspense fallback={<SectionCardsSkeleton count={2} />}>
+                                <PageSpeedView
+                                  data={pageSpeed}
+                                  loading={pageSpeedLoading}
+                                  error={
+                                    pageSpeedError == null
+                                      ? null
+                                      : errorText(pageSpeedError, 'PageSpeed fehlgeschlagen')
+                                  }
+                                  strategy={pageSpeedStrategy}
+                                  onStrategyChange={setPageSpeedStrategy}
+                                  onRun={handleRunPageSpeed}
+                                />
+                              </Suspense>
+                            )}
+                          </Tab>
+                        )}
+                        {!dnsOnly && (
+                          <Tab id="virusscan">
+                            <TabTitle>
+                              Virus Scan
+                              <TabCount
+                                count={
+                                  virusScan
+                                    ? (virusScan.stats.malicious + virusScan.stats.suspicious) || undefined
+                                    : undefined
+                                }
+                              />
+                            </TabTitle>
+                            {tabContent(
+                              'virusscan',
+                              <Suspense fallback={<SectionCardsSkeleton count={2} />}>
+                                <VirusScanView
+                                  data={virusScan}
+                                  loading={virusScanLoading}
+                                  error={
+                                    virusScanError == null
+                                      ? null
+                                      : errorText(virusScanError, 'VirusTotal-Scan fehlgeschlagen')
+                                  }
+                                  onRun={handleRunVirusScan}
+                                />
+                              </Suspense>
+                            )}
+                          </Tab>
+                        )}
+                      </Tabs>
+                    </LayoutCard>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+
+          <footer className={styles.footer}>
+            <Text>
+              <small>diggy · DNS made friendly</small>
+            </Text>
+            {/* Unterstrichen wie Textlinks (Flow „inline“): Rechtliches soll
+                auffindbar sein, aber nicht wie die Navigation oben wirken. */}
+            <nav aria-label={t('Rechtliches')} className={styles.footerLinks}>
+              <Link href="/impressum" size="s" color="dark" inline>
+                {t('Impressum')}
+              </Link>
+              <Link href="/datenschutz" size="s" color="dark" inline>
+                {t('Datenschutz')}
+              </Link>
+            </nav>
+            <Text>
+              <small>{buildLabel()}</small>
+            </Text>
+          </footer>
         </div>
-      </footer>
-    </div>
+      </RouterProvider>
+    </I18nProvider>
   );
+}
+
+/** Anzahl hinter dem Tab-Titel — nur, wenn es etwas zu zählen gibt. */
+function TabCount({ count }: { count?: number }) {
+  if (count === undefined) return null;
+  return <CounterBadge count={count} />;
 }
 
 function Placeholder({ title, subtitle }: { title: string; subtitle: string }) {
@@ -1105,38 +1036,9 @@ function Placeholder({ title, subtitle }: { title: string; subtitle: string }) {
 function SectionError({ error }: { error?: unknown }) {
   useI18n();
   return (
-    <EmptyState tone="danger" icon={<AlertTriangle className="size-5" />}>
+    <EmptyState tone="danger" icon={<IconDanger />}>
       {errorText(error, 'Dieser Check ist fehlgeschlagen.')}
     </EmptyState>
-  );
-}
-
-/**
- * `onClick` ist bewusst verpflichtend: ein Button ohne Handler ist für Nutzer
- * nicht von einem kaputten unterscheidbar. So fängt der Compiler das ab.
- */
-function ActionButton({
-  children,
-  onClick,
-  label,
-  title,
-}: {
-  children: React.ReactNode;
-  onClick: () => void | Promise<void>;
-  /** Zugänglicher Name, wenn die sichtbare Beschriftung allein zu knapp ist. */
-  label?: string;
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={title}
-      className="btn btn-secondary btn-sm"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -1173,4 +1075,3 @@ function replaceLookupPath(domain: string): void {
   if (window.location.pathname === nextPath) return;
   window.history.replaceState(null, '', nextPath);
 }
-

@@ -12,7 +12,7 @@ import { RecordsList } from './RecordsList';
 
 function row(value: string): HTMLElement {
   const cell = screen.getByText(value);
-  const element = cell.closest<HTMLElement>('.grid');
+  const element = cell.closest<HTMLElement>('[role="row"]');
   if (!element) throw new Error(`Keine Zeile für ${value}`);
   return element;
 }
@@ -72,7 +72,8 @@ describe('RecordsList — Erklärungen', () => {
   it('zeigt das „?“ auch, wenn ein Filter aktiv ist', async () => {
     const user = userEvent.setup();
     render(<RecordsList records={RECORDS} />);
-    await user.click(screen.getByRole('button', { name: /^NS/ }));
+    await user.click(screen.getByRole('tab', { name: /^NS/ }));
+    expect(screen.getByRole('tab', { name: /^NS/ })).toHaveAttribute('aria-selected', 'true');
     expect(infoLabels()).toEqual(['Was bedeutet NS?']);
   });
 
@@ -151,7 +152,28 @@ describe('RecordsList — Null-MX', () => {
   it('behält das Badge, wenn der MX-Filter aktiv ist', async () => {
     const user = userEvent.setup();
     render(<RecordsList records={[NULL_MX, ...RECORDS.filter((r) => r.type !== 'MX')]} />);
-    await user.click(screen.getByRole('button', { name: /^MX/ }));
+    await user.click(screen.getByRole('tab', { name: /^MX/ }));
     expect(nullMxBadge()).toBeInTheDocument();
+  });
+});
+
+/** Flow hängt Link-Namen ein U+200D an — daher der Vergleich über den Anfang. */
+const lookupLink = (name: string) => screen.getByRole('link', { name: new RegExp(`^${name.replace(/\./g, '\\.')}`) });
+
+describe('RecordsList — Hostnamen als Links (#147)', () => {
+  it('verlinkt Nameserver, Mailserver und CNAME-Ziele auf ihren eigenen Report', () => {
+    render(
+      <RecordsList
+        records={[...RECORDS, { type: 'CNAME', name: 'www.example.com', value: 'edge.example.net', ttl: 0 }]}
+      />
+    );
+    expect(lookupLink('ns2.example.com')).toHaveAttribute('href', '/lookup/ns2.example.com');
+    expect(lookupLink('mx1.example.com')).toHaveAttribute('href', '/lookup/mx1.example.com');
+    expect(lookupLink('edge.example.net')).toHaveAttribute('href', '/lookup/edge.example.net');
+  });
+
+  it('verlinkt Textwerte und den Null-MX nicht', () => {
+    render(<RecordsList records={[NULL_MX, { type: 'TXT', name: 'example.com', value: 'v=spf1 -all', ttl: 0 }]} />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

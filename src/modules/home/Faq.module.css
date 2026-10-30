@@ -1,0 +1,33 @@
+.faq {
+  display: grid;
+  gap: var(--size-px--l);
+}
+
+/* Breit: Kopf links, Fragen rechts — Antworten über 72rem wären zu lange Zeilen. */
+@media (min-width: 64rem) {
+  .faq {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: var(--size-px--xl);
+  }
+}
+
+/* Dieselbe Körnung wie die Bereichs-Kacheln, ohne Licht: ruhig zum Lesen. */
+.card {
+  border-radius: var(--size-px--l);
+  background:
+    var(--texture--grain),
+    linear-gradient(160deg, var(--neutral--color--100), var(--neutral--color--200));
+  background-blend-mode: overlay, normal;
+}
+
+.answer {
+  max-width: 65ch;
+}
+
+/*
+ * Links im Fließtext umbrechen wie Text. Flow setzt sie als inline-block —
+ * dann rutschte der Punkt dahinter allein in eine neue Zeile.
+ */
+.textLink {
+  display: inline;
+}

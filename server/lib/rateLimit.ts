@@ -165,7 +165,7 @@ export function rateLimit(options: RateLimitOptions) {
 /**
  * Begrenzt, wie viele Requests einen Endpoint GLEICHZEITIG durchlaufen.
  *
- * Nötig zusätzlich zum Rate-Limit, weil ein PageSpeed-Run bis zu 45 s dauert:
+ * Nötig zusätzlich zum Rate-Limit, weil ein PageSpeed-Run bis zu 90 s dauert:
  * wenige gleichzeitige Requests von verschiedenen IPs würden das Rate-Limit
  * nie reißen, aber den Prozess trotzdem mit offenen Verbindungen belegen.
  *

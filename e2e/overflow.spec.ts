@@ -43,10 +43,21 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       await expectNoHorizontalOverflow(page, 'Startseite');
     });
 
+    test('Startseite mit offenem Einstellungsmenü', async ({ page }) => {
+      await openHome(page);
+      await page.getByRole('button', { name: 'Einstellungen' }).click();
+      await page.getByRole('menuitemradio', { name: 'Dark' }).waitFor();
+      await settle(page);
+      await expectNoHorizontalOverflow(page, 'Einstellungsmenü');
+    });
+
+    // Auf dem Handy liegt die Navigation hinter dem Burger im OffCanvas.
     test('Startseite mit offenem Menü', async ({ page }) => {
       await openHome(page);
-      await page.getByRole('button', { name: 'Menü öffnen' }).click();
-      await page.getByRole('button', { name: 'History' }).waitFor();
+      const burger = page.getByRole('button', { name: 'Menü öffnen' });
+      test.skip(!(await burger.isVisible()), 'Navigation steht in der Kopfzeile.');
+      await burger.click();
+      await page.getByRole('dialog').getByRole('link', { name: /^History/ }).waitFor();
       await settle(page);
       await expectNoHorizontalOverflow(page, 'Menü');
     });
@@ -65,7 +76,7 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       // Die History füllt sich wie im echten Betrieb: erst nachschlagen.
       for (const domain of DOMAINS) await openReport(page, domain);
       await page.goto('/history');
-      await page.getByRole('button', { name: 'github.com', exact: true }).waitFor();
+      await page.getByText('github.com', { exact: true }).first().waitFor();
       await settle(page);
       await expectNoHorizontalOverflow(page, 'History');
     });

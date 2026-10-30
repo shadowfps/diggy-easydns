@@ -67,7 +67,7 @@ Kostenlos, ohne Anmeldung, ohne Tracking — und Open Source.
 | Bereich | Was du erfährst |
 |---|---|
 | **Records** | A, AAAA, MX, NS, TXT, CAA, SOA und CNAME mit echter TTL — und hinter jeder IP der Netzbetreiber. |
-| **Mail-Schutz** | SPF inklusive Zählung der DNS-Lookups (RFC 7208), DKIM über 18 gängige Selektoren, DMARC mit der tatsächlich wirksamen Policy (RFC 7489), MTA-STS, TLS-RPT und BIMI. Domains ohne Mailempfang (Null-MX, RFC 7505) werden erkannt. |
+| **Mail-Schutz** | SPF inklusive Zählung der DNS-Lookups (RFC 7208), DKIM über 18 gängige Selektoren, DMARC mit der tatsächlich wirksamen Policy (RFC 7489), MTA-STS, TLS-RPT, BIMI und Reverse DNS der Mailserver (FCrDNS). Domains ohne Mailempfang (Null-MX, RFC 7505) werden erkannt. |
 | **SSL / TLS** | Zertifikat, Aussteller, Restlaufzeit und Kette — bevor Besucher eine Warnung sehen. |
 | **DNSSEC** | Ist die Zone signiert und mit welchem Algorithmus — und bestätigen validierende Resolver die Signatur? |
 | **Propagation** | Neun öffentliche Resolver ohne Filter (Cloudflare, Google, Quad9, OpenDNS, AdGuard, NextDNS, DNS.SB, Control D, DNS4EU) im Vergleich — die Caches verschiedener Anbieter, gefragt aus Deutschland. Für Einträge wie `_dmarc` oder einen DKIM-Schlüssel auch per TXT und CNAME. |
@@ -161,8 +161,9 @@ Die Details stehen in den
 
 ## Unter der Haube
 
-diggy ist eine TypeScript-Anwendung aus einem Guss: React 19 und Tailwind CSS 4
-im Browser, Express 5 auf Node.js 24 im Backend, DNS-Abfragen über das System
+diggy ist eine TypeScript-Anwendung aus einem Guss: React 19 mit dem
+Designsystem [mittwald Flow](https://flow.mittwald.de) im Browser, Express 5 auf
+Node.js 24 im Backend, DNS-Abfragen über das System
 und über DNS-over-HTTPS. Jede Änderung durchläuft Unit- und Integrationstests
 sowie Browser-Tests mit Pixelvergleich in hellem und dunklem Theme, auf Desktop
 und Mobil.

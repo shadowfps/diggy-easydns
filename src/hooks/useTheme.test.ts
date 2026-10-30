@@ -40,11 +40,11 @@ function installColorScheme(initialDark: boolean) {
   };
 }
 
-const isDark = () => document.documentElement.classList.contains('dark');
+const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
 
 function reset() {
   window.localStorage.removeItem('diggy-theme');
-  document.documentElement.classList.remove('dark');
+  document.documentElement.removeAttribute('data-theme');
 }
 
 beforeEach(reset);

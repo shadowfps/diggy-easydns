@@ -1,0 +1,175 @@
+name: Deploy dev
+
+# Testumgebung dev.diggydns.cloud: jeder Push auf den Branch `dev` wird
+# geprüft, als Image gebaut und in den eigenen Dev-Stack ausgerollt. Prod
+# (diggydns.cloud) bleibt davon unberührt — dorthin geht weiter nur `main`
+# über container.yml.
+#
+# Ablauf: Branch auf `dev` schieben (`git push origin <branch>:dev`), testen
+# lassen, dann wie gewohnt per PR nach `main`.
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# Nur der letzte Stand zählt — ein neuer Push bricht einen laufenden Deploy ab.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  # Eigener Stack im selben mStudio-Projekt (p-nmi5ji). `mw stack deploy`
+  # gleicht immer den ganzen Stack ab — getrennt kann ein Dev-Deploy Prod
+  # nicht anfassen.
+  MITTWALD_DEV_STACK_ID: ec47560f-2662-4d57-800b-3bd4e039b29d
+  MITTWALD_CLI_VERSION: v1.20.2
+  PUBLIC_ORIGIN: https://dev.diggydns.cloud
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.22.1
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Lint, Übersetzung, Typecheck, Tests, Build, Smoke-Test, Bundle-Budget —
+      # wie im PR. Die Browser-Tests (e2e) laufen vor dem Push lokal und im PR.
+      - name: Verify
+        run: npm run verify
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Nie `latest` — das bleibt dem Prod-Image von main vorbehalten.
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=dev
+            type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=Diggy (dev)
+            org.opencontainers.image.description=DNS, SSL and domain audit web application — test environment
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Für die Versionsanzeige (Footer, /api/health) — im Build-Kontext fehlt .git.
+          build-args: |
+            DIGGY_COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: https://dev.diggydns.cloud
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install mittwald CLI
+        run: |
+          curl -fsSL -o mw.tgz "https://github.com/mittwald/cli/releases/download/${MITTWALD_CLI_VERSION}/mw-${MITTWALD_CLI_VERSION}-9b7de74-linux-x64.tar.gz"
+          tar -xzf mw.tgz
+          echo "$PWD/mw/bin" >> "$GITHUB_PATH"
+
+      - name: Deploy stack to Mittwald (dev)
+        env:
+          MITTWALD_API_TOKEN: ${{ secrets.MITTWALD_API_TOKEN }}
+          DIGGY_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.publish.outputs.digest }}
+          SITE_PASSWORD: ${{ secrets.DEV_SITE_PASSWORD }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          CONTACT_TO: ${{ secrets.CONTACT_TO }}
+          CONTACT_FROM: ${{ secrets.CONTACT_FROM }}
+          CONTACT_FORM_SECRET: ${{ secrets.CONTACT_FORM_SECRET }}
+          PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
+          VIRUS_TOTAL_API_KEY: ${{ secrets.VIRUS_TOTAL_API_KEY }}
+        run: |
+          # Wie der Prod-Deploy (container.yml): Image per Digest, Werte aus
+          # GitHub-Secrets, fehlt ein Kern-Secret, bricht der Deploy ab.
+          #
+          # Dazu SITE_PASSWORD: Ohne Passwort stünde die Testumgebung offen im
+          # Netz — dann lieber gar nicht ausrollen.
+          : "${DIGGY_IMAGE:?fehlt — Digest aus dem publish-Job kam nicht an}"
+          : "${SITE_PASSWORD:?fehlt — GitHub-Secret DEV_SITE_PASSWORD setzen, sonst wäre dev offen}"
+          : "${SMTP_HOST:?fehlt — GitHub-Secret setzen, sonst wird die Stack-Env geleert}"
+          : "${SMTP_USER:?fehlt — GitHub-Secret setzen}"
+          : "${SMTP_PASS:?fehlt — GitHub-Secret setzen}"
+          : "${CONTACT_TO:?fehlt — GitHub-Secret setzen}"
+          : "${CONTACT_FROM:?fehlt — GitHub-Secret setzen}"
+          : "${CONTACT_FORM_SECRET:?fehlt — GitHub-Secret setzen}"
+
+          umask 077
+          trap 'rm -f runtime.env' EXIT
+          {
+            echo "SMTP_HOST=${SMTP_HOST}"
+            echo "SMTP_PORT=${SMTP_PORT}"
+            echo "SMTP_SECURE=${SMTP_SECURE}"
+            echo "SMTP_USER=${SMTP_USER}"
+            echo "SMTP_PASS=${SMTP_PASS}"
+            echo "CONTACT_TO=${CONTACT_TO}"
+            echo "CONTACT_FROM=${CONTACT_FROM}"
+            echo "CONTACT_FORM_SECRET=${CONTACT_FORM_SECRET}"
+            echo "PUBLIC_ORIGIN=${PUBLIC_ORIGIN}"
+            echo "DIGGY_IMAGE=${DIGGY_IMAGE}"
+            echo "PAGESPEED_API_KEY=${PAGESPEED_API_KEY}"
+            echo "VIRUS_TOTAL_API_KEY=${VIRUS_TOTAL_API_KEY}"
+            echo "SITE_PASSWORD=${SITE_PASSWORD}"
+            echo "CONTACT_SUBJECT_PREFIX=[dev]"
+          } > runtime.env
+
+          mw stack deploy \
+            --token "$MITTWALD_API_TOKEN" \
+            --stack-id "$MITTWALD_DEV_STACK_ID" \
+            --compose-file compose.mittwald.yml \
+            --env-file runtime.env

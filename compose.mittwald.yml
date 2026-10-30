@@ -3,7 +3,7 @@ services:
     # Per Digest aus dem CI-Build, nicht per `:latest` — siehe Kommentar im
     # Deploy-Schritt des Workflows. Für einen manuellen Deploy den Digest oder
     # ein Versions-Tag in DIGGY_IMAGE setzen, z. B.
-    # DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.3.0
+    # DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.4.0
     image: ${DIGGY_IMAGE:-ghcr.io/shadowfps/diggy-easydns:latest}
     restart: unless-stopped
     ports:
@@ -28,6 +28,11 @@ services:
       CONTACT_FORM_SECRET: ${CONTACT_FORM_SECRET}
       PAGESPEED_API_KEY: ${PAGESPEED_API_KEY}
       VIRUS_TOTAL_API_KEY: ${VIRUS_TOTAL_API_KEY}
+      # Nur die Testumgebung (dev.diggydns.cloud, .github/workflows/deploy-dev.yml):
+      # Passwortschutz (server/lib/siteGate.ts) und „[dev]“ im Betreff der
+      # Kontakt-Mails. Auf diggydns.cloud leer — dort gibt es keine Anmeldung.
+      SITE_PASSWORD: ${SITE_PASSWORD:-}
+      CONTACT_SUBJECT_PREFIX: ${CONTACT_SUBJECT_PREFIX:-}
     healthcheck:
       test:
         - CMD
