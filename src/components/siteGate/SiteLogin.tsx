@@ -62,10 +62,10 @@ export function SiteLogin({ onSignedIn }: { onSignedIn: () => void }) {
             </Section>
           </LayoutCard>
           <nav aria-label={t('Rechtliches')} className={styles.footer}>
-            <Link href={`${LIVE_ORIGIN}/impressum`} target="_blank" rel="noopener noreferrer" color="dark">
+            <Link href={`${LIVE_ORIGIN}/impressum`} target="_blank" rel="noopener noreferrer" size="s" color="dark" inline>
               {t('Impressum')}
             </Link>
-            <Link href={`${LIVE_ORIGIN}/datenschutz`} target="_blank" rel="noopener noreferrer" color="dark">
+            <Link href={`${LIVE_ORIGIN}/datenschutz`} target="_blank" rel="noopener noreferrer" size="s" color="dark" inline>
               {t('Datenschutz')}
             </Link>
           </nav>

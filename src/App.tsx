@@ -1018,11 +1018,13 @@ export default function App() {
             <Text>
               <small>diggy · DNS made friendly</small>
             </Text>
+            {/* Unterstrichen wie Textlinks (Flow „inline“): Rechtliches soll
+                auffindbar sein, aber nicht wie die Navigation oben wirken. */}
             <nav aria-label={t('Rechtliches')} className={styles.footerLinks}>
-              <Link href="/impressum" size="s" color="dark">
+              <Link href="/impressum" size="s" color="dark" inline>
                 {t('Impressum')}
               </Link>
-              <Link href="/datenschutz" size="s" color="dark">
+              <Link href="/datenschutz" size="s" color="dark" inline>
                 {t('Datenschutz')}
               </Link>
             </nav>

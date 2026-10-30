@@ -199,23 +199,38 @@
 
 /* ── Footer ─────────────────────────────────────────────────────────── */
 
+/* Auf dem Handy untereinander, mittig wie der Inhalt darüber. */
 .footer {
   box-sizing: border-box;
-  display: flex;
+  display: grid;
   width: 100%;
   max-width: var(--page-width);
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--size-px--s) var(--size-px--l);
+  justify-items: center;
+  gap: var(--size-px--s);
   margin: var(--size-px--xl) auto 0;
   padding: var(--size-px--l) var(--size-px--m);
   color: var(--neutral--color--800);
 }
 
+/*
+ * Ab 640 px drei Spalten mit gleich breiten Außenspalten: Die Links stehen
+ * so genau in der Seitenmitte, auf einer Achse mit Suche und Karten — egal,
+ * wie lang Slogan und Version links und rechts sind.
+ */
 @media (min-width: 640px) {
   .footer {
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: var(--size-px--l);
     padding-inline: var(--size-px--l);
+  }
+
+  .footer > :first-child {
+    justify-self: start;
+  }
+
+  .footer > :last-child {
+    justify-self: end;
   }
 }
 
