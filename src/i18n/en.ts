@@ -19,7 +19,6 @@ const ui: Dictionary = {
   // ─── Header, Menü, Footer, Seitentitel ───────────────────────────────
   'Zur Startseite': 'Go to home page',
   'Menü öffnen': 'Open menu',
-  'Menü schließen': 'Close menu',
   History: 'History',
   'Available Check': 'Availability check',
   About: 'About',
@@ -37,7 +36,6 @@ const ui: Dictionary = {
   'DNS, SSL, Mail-Security und Propagation auf einen Blick.':
     'DNS, SSL, email security and propagation at a glance.',
   'Ohne Fachchinesisch, mit Empfehlungen.': 'No jargon — just clear recommendations.',
-  'Alles, was du wissen musst — in einem Tool.': 'Everything you need to know — in one tool.',
   'Was diggy prüft': 'What diggy checks',
   'Sechs Bereiche, ein Befund': 'Six areas, one verdict',
   'Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.':
@@ -119,10 +117,12 @@ const ui: Dictionary = {
 
   // ─── Records und Findings ────────────────────────────────────────────
   Alle: 'All',
+  'DNS-Records': 'DNS records',
+  Typ: 'Type',
+  Wert: 'Value',
   Warnung: 'Warning',
   Hinweis: 'Info',
   OK: 'OK',
-  'Snippet kopiert': 'Snippet copied',
   'Snippet kopieren': 'Copy snippet',
   'ohne Punktabzug': 'no deduction',
   'TTL unbekannt': 'TTL unknown',
@@ -291,6 +291,7 @@ const ui: Dictionary = {
   '{type}-Record': '{type} record',
   '{types}- oder {last}-Record': '{types} or {last} record',
   'Antwort {letter}': 'Answer {letter}',
+  Antwort: 'Answer',
   'kein Eintrag': 'no record',
   '{label} · weicht ab': '{label} · differs',
   'Mehrheit': 'Majority',
@@ -403,6 +404,11 @@ const ui: Dictionary = {
   verbesserungswürdig: 'needs improvement',
   schlecht: 'poor',
   'PageSpeed-Analyse läuft…': 'PageSpeed analysis running…',
+  'Messung für': 'Measure for',
+  'Misst Ladezeit und Core Web Vitals mit Google Lighthouse — mobil oder am Desktop.':
+    'Measures load time and Core Web Vitals with Google Lighthouse — on mobile or desktop.',
+  Optimierung: 'Opportunity',
+  Potenzial: 'Potential',
 
   // ─── VirusTotal ──────────────────────────────────────────────────────
   'Prüft die Domain gegen 80+ Sicherheits-Engines auf Malware, Phishing und Blacklists.':
@@ -432,6 +438,7 @@ const ui: Dictionary = {
   'Werte Reputation aus…': 'Evaluating reputation…',
   'Scan läuft': 'Scan running',
   'VirusTotal-Scan läuft…': 'VirusTotal scan running…',
+  Ergebnis: 'Result',
 
   // ─── IP-Details ──────────────────────────────────────────────────────
   'IP-Lookup': 'IP lookup',
@@ -440,12 +447,7 @@ const ui: Dictionary = {
   'IP-Details werden geladen…': 'Loading IP details…',
   'IP-, Netzwerk- und Geolocation-Details': 'IP, network and geolocation details',
   'Details zu {ip} anzeigen': 'Show details for {ip}',
-  'Details zu {ip}': 'Details for {ip}',
-  'IP kopieren:': 'Copy IP:',
-  'IP kopiert': 'IP copied',
   'IP kopieren': 'Copy IP',
-  'Details schließen': 'Close details',
-  Schließen: 'Close',
   'nicht konfiguriert': 'not configured',
   'nicht verfügbar': 'not available',
   Organisation: 'Organization',
@@ -473,6 +475,9 @@ const ui: Dictionary = {
   'gerade eben': 'just now',
   'vor {count} min': '{count} min ago',
   'vor {count} h': '{count} h ago',
+  'Alle Einträge werden aus diesem Browser gelöscht. Das lässt sich nicht rückgängig machen.':
+    'All entries will be removed from this browser. This can’t be undone.',
+  Abbrechen: 'Cancel',
 
   // ─── Available Check ─────────────────────────────────────────────────
   'Finde die passende Domain für dein Projekt — mit Alternativen zu gängigen TLDs.':
@@ -486,9 +491,8 @@ const ui: Dictionary = {
   Verfügbar: 'Available',
   Vergeben: 'Taken',
   Unklar: 'Unclear',
-  'Domain kopieren:': 'Copy domain:',
-  'Domain kopiert': 'Domain copied',
   'Domain kopieren': 'Copy domain',
+  'Bitte gib einen Namen oder eine Domain ein.': 'Please enter a name or a domain.',
   'Du suchst qualitatives Hosting für dein neues Projekt? Dann schau doch mal bei {mittwald} vorbei — Managed Webhosting aus Deutschland, gemacht für Agenturen und Freelancer.':
     'Looking for quality hosting for your new project? Take a look at {mittwald} — managed web hosting from Germany, made for agencies and freelancers.',
 
@@ -604,8 +608,6 @@ const ui: Dictionary = {
   },
   'dem letzten Check': 'your last check',
   'Zeitpunkt unbekannt': 'time unknown',
-  'Ausblenden': 'Hide',
-  'Anzeigen': 'Show',
   'gestiegen': 'up',
   'gefallen': 'down',
   'erneuert': 'renewed',

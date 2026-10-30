@@ -74,8 +74,8 @@ export default defineConfig({
          * Vendor-Code in eigene, langlebig cachebare Chunks.
          *
          * Ändert die Gesamtgröße kaum, aber Folgebesuche und Deploys laden nur
-         * den App-Chunk neu statt der kompletten 570 kB. React und Motion
-         * ändern sich selten, der App-Code bei jedem Push.
+         * den App-Chunk neu. React und Flow ändern sich selten, der App-Code
+         * bei jedem Push.
          *
          * Funktionsform, nicht Objektform: Vite 8 bündelt mit rolldown, und
          * rolldown nimmt für `manualChunks` ausschließlich eine Funktion
@@ -84,21 +84,16 @@ export default defineConfig({
          * matchen, deshalb steht `scheduler` (Abhängigkeit von react-dom)
          * ausdrücklich dabei. Ohne das läge es im App-Chunk und der
          * React-Chunk wäre nicht mehr für sich ladbar.
+         *
+         * Flow bekommt bewusst keinen eigenen Chunk: Sein Einstieg exportiert
+         * alle Komponenten, ein Chunk für „alles aus Flow“ zöge auch List und
+         * Form samt MobX-Tabellen, zod und Luxon in den ersten Aufruf, weil
+         * nachgeladene Seiten sie von dort importierten (gemessen: 311 statt
+         * rund 190 kB gzip). rolldown teilt Flow selbst nach Nutzung auf;
+         * scripts/check-bundle-size.mjs budgetiert diese Chunks als Gruppe.
          */
         manualChunks(id: string) {
           if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
-          // Vier Pakete statt einem, und `framer-motion` gehört ausdrücklich
-          // dazu: `motion` ist nur ein Wrapper, der von `framer-motion`
-          // abhängt und es re-exportiert — dort liegt die Implementierung.
-          // `motion-dom` und `motion-utils` bilden den Kern. Fehlt eines,
-          // landen dessen Module im App-Chunk, und der ist genau der, der
-          // bei jedem Push neu geladen wird (#33). Nachgemessen: ohne
-          // `framer-motion` in dieser Liste wanderten 79 Module und 10,8 kB
-          // dorthin.
-          if (/node_modules\/(motion|framer-motion|motion-dom|motion-utils)\//.test(id)) {
-            return 'motion';
-          }
-          if (/node_modules\/lucide-react\//.test(id)) return 'icons';
           return undefined;
         },
       },

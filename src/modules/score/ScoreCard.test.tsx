@@ -1,56 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { animate } from 'motion/react';
 import type { Finding, HealthScore } from '@/types/dns';
 import { calculateScore } from '@/lib/scoring';
 import { ScoreCard } from './ScoreCard';
 
 /**
- * Die Score-Karte zählt die Zahl per imperativem `animate()` hoch und lässt den
- * Balken wachsen. `MotionConfig reducedMotion="user"` erfasst das imperative
- * `animate()` nicht — bei „Bewegung reduzieren“ zählte die Zahl trotzdem hoch
- * (#103). Gefunden hat das erst ein Browser-Screenshot (90 statt 94).
- *
- * `animate` bleibt echt, wird aber beobachtbar: so lässt sich prüfen, ob
- * überhaupt ein Zähler startet. `vi.spyOn` auf den Modul-Namespace geht nicht,
- * ESM-Namespaces sind nicht konfigurierbar.
+ * Die Score-Karte zeigt den Score als Ring (Flows DonutChart). Früher zählte
+ * die Zahl per `animate()` hoch, und bei „Bewegung reduzieren“ tat sie das
+ * trotzdem (#103). Mit Flow gibt es kein Hochzählen mehr: die Zahl steht vom
+ * ersten Render an auf dem Endwert, den Ring animiert Flow selbst und hält
+ * ihn bei der Einstellung an.
  */
-vi.mock('motion/react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('motion/react')>();
-  return { ...actual, animate: vi.fn(actual.animate) };
-});
-
-const animateMock = vi.mocked(animate);
-
-type Listener = (event: MediaQueryListEvent) => void;
-
-/** Steuerbare matchMedia-Implementierung wie in useReducedMotion.test.ts. */
-function installMatchMedia(initial: boolean) {
-  const listeners = new Set<Listener>();
-  let matches = initial;
-
-  window.matchMedia = ((query: string) =>
-    ({
-      get matches() {
-        return query.includes('prefers-reduced-motion') ? matches : false;
-      },
-      media: query,
-      onchange: null,
-      addEventListener: (_: string, listener: Listener) => void listeners.add(listener),
-      removeEventListener: (_: string, listener: Listener) => void listeners.delete(listener),
-      addListener: (listener: Listener) => void listeners.add(listener),
-      removeListener: (listener: Listener) => void listeners.delete(listener),
-      dispatchEvent: () => false,
-    }) as unknown as MediaQueryList) as typeof window.matchMedia;
-
-  return {
-    set(next: boolean) {
-      matches = next;
-      for (const listener of listeners) listener({ matches } as MediaQueryListEvent);
-    },
-  };
-}
 
 const score: HealthScore = {
   score: 94,
@@ -62,84 +24,52 @@ function card(value = score.score) {
   return <ScoreCard score={{ ...score, score: value }} findings={[]} onShowFindings={() => {}} />;
 }
 
-/** Die große Zahl steht direkt vor „/ 100“. */
-function scoreValue(root: HTMLElement) {
-  return within(root).getByText('/ 100').previousElementSibling;
-}
-
-/** Der Balken ist das einzige Kind der grauen Spur; die Breite steht inline. */
-function barWidth(root: HTMLElement) {
-  return root.querySelector<HTMLElement>('.bg-surface-muted > *')?.style.width;
+/** Der Ring trägt den Wert für Screenreader und zeigt ihn als Zahl. */
+function ring(root: HTMLElement) {
+  return root.querySelector<HTMLElement>('[role="progressbar"][aria-label="Health Score"]');
 }
 
 describe('ScoreCard', () => {
-  beforeEach(() => {
-    animateMock.mockClear();
+  it('steht schon im ersten Render auf dem Endwert', () => {
+    // Ohne Effects: `renderToStaticMarkup` zeigt genau den ersten Render.
+    const root = document.createElement('div');
+    root.innerHTML = renderToStaticMarkup(card());
+
+    expect(ring(root)).toHaveAttribute('aria-valuenow', '94');
+    expect(ring(root)).toHaveTextContent('94');
+    expect(ring(root)).toHaveTextContent('/ 100');
   });
 
-  describe('bei „Bewegung reduzieren“', () => {
-    /**
-     * Ohne Effects: `renderToStaticMarkup` zeigt genau den ersten Render. Ein
-     * Nachziehen erst im Effect würde hier auffallen — RTLs render() führt die
-     * Effects schon aus, bevor der Test hinschaut.
-     */
-    it('steht schon im ersten Render auf dem Endwert', () => {
-      installMatchMedia(true);
-      const root = document.createElement('div');
-      root.innerHTML = renderToStaticMarkup(card());
-
-      expect(scoreValue(root)).toHaveTextContent(/^94$/);
-      expect(barWidth(root)).toBe('94%');
-    });
-
-    it('zeigt sofort die Endwerte und startet keinen Zähler', () => {
-      installMatchMedia(true);
-      const { container } = render(card());
-
-      expect(scoreValue(container)).toHaveTextContent(/^94$/);
-      expect(barWidth(container)).toBe('94%');
-      expect(animateMock).not.toHaveBeenCalled();
-    });
-
-    it('springt bei einem neuen Lookup direkt auf den neuen Score', () => {
-      installMatchMedia(true);
-      const { container, rerender } = render(card());
-
-      rerender(card(72));
-
-      expect(scoreValue(container)).toHaveTextContent(/^72$/);
-      expect(barWidth(container)).toBe('72%');
-      expect(animateMock).not.toHaveBeenCalled();
-    });
-
-    it('stoppt einen laufenden Zähler, wenn die Präferenz eingeschaltet wird', () => {
-      const media = installMatchMedia(false);
-      const { container } = render(card());
-      const controls = animateMock.mock.results[0].value as ReturnType<typeof animate>;
-      const stop = vi.spyOn(controls, 'stop');
-
-      act(() => media.set(true));
-
-      expect(stop).toHaveBeenCalledOnce();
-      expect(animateMock).toHaveBeenCalledOnce();
-      expect(scoreValue(container)).toHaveTextContent(/^94$/);
-      expect(barWidth(container)).toBe('94%');
-    });
+  it('springt bei einem neuen Lookup direkt auf den neuen Score', () => {
+    const { container, rerender } = render(card());
+    rerender(card(72));
+    expect(ring(container)).toHaveAttribute('aria-valuenow', '72');
+    expect(ring(container)).toHaveTextContent('72');
   });
 
-  describe('ohne die Einstellung', () => {
-    it('zählt wie bisher von 0 hoch und lässt den Balken wachsen', () => {
-      installMatchMedia(false);
-      const { container } = render(card());
+  it.each([
+    [94, 'Status "Erfolg"'],
+    [50, 'Status "Warnung"'],
+    [20, 'Status "Fehler"'],
+  ])('zeigt das Urteil zu %i mit dem passenden Status', (value, status) => {
+    render(card(value));
+    const heading = screen.getByRole('heading', { name: /^Health Score/ });
+    expect(within(heading).getByRole('img', { name: status })).toBeInTheDocument();
+  });
 
-      expect(scoreValue(container)).toHaveTextContent(/^0$/);
-      expect(barWidth(container)).toBe('0px');
-      expect(animateMock).toHaveBeenCalledOnce();
-      expect(animateMock).toHaveBeenCalledWith(expect.anything(), 94, {
-        duration: 1.2,
-        ease: 'easeOut',
-      });
-    });
+  it('führt über „Alle Findings“ zur Liste', async () => {
+    const onShowFindings = vi.fn();
+    render(<ScoreCard score={score} findings={[]} onShowFindings={onShowFindings} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Alle Findings' }));
+    expect(onShowFindings).toHaveBeenCalledOnce();
+  });
+
+  it('zählt die Befunde je Stufe', () => {
+    const { container } = render(card());
+    expect(container).toHaveTextContent('8 ok');
+    expect(container).toHaveTextContent('1 info');
+    expect(container).toHaveTextContent('1 Warnung');
+    expect(container).toHaveTextContent('0 kritisch');
   });
 });
 
@@ -203,7 +133,7 @@ const titledFinding = (
 
 function renderTop(findings: Finding[]) {
   render(<ScoreCard score={calculateScore(findings)} findings={findings} onShowFindings={() => {}} />);
-  return screen.getByText('Wichtigster Punkt').nextElementSibling;
+  return screen.getByRole('group', { name: 'Wichtigster Punkt' });
 }
 
 /**

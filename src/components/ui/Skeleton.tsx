@@ -139,6 +139,23 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
 }
 
 /**
+ * Platzhalter für eine eigene Seite (History, About, Available Check), solange
+ * ihr Chunk lädt: Überschrift und eine Karte, so breit wie die Textseiten.
+ */
+export function PageSkeleton() {
+  return (
+    <div aria-busy="true" style={{ width: '100%', maxWidth: '48rem', marginInline: 'auto' }}>
+      <Heading level={1}>
+        <SkeletonText width="8em" />
+      </Heading>
+      <LayoutCard>
+        <SectionSkeleton lines={3} />
+      </LayoutCard>
+    </div>
+  );
+}
+
+/**
  * Platzhalter für Impressum und Datenschutz, solange ihr Chunk lädt (App.tsx).
  *
  * Mindestens bildschirmhoch: die Seiten sind es sowieso, und so liegt der

@@ -1,18 +1,13 @@
-import { useId, useMemo, useState, type ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { useMemo, type ReactNode } from 'react';
 import {
-  ArrowLeftRight,
-  Check,
-  ChevronDown,
-  History,
-  Minus,
-  Plus,
-  RefreshCw,
-  TrendingDown,
-  TrendingUp,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
+  Accordion,
+  AlertBadge,
+  Badge,
+  Content,
+  Heading,
+  LayoutCard,
+  Text,
+} from '@mittwald/flow-react-components';
 import type { LookupReport } from '@/types/dns';
 import type { SectionKey } from '@/hooks/useProgressiveLookup';
 import {
@@ -20,10 +15,10 @@ import {
   type LookupHistoryEntry,
   type TrackedRecordType,
 } from '@/lib/lookupHistory';
-import { changeTone, diffChecks, type ChangeTone, type CheckChange } from '@/lib/checkChanges';
-import { cn } from '@/lib/cn';
+import { changeTone, diffChecks, type CheckChange } from '@/lib/checkChanges';
 import { formatDate, locale, t, tRich, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
+import styles from './SinceLastCheck.module.css';
 
 interface SinceLastCheckProps {
   /** Der letzte Check dieser Domain, bevor der laufende ihn überschrieben hat. */
@@ -36,23 +31,21 @@ interface SinceLastCheckProps {
    * „DMARC entfernt“, nur weil die Antwort noch unterwegs ist.
    */
   settled: boolean;
-  className?: string;
 }
 
 /**
  * „Seit dem letzten Check“: was sich geändert hat, seit die Domain zuletzt
  * geprüft wurde (#79). Alles kommt aus der lokalen History.
  *
- * Eingeklappt, bis man die Liste öffnet: so bleibt die Karte vom Laden bis
- * zum Ergebnis gleich hoch, und die Tabs darunter springen nicht, während
- * man schon in den Records liest. Die Zahl der Änderungen steht im Kopf.
+ * Eine eigene LayoutCard über den Tabs, eingeklappt, bis man die Liste
+ * öffnet — Flows Accordion. So bleibt die Karte vom Laden bis zum Ergebnis
+ * gleich hoch, und die Tabs darunter springen nicht, während man schon in
+ * den Records liest. Die Zahl der Änderungen steht im Kopf und damit im
+ * Namen des Buttons.
  */
-export function SinceLastCheck({ previous, report, failed, settled, className }: SinceLastCheckProps) {
+export function SinceLastCheck({ previous, report, failed, settled }: SinceLastCheckProps) {
   // Abonniert den Sprachwechsel; die Helfer unten lesen die Sprache selbst.
   useI18n();
-  const [open, setOpen] = useState(false);
-  const titleId = useId();
-  const listId = useId();
 
   const changes = useMemo(
     () =>
@@ -69,114 +62,70 @@ export function SinceLastCheck({ previous, report, failed, settled, className }:
       : changes.length === 0
         ? t('Keine Änderungen seit {date}', { date: checkedAt })
         : t('{count} Änderungen seit {date}', { count: changes.length, date: checkedAt });
-  const expandable = changes !== null && changes.length > 0;
 
+  // Titel und Status in beiden Zuständen gleich gebaut: aufklappbar oder
+  // nicht, die Karte hat dieselbe Höhe.
   const head = (
     <>
-      {/* Mobil ohne Kachel: sonst bricht der Titel um, sobald rechts der
-          Pfeil zum Aufklappen dazukommt, und die Karte wächst beim Laden. */}
-      <span className="icon-tile hidden sm:inline-flex">
-        <History className="size-4" aria-hidden />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span id={titleId} className="block text-sm font-semibold text-fg">
-          {t('Seit dem letzten Check')}{' '}
-          <span className="whitespace-nowrap font-normal text-fg-muted">
-            ({formatTimeAgo(previous.lookedUpAt)})
-          </span>
-        </span>
-        <span className="mt-0.5 block text-xs text-fg-muted">{status}</span>
-      </span>
+      {t('Seit dem letzten Check')}{' '}
+      <span className={styles.ago}>({formatTimeAgo(previous.lookedUpAt)})</span>
+      <span className={styles.status}>{status}</span>
     </>
   );
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      aria-labelledby={titleId}
-      className={cn('card', className)}
-    >
-      {expandable ? (
-        // Überschrift mit Button darin: das Akkordeon-Muster — die ganze
-        // Zeile ist Klickfläche, und Screenreader hören Kopf und Zustand.
-        <h2>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={listId}
-            onClick={() => setOpen((value) => !value)}
-            className="group flex w-full items-center gap-3 rounded-panel text-left"
-          >
+    <LayoutCard>
+      <section aria-label={t('Seit dem letzten Check')}>
+        {changes !== null && changes.length > 0 ? (
+          <Accordion>
+            {/* Die Überschrift ist der Button des Accordions — die ganze
+                Zeile ist Klickfläche, Screenreader hören Kopf und Zustand. */}
+            <Heading level={2} size="s">
+              {head}
+            </Heading>
+            <Content>
+              <ul className={styles.list}>
+                {changes.map((change, index) => (
+                  <ChangeRow key={`${change.kind}-${index}`} change={change} />
+                ))}
+              </ul>
+            </Content>
+          </Accordion>
+        ) : (
+          <Heading level={2} size="s">
             {head}
-            <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-fg-muted transition-colors group-hover:text-fg">
-              <span className="hidden sm:inline">{open ? t('Ausblenden') : t('Anzeigen')}</span>
-              <ChevronDown
-                className={cn('size-4 transition-transform', open && 'rotate-180')}
-                aria-hidden
-              />
-            </span>
-          </button>
-        </h2>
-      ) : (
-        <h2 className="flex items-center gap-3">{head}</h2>
-      )}
-
-      {expandable && open && (
-        <motion.ul
-          id={listId}
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="mt-4 divide-y divide-line-subtle border-t border-line-subtle"
-        >
-          {changes.map((change, index) => (
-            <ChangeRow key={`${change.kind}-${index}`} change={change} />
-          ))}
-        </motion.ul>
-      )}
-    </motion.section>
+          </Heading>
+        )}
+      </section>
+    </LayoutCard>
   );
 }
 
-const TONE_BADGE: Record<ChangeTone, string> = {
-  neutral: '',
-  success: 'badge-success',
-  warning: 'badge-warning',
-  danger: 'badge-danger',
-};
-
 /**
- * Wort und Form je Änderung — nie nur Farbe (siehe docs/DESIGN.md). Das Wort
- * ist der Schlüssel, übersetzt wird in ChangeRow.
+ * Das Wort je Änderung — der Schlüssel, übersetzt wird in ChangeRow. Es steht
+ * in einem Badge: neutral oder mit Flows Status samt Icon, nie nur Farbe
+ * (siehe docs/DESIGN.md).
  */
-function marker(change: CheckChange): { word: DeKey; Icon: LucideIcon } {
+function markerWord(change: CheckChange): DeKey {
   switch (change.kind) {
     case 'score':
-      return change.to > change.from
-        ? { word: 'gestiegen', Icon: TrendingUp }
-        : { word: 'gefallen', Icon: TrendingDown };
+      return change.to > change.from ? 'gestiegen' : 'gefallen';
     case 'ssl-renewed':
-      return { word: 'erneuert', Icon: RefreshCw };
+      return 'erneuert';
     case 'ssl-replaced':
-      return { word: 'getauscht', Icon: ArrowLeftRight };
+      return 'getauscht';
     case 'ssl-invalid':
-      return { word: 'ungültig', Icon: X };
+      return 'ungültig';
     case 'ssl-valid':
-      return { word: 'gültig', Icon: Check };
+      return 'gültig';
     case 'dnssec':
-      return change.enabled
-        ? { word: 'aktiviert', Icon: Check }
-        : { word: 'deaktiviert', Icon: X };
+      return change.enabled ? 'aktiviert' : 'deaktiviert';
     case 'dmarc':
-      return change.present ? { word: 'neu', Icon: Plus } : { word: 'entfallen', Icon: Minus };
+      return change.present ? 'neu' : 'entfallen';
     case 'dmarc-policy':
-      return { word: 'geändert', Icon: ArrowLeftRight };
+      return 'geändert';
     case 'records':
-      return change.change === 'added'
-        ? { word: 'neu', Icon: Plus }
-        : { word: 'entfallen', Icon: Minus };
+      return change.change === 'added' ? 'neu' : 'entfallen';
   }
 }
 
@@ -186,7 +135,7 @@ function describe(change: CheckChange): ReactNode {
       return (
         <>
           Health Score{' '}
-          <span className="tabular-nums">
+          <span className={styles.numbers}>
             {change.from} → {change.to}
           </span>
         </>
@@ -204,24 +153,24 @@ function describe(change: CheckChange): ReactNode {
     case 'dmarc':
       if (!change.present) return t('DMARC-Record entfernt');
       return change.policy
-        ? tRich('DMARC-Record gesetzt, Policy {policy}', { policy: <Mono>{change.policy}</Mono> })
+        ? tRich('DMARC-Record gesetzt, Policy {policy}', { policy: <span className="mono">{change.policy}</span> })
         : t('DMARC-Record gesetzt');
     case 'dmarc-policy':
       return tRich('DMARC-Policy {from} → {to}', {
-        from: <Mono>{change.from}</Mono>,
-        to: <Mono>{change.to}</Mono>,
+        from: <span className="mono">{change.from}</span>,
+        to: <span className="mono">{change.to}</span>,
       });
     case 'records':
       return (
-        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className={styles.records}>
           <span>{t('{type}-Records', { count: change.values.length, type: change.type })}</span>
           {/* wrap-anywhere statt break-all: ein Name rückt als Ganzes in
               die nächste Zeile und wird nur zerteilt, wenn er allein nicht
               passt (lange IPv6-Adressen). */}
           {change.values.map((value) => (
-            <Mono key={value} className="min-w-0 wrap-anywhere text-fg-muted">
+            <span key={value} className={`mono wrap-anywhere ${styles.value}`}>
               {recordLabel(change.type, value)}
-            </Mono>
+            </span>
           ))}
         </span>
       );
@@ -229,19 +178,17 @@ function describe(change: CheckChange): ReactNode {
 }
 
 function ChangeRow({ change }: { change: CheckChange }) {
-  const { word, Icon } = marker(change);
+  const word = t(markerWord(change));
+  const tone = changeTone(change);
   return (
-    <li className="flex flex-col items-start gap-1.5 py-3 last:pb-0 sm:flex-row sm:gap-3">
-      {/* Ab sm feste Breite: die Beschreibungen beginnen untereinander, egal
-          wie lang das Wort im Badge ist. Mobil steht das Badge darüber —
+    <li className={styles.row}>
+      {/* Ab 640 px feste Breite: die Beschreibungen beginnen untereinander,
+          egal wie lang das Wort im Badge ist. Mobil steht das Badge darüber —
           neben einer festen Spalte blieben für Namen keine 200 px. */}
-      <span className="flex shrink-0 sm:w-28">
-        <span className={cn('badge', TONE_BADGE[changeTone(change)])}>
-          <Icon className="size-3" aria-hidden />
-          {t(word)}
-        </span>
+      <span className={styles.marker}>
+        {tone === 'neutral' ? <Badge color="neutral">{word}</Badge> : <AlertBadge status={tone}>{word}</AlertBadge>}
       </span>
-      <span className="min-w-0 text-sm text-fg">{describe(change)}</span>
+      <Text className={styles.description}>{describe(change)}</Text>
     </li>
   );
 }
@@ -253,10 +200,6 @@ function ChangeRow({ change }: { change: CheckChange }) {
  */
 function recordLabel(type: TrackedRecordType, value: string): string {
   return type === 'MX' && value === '0' ? '0 . (Null-MX)' : value;
-}
-
-function Mono({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn('font-mono text-[13px]', className)}>{children}</span>;
 }
 
 /**

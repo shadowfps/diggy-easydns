@@ -6,6 +6,23 @@ import { MAIL_EXPLANATIONS } from '@/lib/explanations';
 import { MailView } from './MailView';
 
 /**
+ * Die Section, in der eine Überschrift steht. Jedes Verfahren ist eine
+ * Flow-Section; ihr Überschriftenname enthält Erklärung und Status-Badge,
+ * deshalb per Anfang gesucht.
+ */
+const section = (name: string) =>
+  screen.getByRole('heading', { name: new RegExp(`^${escapeRegExp(name)}`) }).closest('section') as HTMLElement;
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Status eines Badges: Flows AlertBadge trägt ein Icon mit Namen
+ * („Status "Warnung"“), das neutrale Badge keins.
+ */
+const badgeStatus = (badge: HTMLElement) =>
+  badge.parentElement?.querySelector('svg[aria-label]')?.getAttribute('aria-label') ?? null;
+
+/**
  * #77: Für eine Domain ohne Mail (Null-MX) markierte der Mail-Tab DKIM und
  * MTA-STS als fehlend — dort sind sie aber gar nicht nötig.
  */
@@ -91,7 +108,7 @@ describe('MailView — Domain ohne Mail (Null-MX)', () => {
         }}
       />
     );
-    const card = screen.getByRole('heading', { name: 'Keine Mails (Null-MX)' }).closest('.card');
+    const card = section('Keine Mails (Null-MX)');
     expect(card).not.toBeNull();
     expect(within(card as HTMLElement).queryByText('fehlt')).not.toBeInTheDocument();
     expect(within(card as HTMLElement).getAllByText('nicht prüfbar')).toHaveLength(2);
@@ -132,14 +149,12 @@ describe('MailView — BIMI und TLS-RPT', () => {
     tlsRpt: { present: false },
   };
 
-  /** Die Karte, in der eine Überschrift steht. */
-  const card = (name: string) =>
-    screen.getByRole('heading', { name }).closest('.card') as HTMLElement;
+  const card = section;
 
   it('zeigt bei älteren Antworten ohne die Felder keine Karten', () => {
     render(<MailView mail={{ ...exampleCom, nullMx: false }} />);
-    expect(screen.queryByRole('heading', { name: 'BIMI' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'TLS-RPT' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^BIMI/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^TLS-RPT/ })).not.toBeInTheDocument();
   });
 
   it('zeigt fehlende Records als „fehlt“', () => {
@@ -171,7 +186,6 @@ describe('MailView — BIMI und TLS-RPT', () => {
     expect(link).toHaveAttribute('href', logoUrl);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(link).toHaveClass('link');
     expect(within(bimi).getByText('hinterlegt')).toBeInTheDocument();
     expect(bimi.querySelector('img')).toBeNull();
   });
@@ -323,7 +337,7 @@ describe('MailView — BIMI und TLS-RPT', () => {
  */
 describe('MailView — DMARC ohne gültiges p=', () => {
   const withMx: MailSecurity = { ...exampleCom, nullMx: false };
-  const dmarcCard = () => screen.getByRole('heading', { name: 'DMARC' }).closest('.card') as HTMLElement;
+  const dmarcCard = () => section('DMARC');
   const record = (value: string): MailSecurity['dmarc'] => ({ present: true, record: value, rua: undefined });
 
   it('zeigt bei rua= ohne p=, dass der Record wie p=none wirkt', () => {
@@ -331,9 +345,8 @@ describe('MailView — DMARC ohne gültiges p=', () => {
       <MailView mail={{ ...withMx, dmarc: { ...record('v=DMARC1; rua=mailto:x@y'), rua: 'mailto:x@y' } }} />
     );
     const card = dmarcCard();
-    const badge = within(card).getByText('p= fehlt');
-    expect(badge).toHaveClass('badge', 'badge-warning');
-    expect(badge.querySelector('svg')).not.toBeNull();
+    // Mit MX eine Warnung — Wort und Icon, nicht nur Farbe.
+    expect(badgeStatus(within(card).getByText('p= fehlt'))).toBe('Status "Warnung"');
     expect(within(card).getByText('wie none')).toBeInTheDocument();
     expect(within(card).getByText('rua gesetzt')).toBeInTheDocument();
     expect(
@@ -372,7 +385,7 @@ describe('MailView — DMARC ohne gültiges p=', () => {
       />
     );
     const card = dmarcCard();
-    expect(within(card).getByText('sp= ungültig')).toHaveClass('badge', 'badge-warning');
+    expect(badgeStatus(within(card).getByText('sp= ungültig'))).toBe('Status "Warnung"');
     expect(within(card).getByText('wie none')).toBeInTheDocument();
     expect(within(card).getByText(/^Ein ungültiges sp= macht den ganzen Record ungültig, auch p=reject\./)).toBeInTheDocument();
   });
@@ -386,7 +399,7 @@ describe('MailView — DMARC ohne gültiges p=', () => {
       />
     );
     const card = dmarcCard();
-    expect(within(card).getByText('2 Records')).toHaveClass('badge', 'badge-warning');
+    expect(badgeStatus(within(card).getByText('2 Records'))).toBe('Status "Warnung"');
     for (const value of records) expect(within(card).getByText(value)).toBeInTheDocument();
     expect(within(card).getByText('keine')).toBeInTheDocument();
     // Gilt keiner, gehen auch keine Berichte raus.
@@ -397,8 +410,7 @@ describe('MailView — DMARC ohne gültiges p=', () => {
   it('zeigt ohne MX das Badge ohne Warnfarbe — wie den fehlenden Record', () => {
     render(<MailView mail={{ ...withMx, hasMx: false, dmarc: record('v=DMARC1') }} />);
     const badge = within(dmarcCard()).getByText('p= fehlt');
-    expect(badge).toHaveClass('badge');
-    expect(badge).not.toHaveClass('badge-warning');
+    expect(badgeStatus(badge)).toBeNull();
   });
 
   it('lässt korrekte Records ohne Badge', () => {
@@ -422,7 +434,7 @@ describe('MailView — DMARC ohne gültiges p=', () => {
     cleanup();
 
     render(<MailView mail={{ ...withMx, dmarc: record('v=DMARC1; p=foo'), bimi: { present: false } }} />);
-    const bimi = screen.getByRole('heading', { name: 'BIMI' }).closest('.card') as HTMLElement;
+    const bimi = section('BIMI');
     expect(within(bimi).getByText(/jetzt: DMARC wirkt nicht \(p=foo ist ungültig\)/)).toBeInTheDocument();
   });
 });
@@ -509,14 +521,16 @@ describe('MailView — Erklärungen', () => {
     const user = userEvent.setup();
     render(<MailView mail={EXPLAINED} />);
 
-    // Der Button steht neben der Überschrift, nicht in ihr — sonst würde der
-    // Popover-Text Teil des Überschriftennamens.
-    const heading = screen.getByRole('heading', { name: term });
+    // Der Button steht in der Überschrift, wie Flow ContextualHelp vorsieht.
+    // Die Erklärung selbst öffnet in einem Popover außerhalb davon — ihr Text
+    // wird nie Teil des Überschriftennamens.
+    const heading = screen.getByRole('heading', { name: new RegExp(`^${term}`) });
     const button = screen.getByRole('button', { name: `Was bedeutet ${term}?` });
-    expect(heading).not.toContainElement(button);
+    expect(heading).toContainElement(button);
 
     await user.click(button);
-    expect(screen.getByText(MAIL_EXPLANATIONS[term].text)).toBeInTheDocument();
+    const explanation = await screen.findByText(MAIL_EXPLANATIONS[term].text);
+    expect(heading).not.toContainElement(explanation);
   });
 
   it('setzt kein „?“ an die Null-MX-Karte — ihr Titel ist kein Fachbegriff', () => {

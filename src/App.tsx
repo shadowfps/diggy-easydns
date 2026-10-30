@@ -16,6 +16,8 @@ import {
   Tabs,
   TabTitle,
   Text,
+  Tooltip,
+  TooltipTrigger,
 } from '@mittwald/flow-react-components';
 import { IconArrowsLeftRight } from '@tabler/icons-react';
 import { Header } from '@/components/layout/Header';
@@ -26,9 +28,6 @@ import { RecordsList } from '@/modules/records/RecordsList';
 import { FindingsList } from '@/modules/findings/FindingsList';
 import { WhoisView } from '@/modules/whois/WhoisView';
 
-import { HistoryView } from '@/modules/history/HistoryView';
-import { AboutView } from '@/modules/about/AboutView';
-import { AvailabilityView } from '@/modules/availability/AvailabilityView';
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { CheckOverview } from '@/modules/home/CheckOverview';
@@ -44,6 +43,7 @@ import {
   WhoisSkeleton,
   ListSkeleton,
   LegalPageSkeleton,
+  PageSkeleton,
   SinceLastCheckSkeleton,
 } from '@/components/ui/Skeleton';
 import styles from './App.module.css';
@@ -66,6 +66,20 @@ const VirusScanView = lazy(() =>
 // muss nicht im Bundle stecken, das den ersten Report blockiert.
 const CompareView = lazy(() =>
   import('@/modules/compare/CompareView').then((m) => ({ default: m.CompareView }))
+);
+
+/*
+ * Ebenso die übrigen eigenen Seiten. Mit Flow wiegen sie mehr als vorher:
+ * History nutzt Flows List (TanStack Table, MobX, Luxon), der Available Check
+ * Flows Form (react-hook-form, zod). Im kritischen Pfad kosteten sie jeden
+ * Aufruf rund 100 kB gzip, auch wer nur einen Report öffnet.
+ */
+const HistoryView = lazy(() =>
+  import('@/modules/history/HistoryView').then((m) => ({ default: m.HistoryView }))
+);
+const AboutView = lazy(() => import('@/modules/about/AboutView').then((m) => ({ default: m.AboutView })));
+const AvailabilityView = lazy(() =>
+  import('@/modules/availability/AvailabilityView').then((m) => ({ default: m.AvailabilityView }))
 );
 
 /*
@@ -559,17 +573,28 @@ export default function App() {
   const showHome = view === 'lookup' && lookup.recordsStatus === 'idle' && !ipQuery;
   const headerView = view === 'lookup' ? undefined : view;
 
-  const tabContent = (tab: TabId, content: ReactNode) => (
-    // Feinere Boundary je Tab: reißt ein Sektions-Renderer ab, bleiben Score,
-    // Schnellübersicht und die anderen Tabs nutzbar. Der Key auf dem Tab sorgt
-    // dafür, dass ein Tab-Wechsel den Fehlerzustand nicht mitschleppt.
-    <ErrorBoundary
-      key={`boundary-${tab}`}
-      fallback={({ error, reset }) => <SectionErrorFallback error={error} reset={reset} />}
-    >
-      {content}
-    </ErrorBoundary>
-  );
+  /*
+   * Inhalt eines Report-Tabs — nur für den aktiven.
+   *
+   * Flows `Tab` hält jedes Panel gemountet und blendet die inaktiven nur aus.
+   * Für den Report hieße das: alle nachgeladenen Ansichten (Mail, Propagation,
+   * Security, Speed, Virus Scan) laden sofort, ihre Effekte laufen ohne
+   * geöffneten Tab, und Texte stünden mehrfach im Dokument. Deshalb rendert
+   * nur der gewählte Tab seinen Inhalt.
+   *
+   * Feinere Boundary je Tab: reißt ein Sektions-Renderer ab, bleiben Score,
+   * Schnellübersicht und die anderen Tabs nutzbar. Der Key auf dem Tab sorgt
+   * dafür, dass ein Tab-Wechsel den Fehlerzustand nicht mitschleppt.
+   */
+  const tabContent = (tab: TabId, content: ReactNode) =>
+    activeTab === tab ? (
+      <ErrorBoundary
+        key={`boundary-${tab}`}
+        fallback={({ error, reset }) => <SectionErrorFallback error={error} reset={reset} />}
+      >
+        {content}
+      </ErrorBoundary>
+    ) : null;
 
   return (
     <I18nProvider locale={language === 'en' ? 'en-US' : 'de-DE'}>
@@ -594,18 +619,24 @@ export default function App() {
           />
 
           <main className={styles.main} data-home={showHome ? '' : undefined}>
-            {view === 'history' && (
-              <HistoryView
-                entries={historyEntries}
-                onRun={handleSearch}
-                onUseDomain={handleUseDomainInSearch}
-                onClear={handleClearHistory}
-              />
+            {(view === 'history' || view === 'about' || view === 'availability') && (
+              // Nachgeladen (siehe oben), mit derselben Absicherung wie die
+              // Rechtstexte: scheitert der Chunk, bleibt die App bedienbar.
+              <ErrorBoundary key={view} fallback={() => <PageErrorFallback />}>
+                <Suspense fallback={<PageSkeleton />}>
+                  {view === 'history' && (
+                    <HistoryView
+                      entries={historyEntries}
+                      onRun={handleSearch}
+                      onUseDomain={handleUseDomainInSearch}
+                      onClear={handleClearHistory}
+                    />
+                  )}
+                  {view === 'about' && <AboutView />}
+                  {view === 'availability' && <AvailabilityView />}
+                </Suspense>
+              </ErrorBoundary>
             )}
-
-            {view === 'about' && <AboutView />}
-
-            {view === 'availability' && <AvailabilityView />}
 
             {(view === 'impressum' || view === 'datenschutz') && (
               // Nachgeladen (siehe oben). Scheitert der Chunk, bleibt die App
@@ -704,7 +735,7 @@ export default function App() {
                   {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann. */}
                   <div className={styles.reportHead}>
                     <div className={styles.reportTitle}>
-                      <Text className={styles.eyebrow}>{t('DNS-Report')}</Text>
+                      <Text className="eyebrow">{t('DNS-Report')}</Text>
                       <Heading level={1} className={`mono ${styles.domain}`}>
                         {report.domain}
                       </Heading>
@@ -714,40 +745,42 @@ export default function App() {
                     </div>
                     {/* Kurze Beschriftungen, damit die drei Aktionen in der
                         Seitenspalte und auf dem Handy in eine Zeile passen. Die
-                        ausführliche Fassung ist der zugängliche Name bzw. der Tooltip. */}
+                        ausführliche Fassung steht ergänzend im Tooltip. */}
                     <div className={styles.reportActions}>
-                      <Button
-                        size="s"
-                        variant="soft"
-                        color="secondary"
-                        onPress={handleExportJson}
-                        aria-label={t('JSON herunterladen')}
-                      >
-                        <IconDownload />
-                        <Text>JSON</Text>
-                      </Button>
-                      <Button
-                        size="s"
-                        variant="soft"
-                        color="secondary"
-                        onPress={handleCopyPermalink}
-                        aria-label={t('Permalink zu diesem Report kopieren')}
-                      >
-                        {permalinkCopied ? <IconCheck /> : <IconLink />}
-                        <Text>{permalinkCopied ? t('Link kopiert') : t('Link kopieren')}</Text>
-                      </Button>
-                      <Button
-                        size="s"
-                        variant="soft"
-                        color="secondary"
-                        onPress={() => handleCompare(report.domain)}
-                        aria-label={t('Mit einer zweiten Domain vergleichen')}
-                      >
-                        <Icon>
-                          <IconArrowsLeftRight />
-                        </Icon>
-                        <Text>{t('Vergleichen')}</Text>
-                      </Button>
+                      <TooltipTrigger delay="long">
+                        <Button
+                          size="s"
+                          variant="soft"
+                          color="secondary"
+                          onPress={handleExportJson}
+                          aria-label={t('JSON herunterladen')}
+                        >
+                          <IconDownload />
+                          <Text>JSON</Text>
+                        </Button>
+                        <Tooltip>{t('Report als JSON herunterladen')}</Tooltip>
+                      </TooltipTrigger>
+                      <TooltipTrigger delay="long">
+                        <Button size="s" variant="soft" color="secondary" onPress={handleCopyPermalink}>
+                          {permalinkCopied ? <IconCheck /> : <IconLink />}
+                          <Text>{permalinkCopied ? t('Link kopiert') : t('Link kopieren')}</Text>
+                        </Button>
+                        <Tooltip>{t('Permalink zu diesem Report kopieren')}</Tooltip>
+                      </TooltipTrigger>
+                      <TooltipTrigger delay="long">
+                        <Button
+                          size="s"
+                          variant="soft"
+                          color="secondary"
+                          onPress={() => handleCompare(report.domain)}
+                        >
+                          <Icon>
+                            <IconArrowsLeftRight />
+                          </Icon>
+                          <Text>{t('Vergleichen')}</Text>
+                        </Button>
+                        <Tooltip>{t('Mit einer zweiten Domain vergleichen')}</Tooltip>
+                      </TooltipTrigger>
                     </div>
                   </div>
 

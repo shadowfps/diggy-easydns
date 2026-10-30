@@ -12,9 +12,8 @@ import { setLanguage } from '@/i18n';
  *
  * Bewusst KEINE `vi.fn()` für diese Shims: der Workspace läuft mit
  * `restoreMocks: true`, das zwischen den Tests die Implementierung von
- * vi.fn-Mocks entfernt. `matchMedia()` hätte danach `undefined` geliefert, und
- * Framer Motion ruft darauf `addListener` auf — jeder zweite Test wäre an
- * einem Shim gescheitert, nicht an der Komponente.
+ * vi.fn-Mocks entfernt. `matchMedia()` hätte danach `undefined` geliefert —
+ * jeder zweite Test wäre an einem Shim gescheitert, nicht an der Komponente.
  */
 
 afterEach(() => {
@@ -52,7 +51,7 @@ configure({ asyncUtilTimeout: 3000 });
  */
 (window as unknown as Record<symbol, string>)[Symbol.for('react-aria.i18n.locale')] = 'de-DE';
 
-/** Vollständiges MediaQueryList — Framer Motion nutzt noch das Legacy-API. */
+/** Vollständiges MediaQueryList — samt Legacy-API (`addListener`), die manche Bibliotheken noch nutzen. */
 function mediaQueryList(query: string, matches: boolean): MediaQueryList {
   return {
     matches,
@@ -92,34 +91,10 @@ export function setMediaQuery(...matching: string[]): void {
 }
 
 /**
- * Font Loading API — in jsdom nicht implementiert.
- *
- * SplitText wartet auf `document.fonts.ready`, bevor es den Text zerlegt:
- * sonst verschieben sich die Zeichen beim Font-Swap. Ohne Shim wirft der
- * Zugriff auf `document.fonts.status` und reißt den ganzen Render-Baum mit.
- *
- * `status: 'loaded'` lässt die Komponente direkt weiterlaufen.
+ * Beobachter, die jsdom nicht mitbringt. Flow und react-aria fragen sie ab
+ * (Tabs messen ihren Indikator, Overlays ihre Größe, eingeklappte Tabs ihre
+ * Breite) — ohne Shim wirft schon der Aufruf von `new`.
  */
-if (!document.fonts) {
-  Object.defineProperty(document, 'fonts', {
-    value: {
-      status: 'loaded',
-      ready: Promise.resolve(),
-      check: () => true,
-      load: () => Promise.resolve([]),
-      add: () => {},
-      delete: () => false,
-      clear: () => {},
-      forEach: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    },
-    configurable: true,
-    writable: true,
-  });
-}
-
-/** Von GSAP/ScrollTrigger (SplitText) und TextType erwartet. */
 window.IntersectionObserver = class {
   observe() {}
   unobserve() {}
@@ -132,7 +107,6 @@ window.IntersectionObserver = class {
   thresholds: number[] = [];
 } as unknown as typeof IntersectionObserver;
 
-/** Framer Motion fragt ResizeObserver für Layout-Animationen ab. */
 window.ResizeObserver = class {
   observe() {}
   unobserve() {}

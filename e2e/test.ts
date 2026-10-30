@@ -28,6 +28,21 @@ export const REPORT_TABS = [
   'virusscan',
 ] as const;
 
+/** Beschriftung der Tabs — Flows Tabs vergeben ihre IDs selbst. */
+const TAB_LABELS: Record<(typeof REPORT_TABS)[number], string> = {
+  records: 'Records',
+  propagation: 'Propagation',
+  security: 'Security',
+  mail: 'Mail',
+  findings: 'Findings',
+  whois: 'WHOIS',
+  speed: 'Speed',
+  virusscan: 'Virus Scan',
+};
+
+const reportTab = (page: Page, tab: (typeof REPORT_TABS)[number]) =>
+  page.getByRole('tab', { name: new RegExp(`^${TAB_LABELS[tab]}`) });
+
 /**
  * Feste „Jetzt“-Zeit, kurz nach der Aufnahme der Testdaten. Ohne sie zählten
  * WHOIS-Laufzeiten und die History („vor 3 min“) mit jedem Tag weiter.
@@ -136,11 +151,18 @@ export { expect };
  * Wartet, bis die Seite fertig aussieht: keine Spinner/Skeletons mehr, alle
  * Schriften geladen, zwei Frames gerendert.
  *
- * Schriften sind wichtig für die Breitenmessung: vor dem Laden von Geist
+ * Ladezustände erkennt der Test an `aria-busy` (diggys Platzhalter) und an
+ * Flows Skeleton und LoadingSpinner. Deren Klassen sind keine API von Flow —
+ * Flow ist exakt gepinnt, und ändert sich der Name, scheitert der Test hier
+ * laut, statt still zu früh zu messen.
+ *
+ * Schriften sind wichtig für die Breitenmessung: vor dem Laden von Inter
  * misst der Browser mit der Fallback-Schrift, und die ist schmaler.
  */
 export async function settle(page: Page): Promise<void> {
-  const loaders = page.locator('.animate-spin, .animate-pulse');
+  const loaders = page.locator(
+    '[aria-busy="true"], [class*="flow--skeleton"], [class*="flow--loading-spinner"]'
+  );
   await expect(loaders).toHaveCount(0);
   await page.evaluate(async () => {
     await document.fonts.ready;
@@ -150,15 +172,10 @@ export async function settle(page: Page): Promise<void> {
   await expect(loaders).toHaveCount(0);
 }
 
-/**
- * Öffnet die Startseite und wartet auf die nachgeladenen Hero-Komponenten.
- * Bis dahin steht ihr Fallback da, und die Seite ist ein paar Pixel kürzer.
- */
+/** Öffnet die Startseite und wartet, bis sie steht. */
 export async function openHome(page: Page): Promise<void> {
   await page.goto('/');
-  for (const lazy of ['.shiny-text', '.split-parent', '.text-type']) {
-    await page.locator(lazy).waitFor();
-  }
+  await page.getByRole('heading', { level: 1 }).waitFor();
   await settle(page);
 }
 
@@ -166,20 +183,14 @@ export async function openHome(page: Page): Promise<void> {
 export async function openReport(page: Page, domain: Domain): Promise<void> {
   await page.goto(`/lookup/${domain}`);
   // Die Findings-Zahl erscheint erst, wenn Records und alle Sektionen da sind.
-  await expect(page.locator('#tab-findings')).toHaveText(/\d/);
+  await expect(reportTab(page, 'findings')).toHaveText(/\d/);
   await settle(page);
 
-  /*
-   * Der Health Score zählte per JavaScript hoch (1,2 s) und ignorierte dabei
-   * „Bewegung reduzieren“ — der Pixelvergleich erwischte die Zahl mitten im
-   * Hochzählen (90 statt 94). Seit #103 steht er dann sofort auf dem Endwert;
-   * das Warten bleibt als Absicherung. Den Endwert rechnet dieselbe Funktion
-   * aus wie die App; der Balken ist fertig, wenn seine Breite passt.
-   */
+  // Der Health Score steht fest, sobald alle Sektionen da sind. Den Endwert
+  // rechnet dieselbe Funktion aus wie die App.
   const score = String(expectedScore(domain));
-  const card = page.locator('.card').filter({ has: page.getByRole('heading', { name: 'Health Score' }) });
-  await expect(card.getByText(score, { exact: true })).toBeVisible();
-  await expect(card.locator(`[style*="width: ${score}%"]`)).toHaveCount(1);
+  const summary = page.getByRole('complementary', { name: 'Zusammenfassung' });
+  await expect(summary.getByText(score, { exact: true }).first()).toBeVisible();
 }
 
 /** Score, den die App aus den Findings der Testdaten berechnet. */
@@ -192,8 +203,17 @@ function expectedScore(domain: Domain): number {
 
 /** Wechselt im Report auf einen Tab und wartet auf dessen Inhalt. */
 export async function showTab(page: Page, tab: (typeof REPORT_TABS)[number]): Promise<void> {
-  await page.locator(`#tab-${tab}`).click();
-  await expect(page.locator(`#panel-${tab}`)).toBeVisible();
+  // Auf schmalen Schirmen klappen Flows Tabs ein: dann steht nur der aktive
+  // Tab in der Leiste, die übrigen liegen im Menü dahinter.
+  const target = reportTab(page, tab);
+  if (await target.isVisible()) {
+    await target.click();
+  } else {
+    await page.getByRole('tablist').getByRole('button').last().click();
+    await page.getByRole('menuitem', { name: new RegExp(`^${TAB_LABELS[tab]}`) }).click();
+  }
+  await expect(reportTab(page, tab)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel')).toBeVisible();
   await settle(page);
 }
 

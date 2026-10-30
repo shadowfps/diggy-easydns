@@ -1,0 +1,16 @@
+/* Textseite: höchstens 48rem breit, zentriert (docs/DESIGN.md). */
+.page {
+  display: flex;
+  width: 100%;
+  max-width: 48rem;
+  flex-direction: column;
+  gap: var(--size-px--l);
+  margin-inline: auto;
+}
+
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--xs);
+}
+

@@ -26,7 +26,6 @@ export type DeText =
   // ─── Header, Menü, Footer, Seitentitel ───────────────────────────────
   | 'Zur Startseite'
   | 'Menü öffnen'
-  | 'Menü schließen'
   | 'History'
   | 'Available Check'
   | 'About'
@@ -43,7 +42,6 @@ export type DeText =
   | 'Was steckt hinter deiner Domain?'
   | 'DNS, SSL, Mail-Security und Propagation auf einen Blick.'
   | 'Ohne Fachchinesisch, mit Empfehlungen.'
-  | 'Alles, was du wissen musst — in einem Tool.'
   | 'Was diggy prüft'
   | 'Sechs Bereiche, ein Befund'
   | 'Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.'
@@ -104,10 +102,12 @@ export type DeText =
 
   // ─── Records und Findings ────────────────────────────────────────────
   | 'Alle'
+  | 'DNS-Records'
+  | 'Typ'
+  | 'Wert'
   | 'Warnung'
   | 'Hinweis'
   | 'OK'
-  | 'Snippet kopiert'
   | 'Snippet kopieren'
   | 'ohne Punktabzug'
   | 'TTL unbekannt'
@@ -229,6 +229,7 @@ export type DeText =
   | '{type}-Record'
   | '{types}- oder {last}-Record'
   | 'Antwort {letter}'
+  | 'Antwort'
   | 'kein Eintrag'
   | '{label} · weicht ab'
   | 'Mehrheit'
@@ -307,6 +308,10 @@ export type DeText =
   | 'verbesserungswürdig'
   | 'schlecht'
   | 'PageSpeed-Analyse läuft…'
+  | 'Messung für'
+  | 'Misst Ladezeit und Core Web Vitals mit Google Lighthouse — mobil oder am Desktop.'
+  | 'Optimierung'
+  | 'Potenzial'
 
   // ─── VirusTotal ──────────────────────────────────────────────────────
   | 'Prüft die Domain gegen 80+ Sicherheits-Engines auf Malware, Phishing und Blacklists.'
@@ -327,6 +332,7 @@ export type DeText =
   | 'Werte Reputation aus…'
   | 'Scan läuft'
   | 'VirusTotal-Scan läuft…'
+  | 'Ergebnis'
 
   // ─── IP-Details ──────────────────────────────────────────────────────
   | 'IP-Lookup'
@@ -335,12 +341,7 @@ export type DeText =
   | 'IP-Details werden geladen…'
   | 'IP-, Netzwerk- und Geolocation-Details'
   | 'Details zu {ip} anzeigen'
-  | 'Details zu {ip}'
-  | 'IP kopieren:'
-  | 'IP kopiert'
   | 'IP kopieren'
-  | 'Details schließen'
-  | 'Schließen'
   | 'nicht konfiguriert'
   | 'nicht verfügbar'
   | 'Organisation'
@@ -366,6 +367,8 @@ export type DeText =
   | 'gerade eben'
   | 'vor {count} min'
   | 'vor {count} h'
+  | 'Alle Einträge werden aus diesem Browser gelöscht. Das lässt sich nicht rückgängig machen.'
+  | 'Abbrechen'
 
   // ─── Available Check ─────────────────────────────────────────────────
   | 'Finde die passende Domain für dein Projekt — mit Alternativen zu gängigen TLDs.'
@@ -374,9 +377,8 @@ export type DeText =
   | 'Verfügbar'
   | 'Vergeben'
   | 'Unklar'
-  | 'Domain kopieren:'
-  | 'Domain kopiert'
   | 'Domain kopieren'
+  | 'Bitte gib einen Namen oder eine Domain ein.'
   | 'Du suchst qualitatives Hosting für dein neues Projekt? Dann schau doch mal bei {mittwald} vorbei — Managed Webhosting aus Deutschland, gemacht für Agenturen und Freelancer.'
 
   // ─── About ───────────────────────────────────────────────────────────
@@ -452,8 +454,6 @@ export type DeText =
   | 'Keine Änderungen seit {date}'
   | 'dem letzten Check'
   | 'Zeitpunkt unbekannt'
-  | 'Ausblenden'
-  | 'Anzeigen'
   | 'gestiegen'
   | 'gefallen'
   | 'erneuert'

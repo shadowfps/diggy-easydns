@@ -10,8 +10,8 @@
  * Welche Dateien zum kritischen Pfad gehören, wird nicht gepflegt, sondern aus
  * `dist/index.html` gelesen: das Entry-Script, alles mit `modulepreload` und
  * die Stylesheets. Genau das lädt der Browser, bevor er etwas zeigen kann.
- * Lazy geladene Chunks (GSAP, die Hero-Komponenten, PageSpeed- und
- * VirusScan-Ansicht) stehen dort nicht und zählen deshalb nicht mit — sie
+ * Lazy geladene Chunks (die eigenen Seiten, die meisten Report-Tabs,
+ * Flows List und Form) stehen dort nicht und zählen deshalb nicht mit — sie
  * werden am Ende nur zur Ansicht aufgelistet.
  *
  * Aufruf: `npm run size` (setzt einen Build in `dist/` voraus).
@@ -28,48 +28,44 @@ const DIST = path.join(ROOT, 'dist');
 /**
  * Obergrenzen in kB gzip, je Chunk des kritischen Pfads.
  *
- * Die Werte in Klammern sind der Stand bei Einführung (21.09.2026, nach React
- * 19.3 und Motion 13.4). Der Abstand liegt bei rund 7 % — genug, damit eine
- * normale Patch-Runde nicht rot wird, eng genug, damit ein Sprung in der
- * Größenordnung des React-Upgrades (+22,6 kB) sicher auffällt.
+ * Die Werte in Klammern sind der Stand beim Umstieg auf mittwald Flow
+ * (30.10.2026). Der Abstand liegt bei rund 7 % — genug, damit eine normale
+ * Patch-Runde nicht rot wird, eng genug, damit ein Sprung sicher auffällt.
  *
  * Wird eine Grenze überschritten, ist das kein Fehler, sondern eine Frage:
  * lohnt der Zuwachs? Lautet die Antwort ja, wird hier die Zahl angehoben —
  * mit dem Grund im Commit.
  */
 const BUDGETS_KB = {
-  'react.js': 68, // 63,36
-  // Motion 14.2 (15.10.2026): +3,3 kB für hardwarebeschleunigte x/y/scale —
-  // genau die Transforms, die hier an über 60 Stellen animiert werden.
-  'motion.js': 51, // 47,67
-  // Erklärungen zu Records und Mail-Begriffen (#80, 16.10.2026): +2,1 kB —
-  // die Texte und der InfoButton. Sie liegen im Haupt-Chunk, weil die Records
-  // der Start-Tab sind; nachladen hieße ein „?“, das erst lädt. Platz dafür
-  // schafft das Nachladen von Sicherheits-Tab, Impressum und Datenschutz
-  // (#79) — die Grenze bleibt bei 48 kB.
-  'index.js': 48, // 43,73 · 42,40 vor, 44,66 mit #80
-  // lucide-react 1.x (#119, 16.10.2026): +1,85 kB bei gleichen 76 Icons
-  // (8,67 → 10,52). Jedes Icon trägt jetzt Name und Alias-Liste mit (daraus
-  // entstehen die Klassen `lucide-<name>`), dazu Kontext-Provider und das
-  // standardmäßige `aria-hidden`. Abschalten lässt sich davon nichts, und die
-  // letzte 0.x kam im März 2026. Hinweis: rolldown legt auch das Paket `react`
-  // (rund 3 kB) in diesen Chunk — schon vor dem Update.
-  'icons.js': 11.5, // 7,78 · 8,67 vor, 10,52 mit #119
-  // Tailwind 4 (15.10.2026): +2,3 kB für `@property`-Deklarationen, ihren
-  // Fallback-Block und die modernere Preflight. Lässt sich nicht abschalten.
-  'index.css': 11, // 10,20
-  'rolldown-runtime.js': 1, // 0,39
-  // Übersetzungsmodul (#86, 16.10.2026): `t()`, Formate und die deutschen
-  // Pluralformen. Eigener Chunk, weil index.js und die nachgeladenen Ansichten
-  // es teilen; per modulepreload trotzdem im kritischen Pfad. Den Namen
-  // vergibt rolldown — auf main hieß der gemeinsame Chunk api.js (0,77 kB),
-  // lib/api liegt seit #86 in index.js.
-  'i18n.js': 3, // 2,71
+  'react.js': 68, // 63,36 bei Einführung (21.09.2026), seitdem unverändert
+  // Der App-Code. Nachgeladen sind die Report-Tabs außer Records, Findings und
+  // WHOIS sowie alle eigenen Seiten außer der Startseite (App.tsx).
+  'index.js': 40, // 37,56
+  'rolldown-runtime.js': 1,
+  // Übersetzungsmodul (#86): `t()`, Formate und die deutschen Pluralformen.
+  'i18n.js': 3,
+  // Flows Stylesheet (fast alles) plus globals.css und die CSS-Module der
+  // App. Flow liefert sein CSS als ein Stück, ungenutzte Regeln fallen nicht weg.
+  'index.css': 56, // 52,42
 };
 
+/**
+ * Flow und react-aria teilt rolldown selbst in Chunks auf — nach Nutzung,
+ * mit Namen wie `Heading.js` oder `TableColumn.js`, die sich mit jeder neu
+ * benutzten Komponente verschieben. Ein festes Budget je Datei wäre dort
+ * Pflegeaufwand ohne Aussage. Diese Chunks zählen deshalb zusammen: alles im
+ * kritischen Pfad ohne eigenen Eintrag oben.
+ *
+ * Stand beim Umstieg auf Flow: 172,37 kB. Der größte Brocken ist Flows Kern mit
+ * react-aria und MobX, den Header, Suche und Report-Rahmen brauchen. Was nur
+ * nachgeladene Seiten nutzen (List, Form samt zod und Luxon), steht nicht
+ * darin — wandert davon etwas in den ersten Aufruf, schlägt dieses Budget an.
+ */
+const SHARED_BUDGET_KB = 184;
+
 /** Obergrenze für die Summe. */
-// Angehoben mit Tailwind 4, tailwind-merge 3 und Motion 14.2 (siehe oben).
-const CRITICAL_PATH_BUDGET_KB = 183; // 175,01
+// Mit Flow (30.10.2026): vorher 175 kB mit Tailwind, Motion und GSAP.
+const CRITICAL_PATH_BUDGET_KB = 354; // 331,24
 
 /**
  * Aus `react-BAgBMDim.js` wird `react.js` — der Hash wechselt bei jedem Build.
@@ -109,6 +105,25 @@ if (referenced.length === 0) {
   process.exit(1);
 }
 
+/*
+ * Flow würde seine Schriften von cdn.mittwald.de laden. vite.config.ts
+ * entfernt diese Regeln (flowSelfHostedFonts) — hier die Gegenprobe am
+ * fertigen CSS: Ein Verweis auf einen fremden Host hieße, dass jeder Aufruf
+ * die IP des Besuchers weitergibt, und die CSP (font-src 'self') blockierte
+ * die Schriften ohnehin.
+ */
+const cssFiles = readdirSync(path.join(DIST, 'assets')).filter((file) => file.endsWith('.css'));
+const thirdParty = cssFiles.filter((file) =>
+  /url\(\s*['"]?https?:/.test(readFileSync(path.join(DIST, 'assets', file), 'utf8'))
+);
+if (thirdParty.length > 0) {
+  console.error(
+    `Stylesheets laden von fremden Hosts: ${thirdParty.join(', ')}.\n` +
+      'Schriften und Bilder kommen aus dem eigenen Bundle — siehe flowSelfHostedFonts in vite.config.ts.'
+  );
+  process.exit(1);
+}
+
 const entries = [...new Set(referenced)].map((rel) => {
   const file = path.join(DIST, rel);
   if (!existsSync(file)) {
@@ -141,14 +156,22 @@ if (orphaned.length > 0) {
 const total = entries.reduce((sum, entry) => sum + entry.size, 0);
 const breaches = entries.filter((entry) => entry.budget !== undefined && kb(entry.size) > entry.budget);
 const totalBreached = kb(total) > CRITICAL_PATH_BUDGET_KB;
+const shared = entries.filter((entry) => entry.budget === undefined);
+const sharedSize = shared.reduce((sum, entry) => sum + entry.size, 0);
+const sharedBreached = kb(sharedSize) > SHARED_BUDGET_KB;
 
 console.log('Kritischer Pfad (gzip)\n');
 for (const entry of entries) {
-  const budget = entry.budget === undefined ? '      —' : `${entry.budget}`.padStart(7);
+  const budget = entry.budget === undefined ? ' Gruppe' : `${`${entry.budget}`.padStart(7)} kB`;
   const mark = entry.budget !== undefined && kb(entry.size) > entry.budget ? ' ÜBER BUDGET' : '';
-  console.log(`  ${entry.name.padEnd(22)} ${fmt(kb(entry.size))} kB  Budget ${budget} kB${mark}`);
+  console.log(`  ${entry.name.padEnd(22)} ${fmt(kb(entry.size))} kB  Budget ${budget}${mark}`);
 }
 console.log(`  ${'—'.repeat(22)} ${'—'.repeat(10)}`);
+console.log(
+  `  ${'Gruppe (Flow u. a.)'.padEnd(22)} ${fmt(kb(sharedSize))} kB  Budget ${`${SHARED_BUDGET_KB}`.padStart(7)} kB${
+    sharedBreached ? ' ÜBER BUDGET' : ''
+  }`
+);
 console.log(
   `  ${'Summe'.padEnd(22)} ${fmt(kb(total))} kB  Budget ${`${CRITICAL_PATH_BUDGET_KB}`.padStart(7)} kB${
     totalBreached ? ' ÜBER BUDGET' : ''
@@ -168,26 +191,13 @@ if (lazy.length > 0) {
   }
 }
 
-/*
- * Ein Chunk im kritischen Pfad ohne eigenes Budget wächst unbemerkt, bis die
- * Summe anschlägt — auf main lief api.js so mit. Ein neuer Chunk (rolldown
- * legt gemeinsame Module selbst zusammen) braucht deshalb einen Eintrag oben.
- */
-const unbudgeted = entries.filter((entry) => entry.budget === undefined);
-if (unbudgeted.length > 0) {
-  console.error(
-    `\nKein eigenes Budget: ${unbudgeted.map((entry) => entry.name).join(', ')} liegt im` +
-      ' kritischen Pfad. Grenze in scripts/check-bundle-size.mjs ergänzen (Stand plus rund 7 %).'
-  );
-}
-
-if (breaches.length > 0 || totalBreached) {
+if (breaches.length > 0 || totalBreached || sharedBreached) {
   console.error(
     '\nBundle-Budget überschritten. Wenn der Zuwachs gewollt ist: Grenze in' +
       ' scripts/check-bundle-size.mjs anheben und im Commit begründen.'
   );
 }
 
-if (unbudgeted.length > 0 || breaches.length > 0 || totalBreached) process.exit(1);
+if (breaches.length > 0 || totalBreached || sharedBreached) process.exit(1);
 
 console.log('\nBundle-Budget eingehalten.');

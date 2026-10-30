@@ -1,5 +1,21 @@
 import { Fragment, type ReactNode } from 'react';
-import { AlertTriangle, Check, CircleHelp, Info, Loader2, Server } from 'lucide-react';
+import {
+  AlertBadge,
+  AlertText,
+  Badge,
+  Button,
+  Heading,
+  IconWarning,
+  LoadingSpinner,
+  Section,
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
+  Text,
+} from '@mittwald/flow-react-components';
 import type { AuthoritativeFailure, RecordType } from '@/types/dns';
 import { countsMissingAnswers } from '@/lib/propagation';
 import {
@@ -8,8 +24,6 @@ import {
   type AuthoritativeAnswer,
   type AuthoritativeReference,
 } from '@shared/authoritative';
-import { cn } from '@/lib/cn';
-import { CardHeader } from '@/components/ui/CardHeader';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { LoadingAnnouncement } from '@/components/ui/LoadingAnnouncement';
 import { UncheckedBadge } from '@/components/ui/Unchecked';
@@ -17,6 +31,7 @@ import type { DeKey } from '@/i18n/de';
 import { errorText, useI18n } from '@/i18n';
 import type { Authoritative } from './useAuthoritative';
 import { AnswerGroup } from './AnswerGroup';
+import styles from './Propagation.module.css';
 
 /** Warum ein Nameserver nicht prüfbar war — kurz, die Zeile ist schmal. */
 const FAILURE_TEXT: Record<AuthoritativeFailure, DeKey> = {
@@ -35,11 +50,14 @@ const FAILURE_TEXT: Record<AuthoritativeFailure, DeKey> = {
 /** Fehler, die auf den Weg dorthin zeigen statt auf den Nameserver. */
 const UNREACHABLE = new Set<AuthoritativeFailure>(['timeout', 'network', 'no_ipv6']);
 
+/** Hinweise unter der Tabelle tragen Flows Status: Icon und Farbe. */
+type NoteStatus = 'success' | 'warning' | 'info' | 'unavailable';
+
 /**
- * Referenz-Block über den Resolvern (#133): was die autoritativen
+ * Referenz-Section über den Resolvern (#133): was die autoritativen
  * Nameserver der Zone selbst antworten — je Adresse Wert, Seriennummer und
  * Antwortzeit. Ist ein Nameserver nicht prüfbar, steht der Grund in seiner
- * Zeile; der Block bleibt, die Resolver-Liste darunter auch.
+ * Zeile; die Section bleibt, die Resolver darunter auch.
  */
 export function AuthoritativeBlock({
   type,
@@ -58,59 +76,60 @@ export function AuthoritativeBlock({
   const { t } = useI18n();
   const { result, error, retry } = auth;
 
-  const header = (aside?: ReactNode) => (
-    <CardHeader
-      icon={<Server className="size-4" />}
-      title={t('Autoritative Nameserver')}
-      subtitle={
-        result?.zone
+  // Überschrift samt Status, darunter wo gefragt wurde. Der Status steht in
+  // der Überschrift, wie es Flow für Badges an Sections vorsieht.
+  const header = (status?: ReactNode) => (
+    <>
+      <Heading level={2}>
+        {t('Autoritative Nameserver')}
+        {status}
+      </Heading>
+      <Text>
+        {result?.zone
           ? t('Zone {zone} · direkt gefragt über Port 53', { zone: result.zone })
-          : t('Direkt gefragt über Port 53')
-      }
-      aside={aside}
-    />
+          : t('Direkt gefragt über Port 53')}
+      </Text>
+    </>
   );
 
   if (!result || !reference) {
     return (
-      <section className="card" aria-label={t('Autoritative Nameserver')}>
+      <Section aria-label={t('Autoritative Nameserver')}>
         {header()}
         {error ? (
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <Note icon={<CircleHelp className="mt-0.5 size-4 shrink-0 text-fg-subtle" />}>
-              {errorText(error, 'Abfrage der autoritativen Nameserver fehlgeschlagen')}
-            </Note>
-            <button type="button" onClick={retry} className="btn btn-secondary btn-sm">
-              {t('Erneut versuchen')}
-            </button>
-          </div>
+          <>
+            <Note status="unavailable">{errorText(error, 'Abfrage der autoritativen Nameserver fehlgeschlagen')}</Note>
+            <div>
+              <Button size="s" variant="soft" color="secondary" onPress={retry}>
+                {t('Erneut versuchen')}
+              </Button>
+            </div>
+          </>
         ) : (
           <>
             {/* Angesagt über LoadingAnnouncement, die Anzeige ist aria-hidden (#108). */}
             <LoadingAnnouncement>{t('Autoritative Nameserver werden gefragt…')}</LoadingAnnouncement>
-            <p aria-hidden="true" className="mt-4 flex items-center gap-2 text-sm text-fg-muted">
-              <Loader2 className="size-4 shrink-0 animate-spin" />
-              {t('Autoritative Nameserver werden gefragt…')}
-            </p>
+            <div aria-hidden="true" className={styles.loading}>
+              <LoadingSpinner size="s" />
+              <Text>{t('Autoritative Nameserver werden gefragt…')}</Text>
+            </div>
           </>
         )}
-      </section>
+      </Section>
     );
   }
 
   if (result.error) {
     return (
-      <section className="card" aria-label={t('Autoritative Nameserver')}>
+      <Section aria-label={t('Autoritative Nameserver')}>
         {header(<UncheckedBadge />)}
-        <div className="mt-4">
-          <Note icon={<CircleHelp className="mt-0.5 size-4 shrink-0 text-fg-subtle" />}>
-            {result.error === 'no_zone'
-              ? t('Für diesen Namen ließ sich keine Zone finden — auf dem Weg nach oben gibt es keinen NS-Record.')
-              : t('Die Nameserver der Zone ließen sich gerade nicht ermitteln.')}{' '}
-            {t('Verglichen wird deshalb mit der Mehrheit der Resolver.')}
-          </Note>
-        </div>
-      </section>
+        <Note status="unavailable">
+          {result.error === 'no_zone'
+            ? t('Für diesen Namen ließ sich keine Zone finden — auf dem Weg nach oben gibt es keinen NS-Record.')
+            : t('Die Nameserver der Zone ließen sich gerade nicht ermitteln.')}{' '}
+          {t('Verglichen wird deshalb mit der Mehrheit der Resolver.')}
+        </Note>
+      </Section>
     );
   }
 
@@ -155,83 +174,71 @@ export function AuthoritativeBlock({
   const missingExpected = new Set(judged.filter(flagged).map((a) => a.server.host)).size;
 
   return (
-    <section className="card" aria-label={t('Autoritative Nameserver')}>
+    <Section aria-label={t('Autoritative Nameserver')}>
       {header(<StateBadge state={state} disagree={disagree} />)}
 
-      <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
-        {nameserverRows(answers).map((row) => (
-          <NameserverRow
-            key={row.map((a) => `${a.server.host}|${a.server.ip ?? ''}`).join(',')}
-            answers={row}
-            type={type}
-            label={labelFor(row[0].key)}
-            flagged={flagged(row[0])}
-          />
-        ))}
-      </div>
-
-      {groups.length > 0 && (
-        <div className="mt-5 space-y-4">
-          {groups.map((group) => (
-            <AnswerGroup
-              key={group.key}
-              letter={group.label}
-              values={group.values}
-              members={group.members}
-              badge={
-                // Wie bei den Resolvern nur, wenn es etwas zu unterscheiden
-                // gibt — sonst sagt es der Hinweis darunter.
-                hasExpected
-                  ? missingExpected === 0
-                    ? undefined
-                    : group.flagged
-                    ? 'deviating'
-                    : 'expected'
-                  : disagree && groups.length > 1 && group.flagged
-                  ? 'deviating'
-                  : undefined
-              }
+      <Table aria-label="Nameserver" verticalAlign="top">
+        <TableHeader>
+          <TableColumn>Nameserver</TableColumn>
+          <TableColumn horizontalAlign="end">{t('Antwort')}</TableColumn>
+        </TableHeader>
+        <TableBody>
+          {nameserverRows(answers).map((row) => (
+            <NameserverRow
+              key={row.map((a) => `${a.server.host}|${a.server.ip ?? ''}`).join(',')}
+              answers={row}
+              type={type}
+              label={labelFor(row[0].key)}
+              flagged={flagged(row[0])}
             />
           ))}
-        </div>
-      )}
+        </TableBody>
+      </Table>
 
-      <div className="panel mt-5 space-y-1.5 py-3">
-        <StateNote state={state} type={type} domain={domain} reference={reference} disagree={disagree} />
-        {hasExpected && judged.length > 0 && (
-          <Note
-            icon={
-              missingExpected > 0 ? (
-                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-              ) : (
-                <Check className="mt-0.5 size-4 shrink-0 text-success" />
-              )
-            }
-          >
-            {missingExpected > 0
+      {groups.map((group) => (
+        <AnswerGroup
+          key={group.key}
+          letter={group.label}
+          values={group.values}
+          members={group.members}
+          badge={
+            // Wie bei den Resolvern nur, wenn es etwas zu unterscheiden
+            // gibt — sonst sagt es der Hinweis darunter.
+            hasExpected
+              ? missingExpected === 0
+                ? undefined
+                : group.flagged
+                  ? 'deviating'
+                  : 'expected'
+              : disagree && groups.length > 1 && group.flagged
+                ? 'deviating'
+                : undefined
+          }
+        />
+      ))}
+
+      <StateNote state={state} type={type} domain={domain} reference={reference} disagree={disagree} />
+      {hasExpected && judged.length > 0 && (
+        <Note status={missingExpected > 0 ? 'warning' : 'success'}>
+          {missingExpected > 0
               ? t('Noch ohne den erwarteten Wert: {count} von {total} Nameservern — dort ist die Änderung nicht angekommen.', {
                   count: missingExpected,
                   total: new Set(judged.map((a) => a.server.host)).size,
                 })
               : t('Die Nameserver liefern den erwarteten Wert.')}
-          </Note>
-        )}
-        {result.omitted !== undefined && result.omitted > 0 && (
-          <Note icon={<Info className="mt-0.5 size-4 shrink-0 text-fg-subtle" />}>
-            {t('Nicht gefragt: {count} von {total} Nameservern, höchstens acht je Abfrage.', {
-              count: result.omitted,
-              total: new Set(answers.map((a) => a.server.host)).size + result.omitted,
-            })}
-          </Note>
-        )}
-        {/* Eine Aussage über diggy, nicht über die Domain — deshalb neutral. */}
-        {result.ipv6Skipped && (
-          <Note icon={<Info className="mt-0.5 size-4 shrink-0 text-fg-subtle" />}>
-            {t('Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.')}
-          </Note>
-        )}
-      </div>
-    </section>
+        </Note>
+      )}
+      {result.omitted !== undefined && result.omitted > 0 && (
+        <Note status="info">
+          {t('Nicht gefragt: {count} von {total} Nameservern, höchstens acht je Abfrage.', {
+            count: result.omitted,
+            total: new Set(answers.map((a) => a.server.host)).size + result.omitted,
+          })}
+        </Note>
+      )}
+      {/* Eine Aussage über diggy, nicht über die Domain — deshalb neutral. */}
+      {result.ipv6Skipped && <Note status="info">{t('Gefragt nur über IPv4: Der diggy-Server hat kein IPv6.')}</Note>}
+    </Section>
   );
 }
 
@@ -255,41 +262,18 @@ function nameserverRows(answers: AuthoritativeAnswer[]): AuthoritativeAnswer[][]
   });
 }
 
-function Note({ icon, children }: { icon: ReactNode; children: ReactNode }) {
-  return (
-    <p className="flex items-start gap-2.5 text-sm text-fg-muted">
-      {icon}
-      <span>{children}</span>
-    </p>
-  );
+/** Ein Hinweis unter der Tabelle — Flows AlertText trägt Icon und Farbe des Status. */
+function Note({ status, children }: { status: NoteStatus; children: ReactNode }) {
+  return <AlertText status={status}>{children}</AlertText>;
 }
 
 function StateBadge({ state, disagree }: { state: AuthoritativeReference['state']; disagree: boolean }) {
   const { t } = useI18n();
   if (state === 'unavailable') return <UncheckedBadge />;
-  if (state === 'agreed' || state === 'providers') {
-    return (
-      <span className="badge badge-success">
-        <Check className="size-3" />
-        {t('einig')}
-      </span>
-    );
-  }
-  if (disagree) {
-    return (
-      <span className="badge badge-warning">
-        <AlertTriangle className="size-3" />
-        {t('uneinig')}
-      </span>
-    );
-  }
-  if (state === 'cname') return <span className="badge">CNAME</span>;
-  return (
-    <span className="badge">
-      <Info className="size-3" />
-      {t('verschieden')}
-    </span>
-  );
+  if (state === 'agreed' || state === 'providers') return <AlertBadge status="success">{t('einig')}</AlertBadge>;
+  if (disagree) return <AlertBadge status="warning">{t('uneinig')}</AlertBadge>;
+  if (state === 'cname') return <Badge color="neutral">CNAME</Badge>;
+  return <Badge color="neutral">{t('verschieden')}</Badge>;
 }
 
 /** Der Satz zum Stand der Nameserver — und was das für den Vergleich darunter heißt. */
@@ -308,15 +292,12 @@ function StateNote({
 }) {
   const { t } = useI18n();
   const majority = t('Verglichen wird deshalb mit der Mehrheit der Resolver.');
-  const success = <Check className="mt-0.5 size-4 shrink-0 text-success" />;
-  const neutral = <Info className="mt-0.5 size-4 shrink-0 text-fg-subtle" />;
-  const warning = <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />;
 
   switch (state) {
     case 'agreed':
       return (
         <>
-          <Note icon={success}>
+          <Note status="success">
             {reference.values.length > 0
               ? t('Die Nameserver sind sich einig — die Resolver werden mit ihrer Antwort verglichen.')
               : t('Die Nameserver sind sich einig: Unter diesem Namen gibt es keinen {type}-Record.', { type })}
@@ -324,7 +305,7 @@ function StateNote({
           {/* Verschiedene Seriennummern bei mehreren Anbietern sind keine
               Störung — sagen, warum die Zeilen verschiedene zeigen. */}
           {reference.primaries > 1 && (
-            <Note icon={neutral}>
+            <Note status="info">
               {t('Die Zone liegt bei {count} Anbietern, jeder mit eigener Seriennummer — kein Fehler.', {
                 count: reference.primaries,
               })}
@@ -334,7 +315,7 @@ function StateNote({
       );
     case 'providers':
       return (
-        <Note icon={success}>
+        <Note status="success">
           {t('Die Nameserver gehören zu {count} Anbietern, jeder mit eigener Seriennummer — aktuell ist ein Resolver, der eine davon liefert.', {
             count: reference.keys?.length ?? 0,
           })}
@@ -342,14 +323,14 @@ function StateNote({
       );
     case 'serial':
       return (
-        <Note icon={warning}>
+        <Note status="warning">
           {t('Die Nameserver sind uneinig: Ihre Seriennummern weichen ab — eine Änderung ist noch nicht auf allen angekommen.')}{' '}
           {majority}
         </Note>
       );
     case 'values':
       return (
-        <Note icon={disagree ? warning : neutral}>
+        <Note status={disagree ? 'warning' : 'info'}>
           {disagree
             ? t('Die Nameserver sind uneinig: Sie liefern unterschiedliche Werte.')
             : t('Die Nameserver liefern unterschiedliche Adressen — bei Lastverteilung oder GeoDNS üblich.')}{' '}
@@ -358,7 +339,7 @@ function StateNote({
       );
     case 'cname':
       return (
-        <Note icon={neutral}>
+        <Note status="info">
           {t('{name} ist ein CNAME auf {target} — den {type}-Record liefern dessen Nameserver.', {
             name: domain,
             target: reference.cname ?? '',
@@ -370,7 +351,7 @@ function StateNote({
     default: {
       const unreachable = reference.answers.every((a) => a.server.error && UNREACHABLE.has(a.server.error));
       return (
-        <Note icon={<CircleHelp className="mt-0.5 size-4 shrink-0 text-fg-subtle" />}>
+        <Note status="unavailable">
           {unreachable
             ? t('Kein Nameserver hat geantwortet — vom diggy-Server aus ist DNS über Port 53 womöglich gesperrt.')
             : t('Kein Nameserver hat brauchbar geantwortet.')}{' '}
@@ -403,65 +384,67 @@ function NameserverRow({
   const [{ server, values, cname, serialDeviates }] = answers;
 
   return (
-    <div className="flex items-start justify-between gap-4 text-sm">
-      {/* Links nimmt den Platz, den die Antwort lässt: Namen und IPv6-Adressen
-          sind lang, eine Adresse rechts ist es nicht. */}
-      <div className="min-w-0 flex-1">
-        <p className="font-mono text-[13px] text-fg-muted">
-          <HostName host={server.host} />
-        </p>
-        {answers.map(({ server: { ip, responseTimeMs, error } }) =>
-          ip ? (
-            <p key={ip} className="flex flex-wrap gap-x-1 text-xs tabular-nums text-fg-subtle">
-              <span className="min-w-0 font-mono wrap-anywhere">{ip}</span>
-              {!error && <span className="whitespace-nowrap">· {responseTimeMs}ms</span>}
-            </p>
-          ) : null
-        )}
-        {server.serial &&
-          (serialDeviates ? (
-            <span className="badge badge-warning mt-1">
-              <AlertTriangle className="size-3" />
-              SOA {server.serial}
-            </span>
-          ) : (
-            <p className="text-xs tabular-nums text-fg-subtle">SOA {server.serial}</p>
-          ))}
-      </div>
+    <TableRow>
+      {/* Links nimmt den Platz, den die Antwort lässt: Namen und
+          IPv6-Adressen sind lang, eine Adresse rechts ist es nicht. */}
+      <TableCell>
+        <div className={styles.whoText}>
+          <Text className="mono">
+            <HostName host={server.host} />
+          </Text>
+          {answers.map(({ server: { ip, responseTimeMs, error } }) =>
+            ip ? (
+              <Text key={ip} className={styles.meta}>
+                <small>
+                  <span className="mono wrap-anywhere">{ip}</span>
+                  {!error && <> · {responseTimeMs}ms</>}
+                </small>
+              </Text>
+            ) : null
+          )}
+          {server.serial &&
+            (serialDeviates ? (
+              // Abweichende Seriennummer mit Wort und Icon — nie nur gelb.
+              <div>
+                <AlertBadge status="warning">SOA {server.serial}</AlertBadge>
+              </div>
+            ) : (
+              <Text className={styles.meta}>
+                <small>SOA {server.serial}</small>
+              </Text>
+            ))}
+        </div>
+      </TableCell>
 
-      {server.error ? (
-        <span className="flex shrink-0 items-center gap-1.5 text-right text-[13px] text-fg-subtle">
-          <CircleHelp className="size-3.5 shrink-0" />
-          {t(FAILURE_TEXT[server.error])}
-        </span>
-      ) : cname ? (
-        <span className="min-w-0 max-w-[55%] text-right font-mono text-[13px] text-fg-muted">
-          → <HostName host={cname} />
-        </span>
-      ) : countsMissingAnswers(type) ? (
-        <EntryBadge label={label} flagged={flagged} />
-      ) : (
-        <span
-          className={cn(
-            'flex max-w-[55%] shrink-0 items-start justify-end gap-1.5 text-right font-mono text-[13px]',
-            flagged ? 'font-medium text-warning' : values.length === 0 ? 'text-fg-subtle' : 'text-fg'
-          )}
-        >
-          {flagged && <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />}
-          {values.length === 0 ? (
-            <span className="truncate">{t('— kein Eintrag')}</span>
+      <TableCell horizontalAlign="end">
+        {server.error ? (
+          <AlertText status="unavailable">{t(FAILURE_TEXT[server.error])}</AlertText>
+        ) : cname ? (
+          <Text className="mono">
+            → <HostName host={cname} />
+          </Text>
+        ) : countsMissingAnswers(type) ? (
+          <EntryBadge label={label} flagged={flagged} />
+        ) : values.length === 0 ? (
+          flagged ? (
+            <AlertText status="warning">{t('— kein Eintrag')}</AlertText>
           ) : (
-            // Untereinander: Zwei Adressen nebeneinander ließen dem Namen links
-            // kaum Platz.
-            <span className="flex min-w-0 flex-col items-end gap-y-1 wrap-anywhere">
+            <Text className={styles.muted}>{t('— kein Eintrag')}</Text>
+          )
+        ) : (
+          // Untereinander: Zwei Adressen nebeneinander ließen dem Namen links
+          // kaum Platz.
+          <div className={styles.inline}>
+            {flagged && <IconWarning status="warning" aria-label={t('weicht ab')} />}
+            <div className={styles.answer}>
               {values.map((value) => (
-                <IpAddressLink key={value} ip={value} className="text-[13px] text-inherit" />
+                <IpAddressLink key={value} ip={value} />
               ))}
-            </span>
-          )}
-        </span>
-      )}
-    </div>
+            </div>
+          </div>
+        )}
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -491,14 +474,7 @@ function HostName({ host }: { host: string }) {
 function EntryBadge({ label, flagged }: { label: string | undefined; flagged: boolean }) {
   const { t } = useI18n();
   const text = label ? t('Antwort {letter}', { letter: label }) : t('kein Eintrag');
-  if (flagged) {
-    return (
-      <span className="badge badge-warning">
-        <AlertTriangle className="size-3" />
-        {t('{label} · weicht ab', { label: text })}
-      </span>
-    );
-  }
-  if (!label) return <span className="text-[13px] text-fg-subtle">{t('— kein Eintrag')}</span>;
-  return <span className="badge">{text}</span>;
+  if (flagged) return <AlertBadge status="warning">{t('{label} · weicht ab', { label: text })}</AlertBadge>;
+  if (!label) return <Text className={styles.muted}>{t('— kein Eintrag')}</Text>;
+  return <Badge color="neutral">{text}</Badge>;
 }

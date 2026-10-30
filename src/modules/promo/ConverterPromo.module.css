@@ -1,0 +1,14 @@
+/* Ein Hinweis, kein Abschnitt: schmaler als die Karte „Was diggy prüft“ darüber. */
+.promo {
+  width: 100%;
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+/* Der Name des Schwester-Tools in der Schrift der Wortmarke. */
+.brand {
+  font-family: Goldman, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+}

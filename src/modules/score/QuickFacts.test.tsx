@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { DetectedTech, DnsRecord, DnssecInfo, MailSecurity, SslInfo } from '@/types/dns';
 import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { QuickFacts } from './QuickFacts';
+
+/** Zeile der Schnellübersicht: ein LabeledValue, benannt nach seinem Label. */
+const row = (label: string) => screen.getByRole('group', { name: label });
+
+/** Bewertung einer Zeile — AlertText trägt ein Status-Icon mit Namen. */
+const status = (label: string, name: 'Erfolg' | 'Fehler' | 'Nicht verfügbar') =>
+  within(row(label)).queryByRole('img', { name: `Status "${name}"` });
 
 /** Alles außer den Records ist hier egal — die Sektionen laden noch nicht. */
 const idle = <T,>(): SectionSlice<T> => ({ status: 'skipped', data: undefined });
@@ -17,7 +25,7 @@ function renderWithMx(mx: DnsRecord[]) {
       techStack={idle()}
     />
   );
-  return screen.getByText('MX').nextElementSibling;
+  return row('MX');
 }
 
 describe('QuickFacts — MX', () => {
@@ -59,25 +67,26 @@ describe('QuickFacts — DMARC', () => {
         techStack={idle()}
       />
     );
-    return screen.getByText('DMARC').nextElementSibling as HTMLElement;
+    return row('DMARC');
   }
 
   it('zeigt eine gültige Policy wie bisher als gesetzt', () => {
     const value = renderWithDmarc({ present: true, record: 'v=DMARC1; p=none', policy: 'none' });
     expect(value).toHaveTextContent('gesetzt');
-    expect(value.querySelector('.text-success')).not.toBeNull();
+    expect(status('DMARC', 'Erfolg')).not.toBeNull();
   });
 
   it('nennt bei rua= ohne p= den Mangel, ohne Haken', () => {
     const value = renderWithDmarc({ present: true, record: 'v=DMARC1; rua=mailto:x@y' });
     expect(value).toHaveTextContent('p= fehlt');
-    expect(value.querySelector('.text-success, .text-danger')).toBeNull();
+    expect(status('DMARC', 'Erfolg')).toBeNull();
+    expect(status('DMARC', 'Fehler')).toBeNull();
   });
 
   it('zeigt einen ignorierten Record als unwirksam', () => {
     const value = renderWithDmarc({ present: true, record: 'v=DMARC1; sp=reject' });
     expect(value).toHaveTextContent('unwirksam');
-    expect(value.querySelector('.text-danger')).not.toBeNull();
+    expect(status('DMARC', 'Fehler')).not.toBeNull();
   });
 
   it('nennt ein ungültiges sp= neben p=reject', () => {
@@ -87,7 +96,7 @@ describe('QuickFacts — DMARC', () => {
       policy: 'reject',
     });
     expect(value).toHaveTextContent('sp= ungültig');
-    expect(value.querySelector('.text-success')).toBeNull();
+    expect(status('DMARC', 'Erfolg')).toBeNull();
   });
 
   it('zeigt mehrere Records als unwirksam', () => {
@@ -110,8 +119,8 @@ const MAIL: MailSecurity = {
 const DNSSEC_OFF: DnssecInfo = { enabled: false, valid: false, chainOfTrust: 'none' };
 const TECH: SectionSlice<DetectedTech[]> = { status: 'done', data: [] };
 
-/** Wert der Zeile mit diesem Label. */
-const fact = (label: string) => screen.getByText(label).nextElementSibling?.textContent;
+/** Wert der Zeile mit diesem Label — ohne das Label selbst. */
+const fact = (label: string) => row(label).textContent?.slice(label.length);
 
 describe('QuickFacts — nicht prüfbar', () => {
   it('zeigt gescheiterte Checks als „nicht prüfbar“', () => {
@@ -131,6 +140,9 @@ describe('QuickFacts — nicht prüfbar', () => {
     expect(fact('SSL')).toBe('nicht prüfbar');
     expect(fact('DNSSEC')).toBe('nicht prüfbar');
     expect(fact('DMARC')).toBe('nicht prüfbar');
+    // Neutral, nicht als Fehler (#101).
+    expect(status('SSL', 'Nicht verfügbar')).not.toBeNull();
+    expect(status('SSL', 'Fehler')).toBeNull();
   });
 
   it('zeigt ausgefallene Sektionen als „nicht prüfbar“, übersprungene als —', () => {
@@ -164,5 +176,44 @@ describe('QuickFacts — nicht prüfbar', () => {
     expect(fact('DNSSEC')).toBe('inaktiv');
     expect(fact('DMARC')).toBe('fehlt');
     expect(screen.queryByText('nicht prüfbar')).not.toBeInTheDocument();
+  });
+});
+
+describe('QuickFacts — Nameserver und Stack', () => {
+  it('übernimmt den Nameserver per Klick in die Suche', async () => {
+    const onUseDomain = vi.fn();
+    render(
+      <QuickFacts
+        records={[{ type: 'NS', name: 'example.com', value: 'a.iana-servers.net', ttl: 0 }]}
+        ssl={idle()}
+        dnssec={idle()}
+        mail={idle()}
+        techStack={idle()}
+        onUseDomain={onUseDomain}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'a.iana-servers.net in die Suche übernehmen' }));
+    expect(onUseDomain).toHaveBeenCalledWith('a.iana-servers.net');
+  });
+
+  it('nennt die erkannten Technologien mit Version', () => {
+    render(
+      <QuickFacts
+        records={[]}
+        ssl={idle()}
+        dnssec={idle()}
+        mail={idle()}
+        techStack={{
+          status: 'done',
+          data: [
+            { name: 'React', category: 'library', confidence: 'high' },
+            { name: 'nginx', category: 'server', version: '1.25', confidence: 'high' },
+          ],
+        }}
+      />
+    );
+    const stack = row('Stack');
+    expect(stack).toHaveTextContent('nginx 1.25');
+    expect(stack).toHaveTextContent('React');
   });
 });

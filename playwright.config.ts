@@ -74,9 +74,8 @@ export default defineConfig({
     baseURL,
     locale: 'de-DE',
     timezoneId: 'Europe/Berlin',
-    // Framer Motion, GSAP und der Typewriter fragen das ab und stehen dann
-    // still — sonst wäre jeder Screenshot eine Momentaufnahme mitten in einer
-    // Animation.
+    // Flow fragt das ab und hält seine Animationen an — sonst wäre jeder
+    // Screenshot eine Momentaufnahme mitten in einer Animation.
     reducedMotion: 'reduce',
     // Kein Trace: das Aufzeichnen kostet pro Test gut zwei Sekunden. Bei einem
     // Fehlschlag reichen Screenshot und Meldung (die nennt das überstehende

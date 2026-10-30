@@ -1,10 +1,16 @@
-import { motion } from 'motion/react';
-import { AlertCircle, Loader2, Network, Server } from 'lucide-react';
+import {
+  Heading,
+  IconDanger,
+  LayoutCard,
+  LoadingSpinner,
+  Section,
+  Text,
+} from '@mittwald/flow-react-components';
 import { IpDetailsRows } from '@/components/ip/IpAddressLink';
 import { formatIpOwnerLabel, useIpDetails } from '@/components/ip/useIpDetails';
-import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useI18n } from '@/i18n';
+import styles from './IpResultView.module.css';
 
 interface IpResultViewProps {
   ip: string;
@@ -21,73 +27,55 @@ export function IpResultView({ ip }: IpResultViewProps) {
   const owner = details ? formatIpOwnerLabel(details) : null;
 
   return (
-    <motion.div
-      key={ip}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24 }}
-      className="mx-auto mt-6 w-full max-w-2xl md:mt-8"
-    >
+    <div key={ip} className={styles.page}>
       {/* Kopf wie beim DNS-Report: Überzeile, dann die Adresse selbst. */}
-      <div className="min-w-0">
-        <p className="eyebrow">{t('IP-Lookup')}</p>
-        <h1 className="mt-1.5 break-all font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
+      <div className={styles.head}>
+        <Text className="eyebrow">{t('IP-Lookup')}</Text>
+        <Heading level={1} className={`mono ${styles.ip}`}>
           {ip}
-        </h1>
+        </Heading>
       </div>
 
-      <div className="mt-6 flex flex-col gap-4">
-        {/* PTR-Highlight */}
-        <div className="card">
-          <CardHeader icon={<Server className="size-4" />} title="PTR / Reverse DNS" />
-          <div className="mt-4">
-            {loading ? (
-              <div role="status" className="flex items-center gap-2 text-sm text-fg-muted">
-                <Loader2 className="size-4 animate-spin" />
-                <span>{t('Reverse-DNS wird ermittelt…')}</span>
-              </div>
-            ) : ptrHosts.length > 0 ? (
-              <div className="flex flex-col gap-1">
-                {ptrHosts.map((host) => (
-                  <span key={host} className="break-all font-mono text-lg font-semibold text-fg">
-                    {host}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-fg-subtle">{t('Für diese IP ist kein PTR-Record konfiguriert.')}</p>
-            )}
-            {owner && !loading && <p className="mt-2 text-sm text-fg-muted">{owner}</p>}
-          </div>
-        </div>
-
-        {/* Details — ohne role="status": derselbe Ladevorgang wie beim PTR
-            oben, der ihn schon ansagt. Zwei Status hießen zwei Ansagen. */}
-        {loading && (
-          <div className="card flex items-center gap-2 text-sm text-fg-muted">
-            <Loader2 className="size-4 animate-spin" />
-            <span>{t('IP-Details werden geladen…')}</span>
-          </div>
-        )}
-
-        {error && !loading && (
-          <EmptyState tone="danger" icon={<AlertCircle className="size-5" />}>
-            {error}
-          </EmptyState>
-        )}
-
-        {details && !loading && !error && (
-          <div className="card">
-            <CardHeader
-              icon={<Network className="size-4" />}
-              title={t('IP-, Netzwerk- und Geolocation-Details')}
-            />
-            <div className="mt-4">
-              <IpDetailsRows details={details} />
+      <LayoutCard>
+        <Section>
+          <Heading level={2}>PTR / Reverse DNS</Heading>
+          {loading ? (
+            <div role="status" className={styles.loading}>
+              <LoadingSpinner size="s" />
+              <Text>{t('Reverse-DNS wird ermittelt…')}</Text>
             </div>
-          </div>
-        )}
-      </div>
-    </motion.div>
+          ) : ptrHosts.length > 0 ? (
+            <div className={styles.hosts}>
+              {ptrHosts.map((host) => (
+                <Text key={host} className={`mono ${styles.host}`}>
+                  <strong>{host}</strong>
+                </Text>
+              ))}
+            </div>
+          ) : (
+            <Text>{t('Für diese IP ist kein PTR-Record konfiguriert.')}</Text>
+          )}
+          {owner && !loading && <Text>{owner}</Text>}
+        </Section>
+
+        <Section>
+          <Heading level={2}>{t('IP-, Netzwerk- und Geolocation-Details')}</Heading>
+          {/* Ohne role="status": derselbe Ladevorgang wie beim PTR oben, der
+              ihn schon ansagt. Zwei Status hießen zwei Ansagen (#108). */}
+          {loading && (
+            <div className={styles.loading}>
+              <LoadingSpinner size="s" />
+              <Text>{t('IP-Details werden geladen…')}</Text>
+            </div>
+          )}
+          {error && !loading && (
+            <EmptyState tone="danger" icon={<IconDanger />}>
+              {error}
+            </EmptyState>
+          )}
+          {details && !loading && !error && <IpDetailsRows details={details} />}
+        </Section>
+      </LayoutCard>
+    </div>
   );
 }

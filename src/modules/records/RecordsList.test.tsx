@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { DnsRecord } from '@/types/dns';
@@ -12,7 +12,7 @@ import { RecordsList } from './RecordsList';
 
 function row(value: string): HTMLElement {
   const cell = screen.getByText(value);
-  const element = cell.closest<HTMLElement>('.grid');
+  const element = cell.closest<HTMLElement>('[role="row"]');
   if (!element) throw new Error(`Keine Zeile für ${value}`);
   return element;
 }
@@ -72,7 +72,8 @@ describe('RecordsList — Erklärungen', () => {
   it('zeigt das „?“ auch, wenn ein Filter aktiv ist', async () => {
     const user = userEvent.setup();
     render(<RecordsList records={RECORDS} />);
-    await user.click(screen.getByRole('button', { name: /^NS/ }));
+    await user.click(screen.getByRole('tab', { name: /^NS/ }));
+    expect(screen.getByRole('tab', { name: /^NS/ })).toHaveAttribute('aria-selected', 'true');
     expect(infoLabels()).toEqual(['Was bedeutet NS?']);
   });
 
@@ -151,7 +152,23 @@ describe('RecordsList — Null-MX', () => {
   it('behält das Badge, wenn der MX-Filter aktiv ist', async () => {
     const user = userEvent.setup();
     render(<RecordsList records={[NULL_MX, ...RECORDS.filter((r) => r.type !== 'MX')]} />);
-    await user.click(screen.getByRole('button', { name: /^MX/ }));
+    await user.click(screen.getByRole('tab', { name: /^MX/ }));
     expect(nullMxBadge()).toBeInTheDocument();
+  });
+});
+
+describe('RecordsList — Nameserver', () => {
+  it('übernimmt einen Nameserver per Klick in die Suche', async () => {
+    const user = userEvent.setup();
+    const onUseDomain = vi.fn();
+    render(<RecordsList records={RECORDS} onUseDomain={onUseDomain} />);
+    await user.click(screen.getByRole('button', { name: 'ns2.example.com in die Suche übernehmen' }));
+    expect(onUseDomain).toHaveBeenCalledWith('ns2.example.com');
+  });
+
+  it('zeigt den Nameserver ohne Suche als Text', () => {
+    render(<RecordsList records={RECORDS} />);
+    expect(screen.getByText('ns1.example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /in die Suche übernehmen/ })).not.toBeInTheDocument();
   });
 });

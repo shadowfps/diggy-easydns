@@ -347,7 +347,7 @@ describe('Ansichten auf Englisch', () => {
         })}
       />
     );
-    const card = screen.getByText('Who may send email in your name?').closest('.card') as HTMLElement;
+    const card = screen.getByText('Who may send email in your name?').closest('section') as HTMLElement;
     expect(within(card).getByText('+all allows any sender — it offers effectively no protection.')).toBeInTheDocument();
     expect(within(card).getByText('has issues')).toBeInTheDocument();
     expect(spfIssueText('Altes Problem')).toBe('Altes Problem');

@@ -1,0 +1,36 @@
+.page {
+  display: flex;
+  width: 100%;
+  max-width: 48rem;
+  flex-direction: column;
+  gap: var(--size-px--l);
+  margin-inline: auto;
+}
+
+.head {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--size-px--xs);
+}
+
+.ip,
+.host {
+  overflow-wrap: anywhere;
+}
+
+.hosts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--xs);
+}
+
+.host {
+  font-size: 1.125rem;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-px--s);
+}

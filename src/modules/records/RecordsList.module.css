@@ -1,0 +1,38 @@
+/* Typ mit dem „?“ daneben — eine Zeile, auch wenn die Spalte schmal ist. */
+.type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-px--xxs);
+  font-weight: 700;
+}
+
+/* Priorität, Wert und Zusätze (Netzbetreiber, Null-MX) fließen nebeneinander und brechen um. */
+.value {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-px--xxs) var(--size-px--s);
+}
+
+.priority {
+  color: var(--neutral--color--800);
+  font-variant-numeric: tabular-nums;
+}
+
+.nameserver {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.nullMx {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-px--xxs);
+  font-family: Inter, sans-serif;
+}
+
+.ttl {
+  font-variant-numeric: tabular-nums;
+}

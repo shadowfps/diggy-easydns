@@ -1,0 +1,23 @@
+/* Die Honeypot-Felder liegen absolut und richten sich am Formular aus. */
+.form {
+  position: relative;
+}
+
+/*
+ * Für Menschen unsichtbar, aber nicht per display:none — Bots füllen nur
+ * Felder aus, die sie für sichtbar halten.
+ */
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Fokusziel der Rückmeldung — der Fokus ist sichtbar am Text, nicht als Ring. */
+.status {
+  outline: none;
+}

@@ -169,15 +169,6 @@
   gap: var(--size-px--xs);
 }
 
-/* Kleine Überzeile in Versalien — Kategorie über der Domain. */
-.eyebrow {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--neutral--color--800);
-}
-
 .domain {
   overflow-wrap: anywhere;
 }

@@ -1,0 +1,92 @@
+/*
+ * Nur, was Flow nicht abdeckt: die Anordnung innerhalb von Tabellenzellen und
+ * Antwort-Gruppen. Abstände aus Flows Skala, Farben aus seinen Tokens.
+ */
+
+/* Typwahl und erwarteter Wert nebeneinander, auf dem Handy untereinander. */
+.controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: var(--size-px--m);
+}
+
+@media (min-width: 640px) {
+  .controls {
+    grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+  }
+}
+
+/* Feld und Löschen-Button in einer Zeile. */
+.expected {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--size-px--s);
+}
+
+/* Erste Spalte: Flagge, Name, darunter Antwortzeit und TTL bzw. Adressen. */
+.who {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--size-px--s);
+}
+
+.whoText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--size-px--xxs, 2px);
+}
+
+.meta {
+  color: var(--neutral--color--800);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Zweite Spalte: Werte untereinander, rechtsbündig. */
+.answer {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--size-px--xs);
+  text-align: end;
+}
+
+.inline {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--size-px--xs);
+}
+
+.muted {
+  color: var(--neutral--color--800);
+}
+
+/* Eine Antwort-Gruppe unter der Tabelle: Überschrift, wer sie liefert, Werte. */
+.group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--size-px--s);
+}
+
+.value {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-px--xs);
+}
+
+/* Gesprochen wird der Ladezustand über LoadingAnnouncement, das hier ist nur fürs Auge. */
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-px--s);
+}

@@ -34,6 +34,15 @@ body {
   background-blend-mode: overlay, normal;
 }
 
+/*
+ * Markierter Text in beiden Themes lesbar (#127): Textfarbe aus dem Theme,
+ * die Markierung als getönte Fläche derselben Farbe. Flow setzt keine eigene.
+ */
+::selection {
+  color: var(--text--color--default);
+  background-color: color-mix(in oklab, var(--text--color--default) 20%, transparent);
+}
+
 /* Für Screenreader lesbar, sonst unsichtbar — Ansagen, Zusatztexte. */
 .sr-only {
   position: absolute;
@@ -55,6 +64,18 @@ body {
 .mono {
   font-family: FiraCode, monospace;
   font-variant-ligatures: none;
+}
+
+/*
+ * Kleine Überzeile in Versalien über einer Seitenüberschrift: Kategorie,
+ * Abschnitt („DNS-Report“, „Vergleich“). Flow hat dafür keine Komponente.
+ */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--neutral--color--800);
 }
 
 /* Lange Werte ohne Leerzeichen (DKIM-Schlüssel, Tokens) umbrechen statt überlaufen. */

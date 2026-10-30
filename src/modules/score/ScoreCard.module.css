@@ -1,0 +1,40 @@
+/* Ring links, die Zählung daneben — in der schmalen Seitenspalte untereinander. */
+.overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-px--m) var(--size-px--l);
+}
+
+.value {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: var(--size-px--s) var(--size-px--m);
+}
+
+.stat,
+.unchecked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-px--xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.top {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--size-px--s);
+}
+
+.topTitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

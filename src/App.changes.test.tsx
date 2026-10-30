@@ -103,7 +103,10 @@ describe('Seit dem letzten Check im Report', () => {
     const toggle = await screen.findByRole('button', { name: /Änderungen seit/ });
     await userEvent.click(toggle);
 
-    const list = within(screen.getByRole('list'));
+    // Eigene Liste der Karte — die Kopfzeile hat auch eine (Navigation).
+    const list = within(
+      within(screen.getByRole('region', { name: 'Seit dem letzten Check' })).getByRole('list')
+    );
     expect(list.getByText('203.0.113.5').closest('li')).toHaveTextContent(/^neu/);
     expect(list.getByText('198.51.100.7').closest('li')).toHaveTextContent(/^entfallen/);
     expect(list.getByText(/DMARC-Record gesetzt/)).toBeInTheDocument();
@@ -196,6 +199,6 @@ describe('Seit dem letzten Check im Report', () => {
     await waitFor(() =>
       expect(screen.getByText(/^Keine Änderungen seit /)).toBeInTheDocument()
     );
-    expect(screen.getByText('SSL').nextElementSibling).toHaveTextContent('nicht prüfbar');
+    expect(screen.getByRole('group', { name: 'SSL' })).toHaveTextContent('nicht prüfbar');
   });
 });

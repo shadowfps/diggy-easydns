@@ -130,7 +130,8 @@ Icon-Buttons brauchen ein `aria-label`.
 - `main.tsx` lädt `all-layered.css`: Flow liegt in `@layer`s, eigenes CSS
   gewinnt ohne Spezifitätskampf.
 - Globale Hilfsklassen (`styles/globals.css`): `mono` (Fira Code ohne
-  Ligaturen), `sr-only`, `wrap-anywhere`.
+  Ligaturen), `eyebrow` (Überzeile über einer Seitenüberschrift), `sr-only`,
+  `wrap-anywhere`.
 
 ## Schriften
 

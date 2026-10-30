@@ -1,0 +1,4 @@
+/* `<address>` für die Semantik — ohne die kursive Voreinstellung des Browsers. */
+.address {
+  font-style: normal;
+}

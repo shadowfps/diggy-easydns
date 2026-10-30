@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /**
@@ -125,10 +125,14 @@ describe('Einstiege', () => {
     expect(screen.queryByRole('heading', { name: 'Zwei Domains vergleichen' })).toBeNull();
   });
 
-  it('öffnet den Vergleich aus dem Menü', async () => {
+  it('öffnet den Vergleich aus der Navigation', async () => {
     render(<App />);
-    await userEvent.click(screen.getByRole('button', { name: /Menü öffnen/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Vergleichen' }));
+    // Flow hängt Link-Namen ein U+200D an — daher der Vergleich über den Anfang.
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: 'Hauptnavigation' })).getByRole('link', {
+        name: /^Vergleichen/,
+      })
+    );
 
     expect(window.location.pathname).toBe('/compare');
     await compareHeading();

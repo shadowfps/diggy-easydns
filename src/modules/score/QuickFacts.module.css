@@ -1,0 +1,18 @@
+/* Lange Hostnamen umbrechen statt die Spalte zu sprengen. */
+.value {
+  overflow-wrap: anywhere;
+}
+
+/* Der Nameserver als Button: linksbündig wie die übrigen Werte. */
+.nsButton {
+  justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-px--xs);
+}

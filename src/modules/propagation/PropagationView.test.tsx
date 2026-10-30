@@ -103,8 +103,25 @@ function View({
 const DNS_ENTRY: PropagationRecordType[] = ['TXT', 'CNAME'];
 const HOST: PropagationRecordType[] = ['A', 'AAAA'];
 
-const typeButton = (name: string) =>
-  within(screen.getByRole('group', { name: 'Record-Typ' })).getByRole('button', { name });
+/** Die Typwahl ist ein Select (acht Optionen); sein Button zeigt den gewählten Typ. */
+const typeSelect = () => screen.getByRole('button', { name: /Record-Typ/ });
+
+/** Wählt einen Typ wie ein Nutzer: Select öffnen, Option anklicken. */
+async function chooseType(name: string) {
+  await userEvent.click(typeSelect());
+  await userEvent.click(await screen.findByRole('option', { name }));
+}
+
+/**
+ * Status-Icons von Flow (AlertBadge, AlertText) heißen „Status "Warnung"“,
+ * eine abweichende Adresse „weicht ab“ — Warnung steht also nie nur in der
+ * Farbe. Darüber prüfen die Tests, ob etwas als Warnung dasteht.
+ */
+const warningIcons = (element: HTMLElement) =>
+  within(element).queryAllByRole('img', { name: /Warnung|weicht ab/ });
+
+/** Flow markiert das Feld als „(optional)“ — der Name beginnt mit der Beschriftung. */
+const expectedField = () => screen.getByRole('textbox', { name: /^Erwarteter Wert/ });
 
 beforeEach(() => {
   vi.mocked(api.lookupPropagation).mockReset();
@@ -192,7 +209,7 @@ describe('PropagationView — TXT', () => {
 
     // Der CNAME steht wie der TXT-Wert einmal unter der Liste — neben dem
     // Resolver-Namen ist auf dem Handy kein Platz für einen Hostnamen.
-    await userEvent.click(typeButton('CNAME'));
+    await chooseType('CNAME');
     expect(screen.getByRole('region', { name: 'Antwort A' })).toHaveTextContent(
       'sel1.dkim.provider.net'
     );
@@ -226,8 +243,7 @@ describe('PropagationView — Hosts', () => {
     expect(screen.getAllByRole('button', { name: 'Details zu 192.0.2.1 anzeigen' })).toHaveLength(2);
     // Voreinstellung wie bisher: der erste Standard-Typ mit Antwort. Der
     // CNAME aus der Antwortkette bleibt dabei außen vor.
-    expect(typeButton('A')).toHaveAttribute('aria-pressed', 'true');
-    expect(typeButton('CNAME')).toHaveAttribute('aria-pressed', 'false');
+    expect(typeSelect()).toHaveTextContent(/^A$/);
     expect(screen.getByText(/DNS sauber propagiert/)).toBeInTheDocument();
   });
 
@@ -254,8 +270,8 @@ describe('PropagationView — Typauswahl (#131)', () => {
       <View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} onTypeChange={onTypeChange} />
     );
 
-    const group = screen.getByRole('group', { name: 'Record-Typ' });
-    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual([
+    await userEvent.click(typeSelect());
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual([
       'A',
       'AAAA',
       'CNAME',
@@ -265,11 +281,16 @@ describe('PropagationView — Typauswahl (#131)', () => {
       'CAA',
       'SOA',
     ]);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
 
-    typeButton('MX').focus();
-    await userEvent.keyboard('{Enter}');
+    // Tastatur: Pfeil öffnet die Liste auf dem gewählten Typ, Enter übernimmt.
+    typeSelect().focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await screen.findByRole('listbox');
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Enter}');
     expect(onTypeChange).toHaveBeenCalledWith('MX');
-    expect(typeButton('MX')).toHaveAttribute('aria-pressed', 'true');
+    expect(typeSelect()).toHaveTextContent(/^MX$/);
   });
 
   it('fragt einen Typ, den der Report nicht mitlädt, erst bei Auswahl ab', async () => {
@@ -284,7 +305,7 @@ describe('PropagationView — Typauswahl (#131)', () => {
     render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
     expect(api.lookupPropagation).not.toHaveBeenCalled();
 
-    await userEvent.click(typeButton('MX'));
+    await chooseType('MX');
     expect(api.lookupPropagation).toHaveBeenCalledWith('example.com', 'MX');
     // Eine Ansage: Die Live-Region kommt leer, der Text danach (#108). Die
     // Nameserver (#133) haben ihre eigene, solange sie laden — hier sind sie
@@ -365,9 +386,9 @@ describe('PropagationView — Typauswahl (#131)', () => {
     render(<View results={results([[]])} types={HOST} initial="MX" />);
     expect(await screen.findByText('Propagation-Check fehlgeschlagen')).toBeInTheDocument();
 
-    await userEvent.click(typeButton('NS'));
+    await chooseType('NS');
     expect(await screen.findByText(/denselben NS-Record/)).toBeInTheDocument();
-    await userEvent.click(typeButton('MX'));
+    await chooseType('MX');
     expect(screen.getByRole('button', { name: 'Erneut versuchen' })).toBeInTheDocument();
     expect(vi.mocked(api.lookupPropagation).mock.calls.map(([, type]) => type)).toEqual(['MX', 'NS']);
 
@@ -506,7 +527,7 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
 
     const view = render(<View results={report} types={HOST} />);
     expect(api.lookupAuthoritative).toHaveBeenCalledWith('example.com', 'A');
-    await userEvent.click(typeButton('MX'));
+    await chooseType('MX');
     expect(api.lookupAuthoritative).toHaveBeenLastCalledWith('example.com', 'MX');
     view.unmount();
 
@@ -528,7 +549,7 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
       vi.mocked(api.lookupPropagation).mockResolvedValue({ propagation: results([[]]), findings: [] });
       render(<View results={results([{ records: [{ type: 'A', value: '192.0.2.1', ttl: 60 }] }])} types={HOST} />);
       await authBlock();
-      await userEvent.click(typeButton('MX'));
+      await chooseType('MX');
       await screen.findByRole('region', { name: 'Öffentliche Resolver' });
 
       const keyWarnings = error.mock.calls.filter((args) => args.some((a) => String(a).includes('same key')));
@@ -587,7 +608,7 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
     expect(await within(block).findByText('uneinig')).toBeInTheDocument();
     expect(within(block).getByText(/Ihre Seriennummern weichen ab/)).toBeInTheDocument();
     // Die abweichende Seriennummer und Antwort tragen Wort und Icon.
-    expect(within(block).getByText('SOA 2026101901').closest('.badge')).toHaveClass('badge-warning');
+    expect(warningIcons(within(block).getByText('SOA 2026101901').parentElement!)).toHaveLength(1);
     expect(within(block).getByText('Antwort 2 · weicht ab')).toBeInTheDocument();
     expect(within(resolverCard()).getByText('Verglichen mit der Mehrheit der Resolver')).toBeInTheDocument();
     expect(within(resolverCard()).getByText(/1 von 3 Resolvern weicht ab/)).toBeInTheDocument();
@@ -606,7 +627,7 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
     expect(await within(block).findByText('einig')).toBeInTheDocument();
     expect(within(block).getByText(/Die Zone liegt bei 2 Anbietern/)).toBeInTheDocument();
     expect(within(block).queryByText('uneinig')).not.toBeInTheDocument();
-    expect(block.querySelector('.badge-warning')).toBeNull();
+    expect(warningIcons(block)).toHaveLength(0);
   });
 
   it('zeigt verschiedene Adressen der Nameserver als Hinweis, nicht als Warnung', async () => {
@@ -621,7 +642,7 @@ describe('PropagationView — autoritative Nameserver (#133)', () => {
     const block = await authBlock();
     expect(await within(block).findByText('verschieden')).toBeInTheDocument();
     expect(within(block).getByText(/bei Lastverteilung oder GeoDNS üblich/)).toBeInTheDocument();
-    expect(block.querySelector('.text-warning')).toBeNull();
+    expect(warningIcons(block)).toHaveLength(0);
   });
 
   it('zeigt „nicht prüfbar“ mit Grund, wenn Port 53 gesperrt ist — die Resolver bleiben', async () => {
@@ -736,7 +757,7 @@ describe('PropagationView — erwarteter Wert (#133)', () => {
     await within(block).findByText('uneinig');
     await screen.findByRole('region', { name: 'Öffentliche Resolver' });
 
-    await userEvent.type(screen.getByRole('textbox', { name: 'Erwarteter Wert' }), 'MX.New.Example.');
+    await userEvent.type(expectedField(), 'MX.New.Example.');
 
     const card = resolverCard();
     expect(
@@ -769,7 +790,7 @@ describe('PropagationView — erwarteter Wert (#133)', () => {
       />
     );
 
-    expect(screen.getByRole('textbox', { name: 'Erwarteter Wert' })).toHaveValue('2001:DB8:0:0:0:0:0:1');
+    expect(expectedField()).toHaveValue('2001:DB8:0:0:0:0:0:1');
     expect(within(resolverCard()).getByText('Alle Resolver liefern den erwarteten Wert.')).toBeInTheDocument();
     expect(await within(await authBlock()).findByText('Die Nameserver liefern den erwarteten Wert.')).toBeInTheDocument();
   });
@@ -794,7 +815,7 @@ describe('PropagationView — erwarteter Wert (#133)', () => {
     const block = await authBlock();
     expect(await within(block).findByText(/ist ein CNAME auf cdn.provider.example/)).toBeInTheDocument();
     expect(within(block).queryByText(/erwarteten Wert/)).toBeNull();
-    expect(block.querySelector('.text-warning')).toBeNull();
+    expect(warningIcons(block)).toHaveLength(0);
     expect(within(resolverCard()).getByText('Alle Resolver liefern den erwarteten Wert.')).toBeInTheDocument();
   });
 

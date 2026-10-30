@@ -161,8 +161,9 @@ Die Details stehen in den
 
 ## Unter der Haube
 
-diggy ist eine TypeScript-Anwendung aus einem Guss: React 19 und Tailwind CSS 4
-im Browser, Express 5 auf Node.js 24 im Backend, DNS-Abfragen über das System
+diggy ist eine TypeScript-Anwendung aus einem Guss: React 19 mit dem
+Designsystem [mittwald Flow](https://flow.mittwald.de) im Browser, Express 5 auf
+Node.js 24 im Backend, DNS-Abfragen über das System
 und über DNS-over-HTTPS. Jede Änderung durchläuft Unit- und Integrationstests
 sowie Browser-Tests mit Pixelvergleich in hellem und dunklem Theme, auf Desktop
 und Mobil.

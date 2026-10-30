@@ -1,10 +1,25 @@
-import { useState, type ReactNode } from 'react';
-import { motion } from 'motion/react';
-import { Building2, Server, ShieldCheck, ShieldOff, ShieldQuestion, Lock, AlertCircle, ArrowUpRight } from 'lucide-react';
+import { useState } from 'react';
+import {
+  AlertBadge,
+  AlertText,
+  Badge,
+  Button,
+  ColumnLayout,
+  Content,
+  Flex,
+  Heading,
+  IconUnavailable,
+  InlineCode,
+  Label,
+  LabeledValue,
+  Link,
+  Section,
+  Text,
+  Tooltip,
+  TooltipTrigger,
+} from '@mittwald/flow-react-components';
 import type { WhoisInfo } from '@/types/dns';
 import { registryWebLookup, type RegistryWebLookup } from '@shared/registryWebLookup';
-import { cn } from '@/lib/cn';
-import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { t, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
@@ -17,8 +32,10 @@ interface WhoisViewProps {
   onUseDomain?: (domain: string) => void;
 }
 
+type Tone = 'ok' | 'warn' | 'bad';
+
 /** EPP-Status-Codes übersetzt für Laien — kurz & verständlich. */
-const STATUS_LABELS: Record<string, { label: DeKey; tone: 'ok' | 'warn' | 'bad' }> = {
+const STATUS_LABELS: Record<string, { label: DeKey; tone: Tone }> = {
   clienttransferprohibited: { label: 'Transfer-Sperre (Client)', tone: 'ok' },
   servertransferprohibited: { label: 'Transfer-Sperre (Registry)', tone: 'ok' },
   clientdeleteprohibited: { label: 'Lösch-Sperre (Client)', tone: 'ok' },
@@ -46,12 +63,16 @@ const WEB_LOOKUP_TEXT: Record<RegistryWebLookup['reason'], DeKey> = {
   permission: 'Die Registry von .{tld} erlaubt die Weitergabe ihrer WHOIS-Daten nur mit Genehmigung. Die Daten zeigt ihre {link}.',
 };
 
-const STATUS_BADGE: Record<'ok' | 'warn' | 'bad', string> = {
-  ok: 'badge-success',
-  warn: 'badge-warning',
-  bad: 'badge-danger',
+const STATUS_ALERT: Record<Tone, 'success' | 'warning' | 'danger'> = {
+  ok: 'success',
+  warn: 'warning',
+  bad: 'danger',
 };
 
+/**
+ * WHOIS/RDAP als Tab-Inhalt: Registrierung, Domain-Status und Nameserver je
+ * eine Section — Flow trennt sie mit einer Linie.
+ */
 export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
   /**
    * Bezugszeitpunkt einmal beim Mount festhalten.
@@ -73,20 +94,14 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
     // offen, wo es die Daten gibt.
     const webLookup = registryWebLookup(domain);
     return (
-      <EmptyState icon={<AlertCircle className="size-5" />} title={t('WHOIS / RDAP nicht verfügbar')}>
+      <EmptyState icon={<IconUnavailable />} title={t('WHOIS / RDAP nicht verfügbar')}>
         {webLookup
           ? tRich(WEB_LOOKUP_TEXT[webLookup.reason], {
               tld: webLookup.tld,
               link: (
-                <a
-                  href={webLookup.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="link inline-flex items-center gap-1"
-                >
+                <Link href={webLookup.url} target="_blank" rel="noopener noreferrer">
                   {t('Web-Abfrage')}
-                  <ArrowUpRight className="size-3.5 shrink-0" />
-                </a>
+                </Link>
               ),
             })
           : t('Diese TLD unterstützt kein RDAP, oder der Lookup ist fehlgeschlagen.')}
@@ -103,87 +118,81 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
 
   // Dieselben Schwellen wie die WHOIS-Findings: unter 7 Tagen (oder schon
   // abgelaufen) kritisch, unter 30 Tagen eine Warnung.
-  const expiryBadge =
+  const expiryStatus =
     expiresInDays === undefined
-      ? ''
+      ? undefined
       : expiresInDays < 7
-      ? 'badge-danger'
+      ? 'danger'
       : expiresInDays < 30
-      ? 'badge-warning'
-      : 'badge-success';
+      ? 'warning'
+      : 'success';
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <>
       {/* Registrar + Daten */}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="card md:col-span-2"
-      >
-        <CardHeader
-          icon={<Building2 className="size-4" />}
-          title={t('Registrierung')}
-          aside={
-            whois.source && (
-              <span
-                className="block max-w-40 truncate font-mono text-xs text-fg-subtle sm:max-w-none"
-                title={whois.source}
-              >
-                {whois.source}
-              </span>
-            )
-          }
-        />
+      <Section>
+        <Heading level={2}>
+          {t('Registrierung')}
+          {/* Woher die Daten kommen (RDAP-Server oder WHOIS-Host) — Metadaten. */}
+          {whois.source && (
+            <Badge color="neutral" className="mono">
+              {whois.source}
+            </Badge>
+          )}
+        </Heading>
 
-        <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
-          <Row label="Registrar" value={whois.registrar ?? '—'} />
-          <Row
-            label={t('Erstellt')}
-            value={
-              whois.createdAt ? (
-                <span>
+        <ColumnLayout s={[1]} m={[1, 1]} l={[1, 1]}>
+          <LabeledValue>
+            <Label>Registrar</Label>
+            <Content>{whois.registrar ?? '—'}</Content>
+          </LabeledValue>
+          <LabeledValue>
+            <Label>{t('Erstellt')}</Label>
+            <Content>
+              {whois.createdAt ? (
+                <>
                   {formatDate(whois.createdAt, DATE_FORMAT)}
                   {ageDays !== undefined && (
-                    <span className="ml-2 text-xs text-fg-subtle">
-                      ({formatAge(ageDays)})
-                    </span>
+                    <Text>
+                      {' '}
+                      <small>({formatAge(ageDays)})</small>
+                    </Text>
                   )}
-                </span>
+                </>
               ) : (
                 '—'
-              )
-            }
-          />
-          <Row
-            label={t('Läuft ab')}
-            value={
-              whois.expiresAt ? (
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span>{formatDate(whois.expiresAt, DATE_FORMAT)}</span>
-                  {expiresInDays !== undefined && (
-                    <span className={cn('badge', expiryBadge)}>
+              )}
+            </Content>
+          </LabeledValue>
+          <LabeledValue>
+            <Label>{t('Läuft ab')}</Label>
+            <Content>
+              {whois.expiresAt ? (
+                <Flex wrap="wrap" align="center" columnGap="s" rowGap="xs">
+                  <Text>{formatDate(whois.expiresAt, DATE_FORMAT)}</Text>
+                  {expiresInDays !== undefined && expiryStatus && (
+                    <AlertBadge status={expiryStatus}>
                       {expiresInDays < 0
                         ? t('vor {count} Tagen', { count: Math.abs(expiresInDays) })
                         : t('noch {count} Tage', { count: expiresInDays })}
-                    </span>
+                    </AlertBadge>
                   )}
-                </span>
+                </Flex>
               ) : (
                 '—'
-              )
-            }
-          />
-          <Row
-            label={t('Geändert')}
-            value={whois.updatedAt ? formatDate(whois.updatedAt, DATE_FORMAT) : '—'}
-          />
-        </dl>
+              )}
+            </Content>
+          </LabeledValue>
+          <LabeledValue>
+            <Label>{t('Geändert')}</Label>
+            <Content>{whois.updatedAt ? formatDate(whois.updatedAt, DATE_FORMAT) : '—'}</Content>
+          </LabeledValue>
+        </ColumnLayout>
 
         {/* Nur mit bekanntem Ablauf, der noch bevorsteht — eine bereits
             abgelaufene Domain braucht keine Erinnerung mehr, sondern Handeln. */}
         {whois.expiresAt && expiresInDays !== undefined && expiresInDays >= 0 && (
-          <div className="mt-4">
+          <div>
             <CalendarButton
               reminder={{
                 kind: 'domain',
@@ -196,109 +205,81 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
             />
           </div>
         )}
-      </motion.div>
-
-      {/* Nameserver aus WHOIS */}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-        className="card"
-      >
-        <CardHeader icon={<Server className="size-4" />} title={t('Nameserver (laut Registry)')} />
-
-        {whois.nameServers && whois.nameServers.length > 0 ? (
-          // Klickbar als Chips (übernimmt den Namen in die Suche), sonst eine
-          // schlichte Liste — ein nicht klickbarer Chip sähe bedienbar aus.
-          <ul className={cn('mt-4', onUseDomain ? 'flex flex-wrap gap-2' : 'space-y-1.5')}>
-            {whois.nameServers.map((ns) => (
-              <li key={ns} className="min-w-0 max-w-full">
-                {onUseDomain ? (
-                  <button
-                    type="button"
-                    onClick={() => onUseDomain(ns)}
-                    className="chip max-w-full font-mono"
-                    title={t('{value} in die Suche übernehmen', { value: ns })}
-                  >
-                    <span className="min-w-0 truncate">{ns}</span>
-                  </button>
-                ) : (
-                  <span className="block truncate font-mono text-[13px] text-fg">{ns}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-4 text-sm text-fg-subtle">{t('Keine Nameserver gemeldet.')}</p>
-        )}
-      </motion.div>
+      </Section>
 
       {/* Status + DNSSEC */}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-        className="card"
-      >
-        <CardHeader icon={<Lock className="size-4" />} title={t('Domain-Status')} />
+      <Section>
+        <Heading level={2}>{t('Domain-Status')}</Heading>
 
         {whois.status && whois.status.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-1.5">
+          <Flex wrap="wrap" gap="xs">
             {whois.status.map((s) => {
               const norm = s.toLowerCase().replace(/\s+/g, '');
               // Unbekannte Codes erscheinen roh — so, wie die Registry sie meldet.
               const meta = STATUS_LABELS[norm];
               return (
-                <span key={s} title={s} className={cn('badge', STATUS_BADGE[meta?.tone ?? 'ok'])}>
+                <AlertBadge key={s} status={STATUS_ALERT[meta?.tone ?? 'ok']}>
                   {meta ? t(meta.label) : s}
-                </span>
+                </AlertBadge>
               );
             })}
-          </div>
+          </Flex>
         ) : (
-          <p className="mt-4 text-sm text-fg-subtle">{t('Keine Status-Codes.')}</p>
+          <Text>{t('Keine Status-Codes.')}</Text>
         )}
 
         {/* Ohne Angabe der Registry (.eu über WHOIS, #105) wäre „nicht
             delegiert“ eine Behauptung, die niemand gemacht hat. */}
-        <div className="mt-5 flex items-center gap-2 border-t border-line-subtle pt-4 text-sm">
-          {whois.dnssecDelegated ? (
-            <ShieldCheck className="size-4 shrink-0 text-success" />
-          ) : whois.dnssecDelegated === false ? (
-            <ShieldOff className="size-4 shrink-0 text-fg-subtle" />
+        <Text elementType="p">
+          {tRich('DNSSEC bei Registry: {status}', {
+            status: whois.dnssecDelegated ? (
+              <AlertText status="success">{t('delegiert')}</AlertText>
+            ) : (
+              <strong>{whois.dnssecDelegated === false ? t('nicht delegiert') : t('keine Angabe')}</strong>
+            ),
+          })}
+        </Text>
+      </Section>
+
+      {/* Nameserver aus WHOIS */}
+      <Section>
+        <Heading level={2}>{t('Nameserver (laut Registry)')}</Heading>
+
+        {whois.nameServers && whois.nameServers.length > 0 ? (
+          onUseDomain ? (
+            // Ein Button je Nameserver übernimmt den Namen in die Suche; ohne
+            // diese Aktion eine schlichte Liste — ein nicht klickbarer Button
+            // sähe bedienbar aus.
+            <Flex wrap="wrap" gap="s">
+              {whois.nameServers.map((ns) => (
+                <TooltipTrigger key={ns} delay="long">
+                  <Button size="s" variant="soft" color="secondary" onPress={() => onUseDomain(ns)}>
+                    <Text className="mono">{ns}</Text>
+                  </Button>
+                  <Tooltip>{t('{value} in die Suche übernehmen', { value: ns })}</Tooltip>
+                </TooltipTrigger>
+              ))}
+            </Flex>
           ) : (
-            <ShieldQuestion className="size-4 shrink-0 text-fg-subtle" />
-          )}
-          <span className="text-fg-muted">
-            {tRich('DNSSEC bei Registry: {status}', {
-              status: (
-                <span className={whois.dnssecDelegated ? 'font-medium text-success' : 'text-fg-subtle'}>
-                  {whois.dnssecDelegated
-                    ? t('delegiert')
-                    : whois.dnssecDelegated === false
-                      ? t('nicht delegiert')
-                      : t('keine Angabe')}
-                </span>
-              ),
-            })}
-          </span>
-        </div>
-      </motion.div>
-    </div>
+            <Text>
+              <ul>
+                {whois.nameServers.map((ns) => (
+                  <li key={ns}>
+                    <InlineCode>{ns}</InlineCode>
+                  </li>
+                ))}
+              </ul>
+            </Text>
+          )
+        ) : (
+          <Text>{t('Keine Nameserver gemeldet.')}</Text>
+        )}
+      </Section>
+    </>
   );
 }
 
 /* ─── Bausteine ──────────────────────────────────────────────────────── */
-
-/** Eine Zeile der Label/Wert-Liste — dieselbe Form wie in der Security-Ansicht. */
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <dt className="w-24 shrink-0 text-xs text-fg-subtle">{label}</dt>
-      <dd className="min-w-0 flex-1 text-sm text-fg wrap-break-word">{value}</dd>
-    </div>
-  );
-}
 
 const DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short', year: 'numeric' };
 

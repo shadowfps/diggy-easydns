@@ -1,29 +1,31 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { motion } from 'motion/react';
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowLeftRight,
-  ArrowRight,
-  Check,
-  CircleHelp,
-  Equal,
-  EqualApproximately,
-  EqualNot,
-  Info,
-  ListTree,
-  Lock,
-  Mail,
-  ShieldCheck,
-  type LucideIcon,
-} from 'lucide-react';
+  AlertBadge,
+  Badge,
+  Button,
+  ColumnLayout,
+  Header,
+  Heading,
+  Icon,
+  IconDanger,
+  IconInfo,
+  IconSuccess,
+  IconUnavailable,
+  IconWarning,
+  InlineCode,
+  Label,
+  LayoutCard,
+  Section,
+  Skeleton,
+  SkeletonText,
+  Text,
+  TextField,
+} from '@mittwald/flow-react-components';
+import { IconArrowRight, IconArrowsLeftRight } from '@tabler/icons-react';
 import { useProgressiveLookup, type ProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
-import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Skeleton } from '@mittwald/flow-react-components';
 import { normalizeCompareInput } from '@/lib/comparePath';
-import { cn } from '@/lib/cn';
 import { verdictFor } from '@/lib/scoring';
 import { errorText, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
@@ -51,6 +53,7 @@ import {
   type RecordValue,
   type SideCells,
 } from './compareDomains';
+import styles from './CompareView.module.css';
 
 interface CompareViewProps {
   /** Domain A aus dem Pfad, leer wenn keine eingetragen ist. */
@@ -113,6 +116,10 @@ const lookupOf = (side: ActiveSide) => (side.kind === 'ready' ? side.lookup : nu
 
 /* ─── Ansicht ──────────────────────────────────────────────────────────── */
 
+/**
+ * Zwei Domains nebeneinander: Seitenkopf, Eingabe, je Domain eine Karte mit
+ * Score, dann eine Karte mit je einer Section pro Bereich.
+ */
 export function CompareView({ left, right, onCompare, onOpenReport }: CompareViewProps) {
   const { t, tRich } = useI18n();
   const [attempt, setAttempt] = useState(0);
@@ -125,55 +132,56 @@ export function CompareView({ left, right, onCompare, onOpenReport }: CompareVie
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="mx-auto w-full max-w-6xl"
-    >
-      <p className="eyebrow flex items-center gap-1.5">
-        <ArrowLeftRight className="size-3.5" />
-        {t('Vergleich')}
-      </p>
-      <h1 className="page-title mt-2">{t('Zwei Domains vergleichen')}</h1>
-      <p className="mt-3 max-w-2xl text-base leading-relaxed text-fg-muted">
-        {tRich(
-          'Zum Beispiel alter gegen neuen Hoster während eines Umzugs oder {apex} gegen {www}. Abweichungen sind markiert.',
-          {
-            apex: <span className="font-mono text-[15px]">domain.de</span>,
-            www: <span className="font-mono text-[15px]">www.domain.de</span>,
-          }
-        )}
-      </p>
+    <div className={styles.page}>
+      <div className={styles.pageHead}>
+        <Text className="eyebrow">{t('Vergleich')}</Text>
+        <Heading level={1}>{t('Zwei Domains vergleichen')}</Heading>
+        <Text elementType="p" className={styles.lead}>
+          {tRich(
+            'Zum Beispiel alter gegen neuen Hoster während eines Umzugs oder {apex} gegen {www}. Abweichungen sind markiert.',
+            {
+              apex: <InlineCode>domain.de</InlineCode>,
+              www: <InlineCode>www.domain.de</InlineCode>,
+            }
+          )}
+        </Text>
+      </div>
 
       <CompareForm left={left} right={right} onSubmit={handleSubmit} />
 
       {a.kind === 'empty' && b.kind === 'empty' ? (
-        <EmptyState
-          className="mt-8"
-          icon={<ArrowLeftRight className="size-5" />}
-          title={t('Zwei Domains eintragen')}
-        >
-          {t('Verglichen werden Health Score, Records je Typ, Mail-Schutz, Zertifikat und DNSSEC.')}
-        </EmptyState>
+        <LayoutCard>
+          <EmptyState icon={<CompareIcon />} title={t('Zwei Domains eintragen')} headingLevel={2}>
+            {t('Verglichen werden Health Score, Records je Typ, Mail-Schutz, Zertifikat und DNSSEC.')}
+          </EmptyState>
+        </LayoutCard>
       ) : (
         <>
-          {/* Unsichtbare h2: die Seiten-Karten tragen h3 — wie die Leer- und
-              Fehlerzustände, die an ihrer Stelle stehen können. */}
-          <section aria-labelledby="compare-sides" className="mt-8">
+          {/* Unsichtbare h2: die Karten der Seiten tragen h3 — wie die Leer-
+              und Fehlerzustände, die an ihrer Stelle stehen können. */}
+          <section aria-labelledby="compare-sides">
             <h2 id="compare-sides" className="sr-only">
               {t('Domains im Vergleich')}
             </h2>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <ColumnLayout s={[1]} m={[1, 1]} l={[1, 1]}>
               <SideSummary label="Domain A" side={a} other={b} onOpenReport={onOpenReport} />
               <SideSummary label="Domain B" side={b} other={a} onOpenReport={onOpenReport} />
-            </div>
+            </ColumnLayout>
           </section>
 
           {isActive(a) && isActive(b) && <Comparison a={a} b={b} />}
         </>
       )}
-    </motion.div>
+    </div>
+  );
+}
+
+/** Tabler, weil Flows Bibliothek keinen Doppelpfeil kennt. */
+function CompareIcon({ className }: { className?: string }) {
+  return (
+    <Icon className={className}>
+      <IconArrowsLeftRight />
+    </Icon>
   );
 }
 
@@ -186,6 +194,12 @@ function prefersAutoFocus(): boolean {
   return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 }
 
+/**
+ * Zwei Felder und der Knopf. Ein schlichtes Formular statt Flows `Form`: es
+ * gibt nichts zu validieren (eine Domain genügt), und das Absenden ist eine
+ * Navigation — `Form` setzte danach Erfolgs-Feedback und eigenen Zustand, der
+ * mit den Props aus dem Pfad konkurriert.
+ */
 function CompareForm({
   left,
   right,
@@ -233,18 +247,19 @@ function CompareForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="card mt-6">
-      <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
+    <LayoutCard>
+      <form onSubmit={handleSubmit} className={styles.form}>
         <DomainField label="Domain A" value={a} onChange={setA} placeholder="example.com" />
-        <button
-          type="button"
-          onClick={swap}
+        <Button
+          variant="plain"
+          color="secondary"
+          onPress={swap}
           aria-label={t('Domains tauschen')}
-          className="btn btn-ghost btn-icon h-11 justify-self-center"
+          className={styles.swap}
         >
           {/* Mobil stehen die Felder untereinander — dort tauscht der Pfeil vertikal. */}
-          <ArrowLeftRight className="size-4 rotate-90 md:rotate-0" />
-        </button>
+          <CompareIcon className={styles.swapIcon} />
+        </Button>
         <DomainField
           label="Domain B"
           value={b}
@@ -252,15 +267,11 @@ function CompareForm({
           placeholder="www.example.com"
           inputRef={rightRef}
         />
-        <button
-          type="submit"
-          disabled={!a.trim() && !b.trim()}
-          className="btn btn-primary h-11"
-        >
+        <Button type="submit" isDisabled={!a.trim() && !b.trim()}>
           {t('Vergleichen')}
-        </button>
-      </div>
-    </form>
+        </Button>
+      </form>
+    </LayoutCard>
   );
 }
 
@@ -278,35 +289,25 @@ function DomainField({
   inputRef?: React.Ref<HTMLInputElement>;
 }) {
   return (
-    <label className="block min-w-0">
-      <span className="text-xs text-fg-subtle">{label}</span>
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        className="input mt-1.5 font-mono"
-      />
-    </label>
+    <TextField
+      ref={inputRef}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      autoComplete="off"
+      // Flows TextField kennt kein `autoCapitalize`; mit der URL-Tastatur
+      // schreiben Handys die Domain ohnehin nicht groß.
+      inputMode="url"
+      spellCheck="false"
+      className={`mono ${styles.field}`}
+    >
+      {/* Ohne „(optional)“: einzeln ist jedes Feld verzichtbar, eins braucht es aber. */}
+      <Label optional={false}>{label}</Label>
+    </TextField>
   );
 }
 
 /* ─── Kopf je Seite: Domain und Score ──────────────────────────────────── */
-
-const SCORE_TEXT: Record<Exclude<FactTone, 'neutral'>, string> = {
-  success: 'text-success',
-  warning: 'text-warning',
-  danger: 'text-danger',
-};
-const SCORE_BADGE: Record<Exclude<FactTone, 'neutral'>, string> = {
-  success: 'badge-success',
-  warning: 'badge-warning',
-  danger: 'badge-danger',
-};
 
 function SideSummary({
   label,
@@ -323,93 +324,108 @@ function SideSummary({
   if (side.kind === 'empty') {
     const otherName = other.kind === 'empty' ? null : other.kind === 'ready' ? other.domain : other.input;
     return (
-      <EmptyState icon={<ArrowLeftRight className="size-5" />} title={t('{label} eintragen', { label })}>
-        {otherName
-          ? tRich('Trag oben eine zweite Domain ein, um sie mit {domain} zu vergleichen.', {
-              domain: <span className="wrap-anywhere font-mono text-[13px] text-fg">{otherName}</span>,
-            })
-          : t('Trag oben eine Domain ein.')}
-      </EmptyState>
+      <LayoutCard>
+        <EmptyState icon={<CompareIcon />} title={t('{label} eintragen', { label })}>
+          {otherName
+            ? tRich('Trag oben eine zweite Domain ein, um sie mit {domain} zu vergleichen.', {
+                domain: <InlineCode className="wrap-anywhere">{otherName}</InlineCode>,
+              })
+            : t('Trag oben eine Domain ein.')}
+        </EmptyState>
+      </LayoutCard>
     );
   }
 
   if (side.kind === 'ip') {
     return (
-      <EmptyState
-        icon={<Info className="size-5" />}
-        title={t('Nur Domains vergleichbar')}
-        action={
-          <button type="button" onClick={() => onOpenReport(side.input)} className="btn btn-secondary btn-sm">
-            {t('IP-Adresse ansehen')}
-          </button>
-        }
-      >
-        {tRich(
-          '{ip} ist eine IP-Adresse. Records, Mail-Schutz und Zertifikat gehören zu Domains — für IPs gibt es die Einzelansicht mit Reverse DNS.',
-          { ip: <span className="wrap-anywhere font-mono text-[13px] text-fg">{side.input}</span> }
-        )}
-      </EmptyState>
+      <LayoutCard>
+        <EmptyState
+          icon={<IconInfo />}
+          title={t('Nur Domains vergleichbar')}
+          action={
+            <Button variant="soft" color="secondary" onPress={() => onOpenReport(side.input)}>
+              {t('IP-Adresse ansehen')}
+            </Button>
+          }
+        >
+          {tRich(
+            '{ip} ist eine IP-Adresse. Records, Mail-Schutz und Zertifikat gehören zu Domains — für IPs gibt es die Einzelansicht mit Reverse DNS.',
+            { ip: <InlineCode className="wrap-anywhere">{side.input}</InlineCode> }
+          )}
+        </EmptyState>
+      </LayoutCard>
     );
   }
 
   if (side.kind === 'error') {
     return (
-      <EmptyState
-        tone="danger"
-        icon={<AlertTriangle className="size-5" />}
-        title={<span className="wrap-anywhere font-mono">{side.input}</span>}
-      >
-        {side.message}
-      </EmptyState>
+      <LayoutCard>
+        <EmptyState
+          tone="danger"
+          icon={<IconDanger />}
+          title={<span className="mono wrap-anywhere">{side.input}</span>}
+        >
+          {side.message}
+        </EmptyState>
+      </LayoutCard>
     );
   }
 
   const name = nameOf(side);
   const lookup = lookupOf(side);
   return (
-    <div className="card flex min-w-0 flex-col">
-      <p className="eyebrow">{label}</p>
-      <h3 className="mt-1.5 break-all font-mono text-xl font-semibold tracking-tight text-fg sm:text-2xl">
-        {name}
-      </h3>
+    <LayoutCard className={styles.side}>
+      <Section>
+        <Text className="eyebrow">{label}</Text>
+        <Heading level={3} className={`mono ${styles.sideName}`}>
+          {name}
+        </Heading>
 
-      {lookup?.allSettled ? <ScoreLine lookup={lookup} /> : <ScoreLineSkeleton />}
+        {lookup?.allSettled ? <ScoreLine lookup={lookup} /> : <ScoreLineSkeleton />}
 
-      <div className="mt-auto pt-5">
-        <button
-          type="button"
-          onClick={() => onOpenReport(name)}
-          disabled={!lookup}
-          className="btn btn-ghost btn-sm group -ml-3"
-        >
-          {t('Vollständigen Report öffnen')}
-          <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-        </button>
-      </div>
-    </div>
+        <div className={styles.sideAction}>
+          <Button
+            variant="soft"
+            color="secondary"
+            size="s"
+            onPress={() => onOpenReport(name)}
+            isDisabled={!lookup}
+          >
+            <Text>{t('Vollständigen Report öffnen')}</Text>
+            <Icon>
+              <IconArrowRight />
+            </Icon>
+          </Button>
+        </div>
+      </Section>
+    </LayoutCard>
   );
 }
+
+const STATUS_OF: Record<Exclude<FactTone, 'neutral'>, 'success' | 'warning' | 'danger'> = {
+  success: 'success',
+  warning: 'warning',
+  danger: 'danger',
+};
 
 function ScoreLine({ lookup }: { lookup: ProgressiveLookup }) {
   const { t } = useI18n();
   const { score, counts } = lookup.healthScore;
   const tone = scoreTone(score);
   return (
-    <div className="mt-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="flex items-baseline gap-1.5">
-          <span className={cn('text-5xl font-semibold tabular-nums tracking-tight', SCORE_TEXT[tone])}>
-            {score}
-          </span>
-          <span className="text-base text-fg-subtle">/ 100</span>
+    <div className={styles.scoreLine}>
+      <div className={styles.scoreRow}>
+        <span className={styles.score}>
+          <span className={styles.scoreValue}>{score}</span>
+          <Text>/ 100</Text>
         </span>
         {/* Das Urteil aus dem Score, nicht der deutsche String des Reports (#86). */}
-        <span className={cn('badge', SCORE_BADGE[tone])}>{t(verdictFor(score))}</span>
+        <AlertBadge status={STATUS_OF[tone]}>{t(verdictFor(score))}</AlertBadge>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-        <Stat label="ok" count={counts.success} dot="bg-success" />
-        <Stat label="Warnungen" count={counts.warning} dot="bg-warning" />
-        <Stat label="kritisch" count={counts.critical} dot="bg-danger" />
+      <div className={styles.stats}>
+        <Stat label="ok" count={counts.success} icon={<IconSuccess color="success" size="s" />} />
+        <Stat label="Warnungen" count={counts.warning} icon={<IconWarning color="warning" size="s" />} />
+        <Stat label="kritisch" count={counts.critical} icon={<IconDanger color="danger" size="s" />} />
       </div>
     </div>
   );
@@ -418,25 +434,26 @@ function ScoreLine({ lookup }: { lookup: ProgressiveLookup }) {
 function ScoreLineSkeleton() {
   const { t } = useI18n();
   return (
-    <div className="mt-4" aria-label={t('Score wird berechnet')}>
-      <Skeleton className="h-12 w-28 rounded-panel" />
-      <div className="mt-3 flex gap-5">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-3 w-14" />
-        ))}
-      </div>
+    <div className={styles.scoreLine} aria-busy="true" aria-label={t('Score wird berechnet')}>
+      <Skeleton width="7rem" height="3rem" />
+      <Text>
+        <SkeletonText width="12em" />
+      </Text>
     </div>
   );
 }
 
 /** `label` ist ein Schlüssel („3 Warnungen“ mit Mehrzahl); „ok“ heißt in beiden Sprachen gleich. */
-function Stat({ label, count, dot }: { label: DeKey | 'ok'; count: number; dot: string }) {
+function Stat({ label, count, icon }: { label: DeKey | 'ok'; count: number; icon: ReactNode }) {
   const { t } = useI18n();
   return (
-    <span className="flex items-center gap-1.5 text-fg-muted">
-      <span className={cn('size-2 rounded-full', dot)} />
-      <span className="font-semibold tabular-nums text-fg">{count}</span>
-      {label === 'ok' ? label : t(label, { count })}
+    <span className={styles.stat}>
+      {icon}
+      <Text>
+        <small>
+          <strong>{count}</strong> {label === 'ok' ? label : t(label, { count })}
+        </small>
+      </Text>
     </span>
   );
 }
@@ -514,82 +531,66 @@ function Comparison({ a, b }: { a: ActiveSide; b: ActiveSide }) {
   }
 
   return (
-    <section aria-labelledby="compare-heading" className="mt-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="compare-heading" className="text-lg font-semibold tracking-tight text-fg">
-          {t('Gegenüberstellung')}
-        </h2>
+    <LayoutCard>
+      <Section>
+        <Heading level={2}>{t('Gegenüberstellung')}</Heading>
         {/* Nach dem Absenden bleibt der Fokus im Formular — das Ergebnis
             wird deshalb angesagt, sobald es feststeht. */}
-        <p aria-live="polite" className="text-sm text-fg-muted">
+        <Text elementType="p" aria-live="polite">
           {parts.join(' · ')}
-        </p>
-      </div>
+        </Text>
+      </Section>
 
-      <div className="mt-4 grid grid-cols-1 gap-4">
-        <CompareCard
-          icon={<ListTree className="size-4" />}
-          title={t('Records je Typ')}
-          names={names}
-          statuses={recordRows.map((row) => row.status)}
-        >
-          {recordRows.map((row) => (
-            <RecordCompareRow key={row.type} row={row} names={names} />
-          ))}
-        </CompareCard>
+      <CompareSection
+        title={t('Records je Typ')}
+        names={names}
+        statuses={recordRows.map((row) => row.status)}
+      >
+        {recordRows.map((row) => (
+          <RecordCompareRow key={row.type} row={row} names={names} />
+        ))}
+      </CompareSection>
 
-        <CompareCard
-          icon={<Mail className="size-4" />}
-          title={t('Mail-Schutz')}
-          names={names}
-          statuses={mailRows.map((row) => row.status)}
-        >
-          {mailRows.map((row) => (
-            <FactCompareRow key={row.id} row={row} names={names} />
-          ))}
-        </CompareCard>
+      <CompareSection title={t('Mail-Schutz')} names={names} statuses={mailRows.map((row) => row.status)}>
+        {mailRows.map((row) => (
+          <FactCompareRow key={row.id} row={row} names={names} />
+        ))}
+      </CompareSection>
 
-        <CompareCard
-          icon={<Lock className="size-4" />}
-          title={t('Zertifikat')}
-          names={names}
-          statuses={certRows.map((row) => row.status)}
-        >
-          {certRows.map((row) => (
-            <FactCompareRow key={row.id} row={row} names={names} />
-          ))}
-        </CompareCard>
+      <CompareSection title={t('Zertifikat')} names={names} statuses={certRows.map((row) => row.status)}>
+        {certRows.map((row) => (
+          <FactCompareRow key={row.id} row={row} names={names} />
+        ))}
+      </CompareSection>
 
-        <CompareCard
-          icon={<ShieldCheck className="size-4" />}
-          title={t('Nameserver & DNSSEC')}
-          names={names}
-          statuses={dnsRows.map((row) => row.status)}
-        >
-          {dnsRows.map((row) => (
-            <FactCompareRow key={row.id} row={row} names={names} />
-          ))}
-        </CompareCard>
-      </div>
-    </section>
+      <CompareSection
+        title={t('Nameserver & DNSSEC')}
+        names={names}
+        statuses={dnsRows.map((row) => row.status)}
+      >
+        {dnsRows.map((row) => (
+          <FactCompareRow key={row.id} row={row} names={names} />
+        ))}
+      </CompareSection>
+    </LayoutCard>
   );
 }
 
 /**
- * Drei Spalten ab md: Bezeichnung, Domain A, Domain B. Darunter steht die
- * Bezeichnung über den Werten — so bleibt auch ein langer TXT-Record auf dem
- * Handy lesbar, statt die Seite seitlich zu sprengen.
+ * Ein Bereich: Überschrift mit Zusammenfassung, darunter die Zeilen.
+ *
+ * Ab einer gewissen Breite drei Spalten — Bezeichnung, Domain A, Domain B —,
+ * darunter steht die Bezeichnung über den Werten. So bleibt auch ein langer
+ * TXT-Record auf dem Handy lesbar, statt die Seite seitlich zu sprengen. Die
+ * Spalten folgen der Breite der Karte (Container Query im CSS-Modul): Flows
+ * ColumnLayout kann die Domain-Beschriftung je Zelle nicht mit umschalten.
  */
-const ROW_GRID = 'md:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)]';
-
-function CompareCard({
-  icon,
+function CompareSection({
   title,
   names,
   statuses,
   children,
 }: {
-  icon: ReactNode;
   title: string;
   names: Names;
   statuses: DiffStatus[];
@@ -597,36 +598,37 @@ function CompareCard({
 }) {
   const { t } = useI18n();
   const summary = summarize(statuses);
-  const aside = summary.pending ? (
-    <Skeleton className="h-5 w-24" />
+  const status = summary.pending ? (
+    <SkeletonText width="7em" />
   ) : summary.differences > 0 ? (
-    <span className="badge badge-warning">{t('{count} Unterschiede', { count: summary.differences })}</span>
+    <AlertBadge status="warning">{t('{count} Unterschiede', { count: summary.differences })}</AlertBadge>
   ) : summary.compared > 0 ? (
-    <span className="badge">{t('keine Unterschiede')}</span>
+    <Badge color="neutral">{t('keine Unterschiede')}</Badge>
   ) : null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="card-flush"
-    >
-      <div className="px-5 py-4 sm:px-6">
-        <CardHeader icon={icon} title={title} aside={aside} />
+    <Section>
+      <Header>
+        <Heading level={3}>
+          {title}
+          {status}
+        </Heading>
+      </Header>
+      <div className={styles.rows}>
+        {/* Spaltenköpfe nur nebeneinander; untereinander trägt jede Zelle
+            ihre Domain selbst. Für Screenreader immer an der Zelle. */}
+        <div aria-hidden="true" className={`${styles.row} ${styles.columnHeads}`}>
+          <span />
+          <Text className="mono">
+            <small>{names.left}</small>
+          </Text>
+          <Text className="mono">
+            <small>{names.right}</small>
+          </Text>
+        </div>
+        {children}
       </div>
-      {/* Spaltenköpfe nur nebeneinander; untereinander trägt jede Zelle
-          ihre Domain selbst. Für Screenreader immer an der Zelle (sr-only). */}
-      <div
-        aria-hidden
-        className={cn('hidden gap-x-6 border-t border-line-subtle px-6 py-2.5 md:grid', ROW_GRID)}
-      >
-        <span />
-        <span className="truncate font-mono text-xs text-fg-subtle">{names.left}</span>
-        <span className="truncate font-mono text-xs text-fg-subtle">{names.right}</span>
-      </div>
-      <div className="divide-y divide-line-subtle border-t border-line-subtle">{children}</div>
-    </motion.div>
+    </Section>
   );
 }
 
@@ -647,12 +649,12 @@ function CompareRow({
   compact?: boolean;
 }) {
   return (
-    <div className={cn('grid grid-cols-1 gap-3 px-5 py-4 sm:px-6 md:gap-x-6', ROW_GRID)}>
-      <div className="flex min-w-0 items-center justify-between gap-3 md:flex-col md:items-start md:justify-start md:gap-1.5">
+    <div className={styles.row}>
+      <div className={styles.rowLabel}>
         {label}
         <DiffBadge status={status} />
       </div>
-      <div className={cn('grid min-w-0 gap-3 md:contents', compact ? 'grid-cols-2' : 'grid-cols-1')}>
+      <div className={styles.cells} data-compact={compact ? '' : undefined}>
         <Cell caption={names.left}>{left}</Cell>
         <Cell caption={names.right}>{right}</Cell>
       </div>
@@ -662,8 +664,10 @@ function CompareRow({
 
 function Cell({ caption, children }: { caption: string; children: ReactNode }) {
   return (
-    <div className="min-w-0">
-      <p className="mb-1 truncate font-mono text-xs text-fg-subtle md:sr-only">{caption}</p>
+    <div className={styles.cell}>
+      <Text className={`mono ${styles.caption}`}>
+        <small>{caption}</small>
+      </Text>
       {children}
     </div>
   );
@@ -674,28 +678,18 @@ function DiffBadge({ status }: { status: DiffStatus }) {
   const { t } = useI18n();
   switch (status) {
     case 'different':
-      return (
-        <span className="badge badge-warning">
-          <EqualNot className="size-3" aria-hidden />
-          {t('Unterschied')}
-        </span>
-      );
+      return <AlertBadge status="warning">{t('Unterschied')}</AlertBadge>;
     case 'equivalent':
       return (
-        <span className="badge" title={t('Gleich eingestuft, im Detail verschieden')}>
-          <EqualApproximately className="size-3" aria-hidden />
-          {t('gleichwertig')}
+        // Flows Badge reicht `title` nicht durch — der Hinweis hängt am Rahmen.
+        <span title={t('Gleich eingestuft, im Detail verschieden')}>
+          <Badge color="neutral">{t('gleichwertig')}</Badge>
         </span>
       );
     case 'same':
-      return (
-        <span className="badge">
-          <Equal className="size-3" aria-hidden />
-          {t('gleich')}
-        </span>
-      );
+      return <Badge color="neutral">{t('gleich')}</Badge>;
     case 'pending':
-      return <Skeleton className="h-5 w-16" />;
+      return <SkeletonText width="4em" />;
     default:
       // Eine Seite ist gescheitert — die Zelle sagt das, ein Urteil gibt es nicht.
       return null;
@@ -704,9 +698,13 @@ function DiffBadge({ status }: { status: DiffStatus }) {
 
 function CellSkeleton() {
   return (
-    <div className="space-y-2 pt-1">
-      <Skeleton className="h-3.5 w-3/4" />
-      <Skeleton className="h-3.5 w-1/2" />
+    <div aria-busy="true">
+      <Text>
+        <SkeletonText width="75%" />
+      </Text>
+      <Text>
+        <SkeletonText width="50%" />
+      </Text>
     </div>
   );
 }
@@ -720,7 +718,11 @@ function RecordCompareRow({ row, names }: { row: RecordRow; names: Names }) {
   const markOnly = Boolean(row.left?.some((v) => v.match === 'both'));
   return (
     <CompareRow
-      label={<span className="font-mono text-xs font-semibold text-fg-muted">{row.type}</span>}
+      label={
+        <Text className="mono">
+          <strong>{row.type}</strong>
+        </Text>
+      }
       status={row.status}
       names={names}
       left={<RecordValues values={row.left} markOnly={markOnly} />}
@@ -732,22 +734,19 @@ function RecordCompareRow({ row, names }: { row: RecordRow; names: Names }) {
 function RecordValues({ values, markOnly }: { values: RecordValue[] | null; markOnly: boolean }) {
   const { t } = useI18n();
   if (!values) return <CellSkeleton />;
-  if (values.length === 0) return <span className="text-sm text-fg-subtle">{t('keine')}</span>;
+  if (values.length === 0) {
+    return (
+      <Text className={styles.muted}>
+        <small>{t('keine')}</small>
+      </Text>
+    );
+  }
   return (
-    <ul className="space-y-1.5">
+    <ul className={styles.values}>
       {values.map((v) => (
-        <li key={v.value} className="flex min-w-0 items-start gap-2">
-          <span
-            className={cn(
-              'min-w-0 font-mono text-[13px] wrap-anywhere',
-              v.match === 'both' ? 'text-fg-muted' : 'text-fg'
-            )}
-          >
-            {v.value}
-          </span>
-          {markOnly && v.match === 'only' && (
-            <span className="badge badge-warning mt-px">{t('nur hier')}</span>
-          )}
+        <li key={v.value} className={styles.value}>
+          <span className={`mono wrap-anywhere ${v.match === 'both' ? styles.muted : ''}`}>{v.value}</span>
+          {markOnly && v.match === 'only' && <AlertBadge status="warning">{t('nur hier')}</AlertBadge>}
         </li>
       ))}
     </ul>
@@ -756,23 +755,10 @@ function RecordValues({ values, markOnly }: { values: RecordValue[] | null; mark
 
 /* Fakten */
 
-const TONE_ICON: Record<FactTone, LucideIcon | null> = {
-  success: Check,
-  warning: AlertTriangle,
-  danger: AlertCircle,
-  neutral: null,
-};
-const TONE_TEXT: Record<FactTone, string> = {
-  success: 'text-success',
-  warning: 'text-warning',
-  danger: 'text-danger',
-  neutral: 'text-fg-subtle',
-};
-
 function FactCompareRow({ row, names }: { row: FactRow; names: Names }) {
   return (
     <CompareRow
-      label={<span className="text-sm text-fg-muted">{rowLabel(row.label)}</span>}
+      label={<Text>{rowLabel(row.label)}</Text>}
       status={row.status}
       names={names}
       left={<FactValue cell={row.left} />}
@@ -782,33 +768,37 @@ function FactCompareRow({ row, names }: { row: FactRow; names: Names }) {
   );
 }
 
+/** Form und Farbe des Tons — „nicht prüfbar“ mit eigenem Zeichen wie im Report. */
+function ToneIcon({ tone, unchecked }: { tone: FactTone; unchecked?: boolean }) {
+  if (unchecked) return <IconUnavailable color="unavailable" size="s" />;
+  if (tone === 'success') return <IconSuccess color="success" size="s" />;
+  if (tone === 'warning') return <IconWarning color="warning" size="s" />;
+  if (tone === 'danger') return <IconDanger color="danger" size="s" />;
+  return null;
+}
+
 function FactValue({ cell }: { cell: FactCell }) {
   const { t } = useI18n();
   if (cell.state === 'loading') return <CellSkeleton />;
   if (cell.state === 'error') {
     return (
-      <span className="flex items-start gap-1.5 text-sm text-fg-muted" title={cell.message}>
-        <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-danger" aria-hidden />
-        {t('Check fehlgeschlagen')}
+      <span className={styles.fact} title={cell.message}>
+        <IconDanger color="danger" size="s" />
+        <Text>{t('Check fehlgeschlagen')}</Text>
       </span>
     );
   }
   const { fact } = cell;
-  // „nicht prüfbar“ mit Fragezeichen wie im Report — die Form trägt den Status.
-  const Icon = fact.unchecked ? CircleHelp : TONE_ICON[fact.tone];
   return (
-    <div className="min-w-0">
-      <span
-        className={cn(
-          'flex min-w-0 items-start gap-1.5 text-sm text-fg',
-          fact.mono && 'font-mono text-[13px]'
-        )}
-      >
-        {Icon && <Icon className={cn('mt-0.5 size-3.5 shrink-0', TONE_TEXT[fact.tone])} aria-hidden />}
-        <span className="min-w-0 wrap-anywhere">{fact.value}</span>
+    <div className={styles.factBlock}>
+      <span className={styles.fact}>
+        <ToneIcon tone={fact.tone} unchecked={fact.unchecked} />
+        <Text className={fact.mono ? 'mono wrap-anywhere' : 'wrap-anywhere'}>{fact.value}</Text>
       </span>
       {fact.detail && (
-        <p className="mt-1 font-mono text-xs text-fg-subtle wrap-anywhere">{fact.detail}</p>
+        <Text className={`mono wrap-anywhere ${styles.muted}`}>
+          <small>{fact.detail}</small>
+        </Text>
       )}
     </div>
   );
