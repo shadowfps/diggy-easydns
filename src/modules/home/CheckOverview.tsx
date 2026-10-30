@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
 import {
-  ColumnLayout,
-  Flex,
   Heading,
   IconCertificate,
   IconDnsZone,
@@ -9,11 +7,10 @@ import {
   IconEmail,
   IconRegistry,
   IconSecurity,
-  LayoutCard,
-  Section,
   Text,
 } from '@mittwald/flow-react-components';
 import { useI18n, type I18n } from '@/i18n';
+import styles from './CheckOverview.module.css';
 
 /**
  * „Was diggy prüft“ auf der Startseite: die sechs Bereiche, die jeder Report
@@ -59,39 +56,44 @@ function checks({ t }: I18n): { icon: ReactNode; title: string; text: string }[]
   ];
 }
 
+/**
+ * Die sechs Bereiche als Kacheln im Grainy-Gradient-Stil der mittwald-
+ * Promo-Kacheln: Körnung über einem Verlauf mit einem Licht oben rechts, das
+ * Icon groß daneben, Titel und Frage darunter.
+ *
+ * Überzeile, Überschrift und Einleitung stehen über den Kacheln auf dem
+ * Seitenhintergrund — die Kacheln selbst sind die Liste.
+ */
 export function CheckOverview() {
   const i18n = useI18n();
   const { t } = i18n;
   return (
-    <LayoutCard>
-      <Section>
-        {/* Überzeile und Überschrift als Block: in der Section stünde die
-            Überschrift sonst mit dem Abstand eines neuen Abschnitts darunter. */}
-        <Flex direction="column" gap="xs">
-          <Text className="eyebrow">{t('Was diggy prüft')}</Text>
-          <Heading level={2}>{t('Sechs Bereiche, ein Befund')}</Heading>
-        </Flex>
-        <Text elementType="p">
+    <section aria-labelledby="checks-heading" className={styles.overview}>
+      <header className={styles.intro}>
+        <Text className="eyebrow">{t('Was diggy prüft')}</Text>
+        <Heading level={2} id="checks-heading" className={styles.heading}>
+          {t('Sechs Bereiche, ein Befund')}
+        </Heading>
+        <Text elementType="p" className={styles.lead}>
           {t('Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.')}
         </Text>
+      </header>
 
-        <ColumnLayout s={[1]} m={[1, 1]} l={[1, 1, 1]} gap="l">
-          {checks(i18n).map(({ icon, title, text }) => (
-            <Flex key={title} direction="column" gap="xs">
-              {/* Icon und Titel in einer Zeile. Die Überschrift steht in einem
-                  eigenen Element: in einer Section bekäme sie hinter dem Icon
-                  sonst den Abstand einer neuen Unterüberschrift. */}
-              <Flex align="center" gap="s">
-                {icon}
-                <div>
-                  <Heading level={3}>{title}</Heading>
-                </div>
-              </Flex>
-              <Text elementType="p">{text}</Text>
-            </Flex>
-          ))}
-        </ColumnLayout>
-      </Section>
-    </LayoutCard>
+      <ul className={styles.tiles}>
+        {checks(i18n).map(({ icon, title, text }) => (
+          <li key={title} className={styles.tile}>
+            <span className={styles.icon} aria-hidden="true">
+              {icon}
+            </span>
+            <Heading level={3} className={styles.title}>
+              {title}
+            </Heading>
+            <Text elementType="p" className={styles.text}>
+              {text}
+            </Text>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

@@ -1,0 +1,155 @@
+/*
+ * Die Kachel füllt ihre Zelle im Raster (App.module.css), auch wenn die
+ * Nachbarin höher ist. Die Hülle ist der Container für die Abfragen unten —
+ * eine Container-Query kann den Container selbst nicht umstellen.
+ */
+.slot {
+  display: flex;
+  container-type: inline-size;
+}
+
+/*
+ * Überzeile und Icon oben, die Aussage über die volle Breite (so bleibt sie
+ * zweizeilig), die Schaltfläche unten rechts.
+ */
+.tile {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 13rem;
+  grid-template:
+    'eyebrow icon' auto
+    'title title' 1fr
+    '. action' auto / minmax(0, 1fr) auto;
+  gap: var(--size-px--s) var(--size-px--l);
+  padding: var(--size-px--xl);
+  overflow: hidden;
+  border-radius: var(--size-px--l);
+  transition: filter 200ms ease-out;
+}
+
+/*
+ * Schmal läuft die Schaltfläche über beide Spalten — sonst würde die rechte
+ * Spalte so breit wie sie und drückte die Überzeile neben dem Icon zusammen.
+ */
+@container (max-width: 30rem) {
+  .tile {
+    grid-template:
+      'eyebrow icon' auto
+      'title title' 1fr
+      'action action' auto / minmax(0, 1fr) auto;
+    padding: var(--size-px--l);
+  }
+}
+
+/* Die ganze Kachel ist der Link — beim Zeigen hellt sie leicht auf. */
+.tile:has(.link:hover) {
+  filter: brightness(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+  }
+}
+
+/* Klein und leiser als die Aussage: drei Ebenen — Überzeile, Aussage, Schaltfläche. */
+.eyebrow {
+  grid-area: eyebrow;
+  align-self: center;
+  justify-self: start;
+  font-size: var(--font-size-text--s);
+  font-weight: 600;
+}
+
+.title {
+  grid-area: title;
+  align-self: end;
+  max-width: 24ch;
+  font-size: clamp(var(--font-size-heading--l), 0.5rem + 4cqi, var(--font-size-heading--xl));
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  /* Ganze Wörter umbrechen, nie mitten im Wort. */
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+/* Flows AccentBox reicht die helle Farbe nur an Text, Überschrift und Link weiter. */
+.icon {
+  display: flex;
+  grid-area: icon;
+  justify-self: end;
+  color: #fff;
+}
+
+.icon svg {
+  width: 3rem;
+  height: 3rem;
+  stroke-width: 1.25;
+}
+
+.action {
+  display: flex;
+  grid-area: action;
+  justify-content: flex-end;
+}
+
+/*
+ * Rund wie die Pille, damit der Fokusrahmen ihr folgt statt eines Rechtecks.
+ * Die unsichtbare Fläche darüber macht die ganze Kachel klickbar.
+ */
+.link {
+  border-radius: 999px;
+}
+
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--size-px--l);
+}
+
+/* Pillenform wie in den mittwald-Kacheln. */
+.cta {
+  border-radius: 999px;
+}
+
+/*
+ * Flow lässt einen Button beim Drücken leicht schrumpfen — im Link setzt Flow
+ * den Zustand aber auf den Link, nicht auf den Button.
+ */
+.link[data-pressed] .cta {
+  transform: scale(0.97);
+}
+
+/*
+ * Kupfer: von dunklem Braun zu warmem Kupfer, ein helles Licht oben rechts.
+ * Feste Farben, kein Theme-Token: Die Kachel sieht hell wie dunkel gleich aus,
+ * der Text darauf ist immer hell. Der Endton ist so dunkel, dass die weiße
+ * Schaltfläche unten rechts AA erreicht, auch auf hellen Körnern.
+ */
+.copper {
+  background:
+    var(--texture--grain),
+    radial-gradient(ellipse 70% 90% at 100% 0%, #e0a98aa6, transparent 70%),
+    linear-gradient(120deg, #24150f 0%, #5a3424 45%, #8a5440 100%);
+  background-blend-mode: overlay, normal, normal;
+}
+
+/*
+ * Dunkel mit einer Kugel aus Flows Markenfarben — Orange, Lila, Blau — oben
+ * rechts um das Icon. Unten rechts bleibt die Fläche dunkel: Dort steht die
+ * Schaltfläche, ihr weißer Text braucht den Kontrast.
+ */
+.orb {
+  background:
+    var(--texture--grain),
+    radial-gradient(circle at 90% 8%, #ff9343d9 0%, transparent 26%),
+    radial-gradient(circle at 98% 44%, #715deee6 0%, transparent 30%),
+    radial-gradient(circle at 78% 26%, #3d80ffb3 0%, transparent 22%),
+    radial-gradient(circle at 84% 20%, #e08dff59 0%, transparent 30%),
+    #101216;
+  background-blend-mode: overlay, normal, normal, normal, normal, normal;
+}

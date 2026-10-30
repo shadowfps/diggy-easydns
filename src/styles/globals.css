@@ -20,18 +20,39 @@ html {
 }
 
 /*
- * Hintergrund wie in den App-Shells von Flow: Verlauf plus Körnung, beides
- * aus den Theme-Tokens, also hell wie dunkel ohne eigene Farbe. Der Verlauf
- * spannt die ganze Seite — `background-attachment: fixed` endete in
- * Ganzseiten-Screenshots (e2e) an der Fensterkante.
+ * Hintergrund wie in den App-Shells von Flow: Verlauf plus Körnung aus den
+ * Theme-Tokens. Darüber zwei weiche Lichter in Flows Markenfarben — Lila oben
+ * rechts, Orange links darunter —, damit die Fläche nicht nur von oben nach
+ * unten dunkler wird. Feste Größen und Lagen statt Prozent: Prozente bezögen
+ * sich auf die ganze Seite, auf einem langen Report würde das Lila zum
+ * Streifen. So sehen alle Seiten oben gleich aus.
+ *
+ * Der Verlauf spannt die ganze Seite — `background-attachment: fixed` endete
+ * in Ganzseiten-Screenshots (e2e) an der Fensterkante.
  */
 body {
+  --page-glow-lilac: color-mix(in oklab, var(--color--bright-lilac--600) 40%, transparent);
+  --page-glow-orange: color-mix(in oklab, var(--color--royal-orange--600) 30%, transparent);
+
   margin: 0;
   min-height: 100dvh;
   font-family: Inter, sans-serif;
   color: var(--text--color--default);
-  background: var(--texture--grain), var(--color--background-gradient);
-  background-blend-mode: overlay, normal;
+  background:
+    var(--texture--grain),
+    radial-gradient(min(56rem, 90vw) 36rem at 100% 0, var(--page-glow-lilac), transparent 70%),
+    radial-gradient(min(48rem, 90vw) 34rem at 0 46rem, var(--page-glow-orange), transparent 70%),
+    var(--color--background-gradient);
+  background-blend-mode: overlay, normal, normal, normal;
+}
+
+/*
+ * Dunkel sind Flows Farbstufen gespiegelt: Die kräftigen Töne liegen dort auf
+ * 400. Weniger Deckkraft, sonst überstrahlen die Lichter den Inhalt.
+ */
+:root[data-theme='dark'] body {
+  --page-glow-lilac: color-mix(in oklab, var(--color--bright-lilac--400) 26%, transparent);
+  --page-glow-orange: color-mix(in oklab, var(--color--royal-orange--400) 20%, transparent);
 }
 
 /*

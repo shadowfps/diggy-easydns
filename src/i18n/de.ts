@@ -60,13 +60,11 @@ export type DeText =
   | 'Sind die Antworten signiert, und hält die Vertrauenskette?'
   | 'Neun öffentliche Resolver im Vergleich: Ist eine Änderung bei allen angekommen?'
   | 'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.'
-  | 'Kennst du schon {converter} by diggy?'
-  | 'Bilder umwandeln, skalieren & komprimieren — direkt im Browser.'
   | 'Zu Converter'
-  | '{mitgestalten} erwünscht!'
-  | 'Mitgestalten'
-  | 'diggy ist Open Source — bring {idee} ein oder entwickle mit.'
-  | 'deine Idee'
+  | '{converter} by diggy'
+  | 'Bilder umwandeln und verkleinern, direkt im Browser.'
+  | 'Open Source'
+  | 'Mitgestalten erwünscht. Bring deine Idee ein.'
   | 'diggy auf GitHub'
 
   // ─── Suche ───────────────────────────────────────────────────────────

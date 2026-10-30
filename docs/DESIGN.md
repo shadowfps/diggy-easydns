@@ -97,7 +97,7 @@ Seitentyp **Detailseite**:
 | Leer-, Start-, Fehlerzustand | `EmptyState` (`components/ui/EmptyState.tsx`, Flows `IllustratedMessage`) |
 | „nicht prüfbar“ | `UncheckedBadge` / `UncheckedLine` (`components/ui/Unchecked.tsx`) |
 | Hinweis, der wichtig ist | `Alert status=…` in der betroffenen Section |
-| Hinweis, den man übergehen kann (Converter, Mitmachen) | `AccentBox` in einer `LayoutCard`; hervorgehobene Wörter mit `Color` — Kontrast prüfen, siehe `promo/ContributeBanner.module.css` |
+| Hinweis, den man übergehen kann (Converter, Mitmachen) | `PromoTile` (`modules/promo/PromoTile.tsx`): `AccentBox color="light-static"` mit eigenem Grainy Gradient, Call-to-Action als `Button` im `Link` — siehe „Kacheln“ unten |
 | Ergebnis einer Aktion | `AlertText` direkt an der Aktion |
 | Ein-/ausklappen | `Accordion` |
 | Inhalte umschalten | `Tabs` |
@@ -120,6 +120,24 @@ Nur wenn keins passt, ein Tabler-Icon (`@tabler/icons-react`) — immer in
 ```
 
 Icon-Buttons brauchen ein `aria-label`.
+
+## Kacheln im Grainy-Gradient-Stil
+
+Die Startseite zeigt die sechs Bereiche und die beiden Hinweise als Kacheln
+nach dem Vorbild der mittwald-Promo-Kacheln: Flows Körnung
+(`--texture--grain`, `background-blend-mode: overlay`) über einem Verlauf.
+
+- **Bereichs-Kacheln** (`modules/home/CheckOverview`): Fläche aus dem Theme
+  (`--neutral--color--100` → `200`), dazu ein Licht oben rechts in Lila oder
+  Violett. **Keine Statusfarben als Dekoration** — Grün, Orange, Blau und Rot
+  heißen im Report ok, Warnung, Info, kritisch.
+- **Promo-Kacheln** (`modules/promo/PromoTile`): sehen in beiden Themes gleich
+  aus, Text immer hell. Dafür feste Farbwerte statt Tokens — die einzige
+  Ausnahme von der Regel unten, wie Flows eigene `-static`-Farben. Der weiße
+  Text muss auch auf den hellsten Körnern AA erreichen; bei jeder Änderung am
+  Verlauf nachmessen (Pixel unter dem Text, nicht der Mittelwert).
+- **Seitenhintergrund** (`styles/globals.css`): Lila oben rechts, Orange links
+  darunter, mit festen Größen — Prozente wüchsen mit langen Seiten mit.
 
 ## Eigenes CSS
 

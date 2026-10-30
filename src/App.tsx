@@ -681,8 +681,11 @@ export default function App() {
             {showHome && (
               <div className={styles.homeSections}>
                 <CheckOverview />
-                <ContributeBanner />
-                <ConverterPromo />
+                {/* Zwei Kacheln nebeneinander, wie die mittwald-Promo-Kacheln. */}
+                <div className={styles.promos}>
+                  <ContributeBanner />
+                  <ConverterPromo />
+                </div>
               </div>
             )}
 

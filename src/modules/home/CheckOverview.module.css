@@ -1,0 +1,136 @@
+.overview {
+  display: grid;
+  gap: var(--size-px--l);
+}
+
+/* Überzeile, Überschrift und Einleitung auf dem Seitenhintergrund. */
+.intro {
+  display: grid;
+  gap: var(--size-px--xs);
+}
+
+/* Eine Stufe unter der Frage im Hero — die Suche bleibt die Hauptsache. */
+.heading {
+  font-size: clamp(1.25rem, 1.1rem + 0.6vw, var(--font-size-heading--l));
+  line-height: 1.2;
+}
+
+.lead {
+  max-width: 60ch;
+  color: var(--neutral--color--800);
+  text-wrap: pretty;
+}
+
+/*
+ * Drei Kacheln je Zeile, wo Platz ist; darunter zwei, auf dem Handy eine.
+ * Eine Liste: Screenreader sagen „Liste, sechs Einträge“ an.
+ *
+ * Jede Kachel belegt drei Zeilen des Rasters (Icon, Titel, Text) und teilt
+ * sie per Subgrid mit ihren Nachbarinnen: Titel einer Reihe stehen auf einer
+ * Höhe, auch wenn ein Text eine Zeile länger ist.
+ */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--size-px--m);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Grainy Gradient: Flows Körnung (dieselbe wie im Seitenhintergrund) über
+ * einem Licht oben rechts und der Kartenfläche. Die Fläche folgt dem Theme —
+ * hell weiß, dunkel wie Flows Karten.
+ *
+ * Das Licht wechselt zwischen Lila und Violett. Grün, Orange, Blau und Rot
+ * sind im Report Statusfarben (ok, Warnung, Info, kritisch) — auf einer
+ * Bereichskachel läse man „DNSSEC ok, Propagation Warnung“. Die Stufen laufen
+ * weich aus, damit das Licht nicht als Ellipse mit Kante erscheint.
+ */
+.tile {
+  --glow: var(--color--bright-lilac--600);
+
+  position: relative;
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: var(--size-px--xs);
+  padding: var(--size-px--l);
+  overflow: hidden;
+  border-radius: var(--size-px--l);
+  background:
+    var(--texture--grain),
+    radial-gradient(
+      ellipse 100% 95% at 100% 0%,
+      color-mix(in oklab, var(--glow) 55%, transparent),
+      color-mix(in oklab, var(--glow) 28%, transparent) 30%,
+      color-mix(in oklab, var(--glow) 9%, transparent) 55%,
+      transparent 75%
+    ),
+    linear-gradient(160deg, var(--neutral--color--100), var(--neutral--color--200));
+  background-blend-mode: overlay, normal, normal;
+}
+
+.tile:nth-child(even) {
+  --glow: var(--color--soft-contrast-violet--600);
+}
+
+/*
+ * Das Icon groß oben rechts, wie in den mittwald-Kacheln — reine Dekoration.
+ * Seine Zeile gibt der Kachel oben Luft, bevor der Titel kommt.
+ */
+.icon {
+  display: flex;
+  min-height: 4.5rem;
+  justify-content: flex-end;
+  align-items: flex-start;
+  color: var(--text--color--default);
+}
+
+.icon svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  stroke-width: 1.5;
+}
+
+.title {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.text {
+  max-width: 32ch;
+  color: var(--neutral--color--900);
+}
+
+/*
+ * Auf dem Handy steht das Icon neben dem Titel statt in einer eigenen Zeile
+ * darüber — sonst trägt jede der sechs Kacheln oben einen leeren Streifen.
+ */
+@media (width < 40rem) {
+  .tile {
+    grid-row: auto;
+    grid-template: 'title icon' auto 'text text' auto / 1fr auto;
+    align-items: center;
+    column-gap: var(--size-px--m);
+  }
+
+  .icon {
+    grid-area: icon;
+    min-height: 0;
+  }
+
+  .icon svg {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .title {
+    grid-area: title;
+  }
+
+  .text {
+    grid-area: text;
+  }
+}

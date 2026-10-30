@@ -62,15 +62,11 @@ const ui: Dictionary = {
     'Nine public resolvers side by side: has your change reached all of them?',
   'Registrar, Laufzeit und Status — bevor eine Domain unbemerkt ausläuft.':
     'Registrar, term and status — before a domain quietly expires.',
-  'Kennst du schon {converter} by diggy?': 'Have you tried {converter} by diggy?',
-  'Bilder umwandeln, skalieren & komprimieren — direkt im Browser.':
-    'Convert, resize & compress images — right in your browser.',
   'Zu Converter': 'Open converter',
-  '{mitgestalten} erwünscht!': '{mitgestalten} welcome!',
-  'Mitgestalten': 'Contributions',
-  'diggy ist Open Source — bring {idee} ein oder entwickle mit.':
-    'diggy is open source — share {idee} or help build it.',
-  'deine Idee': 'your idea',
+  '{converter} by diggy': '{converter} by diggy',
+  'Bilder umwandeln und verkleinern, direkt im Browser.': 'Convert and shrink images, right in your browser.',
+  'Open Source': 'Open source',
+  'Mitgestalten erwünscht. Bring deine Idee ein.': 'Contributions welcome. Bring your idea.',
   'diggy auf GitHub': 'diggy on GitHub',
 
   // ─── Suche ───────────────────────────────────────────────────────────
