@@ -29,7 +29,7 @@ import { checkSsl } from './services/ssl.js';
 import { BUILD_INFO } from './lib/buildInfo.js';
 import { auditMail } from './services/mailAudit.js';
 import { lookupWhois } from './services/whois.js';
-import { lookupPageSpeed } from './services/pagespeed.js';
+import { describePageSpeedError, lookupPageSpeed } from './services/pagespeed.js';
 import { scanVirusTotal } from './services/virusscan.js';
 import { isLookupableIpAddress, lookupIpDetails } from './services/ipDetails.js';
 import { detectTechStack } from './services/techstack.js';
@@ -289,7 +289,7 @@ const LOOKUP_TTL_MS = 60_000;
 /**
  * Eigene, deutlich längere TTLs für die beiden teuren Fremd-API-Checks.
  *
- * Die 60 s der Lookups sind hier sinnlos: ein PageSpeed-Run dauert bis zu 45 s,
+ * Die 60 s der Lookups sind hier sinnlos: ein PageSpeed-Run dauert bis zu 90 s,
  * ein Nutzer, der zwischen Mobile und Desktop hin- und herschaltet, würde jedes
  * Mal einen neuen Call verbrennen. VirusTotal-Daten sind ohnehin träge — das
  * gemeldete last_analysis_date liegt meist Tage zurück.
@@ -341,7 +341,7 @@ const availabilityLimiter = rateLimit({
 });
 
 /**
- * Concurrency-Deckel für die langlaufenden Checks. PageSpeed läuft bis zu 45 s;
+ * Concurrency-Deckel für die langlaufenden Checks. PageSpeed läuft bis zu 90 s;
  * ohne diesen Deckel würden wenige parallele Requests von verschiedenen IPs den
  * Prozess belegen, ohne je ein Rate-Limit zu reißen.
  */
@@ -517,12 +517,9 @@ app.get('/api/pagespeed', rejectCrossSite, pageSpeedLimiter, pageSpeedConcurrenc
     );
     res.json(result);
   } catch (error) {
-    const err = error as Error;
-    const message = err.message || 'PageSpeed-Analyse fehlgeschlagen.';
-    return res.status(upstreamErrorStatus(error)).json({
-      error: 'pagespeed_failed',
-      message,
-    });
+    // Die eigentliche Ursache fürs Log; der Nutzer bekommt eine verständliche Meldung.
+    console.warn(`[pagespeed] ${domain} (${strategy}): ${(error as Error).message || error}`);
+    return res.status(upstreamErrorStatus(error)).json(describePageSpeedError(error));
   }
 });
 
@@ -951,7 +948,8 @@ server.on('error', (error: NodeJS.ErrnoException) => {
  * Request-Timeouts. Die AUSGEHENDEN Calls haben alle einen AbortController,
  * der eingehende Request hatte bisher keine Obergrenze: eine langsam gesendete
  * Anfrage konnte einen Connection-Slot dauerhaft halten (Slowloris-Muster).
- * Das Budget deckt den langsamsten Endpoint ab (PageSpeed, bis 45 s).
+ * `requestTimeout` gilt nur fürs Empfangen der Anfrage, nicht für die Antwort —
+ * ein PageSpeed-Run darf länger dauern (bis 90 s, services/pagespeed.ts).
  */
 server.requestTimeout = 60_000;
 server.headersTimeout = 65_000; // muss über requestTimeout liegen

@@ -51,7 +51,11 @@ export class ApiError extends Error {
  * Bei !res.ok wird die Server-Fehlermeldung (falls JSON) geworfen,
  * sonst die übergebene Fallback-Message.
  */
-async function getJson<T>(url: string, fallback: LookupError): Promise<T> {
+async function getJson<T>(
+  url: string,
+  fallback: LookupError,
+  byStatus: Partial<Record<number, string>> = {}
+): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
     let payload: LookupError;
@@ -62,7 +66,10 @@ async function getJson<T>(url: string, fallback: LookupError): Promise<T> {
       // schon übersetzte Meldung — ohne Code. Der Code steht für die Meldung
       // des Servers, und deren englische Fassung kann enger sein als „ging
       // nicht“: `domain_check_failed` meint eine ungültige Eingabe.
-      throw new Error(fallback.message);
+      //
+      // Cloudflare ersetzt 502 und 504 des Servers durch eine eigene Seite
+      // (#147) — dann sagt wenigstens der Status, was passiert ist.
+      throw new Error(byStatus[res.status] ?? fallback.message);
     }
     // Testumgebung: Die Sitzung ist abgelaufen (siehe SiteGate.tsx). Neu
     // laden zeigt wieder die Anmeldung, statt jeden Check scheitern zu lassen.
@@ -187,10 +194,13 @@ export function lookupPageSpeed(
   domain: string,
   strategy: PageSpeedStrategy = 'mobile'
 ): Promise<PageSpeedReport> {
-  return getJson(`/api/pagespeed?domain=${dq(domain)}&strategy=${encodeURIComponent(strategy)}`, {
-    error: 'pagespeed_failed',
-    message: t('PageSpeed fehlgeschlagen'),
-  });
+  // 504: unser Server hat abgebrochen, 524: Cloudflare nach 100 s.
+  const tooSlow = t('Google braucht für die Analyse dieser Seite zu lange. Große Seiten schafft PageSpeed nicht immer — versuch es in ein paar Minuten noch einmal.');
+  return getJson(
+    `/api/pagespeed?domain=${dq(domain)}&strategy=${encodeURIComponent(strategy)}`,
+    { error: 'pagespeed_failed', message: t('PageSpeed fehlgeschlagen') },
+    { 504: tooSlow, 524: tooSlow }
+  );
 }
 
 export function lookupVirusScan(domain: string): Promise<VirusScanReport> {

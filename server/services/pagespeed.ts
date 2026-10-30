@@ -1,5 +1,6 @@
 import type { PageSpeedReport, PageSpeedStrategy } from '../types.js';
-import { UpstreamTimeoutError } from '../lib/upstreamError.js';
+import type { TextParams } from '../../shared/textKeys.js';
+import { UpstreamQuotaError, UpstreamTargetError, UpstreamTimeoutError } from '../lib/upstreamError.js';
 
 interface PsiMetric {
   percentile?: number;
@@ -40,11 +41,16 @@ interface PsiResponse {
 
 const PSI_ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
-const DEFAULT_TIMEOUT_MS = 45_000;
+/*
+ * PSI/Lighthouse braucht für große Seiten lange — gemessen am 30.10.2026:
+ * mittwald.de mobil 77 s, desktop über 120 s; kleine Seiten 7 s (#147). Mit
+ * 45 s scheiterte jede größere Seite. Mehr als 95 s bringt nichts: Cloudflare
+ * bricht eine Anfrage nach 100 s ab (Fehler 524).
+ */
+const DEFAULT_TIMEOUT_MS = 90_000;
 const MIN_TIMEOUT_MS = 5_000;
-const MAX_TIMEOUT_MS = 120_000;
+const MAX_TIMEOUT_MS = 95_000;
 
-/** PSI/Lighthouse kann bei mobilen Runs und schweren Seiten locker 30–90s brauchen. */
 function resolveTimeoutMs(explicit?: number): number {
   if (explicit !== undefined && Number.isFinite(explicit) && explicit > 0) {
     return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, Math.round(explicit)));
@@ -82,18 +88,20 @@ export async function lookupPageSpeed(
 
     const payload = (await res.json()) as PsiResponse;
     if (!res.ok || payload.error) {
-      throw new Error(payload.error?.message ?? `PageSpeed API Fehler (${res.status})`);
+      const message = payload.error?.message ?? `PageSpeed API Fehler (${res.status})`;
+      if (res.status === 429 || payload.error?.code === 429) throw new UpstreamQuotaError(message);
+      // Lighthouse kam an die Seite nicht heran: „Lighthouse returned error: DNS_FAILURE“.
+      const reason = /Lighthouse returned error: ([A-Z_]+)/.exec(message)?.[1];
+      if (reason) throw new UpstreamTargetError(message, { params: { reason } });
+      throw new Error(message);
     }
     return normalizePsi(domain, strategy, payload);
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       // Eigene Klasse, damit die Route den Timeout am Typ erkennt (504) und
       // nicht am Wort „Timeout“ in der Meldung.
-      throw new UpstreamTimeoutError(
-        `PageSpeed Timeout nach ${effectiveMs / 1000}s. Schwere oder mobile Ansicht kann länger dauern — ` +
-          `in der .env z. B. PAGESPEED_TIMEOUT_MS=90000 setzen oder Desktop-Strategie testen.`,
-        { cause: error }
-      );
+      const seconds = Math.round(effectiveMs / 1000);
+      throw new UpstreamTimeoutError(`PageSpeed Timeout nach ${seconds}s.`, { cause: error, params: { seconds } });
     }
     throw error;
   } finally {
@@ -192,4 +200,44 @@ function extractTopOpportunities(audits: Record<string, PsiAudit>): PageSpeedRep
       displayValue: audit.displayValue,
       numericValue: typeof audit.numericValue === 'number' ? Math.round(audit.numericValue) : undefined,
     }));
+}
+
+export type PageSpeedErrorCode = 'pagespeed_timeout' | 'pagespeed_quota' | 'pagespeed_unreachable' | 'pagespeed_failed';
+
+/**
+ * Was /api/pagespeed dem Nutzer sagt (#147). Vorher kam bei jedem Fehler nur
+ * „PageSpeed fehlgeschlagen“ an — oder die Rohmeldung von Google samt Hinweis
+ * auf die .env. Die eigentliche Ursache gehört ins Log (server/index.ts).
+ */
+export function describePageSpeedError(error: unknown): {
+  error: PageSpeedErrorCode;
+  message: string;
+  params?: TextParams;
+} {
+  if (error instanceof UpstreamTimeoutError) {
+    const seconds = error.params?.seconds ?? Math.round(DEFAULT_TIMEOUT_MS / 1000);
+    return {
+      error: 'pagespeed_timeout',
+      message: `Google braucht für die Analyse dieser Seite länger als ${seconds} Sekunden. Große Seiten schafft PageSpeed nicht immer — versuch es in ein paar Minuten noch einmal.`,
+      params: { seconds },
+    };
+  }
+  if (error instanceof UpstreamQuotaError) {
+    return {
+      error: 'pagespeed_quota',
+      message: 'Das Tageskontingent für PageSpeed-Analysen ist aufgebraucht. Morgen geht es wieder.',
+    };
+  }
+  if (error instanceof UpstreamTargetError) {
+    const reason = String(error.params?.reason ?? '');
+    return {
+      error: 'pagespeed_unreachable',
+      message: `Google konnte die Seite nicht laden (${reason}).`,
+      params: { reason },
+    };
+  }
+  return {
+    error: 'pagespeed_failed',
+    message: 'Die PageSpeed-Analyse ist fehlgeschlagen. Versuch es in ein paar Minuten noch einmal.',
+  };
 }

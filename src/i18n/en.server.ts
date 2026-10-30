@@ -380,8 +380,11 @@ export const apiErrors: Record<ApiErrorCode, string> = {
   whois_failed: 'The WHOIS lookup failed.',
   techstack_failed: 'Tech stack detection failed.',
   ip_details_failed: 'Couldn’t load the IP details.',
-  pagespeed_failed:
-    'The PageSpeed analysis failed. Heavy pages sometimes time out — please try again.',
+  pagespeed_failed: 'The PageSpeed analysis failed. Please try again in a few minutes.',
+  pagespeed_timeout:
+    'Google needs more than {seconds} seconds to analyse this page. PageSpeed doesn’t always manage large pages — please try again in a few minutes.',
+  pagespeed_quota: 'The daily quota for PageSpeed analyses is used up. It resets tomorrow.',
+  pagespeed_unreachable: 'Google couldn’t load the page ({reason}).',
   virusscan_failed: 'The VirusTotal scan failed. Please try again in a moment.',
   domain_check_failed: 'Please enter a valid domain name or label, e.g. myproject or myproject.com.',
   contact_not_configured: 'The contact form isn’t set up at the moment.',

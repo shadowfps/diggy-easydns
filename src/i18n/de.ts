@@ -562,6 +562,7 @@ export type DeText =
   | 'WHOIS-Lookup fehlgeschlagen'
   | 'Tech-Stack-Erkennung fehlgeschlagen'
   | 'PageSpeed fehlgeschlagen'
+  | 'Google braucht für die Analyse dieser Seite zu lange. Große Seiten schafft PageSpeed nicht immer — versuch es in ein paar Minuten noch einmal.'
   | 'VirusTotal-Scan fehlgeschlagen'
   | 'IP-Details fehlgeschlagen'
   | 'Verfügbarkeits-Check fehlgeschlagen'

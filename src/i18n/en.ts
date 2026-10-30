@@ -826,6 +826,8 @@ const ui: Dictionary = {
   'WHOIS-Lookup fehlgeschlagen': 'WHOIS lookup failed',
   'Tech-Stack-Erkennung fehlgeschlagen': 'Tech stack detection failed',
   'PageSpeed fehlgeschlagen': 'PageSpeed failed',
+  'Google braucht für die Analyse dieser Seite zu lange. Große Seiten schafft PageSpeed nicht immer — versuch es in ein paar Minuten noch einmal.':
+    'Google is taking too long to analyse this page. PageSpeed doesn’t always manage large pages — please try again in a few minutes.',
   'VirusTotal-Scan fehlgeschlagen': 'VirusTotal scan failed',
   'IP-Details fehlgeschlagen': 'Couldn’t load the IP details',
   'Verfügbarkeits-Check fehlgeschlagen': 'Availability check failed',
