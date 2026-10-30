@@ -20,6 +20,20 @@
   min-width: 0;
 }
 
+/*
+ * Im Hero steht das Feld selbst auf der Mittelachse, der Such-Button hängt
+ * rechts daneben. Vorher war nur Feld und Button zusammen mittig — das Feld
+ * saß 24 px links, und die Wortmarke darüber wirkte nach rechts verschoben.
+ * Links eine leere Spalte, so breit wie der Button samt Abstand (Flows
+ * Icon-Button ist 2.5rem breit). Auf dem Handy fehlt dafür der Platz.
+ */
+@media (min-width: 40rem) {
+  .form[data-variant='hero'] {
+    box-sizing: border-box;
+    padding-inline-start: calc(2.5rem + var(--size-px--s));
+  }
+}
+
 .shortcuts {
   display: flex;
   flex-wrap: wrap;
