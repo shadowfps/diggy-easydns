@@ -30,6 +30,28 @@ interface IpAddressLinkProps {
   className?: string;
 }
 
+/**
+ * Der PTR der IP (Reverse DNS), klein neben der Adresse — als Link auf den
+ * Report des Namens (#147). Ohne PTR nichts: „nicht konfiguriert“ stünde
+ * sonst in jeder Zeile, und das IP-Fenster sagt es ohnehin.
+ *
+ * Kostet keine eigene Abfrage: Die Details lädt IpOwnerLabel daneben schon,
+ * useIpDetails teilt sie je IP.
+ */
+export function IpPtrLabel({ ip }: { ip: string }) {
+  const { details } = useIpDetails(ip);
+  const ptr = details ? ptrHostsOf(details)[0] : undefined;
+  if (!ptr) return null;
+
+  return (
+    <Text className={styles.ptr}>
+      <small>
+        PTR <LookupLink value={ptr} />
+      </small>
+    </Text>
+  );
+}
+
 /** Wem das Netz hinter der IP gehört — klein neben der Adresse. */
 export function IpOwnerLabel({ ip, className }: { ip: string; className?: string }) {
   const { details, loading } = useIpDetails(ip);
@@ -125,7 +147,7 @@ function IpDetailsDialog({ ip }: { ip: string }) {
  */
 export function IpDetailsRows({ details }: { details: IpDetails }) {
   const { t } = useI18n();
-  const ptrHosts = details.ptr && details.ptr.length > 0 ? details.ptr : details.reverse ? [details.reverse] : [];
+  const ptrHosts = ptrHostsOf(details);
 
   return (
     <>
@@ -189,4 +211,10 @@ function formatLocation(details: IpDetails): string | undefined {
 function formatCoordinates(details: IpDetails): string | undefined {
   if (details.latitude === undefined || details.longitude === undefined) return undefined;
   return `Latitude: ${details.latitude}, Longitude: ${details.longitude}`;
+}
+
+/** Die PTR-Namen der IP; fehlt die DNS-Antwort, der Reverse-Name des Geo-Dienstes. */
+function ptrHostsOf(details: IpDetails): string[] {
+  if (details.ptr && details.ptr.length > 0) return details.ptr;
+  return details.reverse ? [details.reverse] : [];
 }

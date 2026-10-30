@@ -15,7 +15,7 @@ import {
   Text,
 } from '@mittwald/flow-react-components';
 import type { DnsRecord, RecordType } from '@/types/dns';
-import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
+import { IpAddressLink, IpOwnerLabel, IpPtrLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { InfoButton } from '@/components/ui/InfoButton';
 import { LookupLink } from '@/components/ui/LookupLink';
@@ -134,6 +134,7 @@ function RecordsTable({ records, nullMx }: { records: DnsRecord[]; nullMx: boole
                   {hasIpDetails ? (
                     <>
                       <IpAddressLink ip={record.value} />
+                      <IpPtrLabel ip={record.value} />
                       <IpOwnerLabel ip={record.value} />
                     </>
                   ) : record.type === 'NS' || record.type === 'CNAME' ? (

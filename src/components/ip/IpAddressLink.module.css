@@ -10,6 +10,17 @@
   overflow-wrap: anywhere;
 }
 
+.ptr {
+  min-width: 0;
+}
+
+/* Steht der PTR davor, trennt ein Punkt den Netzbetreiber vom Hostnamen —
+   sonst läse sich „….github.com GitHub, Inc.“ wie ein Wert. */
+.ptr + .owner::before {
+  content: '·';
+  margin-inline-end: var(--size-px--s);
+}
+
 .ip {
   overflow-wrap: anywhere;
 }

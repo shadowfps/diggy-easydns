@@ -6,7 +6,7 @@
   font-weight: 700;
 }
 
-/* Priorität, Wert und Zusätze (Netzbetreiber, Null-MX) fließen nebeneinander und brechen um. */
+/* Priorität, Wert und Zusätze (PTR, Netzbetreiber, Null-MX) fließen nebeneinander und brechen um. */
 .value {
   display: flex;
   min-width: 0;

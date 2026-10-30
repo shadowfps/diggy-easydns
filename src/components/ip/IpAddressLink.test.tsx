@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 vi.mock('@/lib/api', () => ({ lookupIpDetails: vi.fn() }));
 
 const api = await import('@/lib/api');
-const { IpAddressLink, IpOwnerLabel } = await import('./IpAddressLink');
+const { IpAddressLink, IpOwnerLabel, IpPtrLabel } = await import('./IpAddressLink');
 
 /**
  * Die IP-Details im Modal (Flows ModalTrigger): erst beim Öffnen laden, Werte
@@ -33,7 +33,15 @@ describe('IpAddressLink', () => {
     await user.click(screen.getByRole('button', { name: 'Details zu 192.0.2.10 anzeigen' }));
     const dialog = await screen.findByRole('dialog');
 
-    expect(await within(dialog).findByText('host.example.net')).toBeInTheDocument();
+    // Der PTR-Name führt auf seinen Report, die IP selbst als eigene Suche (#147).
+    expect(await within(dialog).findByRole('link', { name: /^host\.example\.net/ })).toHaveAttribute(
+      'href',
+      '/lookup/host.example.net'
+    );
+    expect(within(dialog).getByRole('link', { name: /^Als eigene Suche öffnen/ })).toHaveAttribute(
+      'href',
+      '/lookup/192.0.2.10'
+    );
     expect(within(dialog).getByRole('group', { name: 'Organisation' })).toHaveTextContent('Example Hosting');
     expect(within(dialog).getByRole('group', { name: 'Zeitzone' })).toHaveTextContent('nicht verfügbar');
     expect(within(dialog).getByRole('button', { name: 'IP kopieren' })).toBeInTheDocument();
@@ -63,5 +71,28 @@ describe('IpOwnerLabel', () => {
     });
     render(<IpOwnerLabel ip="192.0.2.12" />);
     expect(await screen.findByText('Example ISP')).toBeInTheDocument();
+  });
+});
+
+describe('IpPtrLabel (#147)', () => {
+  it('zeigt den PTR als Link auf seinen Report', async () => {
+    vi.mocked(api.lookupIpDetails).mockResolvedValue({
+      ip: '192.0.2.13',
+      type: 'IPv4',
+      ptr: ['lb-13.example.net'],
+      source: 'test',
+    });
+    render(<IpPtrLabel ip="192.0.2.13" />);
+    expect(await screen.findByRole('link', { name: /^lb-13\.example\.net/ })).toHaveAttribute(
+      'href',
+      '/lookup/lb-13.example.net'
+    );
+  });
+
+  it('zeigt ohne PTR nichts — „nicht konfiguriert“ stünde sonst in jeder Zeile', async () => {
+    vi.mocked(api.lookupIpDetails).mockResolvedValue({ ip: '192.0.2.14', type: 'IPv4', source: 'test' });
+    const { container } = render(<IpPtrLabel ip="192.0.2.14" />);
+    await waitFor(() => expect(api.lookupIpDetails).toHaveBeenCalledWith('192.0.2.14'));
+    expect(container).toBeEmptyDOMElement();
   });
 });
