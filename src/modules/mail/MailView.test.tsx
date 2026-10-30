@@ -595,6 +595,22 @@ describe('MailView — Reverse DNS', () => {
     expect(within(card).getAllByText('nicht prüfbar').length).toBeGreaterThanOrEqual(1);
   });
 
+  // Codex-Review: Eine gescheiterte Adressabfrage erschien als „keine IP-Adresse“ unter „passt“.
+  it('zeigt einen Ausfall als nicht prüfbar und das Ganze als unvollständig', () => {
+    render(
+      <MailView
+        mail={withReverse([
+          { host: 'mx1.example.net', ips: [{ ip: '192.0.2.1', ptr: ['mx1.example.net'], confirmed: true }] },
+          { host: 'mx2.example.net', ips: [], unchecked: true },
+        ])}
+      />
+    );
+    const card = section('Reverse DNS');
+    expect(badgeStatus(within(card).getByText('unvollständig'))).toBe('Status "Nicht verfügbar"');
+    expect(within(card).getByRole('group', { name: 'mx2.example.net' })).toHaveTextContent('nicht prüfbar');
+    expect(within(card).queryByText('keine IP-Adresse')).not.toBeInTheDocument();
+  });
+
   it('fehlt ohne Empfang (Null-MX) und bei älteren Antworten ohne die Prüfung', () => {
     render(<MailView mail={{ ...EXPLAINED, nullMx: true }} />);
     expect(screen.queryByRole('heading', { name: /^Reverse DNS/ })).not.toBeInTheDocument();

@@ -268,7 +268,9 @@ const ui: Dictionary = {
   'Zeigt der PTR jeder Mailserver-IP auf einen Namen, der wieder auf sie auflöst?':
     'Does each mail server IP’s PTR point to a name that resolves back to it?',
   passt: 'matches',
-  lückenhaft: 'incomplete',
+  lückenhaft: 'has gaps',
+  unvollständig: 'incomplete',
+  'weitere Adressen nicht prüfbar': 'further addresses couldn’t be checked',
   'keine IP-Adresse': 'no IP address',
   'kein PTR': 'no PTR',
   'löst zurück auf': 'resolves back',

@@ -388,15 +388,23 @@ export async function checkMxReverse(mx: readonly MxRecord[]): Promise<MailMxRev
       .map((record) => record.exchange.toLowerCase().replace(/\.$/, ''))
   )].slice(0, MAX_MX_HOSTS);
 
-  return Promise.all(hosts.map(async (host) => ({ host, ips: await reverseOfHost(host) })));
+  return Promise.all(hosts.map(reverseOfHost));
 }
 
-async function reverseOfHost(host: string): Promise<MailMxReverseIp[]> {
+async function reverseOfHost(host: string): Promise<MailMxReverse> {
+  let failed = false;
+  // „Gibt es nicht“ ist eine Antwort (leere Liste); ein Ausfall nicht.
+  const addresses = (lookup: Promise<string[]>) =>
+    lookup.catch((error: unknown) => {
+      if (dnsLookupFailure(error)) failed = true;
+      return [] as string[];
+    });
   const [v4, v6] = await Promise.all([
-    reverseResolver.resolve4(host).catch(() => []),
-    reverseResolver.resolve6(host).catch(() => []),
+    addresses(reverseResolver.resolve4(host)),
+    addresses(reverseResolver.resolve6(host)),
   ]);
-  return Promise.all([...v4, ...v6].slice(0, MAX_IPS_PER_HOST).map(confirmReverse));
+  const ips = await Promise.all([...v4, ...v6].slice(0, MAX_IPS_PER_HOST).map(confirmReverse));
+  return failed ? { host, ips, unchecked: true } : { host, ips };
 }
 
 async function confirmReverse(ip: string): Promise<MailMxReverseIp> {
@@ -420,8 +428,10 @@ async function confirmReverse(ip: string): Promise<MailMxReverseIp> {
       if (dnsLookupFailure(error)) failed = true;
     }
   }
-  // Nur widerlegt, wenn jede Rückfrage eine Antwort bekam.
-  return failed ? { ip, ptr, confirmed: false, unchecked: true } : { ip, ptr, confirmed: false };
+  // Nur widerlegt, wenn jeder PTR-Name eine Antwort bekam — scheiterte eine
+  // Rückfrage oder blieben Namen über dem Budget ungeprüft, ist es offen.
+  const incomplete = failed || ptr.length > MAX_PTR_NAMES;
+  return incomplete ? { ip, ptr, confirmed: false, unchecked: true } : { ip, ptr, confirmed: false };
 }
 
 /** IPv6 in kurzer Schreibweise kleingeschrieben, damit `2001:DB8::1` und `2001:db8:0::1` gleich sind. */

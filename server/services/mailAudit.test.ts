@@ -331,6 +331,35 @@ describe('checkMxReverse (FCrDNS)', () => {
     ]);
   });
 
+  // Codex-Review: Ein Timeout bei der Adressabfrage erschien als „keine IP-Adresse“.
+  it('hält eine gescheiterte Adressabfrage als nicht prüfbar fest', async () => {
+    zone({}, {});
+    vi.mocked(proto.resolve4).mockRejectedValue(dnsError('ETIMEOUT'));
+    expect(await checkMxReverse([mx('mx.example.net')])).toEqual([{ host: 'mx.example.net', ips: [], unchecked: true }]);
+  });
+
+  it('unterscheidet „keine Adresse“ von einem Ausfall', async () => {
+    zone({}, {});
+    expect(await checkMxReverse([mx('mx.example.net')])).toEqual([{ host: 'mx.example.net', ips: [] }]);
+  });
+
+  // Codex-Review: Nur drei PTR-Namen werden geprüft — passte keiner, hieß es „passt nicht“,
+  // obwohl der vierte zurück auf die IP auflöste.
+  it('widerlegt nicht, solange PTR-Namen über dem Budget ungeprüft bleiben', async () => {
+    zone(
+      {
+        'mx.example.net': ['192.0.2.1'],
+        'a.example.net': ['198.51.100.1'],
+        'b.example.net': ['198.51.100.2'],
+        'c.example.net': ['198.51.100.3'],
+        'd.example.net': ['192.0.2.1'],
+      },
+      { '192.0.2.1': ['a.example.net', 'b.example.net', 'c.example.net', 'd.example.net'] }
+    );
+    const [host] = await checkMxReverse([mx('mx.example.net')]);
+    expect(host.ips[0]).toMatchObject({ confirmed: false, unchecked: true });
+  });
+
   it('prüft die wichtigsten vier Server, ohne Null-MX und Duplikate', async () => {
     zone({}, {});
     const result = await checkMxReverse([

@@ -305,6 +305,12 @@ export interface MailSecurity {
 export interface MailMxReverse {
   host: string;
   ips: MailMxReverseIp[];
+  /**
+   * Die Adressabfrage (A oder AAAA) scheiterte — Timeout, SERVFAIL. Welche
+   * IPs der Server hat, ist dann nicht vollständig bekannt; „keine IP-Adresse“
+   * wäre falsch.
+   */
+  unchecked?: boolean;
 }
 
 /**

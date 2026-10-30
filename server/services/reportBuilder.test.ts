@@ -1232,18 +1232,42 @@ describe('mailFindings — Reverse DNS der Mailserver (FCrDNS)', () => {
     expect(finding.fix?.explanation).toMatch(/^Den PTR setzt, wem die IP gehört/);
   });
 
-  it('wertet nicht prüfbare IPs weder dafür noch dagegen', () => {
+  it('meldet kein „passt“, solange etwas nicht prüfbar ist — und keinen Mangel daraus', () => {
     expect(fcrdns(mailFindings(receiving([{ host: 'mx1.example.net', ips: [ip('192.0.2.1', false, true)] }]), 'example.com'))).toEqual([]);
+    // Eine IP passt, eine ist offen: kein Erfolg, kein Mangel.
     expect(
-      summary(
-        fcrdns(
-          mailFindings(
-            receiving([{ host: 'mx1.example.net', ips: [ip('192.0.2.1', true), ip('192.0.2.2', false, true)] }]),
-            'example.com'
-          )
+      fcrdns(
+        mailFindings(
+          receiving([{ host: 'mx1.example.net', ips: [ip('192.0.2.1', true), ip('192.0.2.2', false, true)] }]),
+          'example.com'
         )
       )
-    ).toEqual(['success mx-fcrdns-ok']);
+    ).toEqual([]);
+    // Codex-Review: Die Adressabfrage eines zweiten Servers scheiterte — vorher trotzdem „passt“.
+    expect(
+      fcrdns(
+        mailFindings(
+          receiving([
+            { host: 'mx1.example.net', ips: [ip('192.0.2.1', true)] },
+            { host: 'mx2.example.net', ips: [], unchecked: true },
+          ]),
+          'example.com'
+        )
+      )
+    ).toEqual([]);
+  });
+
+  it('meldet einen nachgewiesenen Mangel auch dann, wenn anderes offen ist', () => {
+    const findings = fcrdns(
+      mailFindings(
+        receiving([
+          { host: 'mx1.example.net', ips: [ip('192.0.2.1', false)] },
+          { host: 'mx2.example.net', ips: [], unchecked: true },
+        ]),
+        'example.com'
+      )
+    );
+    expect(summary(findings)).toEqual(['info mx-fcrdns-missing']);
   });
 
   it('sagt nichts ohne Empfang (Null-MX) oder bei älteren Antworten ohne die Prüfung', () => {

@@ -503,13 +503,17 @@ function TlsRptSection({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean
 function MxReverseSection({ mxReverse }: { mxReverse: MailMxReverse[] }) {
   const { t } = useI18n();
   const checked = mxReverse.flatMap((host) => host.ips).filter((ip) => !ip.unchecked);
+  const incomplete = mxReverse.some((host) => host.unchecked || host.ips.some((ip) => ip.unchecked));
+  // „passt“ nur, wenn alles geprüft ist — sonst bliebe ein Ausfall unsichtbar.
   const status =
     checked.length === 0 ? (
       <UncheckedBadge />
-    ) : checked.every((ip) => ip.confirmed) ? (
-      <AlertBadge status="success">{t('passt')}</AlertBadge>
-    ) : (
+    ) : !checked.every((ip) => ip.confirmed) ? (
       <AlertBadge status="info">{t('lückenhaft')}</AlertBadge>
+    ) : incomplete ? (
+      <AlertBadge status="unavailable">{t('unvollständig')}</AlertBadge>
+    ) : (
+      <AlertBadge status="success">{t('passt')}</AlertBadge>
     );
 
   return (
@@ -518,14 +522,18 @@ function MxReverseSection({ mxReverse }: { mxReverse: MailMxReverse[] }) {
       subtitle={t('Zeigt der PTR jeder Mailserver-IP auf einen Namen, der wieder auf sie auflöst?')}
       status={status}
     >
-      {mxReverse.map(({ host, ips }) => (
+      {mxReverse.map(({ host, ips, unchecked }) => (
         <LabeledValue key={host}>
           <Label>
             <span className="mono">{host}</span>
           </Label>
           <Content>
             {ips.length === 0 ? (
-              <Text>{t('keine IP-Adresse')}</Text>
+              unchecked ? (
+                <AlertText status="unavailable">{t('nicht prüfbar')}</AlertText>
+              ) : (
+                <Text>{t('keine IP-Adresse')}</Text>
+              )
             ) : (
               <ul className={styles.reverseList}>
                 {ips.map((ip) => (
@@ -541,6 +549,11 @@ function MxReverseSection({ mxReverse }: { mxReverse: MailMxReverse[] }) {
                     <ReverseStatus ip={ip} />
                   </li>
                 ))}
+                {unchecked && (
+                  <li>
+                    <AlertText status="unavailable">{t('weitere Adressen nicht prüfbar')}</AlertText>
+                  </li>
+                )}
               </ul>
             )}
           </Content>

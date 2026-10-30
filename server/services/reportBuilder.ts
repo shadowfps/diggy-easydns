@@ -556,7 +556,10 @@ function withDmarcPolicy(record: string, policy: DmarcPolicy): string {
  * Reverse DNS der Mailserver (FCrDNS, #147). Beim Empfang prüft das kaum ein
  * Absender — deshalb nur eine Empfehlung ohne Score-Abzug. Verschickt derselbe
  * Server aber auch, werten viele Empfänger einen fehlenden oder unpassenden
- * PTR als Spam-Signal. Nicht prüfbare IPs zählen weder dafür noch dagegen.
+ * PTR als Spam-Signal.
+ *
+ * Nicht prüfbare Teile zählen nicht dagegen — aber auch nicht dafür: Ist
+ * irgendwo etwas offen, gibt es kein „passt“.
  */
 function mxReverseFindings(mail: MailSecurity, receivesMail: boolean): KeyedFinding[] {
   if (!receivesMail || !mail.mxReverse) return [];
@@ -564,9 +567,11 @@ function mxReverseFindings(mail: MailSecurity, receivesMail: boolean): KeyedFind
     ips.filter((ip) => !ip.unchecked).map((ip) => ({ host, confirmed: ip.confirmed }))
   );
   if (checked.length === 0) return [];
+  const incomplete = mail.mxReverse.some((host) => host.unchecked || host.ips.some((ip) => ip.unchecked));
 
   const failing = [...new Set(checked.filter((ip) => !ip.confirmed).map((ip) => ip.host))];
   if (failing.length === 0) {
+    if (incomplete) return [];
     return [{
       id: 'mx-fcrdns-ok',
       severity: 'success',

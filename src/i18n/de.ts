@@ -208,6 +208,8 @@ export type DeText =
   | 'Zeigt der PTR jeder Mailserver-IP auf einen Namen, der wieder auf sie auflöst?'
   | 'passt'
   | 'lückenhaft'
+  | 'unvollständig'
+  | 'weitere Adressen nicht prüfbar'
   | 'keine IP-Adresse'
   | 'kein PTR'
   | 'löst zurück auf'
