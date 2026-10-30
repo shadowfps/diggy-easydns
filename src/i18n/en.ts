@@ -229,6 +229,17 @@ const ui: Dictionary = {
   'Postfächer zeigen das Logo erst bei DMARC mit p=quarantine oder p=reject, jetzt: {gap}.':
     'Inboxes only show the logo with DMARC at p=quarantine or p=reject, currently: {gap}.',
   'Berichte über gescheiterte TLS-Zustellung': 'Reports on failed TLS delivery',
+  'Zeigt der PTR jeder Mailserver-IP auf einen Namen, der wieder auf sie auflöst?':
+    'Does each mail server IP’s PTR point to a name that resolves back to it?',
+  passt: 'matches',
+  lückenhaft: 'incomplete',
+  'keine IP-Adresse': 'no IP address',
+  'kein PTR': 'no PTR',
+  'löst zurück auf': 'resolves back',
+  'löst nicht zurück auf': 'doesn’t resolve back',
+  'Name hinter der IP': 'The name behind the IP',
+  'Zu jeder IP kann ihr Besitzer einen Namen hinterlegen (PTR); löst er wieder auf dieselbe IP auf, heißt das FCrDNS. Viele Mailserver prüfen das beim Absender — fehlt es, landet Mail eher im Spam.':
+    'Whoever owns an IP can attach a name to it (PTR); if that name resolves back to the same IP, that’s FCrDNS. Many mail servers check this for senders — without it, email is more likely to land in spam.',
   'Nicht nötig: Eine Domain ohne Mails (Null-MX) bekommt keine Zustellungen, über die jemand berichten könnte.':
     'Not needed: a domain without email (null MX) receives no deliveries anyone could report on.',
   'Kein TLS-RPT-Record auf _smtp._tls.<domain>': 'No TLS-RPT record at _smtp._tls.<domain>',

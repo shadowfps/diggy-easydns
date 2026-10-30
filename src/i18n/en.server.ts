@@ -185,6 +185,16 @@ export const findings: Record<FindingKey, FindingText> = {
     title: 'TLS-RPT active',
     description: 'Reports about problems with encrypted delivery go to {rua}.',
   },
+  'mx-fcrdns-ok': {
+    title: 'Mail servers’ reverse DNS matches',
+    description: 'Every checked mail server IP has a PTR that resolves back to it (FCrDNS).',
+  },
+  'mx-fcrdns-missing': {
+    title: 'Mail server without matching reverse DNS',
+    description:
+      'For {hosts}, the IP’s PTR doesn’t point to a name that resolves back to it (FCrDNS). Harmless for incoming email — but if the same server also sends, many recipients treat this as a spam signal.',
+    fix: 'Whoever owns the IP sets the PTR — your host or provider, usually in the customer panel or on request. It should point to the mail server’s name, which in turn resolves to the IP.',
+  },
   'bimi-needs-dmarc': {
     title: 'BIMI needs a stricter DMARC policy first',
     description:

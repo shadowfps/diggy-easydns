@@ -12,13 +12,22 @@ import type { Finding } from '../types.js';
  * Abzug.
  */
 
-const dns = vi.hoisted(() => ({ resolveTxt: vi.fn(), resolveMx: vi.fn() }));
+const dns = vi.hoisted(() => {
+  // Reverse DNS der Mailserver (#147) ist hier nicht Thema: keine Adressen.
+  const none = async () => {
+    throw Object.assign(new Error('ENODATA'), { code: 'ENODATA' });
+  };
+  return { resolveTxt: vi.fn(), resolveMx: vi.fn(), resolve4: none, resolve6: none, reverse: none };
+});
 
 vi.mock('node:dns', () => {
   class Resolver {
     setServers() {}
     resolveTxt = dns.resolveTxt;
     resolveMx = dns.resolveMx;
+    resolve4 = dns.resolve4;
+    resolve6 = dns.resolve6;
+    reverse = dns.reverse;
   }
   return { promises: { Resolver } };
 });

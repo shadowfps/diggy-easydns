@@ -142,6 +142,8 @@ export type FindingKey =
   | 'no-tls-rpt-mta-sts'
   | 'tls-rpt-invalid'
   | 'tls-rpt-present'
+  | 'mx-fcrdns-ok'
+  | 'mx-fcrdns-missing'
   | 'bimi-needs-dmarc'
   | 'no-bimi'
   | 'bimi-invalid'

@@ -28,7 +28,7 @@ export interface Explanation {
  */
 export type ExplainedRecordType = 'A' | 'AAAA' | 'CNAME' | 'MX' | 'NS' | 'TXT' | 'CAA' | 'SOA';
 
-export type MailTerm = 'SPF' | 'DKIM' | 'DMARC' | 'MTA-STS' | 'BIMI' | 'TLS-RPT';
+export type MailTerm = 'SPF' | 'DKIM' | 'DMARC' | 'MTA-STS' | 'BIMI' | 'TLS-RPT' | 'Reverse DNS';
 
 export const RECORD_EXPLANATIONS: Record<ExplainedRecordType, Explanation> = {
   A: {
@@ -123,6 +123,11 @@ export const MAIL_EXPLANATIONS: Record<MailTerm, Explanation> = {
     title: 'Berichte über Zustellprobleme',
     text:
       'Nennt eine Adresse, an die andere Mailserver berichten, wenn die verschlüsselte Zustellung an deine Domain scheitert. So fällt auf, wenn etwa ein abgelaufenes Zertifikat oder MTA-STS Mails aufhält.',
+  },
+  'Reverse DNS': {
+    title: 'Name hinter der IP',
+    text:
+      'Zu jeder IP kann ihr Besitzer einen Namen hinterlegen (PTR); löst er wieder auf dieselbe IP auf, heißt das FCrDNS. Viele Mailserver prüfen das beim Absender — fehlt es, landet Mail eher im Spam.',
   },
 };
 

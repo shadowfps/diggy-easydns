@@ -120,6 +120,15 @@ function everyFinding(): Finding[] {
     ),
     ...mailFindings(mail({}), 'example.com'),
     ...mailFindings(mail({ hasMx: false }), 'example.com'),
+    // Reverse DNS der Mailserver (#147): passt, passt nicht.
+    ...mailFindings(
+      mail({ mxReverse: [{ host: 'mx.example.com', ips: [{ ip: '192.0.2.1', ptr: ['mx.example.com'], confirmed: true }] }] }),
+      'example.com'
+    ),
+    ...mailFindings(
+      mail({ mxReverse: [{ host: 'mx.example.com', ips: [{ ip: '192.0.2.1', ptr: [], confirmed: false }] }] }),
+      'example.com'
+    ),
     ...mailFindings(
       mail({
         spf: spf(

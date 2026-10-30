@@ -294,6 +294,33 @@ export interface MailSecurity {
    */
   bimi?: MailBimi;
   tlsRpt?: MailTlsRpt;
+  /**
+   * Reverse DNS der Mailserver (#147). Optional wie BIMI: ältere Antworten
+   * kennen es nicht. Leer ohne MX oder bei einem Null-MX.
+   */
+  mxReverse?: MailMxReverse[];
+}
+
+/** Ein Mailserver (MX-Ziel) und der Reverse DNS seiner IPs. */
+export interface MailMxReverse {
+  host: string;
+  ips: MailMxReverseIp[];
+}
+
+/**
+ * Forward-Confirmed Reverse DNS einer IP: Der PTR zeigt auf einen Namen, der
+ * wieder auf dieselbe IP auflöst. Viele Empfänger prüfen das beim Absender —
+ * verschickt der Mailserver auch, zählt ein fehlender oder unpassender PTR
+ * als Spam-Signal.
+ */
+export interface MailMxReverseIp {
+  ip: string;
+  /** Die PTR-Namen der IP, leer ohne PTR. */
+  ptr: string[];
+  /** Einer der PTR-Namen löst wieder auf diese IP auf. */
+  confirmed: boolean;
+  /** Eine Abfrage scheiterte — weder bestätigt noch widerlegt. */
+  unchecked?: boolean;
 }
 
 /**

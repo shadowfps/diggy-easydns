@@ -10,13 +10,24 @@
  *   5) MX — ob die Domain überhaupt Mail annimmt (Null-MX, RFC 7505)
  *   6) BIMI — TXT auf default._bimi.<domain> (Markenlogo, #83)
  *   7) TLS-RPT — TXT auf _smtp._tls.<domain> (RFC 8460, #83)
+ *   8) Reverse DNS der Mailserver — PTR je MX-IP und zurück (FCrDNS, #147)
  *
  * Alles parallel, alles per node:dns mit Cloudflare als Resolver
  * (siehe dnsLookup.ts) — günstiger als DoH für reine Existenz-Checks.
  */
 
 import { promises as dnsPromises, type MxRecord } from 'node:dns';
-import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt, SpfIssueKey, TextRef } from '../types.js';
+import { isIPv6 } from 'node:net';
+import type {
+  LookupFailure,
+  MailBimi,
+  MailMxReverse,
+  MailMxReverseIp,
+  MailSecurity,
+  MailTlsRpt,
+  SpfIssueKey,
+  TextRef,
+} from '../types.js';
 import { dnsLookupFailure } from '../lib/dnsFailure.js';
 import type { SpfLookup } from './dnsLookup.js';
 import { isNullMx } from '../../shared/nullMx.js';
@@ -61,13 +72,17 @@ export async function auditMail(
   /** SPF aus dem Apex-TXT-Lookup (lookupSpfRecord) */
   spfLookup: SpfLookup = {}
 ): Promise<MailSecurity> {
-  const [dmarc, dkim, mtaSts, mx, bimi, tlsRpt] = await Promise.all([
+  // Der Reverse DNS braucht die MX-Ziele, läuft aber neben den übrigen
+  // Abfragen (DKIM probiert ein Dutzend Selectors) — kaum Zeit obendrauf.
+  const mxLookup = lookupMx(domain);
+  const [dmarc, dkim, mtaSts, mx, bimi, tlsRpt, mxReverse] = await Promise.all([
     lookupDmarc(domain),
     probeDkimSelectors(domain),
     lookupMtaSts(domain),
-    lookupMx(domain),
+    mxLookup,
     lookupBimi(domain),
     lookupTlsRpt(domain),
+    mxLookup.then(checkMxReverse),
   ]);
 
   const spf: MailSecurity['spf'] = spfLookup.lookupFailed
@@ -82,6 +97,7 @@ export async function auditMail(
     ...summarizeMx(mx),
     bimi,
     tlsRpt,
+    mxReverse,
   };
 }
 
@@ -342,4 +358,78 @@ export function summarizeMx(mx: readonly MxRecord[]): Pick<MailSecurity, 'hasMx'
     hasMx: mx.length > 0,
     nullMx: isNullMx(mx.map((r) => ({ priority: r.priority, value: r.exchange }))),
   };
+}
+
+/* ─── Reverse DNS der Mailserver (FCrDNS, #147) ───────────────────────── */
+
+/**
+ * Eigener Resolver mit kurzem Budget: drei Schritte hintereinander (Adresse,
+ * PTR, zurück) dürfen den Mail-Check nicht um Sekunden verlängern, wenn ein
+ * Reverse-Server nicht antwortet.
+ */
+const reverseResolver = new dnsPromises.Resolver({ timeout: 2000, tries: 1 });
+reverseResolver.setServers(['1.1.1.1', '8.8.8.8']);
+
+/** Genug für die Hauptserver; große Anbieter haben Dutzende IPs je Name. */
+const MAX_MX_HOSTS = 4;
+const MAX_IPS_PER_HOST = 2;
+const MAX_PTR_NAMES = 3;
+
+/**
+ * Prüft je Mailserver, ob der PTR seiner IPs auf einen Namen zeigt, der
+ * wieder auf dieselbe IP auflöst. Die wichtigsten Server zuerst (niedrigste
+ * Priorität), ein Null-MX hat kein Ziel und fällt heraus.
+ */
+export async function checkMxReverse(mx: readonly MxRecord[]): Promise<MailMxReverse[]> {
+  const hosts = [...new Set(
+    [...mx]
+      .filter((record) => record.exchange)
+      .sort((a, b) => a.priority - b.priority)
+      .map((record) => record.exchange.toLowerCase().replace(/\.$/, ''))
+  )].slice(0, MAX_MX_HOSTS);
+
+  return Promise.all(hosts.map(async (host) => ({ host, ips: await reverseOfHost(host) })));
+}
+
+async function reverseOfHost(host: string): Promise<MailMxReverseIp[]> {
+  const [v4, v6] = await Promise.all([
+    reverseResolver.resolve4(host).catch(() => []),
+    reverseResolver.resolve6(host).catch(() => []),
+  ]);
+  return Promise.all([...v4, ...v6].slice(0, MAX_IPS_PER_HOST).map(confirmReverse));
+}
+
+async function confirmReverse(ip: string): Promise<MailMxReverseIp> {
+  let ptr: string[];
+  try {
+    ptr = (await reverseResolver.reverse(ip)).map((name) => name.toLowerCase().replace(/\.$/, ''));
+  } catch (error) {
+    // Kein PTR ist eine Antwort; alles andere heißt: wir wissen es nicht.
+    if (dnsLookupFailure(error)) return { ip, ptr: [], confirmed: false, unchecked: true };
+    return { ip, ptr: [], confirmed: false };
+  }
+
+  const v6 = isIPv6(ip);
+  const target = normalizeIp(ip);
+  let failed = false;
+  for (const name of ptr.slice(0, MAX_PTR_NAMES)) {
+    try {
+      const forward = v6 ? await reverseResolver.resolve6(name) : await reverseResolver.resolve4(name);
+      if (forward.some((address) => normalizeIp(address) === target)) return { ip, ptr, confirmed: true };
+    } catch (error) {
+      if (dnsLookupFailure(error)) failed = true;
+    }
+  }
+  // Nur widerlegt, wenn jede Rückfrage eine Antwort bekam.
+  return failed ? { ip, ptr, confirmed: false, unchecked: true } : { ip, ptr, confirmed: false };
+}
+
+/** IPv6 in kurzer Schreibweise kleingeschrieben, damit `2001:DB8::1` und `2001:db8:0::1` gleich sind. */
+function normalizeIp(ip: string): string {
+  if (!isIPv6(ip)) return ip;
+  try {
+    return new URL(`http://[${ip}]/`).hostname.slice(1, -1);
+  } catch {
+    return ip.toLowerCase();
+  }
 }

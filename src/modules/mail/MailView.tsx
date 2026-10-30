@@ -16,7 +16,7 @@ import {
   Section,
   Text,
 } from '@mittwald/flow-react-components';
-import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt } from '@/types/dns';
+import type { LookupFailure, MailBimi, MailMxReverse, MailMxReverseIp, MailSecurity, MailTlsRpt } from '@/types/dns';
 import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
 import { bimiDmarcGapPhrase, isHttpsUrl } from '@/lib/bimiTlsRpt';
 import {
@@ -28,6 +28,7 @@ import {
 import { phraseText, spfIssueText, t, useI18n, type DeKey } from '@/i18n';
 import { CopyableValue } from '@/components/ui/CopyableValue';
 import { InfoButton } from '@/components/ui/InfoButton';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { explainMailTerm } from '@/lib/explanations';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
 import styles from './MailView.module.css';
@@ -58,6 +59,10 @@ export function MailView({ mail }: MailViewProps) {
       {/* Ältere Antworten kennen BIMI und TLS-RPT nicht — dann keine Section statt „fehlt“. */}
       {mail.bimi && <BimiSection bimi={mail.bimi} dmarc={mail.dmarc} noMail={mail.nullMx} />}
       {mail.tlsRpt && <TlsRptSection tlsRpt={mail.tlsRpt} noMail={mail.nullMx} />}
+      {/* Ohne Mailserver (kein MX, Null-MX) gibt es keinen Reverse DNS zu prüfen. */}
+      {receivesMail && mail.mxReverse && mail.mxReverse.length > 0 && (
+        <MxReverseSection mxReverse={mail.mxReverse} />
+      )}
     </>
   );
 }
@@ -486,6 +491,73 @@ function TlsRptSection({ tlsRpt, noMail }: { tlsRpt: MailTlsRpt; noMail: boolean
 }
 
 /* ─── Status von BIMI und TLS-RPT ────────────────────────────────────── */
+
+/* ─── Reverse DNS der Mailserver ─────────────────────────────────────── */
+
+/**
+ * Reverse DNS der Mailserver (FCrDNS, #147): je Server seine IPs, ihr PTR und
+ * ob der Name zurück auf die IP auflöst. Eine Empfehlung wie BIMI und
+ * TLS-RPT — grün, wenn alles passt, sonst ein Hinweis, keine Warnfarbe.
+ * Nicht prüfbare IPs zählen nicht mit.
+ */
+function MxReverseSection({ mxReverse }: { mxReverse: MailMxReverse[] }) {
+  const { t } = useI18n();
+  const checked = mxReverse.flatMap((host) => host.ips).filter((ip) => !ip.unchecked);
+  const status =
+    checked.length === 0 ? (
+      <UncheckedBadge />
+    ) : checked.every((ip) => ip.confirmed) ? (
+      <AlertBadge status="success">{t('passt')}</AlertBadge>
+    ) : (
+      <AlertBadge status="info">{t('lückenhaft')}</AlertBadge>
+    );
+
+  return (
+    <MailSection
+      title="Reverse DNS"
+      subtitle={t('Zeigt der PTR jeder Mailserver-IP auf einen Namen, der wieder auf sie auflöst?')}
+      status={status}
+    >
+      {mxReverse.map(({ host, ips }) => (
+        <LabeledValue key={host}>
+          <Label>
+            <span className="mono">{host}</span>
+          </Label>
+          <Content>
+            {ips.length === 0 ? (
+              <Text>{t('keine IP-Adresse')}</Text>
+            ) : (
+              <ul className={styles.reverseList}>
+                {ips.map((ip) => (
+                  <li key={ip.ip} className={styles.reverse}>
+                    <span className="mono">{ip.ip}</span>
+                    {ip.ptr.length > 0 ? (
+                      <span className="mono">
+                        PTR <LookupLink value={ip.ptr[0]} />
+                      </span>
+                    ) : (
+                      <Text>{t('kein PTR')}</Text>
+                    )}
+                    <ReverseStatus ip={ip} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Content>
+        </LabeledValue>
+      ))}
+    </MailSection>
+  );
+}
+
+function ReverseStatus({ ip }: { ip: MailMxReverseIp }) {
+  const { t } = useI18n();
+  if (ip.unchecked) return <AlertText status="unavailable">{t('nicht prüfbar')}</AlertText>;
+  if (ip.confirmed) return <AlertText status="success">{t('löst zurück auf')}</AlertText>;
+  // Ohne PTR sagt die Zeile davor schon alles.
+  if (ip.ptr.length === 0) return null;
+  return <AlertText status="info">{t('löst nicht zurück auf')}</AlertText>;
+}
 
 type PolicyStatus =
   | 'active'

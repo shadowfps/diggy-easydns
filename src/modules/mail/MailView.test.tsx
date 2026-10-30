@@ -514,10 +514,11 @@ const EXPLAINED: MailSecurity = {
   nullMx: false,
   bimi: { present: false },
   tlsRpt: { present: false },
+  mxReverse: [{ host: 'mx.example.net', ips: [{ ip: '192.0.2.1', ptr: ['mx.example.net'], confirmed: true }] }],
 };
 
 describe('MailView — Erklärungen', () => {
-  it.each(['SPF', 'DKIM', 'DMARC', 'MTA-STS', 'BIMI', 'TLS-RPT'] as const)('erklärt %s', async (term) => {
+  it.each(['SPF', 'DKIM', 'DMARC', 'MTA-STS', 'BIMI', 'TLS-RPT', 'Reverse DNS'] as const)('erklärt %s', async (term) => {
     const user = userEvent.setup();
     render(<MailView mail={EXPLAINED} />);
 
@@ -537,5 +538,68 @@ describe('MailView — Erklärungen', () => {
     render(<MailView mail={{ ...EXPLAINED, nullMx: true }} />);
     expect(screen.getByRole('heading', { name: 'Keine Mails (Null-MX)' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /^Was bedeutet / })).toHaveLength(6);
+  });
+});
+
+/** #147: Reverse DNS der Mailserver (FCrDNS). */
+describe('MailView — Reverse DNS', () => {
+  const withReverse = (mxReverse: MailSecurity['mxReverse']): MailSecurity => ({ ...EXPLAINED, mxReverse });
+
+  it('zeigt je Mailserver IP, PTR als Link und Ergebnis; grün, wenn alles passt', () => {
+    render(
+      <MailView
+        mail={withReverse([
+          {
+            host: 'mx1.example.net',
+            ips: [{ ip: '192.0.2.1', ptr: ['out.example.net'], confirmed: true }],
+          },
+        ])}
+      />
+    );
+    const card = section('Reverse DNS');
+    expect(badgeStatus(within(card).getByText('passt'))).toBe('Status "Erfolg"');
+    expect(within(card).getByRole('group', { name: 'mx1.example.net' })).toHaveTextContent('192.0.2.1');
+    expect(within(card).getByRole('link', { name: /^out\.example\.net/ })).toHaveAttribute('href', '/lookup/out.example.net');
+    expect(within(card).getByText('löst zurück auf')).toBeInTheDocument();
+  });
+
+  it('weist auf fehlende oder unpassende PTR hin — als Hinweis, nicht als Warnung', () => {
+    render(
+      <MailView
+        mail={withReverse([
+          {
+            host: 'mx1.example.net',
+            ips: [
+              { ip: '192.0.2.1', ptr: ['other.example.net'], confirmed: false },
+              { ip: '192.0.2.2', ptr: [], confirmed: false },
+            ],
+          },
+        ])}
+      />
+    );
+    const card = section('Reverse DNS');
+    expect(badgeStatus(within(card).getByText('lückenhaft'))).toBe('Status "Information"');
+    expect(within(card).getByText('löst nicht zurück auf')).toBeInTheDocument();
+    expect(within(card).getByText('kein PTR')).toBeInTheDocument();
+  });
+
+  it('zeigt „nicht prüfbar“, wenn keine Abfrage eine Antwort bekam', () => {
+    render(
+      <MailView
+        mail={withReverse([
+          { host: 'mx1.example.net', ips: [{ ip: '192.0.2.1', ptr: [], confirmed: false, unchecked: true }] },
+        ])}
+      />
+    );
+    const card = section('Reverse DNS');
+    expect(within(card).getAllByText('nicht prüfbar').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('fehlt ohne Empfang (Null-MX) und bei älteren Antworten ohne die Prüfung', () => {
+    render(<MailView mail={{ ...EXPLAINED, nullMx: true }} />);
+    expect(screen.queryByRole('heading', { name: /^Reverse DNS/ })).not.toBeInTheDocument();
+    cleanup();
+    render(<MailView mail={{ ...EXPLAINED, mxReverse: undefined }} />);
+    expect(screen.queryByRole('heading', { name: /^Reverse DNS/ })).not.toBeInTheDocument();
   });
 });

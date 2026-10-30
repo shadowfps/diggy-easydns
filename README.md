@@ -67,7 +67,7 @@ Kostenlos, ohne Anmeldung, ohne Tracking — und Open Source.
 | Bereich | Was du erfährst |
 |---|---|
 | **Records** | A, AAAA, MX, NS, TXT, CAA, SOA und CNAME mit echter TTL — und hinter jeder IP der Netzbetreiber. |
-| **Mail-Schutz** | SPF inklusive Zählung der DNS-Lookups (RFC 7208), DKIM über 18 gängige Selektoren, DMARC mit der tatsächlich wirksamen Policy (RFC 7489), MTA-STS, TLS-RPT und BIMI. Domains ohne Mailempfang (Null-MX, RFC 7505) werden erkannt. |
+| **Mail-Schutz** | SPF inklusive Zählung der DNS-Lookups (RFC 7208), DKIM über 18 gängige Selektoren, DMARC mit der tatsächlich wirksamen Policy (RFC 7489), MTA-STS, TLS-RPT, BIMI und Reverse DNS der Mailserver (FCrDNS). Domains ohne Mailempfang (Null-MX, RFC 7505) werden erkannt. |
 | **SSL / TLS** | Zertifikat, Aussteller, Restlaufzeit und Kette — bevor Besucher eine Warnung sehen. |
 | **DNSSEC** | Ist die Zone signiert und mit welchem Algorithmus — und bestätigen validierende Resolver die Signatur? |
 | **Propagation** | Neun öffentliche Resolver ohne Filter (Cloudflare, Google, Quad9, OpenDNS, AdGuard, NextDNS, DNS.SB, Control D, DNS4EU) im Vergleich — die Caches verschiedener Anbieter, gefragt aus Deutschland. Für Einträge wie `_dmarc` oder einen DKIM-Schlüssel auch per TXT und CNAME. |

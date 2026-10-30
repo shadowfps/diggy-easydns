@@ -1193,3 +1193,61 @@ describe('mailFindings — DMARC ohne gültiges p=', () => {
     });
   });
 });
+
+/** #147: Reverse DNS der Mailserver — eine Empfehlung, kein Abzug. */
+describe('mailFindings — Reverse DNS der Mailserver (FCrDNS)', () => {
+  const receiving = (mxReverse: MailSecurity['mxReverse']) => mail({ nullMx: false, mxReverse });
+  const ip = (address: string, confirmed: boolean, unchecked?: boolean) => ({
+    ip: address,
+    ptr: confirmed ? ['mx.example.net'] : [],
+    confirmed,
+    ...(unchecked ? { unchecked } : {}),
+  });
+  const fcrdns = (findings: Finding[]) => findings.filter((f) => f.id.startsWith('mx-fcrdns'));
+
+  it('meldet passenden Reverse DNS als Erfolg', () => {
+    const findings = mailFindings(
+      receiving([{ host: 'mx1.example.net', ips: [ip('192.0.2.1', true), ip('2001:db8::1', true)] }]),
+      'example.com'
+    );
+    expect(summary(fcrdns(findings))).toEqual(['success mx-fcrdns-ok']);
+  });
+
+  it('nennt die Server ohne passenden Reverse DNS — als Empfehlung ohne Abzug', () => {
+    const [finding] = fcrdns(
+      mailFindings(
+        receiving([
+          { host: 'mx1.example.net', ips: [ip('192.0.2.1', true)] },
+          { host: 'mx2.example.net', ips: [ip('192.0.2.2', false), ip('192.0.2.3', false)] },
+        ]),
+        'example.com'
+      )
+    );
+    expect(finding).toMatchObject({
+      id: 'mx-fcrdns-missing',
+      severity: 'info',
+      advisory: true,
+      params: { hosts: 'mx2.example.net' },
+    });
+    expect(finding.fix?.explanation).toMatch(/^Den PTR setzt, wem die IP gehört/);
+  });
+
+  it('wertet nicht prüfbare IPs weder dafür noch dagegen', () => {
+    expect(fcrdns(mailFindings(receiving([{ host: 'mx1.example.net', ips: [ip('192.0.2.1', false, true)] }]), 'example.com'))).toEqual([]);
+    expect(
+      summary(
+        fcrdns(
+          mailFindings(
+            receiving([{ host: 'mx1.example.net', ips: [ip('192.0.2.1', true), ip('192.0.2.2', false, true)] }]),
+            'example.com'
+          )
+        )
+      )
+    ).toEqual(['success mx-fcrdns-ok']);
+  });
+
+  it('sagt nichts ohne Empfang (Null-MX) oder bei älteren Antworten ohne die Prüfung', () => {
+    expect(fcrdns(mailFindings(mail({ mxReverse: [{ host: 'mx.example.net', ips: [ip('192.0.2.1', false)] }] }), 'example.com'))).toEqual([]);
+    expect(fcrdns(mailFindings(mail({ nullMx: false }), 'example.com'))).toEqual([]);
+  });
+});
