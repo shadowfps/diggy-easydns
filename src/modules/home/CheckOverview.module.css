@@ -3,24 +3,6 @@
   gap: var(--size-px--l);
 }
 
-/* Überzeile, Überschrift und Einleitung auf dem Seitenhintergrund. */
-.intro {
-  display: grid;
-  gap: var(--size-px--xs);
-}
-
-/* Eine Stufe unter der Frage im Hero — die Suche bleibt die Hauptsache. */
-.heading {
-  font-size: clamp(1.25rem, 1.1rem + 0.6vw, var(--font-size-heading--l));
-  line-height: 1.2;
-}
-
-.lead {
-  max-width: 60ch;
-  color: var(--neutral--color--800);
-  text-wrap: pretty;
-}
-
 /*
  * Drei Kacheln je Zeile, wo Platz ist; darunter zwei, auf dem Handy eine.
  * Eine Liste: Screenreader sagen „Liste, sechs Einträge“ an.

@@ -10,6 +10,7 @@ import {
   Text,
 } from '@mittwald/flow-react-components';
 import { useI18n, type I18n } from '@/i18n';
+import { SectionIntro } from './SectionIntro';
 import styles from './CheckOverview.module.css';
 
 /**
@@ -69,15 +70,12 @@ export function CheckOverview() {
   const { t } = i18n;
   return (
     <section aria-labelledby="checks-heading" className={styles.overview}>
-      <header className={styles.intro}>
-        <Text className="eyebrow">{t('Was diggy prüft')}</Text>
-        <Heading level={2} id="checks-heading" className={styles.heading}>
-          {t('Sechs Bereiche, ein Befund')}
-        </Heading>
-        <Text elementType="p" className={styles.lead}>
-          {t('Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.')}
-        </Text>
-      </header>
+      <SectionIntro
+        id="checks-heading"
+        eyebrow={t('Was diggy prüft')}
+        title={t('Sechs Bereiche, ein Befund')}
+        lead={t('Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.')}
+      />
 
       <ul className={styles.tiles}>
         {checks(i18n).map(({ icon, title, text }) => (

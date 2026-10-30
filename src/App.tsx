@@ -32,6 +32,7 @@ import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
 import { ContributeBanner } from '@/modules/promo/ContributeBanner';
 import { CheckOverview } from '@/modules/home/CheckOverview';
+import { Faq } from '@/modules/home/Faq';
 import { usePreviousCheck } from '@/modules/changes/usePreviousCheck';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -686,6 +687,7 @@ export default function App() {
                   <ContributeBanner />
                   <ConverterPromo />
                 </div>
+                <Faq />
               </div>
             )}
 

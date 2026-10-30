@@ -46,6 +46,46 @@ const ui: Dictionary = {
     'DNS, SSL, email security and propagation at a glance.',
   'Ohne Fachchinesisch, mit Empfehlungen.': 'No jargon — just clear recommendations.',
   'Was diggy prüft': 'What diggy checks',
+  'Häufige Fragen':
+    'Frequently asked questions',
+  'Noch eine Frage? Schreib uns über das {kontakt} im Impressum.':
+    'Another question? Write to us via the {kontakt} in the legal notice.',
+  'Was diggy prüft, was es kostet und was mit deinen Suchen passiert.':
+    'What diggy checks, what it costs and what happens to your lookups.',
+  'Datenschutzerklärung':
+    'privacy policy',
+  'Was ist diggy?':
+    'What is diggy?',
+  'diggy prüft eine Domain in einem Rutsch: DNS-Records, Mail-Schutz, SSL-Zertifikat, DNSSEC, Propagation und WHOIS. Statt roher Antworten bekommst du einen Health Score und Empfehlungen, was zu tun ist.':
+    'diggy checks a domain in one go: DNS records, email protection, SSL certificate, DNSSEC, propagation and WHOIS. Instead of raw answers you get a Health Score and recommendations on what to do.',
+  'Kostet diggy etwas, brauche ich ein Konto?':
+    'Does diggy cost anything, do I need an account?',
+  'Nein. diggy ist kostenlos und ohne Anmeldung nutzbar — Domain oder IP-Adresse eingeben, fertig.':
+    'No. diggy is free and works without signing up — enter a domain or IP address, done.',
+  'Wie entsteht der Health Score?':
+    'How is the Health Score calculated?',
+  'Er startet bei 100 Punkten. Ein kritischer Befund kostet 25, eine Warnung 8, ein Hinweis 2 — alle Hinweise zusammen höchstens 6. Was sich nicht prüfen ließ und reine Empfehlungen kosten nichts.':
+    'It starts at 100 points. A critical finding costs 25, a warning 8, a notice 2 — all notices together at most 6. Anything that couldn’t be checked and pure recommendations cost nothing.',
+  'Warum zeigen die Resolver unterschiedliche Werte?':
+    'Why do the resolvers show different values?',
+  'Resolver merken sich Antworten so lange, wie die TTL des Records es erlaubt. Nach einer Änderung liefern manche noch den alten Wert, bis ihr Zwischenspeicher abläuft. diggy vergleicht neun öffentliche Resolver mit dem, was die Nameserver der Domain selbst ausliefern.':
+    'Resolvers keep answers for as long as the record’s TTL allows. After a change, some still return the old value until their cache expires. diggy compares nine public resolvers with what the domain’s own name servers serve.',
+  'Was bedeutet „nicht prüfbar“?':
+    'What does “couldn’t check” mean?',
+  'Eine Abfrage kam nicht durch, etwa wegen einer Zeitüberschreitung oder eines Serverfehlers. diggy sagt das offen, statt zu raten, und zieht dafür keine Punkte ab. Ein neuer Check hilft meistens.':
+    'A query didn’t get through, for example because of a timeout or a server error. diggy says so openly instead of guessing, and doesn’t deduct points for it. Running the check again usually helps.',
+  'Speichert diggy meine Suchen?':
+    'Does diggy store my lookups?',
+  'Nicht dauerhaft. Ergebnisse liegen auf dem Server nur kurz im Zwischenspeicher, damit dieselbe Abfrage nicht mehrfach nach außen geht. Deine letzten zehn Suchen kennt nur dein Browser — für die History. Mehr in der {datenschutz}.':
+    'Not permanently. Results sit in a short-lived cache on the server so the same lookup doesn’t go out twice. Only your browser knows your last ten lookups — for the history. More in the {datenschutz}.',
+  'Wer erfährt, welche Domain ich prüfe?':
+    'Who learns which domain I check?',
+  'Die Dienste, ohne die ein Check nicht geht: öffentliche DNS-Resolver, die Registry der Endung, der Webserver der Domain. Die Anfragen stellt der Server von diggy, nicht dein Browser. PageSpeed (Google) und VirusTotal laufen nur, wenn du sie anklickst. Die vollständige Liste steht in der {datenschutz}.':
+    'The services a check can’t do without: public DNS resolvers, the registry of the domain ending, the domain’s web server. diggy’s server sends these queries, not your browser. PageSpeed (Google) and VirusTotal only run when you click them. The full list is in the {datenschutz}.',
+  'Kann ich einen Report teilen?':
+    'Can I share a report?',
+  'Ja. Jeder Report hat eine eigene Adresse — „Link kopieren“ legt sie in die Zwischenablage. Mit „JSON“ lädst du alle Ergebnisse als Datei herunter.':
+    'Yes. Every report has its own address — “Copy link” puts it on your clipboard. “JSON” downloads all results as a file.',
   'Sechs Bereiche, ein Befund': 'Six areas, one verdict',
   'Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.':
     'Every area counts toward the Health Score. PageSpeed and VirusTotal are one click away.',
