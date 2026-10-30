@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import {
   AlertText,
   Badge,
-  Button,
   ColumnLayout,
   Heading,
   Label,
@@ -25,6 +24,7 @@ import { isNullMx } from '@/lib/nullMx';
 import { dmarcPolicyFlawLabelPhrase, effectiveDmarcPolicy } from '@/lib/dmarc';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { Hostname } from '@/components/ui/Hostname';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { phraseText, useI18n } from '@/i18n';
 import styles from './QuickFacts.module.css';
@@ -65,10 +65,9 @@ interface QuickFactsProps {
   dnssec: SectionSlice<DnssecInfo>;
   mail: SectionSlice<MailSecurity>;
   techStack: SectionSlice<DetectedTech[]>;
-  onUseDomain?: (domain: string) => void;
 }
 
-export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain }: QuickFactsProps) {
+export function QuickFacts({ records, ssl, dnssec, mail, techStack }: QuickFactsProps) {
   const { t } = useI18n();
   const aRecord = records.find((r) => r.type === 'A');
   const mxRecords = records.filter((r) => r.type === 'MX');
@@ -81,7 +80,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
   // läuft auf der Apex-Domain und kommt später.
   const mxItem: QuickFactItem = isNullMx(mxRecords)
     ? { label: 'MX', value: t('keine Mails (Null-MX)') }
-    : { label: 'MX', value: mxRecord?.value ?? '—', mono: true };
+    : { label: 'MX', value: mxRecord ? <LookupLink value={mxRecord.value} /> : '—', mono: true };
   const aValue =
     aRecord && isInspectableIp(aRecord.value) ? (
       <IpAddressLink ip={aRecord.value} className={styles.flush} />
@@ -89,25 +88,8 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       (aRecord?.value ?? '—')
     );
 
-  // Ein Klick übernimmt den Nameserver in die Suche — eine Aktion, also ein
-  // Button. Der Name sagt, was passiert, und enthält den sichtbaren Wert.
-  const nsValue =
-    nsRecord && onUseDomain ? (
-      <Button
-        size="s"
-        variant="plain"
-        color="secondary"
-        onPress={() => onUseDomain(nsRecord.value)}
-        aria-label={t('{value} in die Suche übernehmen', { value: nsRecord.value })}
-        className={`${styles.flush} ${styles.nsButton}`}
-      >
-        <Text className="mono">
-          <Hostname value={nsRecord.value} />
-        </Text>
-      </Button>
-    ) : (
-      (nsRecord?.value ?? '—')
-    );
+  // Nameserver und Mailserver führen auf ihren eigenen Report (#147).
+  const nsValue = nsRecord ? <LookupLink value={nsRecord.value} /> : '—';
 
   // A/NS/MX kommen aus den Records und stehen sofort. SSL/DNSSEC/DMARC laden
   // im Hintergrund → bis dahin ein Inline-Skeleton statt des Werts. Nur

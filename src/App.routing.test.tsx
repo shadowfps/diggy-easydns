@@ -239,7 +239,9 @@ describe('Suche und History-Einträge', () => {
     push.mockRestore();
   });
 
-  it('legt bei einer Suche INNERHALB der Lookup-Ansicht keinen zweiten Eintrag an', async () => {
+  // #147: Vorher überschrieb eine Suche aus dem Report heraus dessen Eintrag —
+  // Zurück führte auf die Startseite statt zum vorigen Report.
+  it('legt für eine andere Domain aus dem Report heraus einen eigenen Eintrag an', async () => {
     render(<App />);
     await userEvent.type(searchField(), 'example.com{Enter}');
     await waitFor(() => expect(window.location.pathname).toBe('/lookup/example.com'));
@@ -250,8 +252,46 @@ describe('Suche und History-Einträge', () => {
     await userEvent.type(searchField(), 'other.com{Enter}');
 
     await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledWith('other.com'));
+    expect(push).toHaveBeenCalledWith(null, '', '/lookup/other.com');
+    push.mockRestore();
+  });
+
+  it('legt für dieselbe Domain keinen doppelten Eintrag an', async () => {
+    render(<App />);
+    await userEvent.type(searchField(), 'example.com{Enter}');
+    await waitFor(() => expect(window.location.pathname).toBe('/lookup/example.com'));
+
+    const push = vi.spyOn(window.history, 'pushState');
+    await userEvent.clear(searchField());
+    await userEvent.type(searchField(), 'example.com{Enter}');
+
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledTimes(2));
     expect(push).not.toHaveBeenCalled();
     push.mockRestore();
+  });
+
+  it('prüft einen verlinkten Nameserver sofort, und Zurück führt zum vorigen Report', async () => {
+    vi.mocked(api.lookupRecords).mockImplementation(async (domain) => ({
+      domain,
+      timestamp: '2026-09-09T10:00:00.000Z',
+      records:
+        domain === 'example.com'
+          ? [{ type: 'NS', name: domain, value: 'ns1.example.net', ttl: 300 }]
+          : [{ type: 'A', name: domain, value: '93.184.216.34', ttl: 300 }],
+      findings: [],
+    }));
+    render(<App />);
+    await userEvent.type(searchField(), 'example.com{Enter}');
+
+    const records = await screen.findByRole('grid', { name: 'DNS-Records' });
+    await userEvent.click(within(records).getByRole('link', { name: /^ns1\.example\.net/ }));
+
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenCalledWith('ns1.example.net'));
+    expect(window.location.pathname).toBe('/lookup/ns1.example.net');
+
+    window.history.back();
+    await waitFor(() => expect(window.location.pathname).toBe('/lookup/example.com'));
+    await waitFor(() => expect(api.lookupRecords).toHaveBeenLastCalledWith('example.com'));
   });
 
   it('setzt den Dokumenttitel auf die abgefragte Domain', async () => {

@@ -75,7 +75,6 @@ export type DeText =
   | 'Suchen'
   | 'Zuletzt geprüft'
   | 'Beispiele'
-  | '{value} in die Suche übernehmen'
 
   // ─── Report: Kopf, Tabs, Zustände ────────────────────────────────────
   | 'Records werden geholt…'
@@ -352,6 +351,7 @@ export type DeText =
   | 'Reverse-DNS wird ermittelt…'
   | 'Für diese IP ist kein PTR-Record konfiguriert.'
   | 'IP-Details werden geladen…'
+  | 'Als eigene Suche öffnen'
   | 'IP-, Netzwerk- und Geolocation-Details'
   | 'Details zu {ip} anzeigen'
   | 'IP kopieren'

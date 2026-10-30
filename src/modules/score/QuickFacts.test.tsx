@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import type { DetectedTech, DnsRecord, DnssecInfo, MailSecurity, SslInfo } from '@/types/dns';
 import type { SectionSlice } from '@/hooks/useProgressiveLookup';
 import { QuickFacts } from './QuickFacts';
@@ -180,20 +179,24 @@ describe('QuickFacts — nicht prüfbar', () => {
 });
 
 describe('QuickFacts — Nameserver und Stack', () => {
-  it('übernimmt den Nameserver per Klick in die Suche', async () => {
-    const onUseDomain = vi.fn();
+  it('verlinkt Nameserver und Mailserver auf ihren eigenen Report (#147)', () => {
     render(
       <QuickFacts
-        records={[{ type: 'NS', name: 'example.com', value: 'a.iana-servers.net', ttl: 0 }]}
+        records={[
+          { type: 'NS', name: 'example.com', value: 'a.iana-servers.net', ttl: 0 },
+          { type: 'MX', name: 'example.com', value: 'mx.example.net', priority: 10, ttl: 0 },
+        ]}
         ssl={idle()}
         dnssec={idle()}
         mail={idle()}
         techStack={idle()}
-        onUseDomain={onUseDomain}
       />
     );
-    await userEvent.click(screen.getByRole('button', { name: 'a.iana-servers.net in die Suche übernehmen' }));
-    expect(onUseDomain).toHaveBeenCalledWith('a.iana-servers.net');
+    expect(screen.getByRole('link', { name: /^a\.iana-servers\.net/ })).toHaveAttribute(
+      'href',
+      '/lookup/a.iana-servers.net'
+    );
+    expect(screen.getByRole('link', { name: /^mx\.example\.net/ })).toHaveAttribute('href', '/lookup/mx.example.net');
   });
 
   it('nennt die erkannten Technologien mit Version', () => {

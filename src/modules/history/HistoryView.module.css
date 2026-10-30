@@ -29,10 +29,6 @@
 }
 
 /* Nameserver übernehmen: als Wert lesbar, nicht als Knopf-Fläche. */
-.valueButton {
-  max-width: 100%;
-}
-
 .badges {
   display: flex;
   flex-wrap: wrap;

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   Badge,
-  Button,
   CounterBadge,
   Section,
   Tab,
@@ -19,7 +18,7 @@ import type { DnsRecord, RecordType } from '@/types/dns';
 import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { InfoButton } from '@/components/ui/InfoButton';
-import { Hostname } from '@/components/ui/Hostname';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { NULL_MX_EXPLANATION, explainRecordType } from '@/lib/explanations';
 import { isNullMx } from '@/lib/nullMx';
 import { useI18n } from '@/i18n';
@@ -27,7 +26,6 @@ import styles from './RecordsList.module.css';
 
 interface RecordsListProps {
   records: DnsRecord[];
-  onUseDomain?: (domain: string) => void;
 }
 
 type Filter = RecordType | 'ALL';
@@ -44,7 +42,7 @@ type Filter = RecordType | 'ALL';
  * nur im gewählten Tab — sonst lägen alle Records mehrfach im DOM, und jede
  * IP fragte ihren Netzbetreiber je Tab ab.
  */
-export function RecordsList({ records, onUseDomain }: RecordsListProps) {
+export function RecordsList({ records }: RecordsListProps) {
   const [filter, setFilter] = useState<Filter>('ALL');
   const { t } = useI18n();
 
@@ -59,7 +57,7 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
   const nullMx = useMemo(() => isNullMx(records.filter((r) => r.type === 'MX')), [records]);
 
   const table = (key: Filter, shown: () => DnsRecord[]) =>
-    filter === key && <RecordsTable records={shown()} nullMx={nullMx} onUseDomain={onUseDomain} />;
+    filter === key && <RecordsTable records={shown()} nullMx={nullMx} />;
 
   return (
     <Section>
@@ -89,15 +87,7 @@ export function RecordsList({ records, onUseDomain }: RecordsListProps) {
   );
 }
 
-function RecordsTable({
-  records,
-  nullMx,
-  onUseDomain,
-}: {
-  records: DnsRecord[];
-  nullMx: boolean;
-  onUseDomain?: (domain: string) => void;
-}) {
+function RecordsTable({ records, nullMx }: { records: DnsRecord[]; nullMx: boolean }) {
   const { t } = useI18n();
 
   // Das „?“ zur Erklärung steht nur in der ersten Zeile je Typ. An jeder
@@ -146,29 +136,17 @@ function RecordsTable({
                       <IpAddressLink ip={record.value} />
                       <IpOwnerLabel ip={record.value} />
                     </>
-                  ) : record.type === 'NS' && onUseDomain ? (
-                    <Button
-                      size="s"
-                      variant="plain"
-                      color="secondary"
-                      onPress={() => onUseDomain(record.value)}
-                      aria-label={t('{value} in die Suche übernehmen', { value: record.value })}
-                      className={styles.nameserver}
-                    >
-                      <Text className="mono">
-                        <Hostname value={record.value} />
-                      </Text>
-                    </Button>
+                  ) : record.type === 'NS' || record.type === 'CNAME' ? (
+                    // Ein Hostname, den man selbst prüfen will (#147): Link auf seinen Report.
+                    <LookupLink value={record.value} />
                   ) : record.type === 'MX' ? (
                     <MxTarget value={record.value} nullMx={nullMx} />
                   ) : (
                     // Ganz zeigen statt abschneiden: DKIM-Schlüssel, SPF und
                     // Verifizierungs-Tokens will man lesen und kopieren können.
                     // `wrap-anywhere` bricht lange Base64-Ketten, bevorzugt aber
-                    // Leerzeichen (#64). Hostnamen (CNAME) brechen nach einem Punkt.
-                    <span className="wrap-anywhere">
-                      {record.type === 'CNAME' ? <Hostname value={record.value} /> : record.value}
-                    </span>
+                    // Leerzeichen (#64).
+                    <span className="wrap-anywhere">{record.value}</span>
                   )}
                 </span>
               </TableCell>
@@ -216,7 +194,7 @@ function MxTarget({ value, nullMx }: { value: string; nullMx: boolean }) {
   const { t } = useI18n();
   return (
     <>
-      <span className="wrap-anywhere">{value ? <Hostname value={value} /> : '.'}</span>
+      <span className="wrap-anywhere">{value && !nullMx ? <LookupLink value={value} /> : value || '.'}</span>
       {nullMx && (
         <span className={styles.nullMx}>
           <Badge color="neutral">{t('Null-MX — keine Mails')}</Badge>

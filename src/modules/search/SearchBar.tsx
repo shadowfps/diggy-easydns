@@ -16,7 +16,6 @@ interface SearchBarProps {
   onSearch: (domain: string) => void;
   value: string;
   onValueChange: (value: string) => void;
-  focusSignal?: number;
   autoFocus?: boolean;
   loading?: boolean;
   /**
@@ -51,7 +50,6 @@ export function SearchBar({
   onSearch,
   value,
   onValueChange,
-  focusSignal = 0,
   autoFocus = false,
   loading,
   variant = 'hero',
@@ -66,12 +64,6 @@ export function SearchBar({
     inputRef.current?.focus({ preventScroll: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (focusSignal <= 0) return;
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, [focusSignal]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();

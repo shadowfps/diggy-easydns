@@ -4,20 +4,12 @@
 }
 
 /*
- * IP und Nameserver sind Buttons. Ihr Text steht bündig unter der Beschriftung
- * wie der MX darunter — die Hover-Fläche ragt dafür um den Innenabstand nach
- * links hinaus.
+ * Die IP ist ein Button (sie öffnet ihre Details). Ihr Text steht bündig unter
+ * der Beschriftung wie die Links darunter — die Hover-Fläche ragt dafür um den
+ * Innenabstand nach links hinaus.
  */
 .flush {
   margin-inline-start: calc(-1 * var(--size-px--s));
-}
-
-/* Der Nameserver als Button: linksbündig wie die übrigen Werte. */
-.nsButton {
-  justify-self: start;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  text-align: start;
 }
 
 .stack {

@@ -9,6 +9,7 @@ import {
 import { IpDetailsRows } from '@/components/ip/IpAddressLink';
 import { formatIpOwnerLabel, useIpDetails } from '@/components/ip/useIpDetails';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { useI18n } from '@/i18n';
 import styles from './IpResultView.module.css';
 
@@ -46,9 +47,10 @@ export function IpResultView({ ip }: IpResultViewProps) {
             </div>
           ) : ptrHosts.length > 0 ? (
             <div className={styles.hosts}>
+              {/* Der Hostname hinter der IP führt auf seinen eigenen Report (#147). */}
               {ptrHosts.map((host) => (
                 <Text key={host} className={`mono ${styles.host}`}>
-                  <strong>{host}</strong>
+                  <LookupLink value={host} />
                 </Text>
               ))}
             </div>

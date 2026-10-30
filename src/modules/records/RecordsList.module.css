@@ -20,12 +20,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.nameserver {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  text-align: start;
-}
-
 .nullMx {
   display: inline-flex;
   align-items: center;

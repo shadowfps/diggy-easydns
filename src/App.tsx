@@ -145,7 +145,6 @@ import {
   formatExportTimestamp,
   getDomainFromLookupPath,
   lookupPathFor,
-  normalizeSearchDomain,
   sanitizeFilename,
   STATIC_ROUTES,
   type AppView,
@@ -185,7 +184,6 @@ export default function App() {
   // Erwarteter Wert im Propagation-Tab (#133) — gehört zum gezeigten Typ.
   const [propagationExpected, setPropagationExpected] = useState('');
   const [searchValue, setSearchValue] = useState('');
-  const [searchFocusSignal, setSearchFocusSignal] = useState(0);
   const [comparePair, setComparePair] = useState<ComparePair>({ left: '', right: '' });
   const initialPathHandledRef = useRef(false);
   // Die Tab-Leiste — „Alle Findings“ in der Score-Karte holt sie in Sicht.
@@ -253,21 +251,18 @@ export default function App() {
   const handleSearch = (domain: string) => {
     window.scrollTo({ top: 0, behavior: records || ipQuery ? smoothScroll : 'auto' });
     /*
-     * Eintrag nur anlegen, wenn wir NICHT schon auf einem Lookup-Pfad sind.
+     * Jede Suche nach einer anderen Domain ist ein eigener Eintrag im Verlauf
+     * — auch aus einem Report heraus. Vorher überschrieb sie dort den Eintrag
+     * des Reports, und Zurück führte auf die Startseite statt zum vorigen
+     * Report (#147).
      *
-     * Die Bedingung hing vorher an `records || ipQuery` und war damit
-     * inkonsistent: während ein Lookup lädt, ist `records` bereits null (der
-     * Reducer setzt beim Start auf INITIAL), eine Suche in diesem Moment legte
-     * also einen Eintrag an — nach dem Laden dagegen nicht. Und ein erneuter
-     * Versuch derselben Domain nach einem Fehler erzeugte einen doppelten
-     * Eintrag mit identischer URL.
-     *
-     * Der Pfad ist die verlässlichere Quelle: von einer statischen Route aus
-     * pushState, innerhalb der Lookup-Ansicht übernimmt replaceLookupPath.
+     * Entscheidend ist der Pfad, nicht `records`: während ein Lookup lädt, ist
+     * `records` null. Dieselbe Domain noch einmal (ein erneuter Versuch nach
+     * einem Fehler) legt keinen doppelten Eintrag mit gleicher URL an.
      */
-    if (!window.location.pathname.startsWith('/lookup/')) {
-      const target = domain.trim().toLowerCase();
-      if (target) window.history.pushState(null, '', lookupPathFor(target));
+    const target = domain.trim().toLowerCase();
+    if (target && target !== getDomainFromLookupPath(window.location.pathname)) {
+      window.history.pushState(null, '', lookupPathFor(target));
     }
     runLookup(domain);
   };
@@ -469,18 +464,6 @@ export default function App() {
     clearLookupHistory();
   };
 
-  const handleUseDomainInSearch = (domain: string) => {
-    const nextValue = normalizeSearchDomain(domain);
-    if (!nextValue) return;
-    setView('lookup');
-    setSearchValue(nextValue);
-    setSearchFocusSignal((value) => value + 1);
-    if (!records && window.location.pathname !== '/') {
-      window.history.pushState(null, '', '/');
-    }
-    window.scrollTo({ top: 0, behavior: smoothScroll });
-  };
-
   // Erstes Laden: Deep-Link/Permalink anwenden.
   useEffect(() => {
     if (initialPathHandledRef.current) return;
@@ -612,7 +595,6 @@ export default function App() {
                   variant="compact"
                   value={searchValue}
                   onValueChange={setSearchValue}
-                  focusSignal={searchFocusSignal}
                   onSearch={handleSearch}
                   loading={recordsLoading}
                 />
@@ -630,7 +612,6 @@ export default function App() {
                     <HistoryView
                       entries={historyEntries}
                       onRun={handleSearch}
-                      onUseDomain={handleUseDomainInSearch}
                       onClear={handleClearHistory}
                     />
                   )}
@@ -690,7 +671,6 @@ export default function App() {
               <SearchBar
                 value={searchValue}
                 onValueChange={setSearchValue}
-                focusSignal={searchFocusSignal}
                 autoFocus={autoFocusSearch}
                 onSearch={handleSearch}
                 loading={recordsLoading}
@@ -805,7 +785,6 @@ export default function App() {
                     dnssec={dnssec}
                     mail={mail}
                     techStack={techStack}
-                    onUseDomain={handleUseDomainInSearch}
                   />
                 </aside>
 
@@ -849,7 +828,6 @@ export default function App() {
                             <RecordsList
                               key={report.domain}
                               records={report.records}
-                              onUseDomain={handleUseDomainInSearch}
                             />
                           )}
                         </Tab>
@@ -948,7 +926,6 @@ export default function App() {
                               <WhoisView
                                 domain={report.domain}
                                 whois={whois.data ?? undefined}
-                                onUseDomain={handleUseDomainInSearch}
                               />
                             )
                           )}

@@ -23,7 +23,7 @@ import {
 import { IconHistory } from '@tabler/icons-react';
 import type { LookupHistoryEntry } from '@/lib/lookupHistory';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Hostname } from '@/components/ui/Hostname';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { verdictFor } from '@/lib/scoring';
 import { formatDate, t, useI18n } from '@/i18n';
 import styles from './HistoryView.module.css';
@@ -31,7 +31,6 @@ import styles from './HistoryView.module.css';
 interface HistoryViewProps {
   entries: LookupHistoryEntry[];
   onRun: (domain: string) => void;
-  onUseDomain?: (domain: string) => void;
   onClear: () => void;
 }
 
@@ -45,7 +44,7 @@ const HistoryList = typedList<LookupHistoryEntry>();
  * Einträge, neueste zuerst. Ohne `settingStorageKey` merkt sich die List
  * nichts — die History bleibt das Einzige, was diggy dafür speichert.
  */
-export function HistoryView({ entries, onRun, onUseDomain, onClear }: HistoryViewProps) {
+export function HistoryView({ entries, onRun, onClear }: HistoryViewProps) {
   useI18n();
   const confirmClear = useModalController();
 
@@ -77,7 +76,7 @@ export function HistoryView({ entries, onRun, onUseDomain, onClear }: HistoryVie
             </Button>
           </ActionGroup>
           <HistoryList.Item textValue={(entry) => entry.domain}>
-            {(entry) => <HistoryItem entry={entry} onRun={onRun} onUseDomain={onUseDomain} />}
+            {(entry) => <HistoryItem entry={entry} onRun={onRun} />}
           </HistoryList.Item>
         </HistoryList.List>
       </LayoutCard>
@@ -115,15 +114,7 @@ function HistoryIcon() {
   );
 }
 
-function HistoryItem({
-  entry,
-  onRun,
-  onUseDomain,
-}: {
-  entry: LookupHistoryEntry;
-  onRun: (domain: string) => void;
-  onUseDomain?: (domain: string) => void;
-}) {
+function HistoryItem({ entry, onRun }: { entry: LookupHistoryEntry; onRun: (domain: string) => void }) {
   return (
     <HistoryList.ItemView>
       <Avatar>
@@ -153,7 +144,7 @@ function HistoryItem({
           <ColumnLayout s={[1]} m={[1, 1, 1]} l={[1, 1, 1]} rowGap="m">
             <CoreValues label="IP" values={entry.ips} />
             <CoreValues label="MX" values={entry.mx} />
-            <CoreValues label="NS" values={entry.nameservers} onUseValue={onUseDomain} />
+            <CoreValues label="NS" values={entry.nameservers} />
           </ColumnLayout>
           <div className={styles.badges}>
             <StatusBadge ok={entry.sslValid}>{entry.sslValid ? sslLabel(entry) : t('SSL fehlt')}</StatusBadge>
@@ -170,42 +161,19 @@ function HistoryItem({
   );
 }
 
-function CoreValues({
-  label,
-  values,
-  onUseValue,
-}: {
-  label: string;
-  values: string[];
-  onUseValue?: (value: string) => void;
-}) {
+/** Jeder Wert führt auf seinen eigenen Report (#147). */
+function CoreValues({ label, values }: { label: string; values: string[] }) {
   return (
     <LabeledValue>
       <Label>{label}</Label>
       <Content>
         {values.length > 0 ? (
           <div className={styles.values}>
-            {values.slice(0, 3).map((value) =>
-              onUseValue ? (
-                <Button
-                  key={value}
-                  variant="plain"
-                  color="secondary"
-                  size="s"
-                  onPress={() => onUseValue(value)}
-                  aria-label={t('{value} in die Suche übernehmen', { value })}
-                  className={styles.valueButton}
-                >
-                  <Text className="mono wrap-anywhere">
-                    <Hostname value={value} />
-                  </Text>
-                </Button>
-              ) : (
-                <Text key={value} className="mono wrap-anywhere">
-                  <Hostname value={value} />
-                </Text>
-              )
-            )}
+            {values.slice(0, 3).map((value) => (
+              <Text key={value} className="mono">
+                <LookupLink value={value} />
+              </Text>
+            ))}
             {values.length > 3 && (
               <Text>
                 <small>{t('+{count} weitere', { count: values.length - 3 })}</small>

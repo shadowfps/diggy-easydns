@@ -3,24 +3,21 @@ import {
   AlertBadge,
   AlertText,
   Badge,
-  Button,
   ColumnLayout,
   Content,
   Flex,
   Heading,
   IconUnavailable,
-  InlineCode,
   Label,
   LabeledValue,
   Link,
   Section,
   Text,
-  Tooltip,
-  TooltipTrigger,
 } from '@mittwald/flow-react-components';
 import type { WhoisInfo } from '@/types/dns';
 import { registryWebLookup, type RegistryWebLookup } from '@shared/registryWebLookup';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LookupLink } from '@/components/ui/LookupLink';
 import { t, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
 import { CalendarButton } from '@/components/calendar/CalendarButton';
@@ -29,7 +26,6 @@ interface WhoisViewProps {
   /** Domain des Reports — Ziel des Links in der Kalender-Erinnerung. */
   domain: string;
   whois?: WhoisInfo;
-  onUseDomain?: (domain: string) => void;
 }
 
 type Tone = 'ok' | 'warn' | 'bad';
@@ -73,7 +69,7 @@ const STATUS_ALERT: Record<Tone, 'success' | 'warning' | 'danger'> = {
  * WHOIS/RDAP als Tab-Inhalt: Registrierung, Domain-Status und Nameserver je
  * eine Section — Flow trennt sie mit einer Linie.
  */
-export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
+export function WhoisView({ domain, whois }: WhoisViewProps) {
   /**
    * Bezugszeitpunkt einmal beim Mount festhalten.
    *
@@ -246,31 +242,16 @@ export function WhoisView({ domain, whois, onUseDomain }: WhoisViewProps) {
         <Heading level={2}>{t('Nameserver (laut Registry)')}</Heading>
 
         {whois.nameServers && whois.nameServers.length > 0 ? (
-          onUseDomain ? (
-            // Ein Button je Nameserver übernimmt den Namen in die Suche; ohne
-            // diese Aktion eine schlichte Liste — ein nicht klickbarer Button
-            // sähe bedienbar aus.
-            <Flex wrap="wrap" gap="s">
+          // Jeder Nameserver führt auf seinen eigenen Report (#147).
+          <Text>
+            <ul>
               {whois.nameServers.map((ns) => (
-                <TooltipTrigger key={ns} delay="long">
-                  <Button size="s" variant="soft" color="secondary" onPress={() => onUseDomain(ns)}>
-                    <Text className="mono">{ns}</Text>
-                  </Button>
-                  <Tooltip>{t('{value} in die Suche übernehmen', { value: ns })}</Tooltip>
-                </TooltipTrigger>
+                <li key={ns} className="mono">
+                  <LookupLink value={ns} />
+                </li>
               ))}
-            </Flex>
-          ) : (
-            <Text>
-              <ul>
-                {whois.nameServers.map((ns) => (
-                  <li key={ns}>
-                    <InlineCode>{ns}</InlineCode>
-                  </li>
-                ))}
-              </ul>
-            </Text>
-          )
+            </ul>
+          </Text>
         ) : (
           <Text>{t('Keine Nameserver gemeldet.')}</Text>
         )}

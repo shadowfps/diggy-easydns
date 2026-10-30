@@ -9,6 +9,7 @@ import {
   IconLink,
   Label,
   LabeledValue,
+  Link,
   LoadingSpinner,
   Modal,
   ModalTrigger,
@@ -20,6 +21,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { formatIpOwnerLabel, useIpDetails } from './useIpDetails';
 import { useI18n } from '@/i18n';
 import { Hostname } from '@/components/ui/Hostname';
+import { LookupLink } from '@/components/ui/LookupLink';
+import { lookupPathFor } from '@/lib/lookupPath';
 import styles from './IpAddressLink.module.css';
 
 interface IpAddressLinkProps {
@@ -108,6 +111,8 @@ function IpDetailsDialog({ ip }: { ip: string }) {
             </EmptyState>
           )}
           {details && !loading && !error && <IpDetailsRows details={details} />}
+          {/* Eigene Adresse, eigener Eintrag im Verlauf, teilbar (#147). */}
+          <Link href={lookupPathFor(ip)}>{t('Als eigene Suche öffnen')}</Link>
         </Section>
       </Content>
     </>
@@ -132,8 +137,8 @@ export function IpDetailsRows({ details }: { details: IpDetails }) {
             ptrHosts.length > 0 ? (
               <span className={styles.hosts}>
                 {ptrHosts.map((host) => (
-                  <span key={host} className="mono wrap-anywhere">
-                    {host}
+                  <span key={host} className="mono">
+                    <LookupLink value={host} />
                   </span>
                 ))}
               </span>

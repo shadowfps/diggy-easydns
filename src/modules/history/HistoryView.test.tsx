@@ -28,7 +28,7 @@ const entry = (domain: string, overrides: Partial<LookupHistoryEntry> = {}): Loo
 });
 
 function setup(entries: LookupHistoryEntry[]) {
-  const props = { onRun: vi.fn(), onUseDomain: vi.fn(), onClear: vi.fn() };
+  const props = { onRun: vi.fn(), onClear: vi.fn() };
   render(<HistoryView entries={entries} {...props} />);
   return props;
 }
@@ -55,14 +55,16 @@ describe('HistoryView', () => {
     expect(within(rows[1]).getByText('SSL fehlt')).toBeInTheDocument();
   });
 
-  it('prüft eine Domain erneut und übernimmt Nameserver in die Suche', async () => {
-    const { onRun, onUseDomain } = setup([entry('example.com')]);
+  it('prüft eine Domain erneut und verlinkt ihre Nameserver (#147)', async () => {
+    const { onRun } = setup([entry('example.com')]);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Scan erneut' }));
     expect(onRun).toHaveBeenCalledWith('example.com');
 
-    await userEvent.click(screen.getByRole('button', { name: 'b.iana-servers.net in die Suche übernehmen' }));
-    expect(onUseDomain).toHaveBeenCalledWith('b.iana-servers.net');
+    expect(screen.getByRole('link', { name: /^b\.iana-servers\.net/ })).toHaveAttribute(
+      'href',
+      '/lookup/b.iana-servers.net'
+    );
   });
 
   it('löscht erst nach Bestätigung', async () => {
@@ -83,7 +85,7 @@ describe('HistoryView', () => {
   });
 
   it('folgt neuen Einträgen — nach dem Löschen steht der Leerzustand da', async () => {
-    const props = { onRun: vi.fn(), onUseDomain: vi.fn(), onClear: vi.fn() };
+    const props = { onRun: vi.fn(), onClear: vi.fn() };
     const { rerender } = render(<HistoryView entries={[entry('example.com')]} {...props} />);
     expect(await screen.findByText('example.com')).toBeInTheDocument();
 

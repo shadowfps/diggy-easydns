@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { DnsRecord } from '@/types/dns';
@@ -157,18 +157,23 @@ describe('RecordsList — Null-MX', () => {
   });
 });
 
-describe('RecordsList — Nameserver', () => {
-  it('übernimmt einen Nameserver per Klick in die Suche', async () => {
-    const user = userEvent.setup();
-    const onUseDomain = vi.fn();
-    render(<RecordsList records={RECORDS} onUseDomain={onUseDomain} />);
-    await user.click(screen.getByRole('button', { name: 'ns2.example.com in die Suche übernehmen' }));
-    expect(onUseDomain).toHaveBeenCalledWith('ns2.example.com');
+/** Flow hängt Link-Namen ein U+200D an — daher der Vergleich über den Anfang. */
+const lookupLink = (name: string) => screen.getByRole('link', { name: new RegExp(`^${name.replace(/\./g, '\\.')}`) });
+
+describe('RecordsList — Hostnamen als Links (#147)', () => {
+  it('verlinkt Nameserver, Mailserver und CNAME-Ziele auf ihren eigenen Report', () => {
+    render(
+      <RecordsList
+        records={[...RECORDS, { type: 'CNAME', name: 'www.example.com', value: 'edge.example.net', ttl: 0 }]}
+      />
+    );
+    expect(lookupLink('ns2.example.com')).toHaveAttribute('href', '/lookup/ns2.example.com');
+    expect(lookupLink('mx1.example.com')).toHaveAttribute('href', '/lookup/mx1.example.com');
+    expect(lookupLink('edge.example.net')).toHaveAttribute('href', '/lookup/edge.example.net');
   });
 
-  it('zeigt den Nameserver ohne Suche als Text', () => {
-    render(<RecordsList records={RECORDS} />);
-    expect(screen.getByText('ns1.example.com')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /in die Suche übernehmen/ })).not.toBeInTheDocument();
+  it('verlinkt Textwerte und den Null-MX nicht', () => {
+    render(<RecordsList records={[NULL_MX, { type: 'TXT', name: 'example.com', value: 'v=spf1 -all', ttl: 0 }]} />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

@@ -79,7 +79,6 @@ const ui: Dictionary = {
   Suchen: 'Search',
   'Zuletzt geprüft': 'Recently checked',
   Beispiele: 'Examples',
-  '{value} in die Suche übernehmen': 'Use {value} in the search',
 
   // ─── Report: Kopf, Tabs, Zustände ────────────────────────────────────
   'Records werden geholt…': 'Fetching records…',
@@ -460,6 +459,7 @@ const ui: Dictionary = {
   'Reverse-DNS wird ermittelt…': 'Looking up reverse DNS…',
   'Für diese IP ist kein PTR-Record konfiguriert.': 'No PTR record is configured for this IP.',
   'IP-Details werden geladen…': 'Loading IP details…',
+  'Als eigene Suche öffnen': 'Open as its own lookup',
   'IP-, Netzwerk- und Geolocation-Details': 'IP, network and geolocation details',
   'Details zu {ip} anzeigen': 'Show details for {ip}',
   'IP kopieren': 'Copy IP',
