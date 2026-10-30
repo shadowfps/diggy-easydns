@@ -83,7 +83,11 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
     ? { label: 'MX', value: t('keine Mails (Null-MX)') }
     : { label: 'MX', value: mxRecord?.value ?? '—', mono: true };
   const aValue =
-    aRecord && isInspectableIp(aRecord.value) ? <IpAddressLink ip={aRecord.value} /> : (aRecord?.value ?? '—');
+    aRecord && isInspectableIp(aRecord.value) ? (
+      <IpAddressLink ip={aRecord.value} className={styles.flush} />
+    ) : (
+      (aRecord?.value ?? '—')
+    );
 
   // Ein Klick übernimmt den Nameserver in die Suche — eine Aktion, also ein
   // Button. Der Name sagt, was passiert, und enthält den sichtbaren Wert.
@@ -95,7 +99,7 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
         color="secondary"
         onPress={() => onUseDomain(nsRecord.value)}
         aria-label={t('{value} in die Suche übernehmen', { value: nsRecord.value })}
-        className={styles.nsButton}
+        className={`${styles.flush} ${styles.nsButton}`}
       >
         <Text className="mono">
           <Hostname value={nsRecord.value} />
@@ -154,14 +158,13 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
         ? { label: 'DMARC', value: phraseText(dmarcPolicyFlawLabelPhrase(dmarcFlaw)) }
         : { label: 'DMARC', value: t('gesetzt'), ok: true });
 
-  const items: QuickFactItem[] = [
+  // Hostnamen brauchen Breite, die Bewertungen nicht: getrennt angeordnet.
+  const hostItems: QuickFactItem[] = [
     { label: 'A', value: aValue, mono: true },
     { label: 'NS', value: nsValue, mono: true },
     mxItem,
-    sslItem,
-    dnssecItem,
-    dmarcItem,
   ];
+  const statusItems: QuickFactItem[] = [sslItem, dnssecItem, dmarcItem];
 
   const techLoading = techStack.status === 'loading';
   const sortedTech = sortTech(techStack.data ?? []);
@@ -171,14 +174,19 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
       <Section>
         <Heading level={2}>{t('Schnellübersicht')}</Heading>
 
-        {/* Zwei Spalten auch in der schmalen Seitenspalte: die Werte sind kurz,
-            und die Karte bleibt flach genug, um beim Scrollen mitzulaufen. */}
-        <ColumnLayout s={[1, 1]} m={[1, 1]} l={[1, 1]} rowGap="m">
-          {items.map((item) => (
-            <LabeledValue key={item.label}>
-              <Label>{item.label}</Label>
-              <FactValue item={item} />
-            </LabeledValue>
+        {/* Hostnamen über die volle Breite — in der schmalen Seitenspalte
+            untereinander, damit sie in eine Zeile passen; ist die Karte breiter
+            (gestapelter Report), nebeneinander. */}
+        <ColumnLayout s={[1]} m={[1, 1, 1]} l={[1, 1, 1]} rowGap="m">
+          {hostItems.map((item) => (
+            <Fact key={item.label} item={item} />
+          ))}
+        </ColumnLayout>
+
+        {/* Die Bewertungen sind kurz („✓ 81 Tage“) — drei in einer Reihe. */}
+        <ColumnLayout s={[1, 1, 1]} m={[1, 1, 1]} l={[1, 1, 1]} rowGap="m">
+          {statusItems.map((item) => (
+            <Fact key={item.label} item={item} />
           ))}
         </ColumnLayout>
 
@@ -204,6 +212,15 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
         )}
       </Section>
     </LayoutCard>
+  );
+}
+
+function Fact({ item }: { item: QuickFactItem }) {
+  return (
+    <LabeledValue>
+      <Label>{item.label}</Label>
+      <FactValue item={item} />
+    </LabeledValue>
   );
 }
 

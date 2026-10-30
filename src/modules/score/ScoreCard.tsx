@@ -3,7 +3,6 @@ import {
   AlertBadge,
   Button,
   DonutChart,
-  Flex,
   Heading,
   IconChevronRight,
   IconDanger,
@@ -83,7 +82,7 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
             value={score.score}
             maxValue={100}
             status={status}
-            size="l"
+            size="m"
             formatOptions={{ style: 'decimal' }}
             aria-label="Health Score"
           >
@@ -113,14 +112,16 @@ export function ScoreCard({ score, findings, failed = [], onShowFindings }: Scor
 
         <Separator />
 
-        {/* Der nächste Schritt: der schwerste offene Punkt, ein Klick zu allen. */}
-        <Flex align="center" justify="space-between" gap="m">
-          <TopFinding finding={top} />
-          <Button size="s" variant="plain" color="secondary" onPress={onShowFindings}>
+        {/* Der nächste Schritt: der schwerste offene Punkt, ein Klick zu allen.
+            Untereinander, damit der Titel ganz zu lesen ist und der Button
+            nicht umbricht. */}
+        <TopFinding finding={top} />
+        <div className={styles.more}>
+          <Button size="s" variant="soft" color="secondary" onPress={onShowFindings}>
             <Text>{t('Alle Findings')}</Text>
             <IconChevronRight />
           </Button>
-        </Flex>
+        </div>
       </Section>
     </LayoutCard>
   );
@@ -149,7 +150,7 @@ function TopFinding({ finding }: { finding?: Finding }) {
       {TOP_ICON[finding.severity as keyof typeof TOP_ICON]}
       <LabeledValue>
         <Label>{t('Wichtigster Punkt')}</Label>
-        <Text className={styles.topTitle}>{findingText(finding).title}</Text>
+        <Text>{findingText(finding).title}</Text>
       </LabeledValue>
     </div>
   );

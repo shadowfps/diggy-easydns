@@ -116,6 +116,17 @@
   }
 }
 
+/*
+ * Flows Navigationslinks sind inline und auf Text ausgelegt: Ein Icon allein
+ * säße auf der Grundlinie, oben in der Hover-Fläche. Als Flexbox steht es in
+ * der Mitte — und die Fläche ist so groß wie die des Einstellungs-Buttons.
+ */
+.iconLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .actions {
   display: flex;
   flex-shrink: 0;

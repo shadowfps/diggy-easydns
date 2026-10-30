@@ -1,4 +1,4 @@
-/* Ring links, die Zählung daneben — in der schmalen Seitenspalte untereinander. */
+/* Ring links, die Zählung als Liste daneben; reicht die Breite nicht, darunter. */
 .overview {
   display: flex;
   flex-wrap: wrap;
@@ -13,8 +13,7 @@
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(2, max-content);
-  gap: var(--size-px--s) var(--size-px--m);
+  gap: var(--size-px--xs);
 }
 
 .stat,
@@ -25,16 +24,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Icon auf Höhe der Beschriftung, der Titel darf umbrechen. */
 .top {
   display: flex;
-  min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--size-px--s);
 }
 
-.topTitle {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.more {
+  display: flex;
 }
