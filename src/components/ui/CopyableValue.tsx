@@ -31,7 +31,15 @@ export function CopyableValue({ value, truncate, copyLabel }: CopyableValueProps
       >
         {value}
       </InlineCode>
-      <CopyButton text={value} size="s" variant="soft" color="secondary" aria-label={copyLabel} />
+      {/* Nur mit eigenem Namen überschreiben: `aria-label={undefined}` nähme
+          Flow seinen Standardnamen („Kopieren“), und der Button hätte keinen. */}
+      <CopyButton
+        text={value}
+        size="s"
+        variant="soft"
+        color="secondary"
+        {...(copyLabel ? { 'aria-label': copyLabel } : {})}
+      />
     </div>
   );
 }
