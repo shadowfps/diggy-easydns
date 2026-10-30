@@ -30,6 +30,7 @@ import { WhoisView } from '@/modules/whois/WhoisView';
 
 import { IpResultView } from '@/modules/ip/IpResultView';
 import { ConverterPromo } from '@/modules/promo/ConverterPromo';
+import { ContributeBanner } from '@/modules/promo/ContributeBanner';
 import { CheckOverview } from '@/modules/home/CheckOverview';
 import { usePreviousCheck } from '@/modules/changes/usePreviousCheck';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
@@ -700,6 +701,7 @@ export default function App() {
             {showHome && (
               <div className={styles.homeSections}>
                 <CheckOverview />
+                <ContributeBanner />
                 <ConverterPromo />
               </div>
             )}

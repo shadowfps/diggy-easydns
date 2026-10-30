@@ -21,12 +21,11 @@ import {
 } from '@mittwald/flow-react-components';
 import { IconBrandGithub, IconMoon, IconSun } from '@tabler/icons-react';
 import { useTheme } from '@/hooks/useTheme';
+import { GITHUB_URL } from '@/lib/project';
 import { setLanguage, useI18n } from '@/i18n';
 import type { AppView } from '@/lib/lookupPath';
 import { isSiteGated } from '@/lib/siteGate';
 import styles from './Header.module.css';
-
-const GITHUB_URL = 'https://github.com/shadowfps/diggy-easydns';
 
 interface HeaderProps {
   /** Die aktuelle Ansicht — ihr Navigationspunkt trägt `aria-current`. */

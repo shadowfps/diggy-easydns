@@ -97,6 +97,7 @@ Seitentyp **Detailseite**:
 | Leer-, Start-, Fehlerzustand | `EmptyState` (`components/ui/EmptyState.tsx`, Flows `IllustratedMessage`) |
 | „nicht prüfbar“ | `UncheckedBadge` / `UncheckedLine` (`components/ui/Unchecked.tsx`) |
 | Hinweis, der wichtig ist | `Alert status=…` in der betroffenen Section |
+| Hinweis, den man übergehen kann (Converter, Mitmachen) | `AccentBox` in einer `LayoutCard`; hervorgehobene Wörter mit `Color` — Kontrast prüfen, siehe `promo/ContributeBanner.module.css` |
 | Ergebnis einer Aktion | `AlertText` direkt an der Aktion |
 | Ein-/ausklappen | `Accordion` |
 | Inhalte umschalten | `Tabs` |

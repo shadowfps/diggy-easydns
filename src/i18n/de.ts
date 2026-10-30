@@ -63,6 +63,11 @@ export type DeText =
   | 'Kennst du schon {converter} by diggy?'
   | 'Bilder umwandeln, skalieren & komprimieren — direkt im Browser.'
   | 'Zu Converter'
+  | '{mitgestalten} erwünscht!'
+  | 'Mitgestalten'
+  | 'diggy ist Open Source — bring {idee} ein oder entwickle mit.'
+  | 'deine Idee'
+  | 'diggy auf GitHub'
 
   // ─── Suche ───────────────────────────────────────────────────────────
   | 'Jetzt deine Anfrage starten'

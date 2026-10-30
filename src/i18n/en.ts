@@ -66,6 +66,12 @@ const ui: Dictionary = {
   'Bilder umwandeln, skalieren & komprimieren — direkt im Browser.':
     'Convert, resize & compress images — right in your browser.',
   'Zu Converter': 'Open converter',
+  '{mitgestalten} erwünscht!': '{mitgestalten} welcome!',
+  'Mitgestalten': 'Contributions',
+  'diggy ist Open Source — bring {idee} ein oder entwickle mit.':
+    'diggy is open source — share {idee} or help build it.',
+  'deine Idee': 'your idea',
+  'diggy auf GitHub': 'diggy on GitHub',
 
   // ─── Suche ───────────────────────────────────────────────────────────
   'Jetzt deine Anfrage starten': 'Look up a domain or IP',
