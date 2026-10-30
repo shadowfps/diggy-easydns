@@ -1,6 +1,26 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+
+/**
+ * Der Commit, aus dem gebaut wird — für die Versionsanzeige im Footer. Im
+ * Docker-Build fehlt .git (.dockerignore); dort reicht die CI ihn als
+ * DIGGY_COMMIT durch (container.yml, deploy-dev.yml). Lokal fragt Vite git.
+ * Geht beides nicht, bleibt er leer und der Footer zeigt nur die Version.
+ */
+function buildCommit(): string {
+  const fromCi = process.env.DIGGY_COMMIT?.trim();
+  if (fromCi) return fromCi.slice(0, 7);
+  try {
+    return execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Entfernt die Schriften, die Flow von cdn.mittwald.de lädt.
@@ -61,6 +81,9 @@ function englishPreload(): Plugin {
 
 export default defineConfig({
   plugins: [react(), flowSelfHostedFonts(), englishPreload()],
+  define: {
+    'import.meta.env.DIGGY_COMMIT': JSON.stringify(buildCommit()),
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

@@ -128,6 +128,7 @@ const DatenschutzView = lazy(() =>
   import('@/modules/datenschutz/DatenschutzView').then((m) => ({ default: m.DatenschutzView }))
 );
 import { lookupPageSpeed, lookupVirusScan } from '@/lib/api';
+import { buildLabel } from '@/lib/buildInfo';
 import { useProgressiveLookup } from '@/hooks/useProgressiveLookup';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { isDnsOnlyName } from '@/lib/dnsName';
@@ -1029,7 +1030,7 @@ export default function App() {
               </Link>
             </nav>
             <Text>
-              <small>v0.3.0</small>
+              <small>{buildLabel()}</small>
             </Text>
           </footer>
         </div>

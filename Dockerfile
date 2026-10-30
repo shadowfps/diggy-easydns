@@ -19,6 +19,10 @@ COPY src ./src
 COPY public ./public
 COPY server ./server
 COPY shared ./shared
+# Commit für die Versionsanzeige (Footer, /api/health). .git gehört nicht in
+# den Build-Kontext — die CI reicht ihn als Build-Argument durch. Erst hier,
+# damit `npm ci` darüber im Cache bleibt.
+ARG DIGGY_COMMIT=""
 RUN npm run build
 
 FROM node:24.22.1-alpine AS runtime
@@ -29,6 +33,9 @@ ENV NODE_ENV=production \
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+ARG DIGGY_COMMIT=""
+ENV DIGGY_COMMIT=${DIGGY_COMMIT}
 
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/dist-server ./dist-server

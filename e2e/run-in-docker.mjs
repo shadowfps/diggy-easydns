@@ -58,6 +58,9 @@ const result = spawnSync(
     '-e', `OWNER=${owner}`,
     // Schaltet den Pixelvergleich ein (e2e/screenshots.spec.ts).
     '-e', 'E2E_DOCKER=1',
+    // Fester Commit für den Footer (vite.config.ts): Die Referenzbilder decken
+    // Version und Commit ab, die Breite der Abdeckung hinge sonst vom Commit ab.
+    '-e', 'DIGGY_COMMIT=0000000',
     // CI weiterreichen: steuert Reporter, forbidOnly und dass fehlende
     // Referenzbilder nicht still angelegt werden (playwright.config.ts).
     ...(process.env.CI ? ['-e', `CI=${process.env.CI}`] : []),

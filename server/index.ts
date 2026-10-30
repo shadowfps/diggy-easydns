@@ -26,6 +26,7 @@ import { AuthoritativeBusyError, authoritativeSection } from './services/authori
 import { PROPAGATION_RECORD_TYPES } from '../shared/propagation.js';
 import { checkDnssec } from './services/dnssec.js';
 import { checkSsl } from './services/ssl.js';
+import { BUILD_INFO } from './lib/buildInfo.js';
 import { auditMail } from './services/mailAudit.js';
 import { lookupWhois } from './services/whois.js';
 import { lookupPageSpeed } from './services/pagespeed.js';
@@ -400,7 +401,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
   if (shuttingDown) {
     return res.status(503).json({ status: 'shutting_down', service: 'diggy-api' });
   }
-  res.json({ status: 'ok', service: 'diggy-api', version: '0.3.0' });
+  res.json({ status: 'ok', service: 'diggy-api', ...BUILD_INFO });
 });
 
 /*

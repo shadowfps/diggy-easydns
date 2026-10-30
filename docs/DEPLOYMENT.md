@@ -69,7 +69,7 @@ dem vorherigen Digest. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die
 
 Fehlt eines der SMTP-/Kontakt-Secrets, bricht der Deploy bewusst ab, statt die Stack-Env leer zu überschreiben.
 
-Versions-Tags wie `v0.3.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
+Versions-Tags wie `v0.4.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
 
 - Projekt: `p-nmi5ji`
 - Container-Stack: `86540922-d203-4150-8776-9cc4e22352bd`
@@ -81,7 +81,7 @@ Für manuelles Deployment zuerst prüfen, ob der Ziel-Stack weitere Services ent
 mw stack ps --stack-id 86540922-d203-4150-8776-9cc4e22352bd --output json
 # DIGGY_IMAGE muss gesetzt sein, sonst fällt die Compose auf :latest zurück
 # und der Rollout bleibt aus. Digest oder Versions-Tag verwenden:
-export DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.3.0
+export DIGGY_IMAGE=ghcr.io/shadowfps/diggy-easydns:v0.4.0
 
 mw stack deploy --stack-id 86540922-d203-4150-8776-9cc4e22352bd --compose-file compose.mittwald.yml --env-file .env
 ```
@@ -114,7 +114,29 @@ so nicht anfassen.
    ```
    Auf dev steht immer der zuletzt geschobene Stand.
 3. Testen lassen.
-4. Wie gewohnt per PR nach `main` — das rollt nach diggydns.cloud aus.
+4. Version in `package.json` anheben (siehe unten), dann wie gewohnt per PR
+   nach `main` — das rollt nach diggydns.cloud aus.
+
+**Version**
+
+Die Versionsnummer steht nur in `package.json`; Footer und `/api/health`
+lesen sie von dort. Dazu kommt automatisch der Commit, aus dem gebaut wurde
+(„v0.4.0 · 085959d“ im Footer, `commit` in `/api/health`) — daran sieht man
+auf dev wie auf Prod, welcher Stand läuft, und ob ein Deploy angekommen ist:
+
+```bash
+curl -s https://dev.diggydns.cloud/api/health   # {"status":"ok",…,"version":"0.4.0","commit":"085959d"}
+```
+
+Hochgezählt wird mit jedem Release nach Prod, im PR nach `main`
+(Semver, solange 0.x: neue Funktionen → Minor, nur Fehlerbehebungen → Patch):
+
+```bash
+npm version minor --no-git-tag-version   # oder: patch
+```
+
+Nach dem Merge optional das Tag setzen — es baut ein unveränderliches Image
+`:vX.Y.Z` (siehe oben): `git tag v0.4.0 <merge-commit> && git push origin v0.4.0`.
 
 **Passwort**
 

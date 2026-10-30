@@ -45,7 +45,7 @@ async function expectScreenshot(page: Page, name: string): Promise<void> {
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await expect(page).toHaveScreenshot(name, {
     fullPage: true,
-    // Die Versionsnummer im Footer — sonst bräuchte jedes Release neue Bilder.
-    mask: [page.getByText(/^v\d+\.\d+\.\d+$/)],
+    // Version und Commit im Footer — sonst bräuchte jeder Commit neue Bilder.
+    mask: [page.getByText(/^v\d+\.\d+\.\d+/)],
   });
 }
