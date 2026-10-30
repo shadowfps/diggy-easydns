@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RECORD_EXPLANATIONS } from '@/lib/explanations';
 import { InfoButton } from './InfoButton';
 
 /**
  * Das „?“ muss ohne Maus funktionieren (#80): kein Hover-Tooltip, sondern ein
- * Button, der per Tastatur und Touch auf- und zugeht und dabei seinen Zustand
- * meldet.
+ * Button, der per Tastatur und Touch aufgeht, seinen Zustand meldet und den
+ * Fokus beim Schließen zurückgibt. Umgesetzt mit Flows ContextualHelp.
  */
 
 // Titel und Text sind Schlüssel aus dem Wörterbuch (#86) — deshalb ein
@@ -28,57 +28,57 @@ function setup() {
 }
 
 describe('InfoButton', () => {
-  it('ist zu Beginn geschlossen und verweist auf kein fehlendes Element', () => {
+  it('ist zu Beginn geschlossen', () => {
     const { button } = setup();
     expect(button).toHaveAttribute('aria-expanded', 'false');
-    expect(button).not.toHaveAttribute('aria-controls');
     expect(screen.queryByText(EXPLANATION.text)).not.toBeInTheDocument();
   });
 
-  it('zeigt nach dem Öffnen Begriff, Titel und Text im verknüpften Element', async () => {
+  it('zeigt nach dem Öffnen Begriff, Titel und Text im verknüpften Dialog', async () => {
     const { user, button } = setup();
     await user.click(button);
 
     expect(button).toHaveAttribute('aria-expanded', 'true');
-    const panel = document.getElementById(button.getAttribute('aria-controls') ?? '');
-    expect(panel).not.toBeNull();
-    expect(panel).toHaveTextContent('MX');
-    expect(panel).toHaveTextContent(EXPLANATION.title);
-    expect(panel).toHaveTextContent(EXPLANATION.text);
+    const dialog = await screen.findByRole('dialog');
+    expect(button.getAttribute('aria-controls')).toBeTruthy();
+    expect(dialog).toHaveTextContent('MX');
+    expect(dialog).toHaveTextContent(EXPLANATION.title);
+    expect(dialog).toHaveTextContent(EXPLANATION.text);
   });
 
-  it('öffnet und schließt per Tastatur (Enter, Leertaste)', async () => {
+  it('öffnet per Tastatur (Enter, Leertaste)', async () => {
     const { user, button } = setup();
     await user.tab();
     await user.tab();
     expect(button).toHaveFocus();
 
     await user.keyboard('{Enter}');
-    expect(button).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText(EXPLANATION.text)).toBeInTheDocument();
+    expect(await screen.findByText(EXPLANATION.text)).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    // Den Fokus gibt react-aria erst nach der Ausblende-Animation zurück.
+    await waitFor(() => expect(button).toHaveFocus());
 
     await user.keyboard(' ');
-    expect(button).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText(EXPLANATION.text)).not.toBeInTheDocument();
+    expect(await screen.findByText(EXPLANATION.text)).toBeInTheDocument();
   });
 
-  it('schließt mit Escape und lässt den Fokus auf dem Button', async () => {
+  it('schließt mit Escape und gibt den Fokus an den Button zurück', async () => {
     const { user, button } = setup();
     await user.tab();
     await user.tab();
     await user.keyboard('{Enter}');
-    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
     expect(button).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText(EXPLANATION.text)).not.toBeInTheDocument();
-    expect(button).toHaveFocus();
+    await waitFor(() => expect(screen.queryByText(EXPLANATION.text)).not.toBeInTheDocument());
+    await waitFor(() => expect(button).toHaveFocus());
   });
 
   it('schließt bei einem Klick außerhalb', async () => {
     const { user, button } = setup();
     await user.click(button);
-    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
     await user.click(document.body);
     expect(button).toHaveAttribute('aria-expanded', 'false');
@@ -87,17 +87,7 @@ describe('InfoButton', () => {
   it('bleibt offen bei einem Klick in die Erklärung', async () => {
     const { user, button } = setup();
     await user.click(button);
-    await user.click(screen.getByText(EXPLANATION.text));
+    await user.click(await screen.findByText(EXPLANATION.text));
     expect(button).toHaveAttribute('aria-expanded', 'true');
-  });
-
-  it('schließt, wenn der Fokus per Tab weiterwandert', async () => {
-    const { user, button } = setup();
-    await user.click(button);
-    expect(button).toHaveAttribute('aria-expanded', 'true');
-
-    await user.tab();
-    expect(screen.getByRole('button', { name: 'danach' })).toHaveFocus();
-    expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 });

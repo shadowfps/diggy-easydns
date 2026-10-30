@@ -1,0 +1,29 @@
+/*
+ * Schriften lokal, nicht von einem CDN.
+ *
+ * Flow setzt Inter für Text und „FiraCode“ für Code. Sein Stylesheet lädt
+ * beide von cdn.mittwald.de — diese Regeln entfernt der Build
+ * (flowSelfHostedFonts in vite.config.ts), hier kommen dieselben Familien aus
+ * dem eigenen Bundle. Hintergrund wie früher bei Google Fonts: jeder Abruf
+ * bei einem Dritten gibt die IP des Besuchers weiter (LG München I,
+ * 3 O 17493/20), und die CSP erlaubt Schriften nur von `'self'`.
+ *
+ * Nur die Schnitte, die Flow nutzt: normal (400) und bold (700). Goldman
+ * trägt allein die Wortmarke.
+ */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/goldman/latin-700.css';
+
+/* Fontsource nennt die Familie „Fira Code“, Flow erwartet „FiraCode“. */
+@font-face {
+  font-family: FiraCode;
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src:
+    url('@fontsource/fira-code/files/fira-code-latin-400-normal.woff2') format('woff2'),
+    url('@fontsource/fira-code/files/fira-code-latin-400-normal.woff') format('woff');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

@@ -1,0 +1,29 @@
+.hero {
+  display: flex;
+  width: 100%;
+  max-width: 42rem;
+  flex-direction: column;
+  gap: var(--size-px--m);
+  margin-inline: auto;
+}
+
+.form {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--size-px--s);
+}
+
+.field {
+  min-width: 0;
+}
+
+.shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-px--s);
+}

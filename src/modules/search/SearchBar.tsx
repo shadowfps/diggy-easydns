@@ -1,9 +1,16 @@
-import { Search } from 'lucide-react';
-import { motion } from 'motion/react';
 import { useEffect, useRef, type FormEvent } from 'react';
+import {
+  Button,
+  IconDanger,
+  IconSearch,
+  IconSuccess,
+  IconWarning,
+  Text,
+  TextField,
+} from '@mittwald/flow-react-components';
 import type { LookupHistoryEntry } from '@/lib/lookupHistory';
-import { cn } from '@/lib/cn';
 import { useI18n } from '@/i18n';
+import styles from './SearchBar.module.css';
 
 interface SearchBarProps {
   onSearch: (domain: string) => void;
@@ -13,8 +20,8 @@ interface SearchBarProps {
   autoFocus?: boolean;
   loading?: boolean;
   /**
-   * `hero`: großes Feld auf der Startseite, darunter zuletzt Geprüftes oder
-   * Beispiele. `compact`: schmal für den Header auf Report-Seiten.
+   * `hero`: Feld auf der Startseite, darunter zuletzt Geprüftes oder
+   * Beispiele. `compact`: für die Kopfzeile auf Report-Seiten.
    */
   variant?: 'hero' | 'compact';
   /** Zuletzt geprüfte Domains — ersetzen die Beispiele, sobald es welche gibt. */
@@ -30,6 +37,16 @@ function prefersAutoFocus(): boolean {
   return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 }
 
+/**
+ * Die Suche: ein TextField und der Absende-Button daneben — auch auf dem
+ * Handy in einer Zeile (Flows Combine bricht dort um, der Button stünde dann
+ * unter dem Feld).
+ *
+ * Bewusst kein SearchField: das ist in Flow für das Filtern von Listen
+ * gedacht und setzt Beschriftung und Platzhalter fest auf „Suchen“. Hier wird
+ * nichts gefiltert, sondern eine Domain oder IP geprüft — das Feld braucht
+ * seinen eigenen Namen.
+ */
 export function SearchBar({
   onSearch,
   value,
@@ -68,106 +85,82 @@ export function SearchBar({
   };
 
   const field = (
-    <form onSubmit={handleSubmit} className="relative">
-      <div
-        className={cn(
-          'pointer-events-none absolute top-1/2 -translate-y-1/2 text-fg-subtle',
-          variant === 'hero' ? 'left-5' : 'left-3.5'
-        )}
-      >
-        <Search className={variant === 'hero' ? 'size-[18px]' : 'size-4'} />
-      </div>
-      <input
+    <form onSubmit={handleSubmit} className={styles.form} data-variant={variant}>
+      <TextField
         ref={inputRef}
-        type="text"
         value={value}
-        onChange={(e) => onValueChange(e.target.value)}
+        onChange={onValueChange}
         placeholder={t('Jetzt deine Anfrage starten')}
         aria-label={t('Domain oder IP-Adresse')}
         autoComplete="off"
-        spellCheck={false}
-        className={cn(
-          'w-full rounded-full border border-line bg-surface font-mono text-fg transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-fg/30 focus:outline-hidden focus:ring-4 focus:ring-fg/6',
-          variant === 'hero' ? 'h-14 pl-12 pr-16 text-base shadow-card' : 'h-10 pl-10 pr-12 text-sm'
-        )}
+        spellCheck="false"
+        enterKeyHint="search"
+        className={`mono ${styles.field}`}
       />
-      <button
-        type="submit"
-        disabled={loading || !value.trim()}
-        className={cn(
-          'btn btn-primary btn-icon absolute',
-          variant === 'hero' ? 'right-2 top-2' : 'btn-sm right-1 top-1'
-        )}
-        aria-label={t('Suchen')}
-      >
-        {loading ? (
-          <span className="dig-dots">
-            <span /> <span /> <span />
-          </span>
-        ) : (
-          <Search className={variant === 'hero' ? 'size-4' : 'size-3.5'} />
-        )}
-      </button>
+      <Button type="submit" aria-label={t('Suchen')} isPending={loading} isDisabled={!loading && !value.trim()}>
+        <IconSearch />
+      </Button>
     </form>
   );
 
-  // Im Header ohne Einblend-Animation: er bleibt beim Wechsel zwischen
-  // Reports stehen, eine Animation bei jedem Lookup wäre nur Unruhe.
+  // Im Header nur das Feld: er bleibt beim Wechsel zwischen Reports stehen.
   if (variant === 'compact') return field;
 
   const shortcuts = recent.slice(0, 4);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: 'easeOut' }}
-      className="w-full max-w-2xl mx-auto"
-    >
+    <div className={styles.hero}>
       {field}
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+      <div className={styles.shortcuts}>
         {shortcuts.length > 0 ? (
           <>
-            <span className="text-xs text-fg-subtle">{t('Zuletzt geprüft')}</span>
+            <Text>
+              <small>{t('Zuletzt geprüft')}</small>
+            </Text>
             {shortcuts.map((entry) => (
-              <button
+              <Button
                 key={entry.domain}
-                type="button"
-                disabled={loading}
-                onClick={() => run(entry.domain)}
-                className="chip font-mono disabled:opacity-45"
+                size="s"
+                variant="soft"
+                color="secondary"
+                isDisabled={loading}
+                onPress={() => run(entry.domain)}
               >
-                <span className={cn('size-2 rounded-full', scoreDot(entry.score))} aria-hidden />
-                {entry.domain}
-                <span className="text-fg-subtle">{entry.score}</span>
-              </button>
+                <ScoreIcon score={entry.score} />
+                <Text className="mono">
+                  {entry.domain} {entry.score}
+                </Text>
+              </Button>
             ))}
           </>
         ) : (
           <>
-            <span className="text-xs text-fg-subtle">{t('Beispiele')}</span>
+            <Text>
+              <small>{t('Beispiele')}</small>
+            </Text>
             {EXAMPLES.map((ex) => (
-              <button
+              <Button
                 key={ex}
-                type="button"
-                disabled={loading}
-                onClick={() => run(ex)}
-                className="chip font-mono disabled:opacity-45"
+                size="s"
+                variant="soft"
+                color="secondary"
+                isDisabled={loading}
+                onPress={() => run(ex)}
               >
-                {ex}
-              </button>
+                <Text className="mono">{ex}</Text>
+              </Button>
             ))}
           </>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-/** Dieselben Stufen wie die Score-Karte. */
-function scoreDot(score: number): string {
-  if (score >= 65) return 'bg-success';
-  if (score >= 40) return 'bg-warning';
-  return 'bg-danger';
+/** Dieselben Stufen wie die Score-Karte — Form und Farbe, nie nur Farbe. */
+function ScoreIcon({ score }: { score: number }) {
+  if (score >= 65) return <IconSuccess color="success" />;
+  if (score >= 40) return <IconWarning color="warning" />;
+  return <IconDanger color="danger" />;
 }

@@ -1,493 +1,63 @@
 /*
- * Schriften lokal, nicht von fonts.googleapis.com.
+ * Globale Regeln — bewusst wenige.
  *
- * Vorher lud index.html Geist/Geist Mono/Goldman zur Laufzeit von Googles CDN.
- * Damit ging bei jedem Seitenaufruf die IP des Besuchers ohne Einwilligung an
- * Google (LG München I, 3 O 17493/20). Nebeneffekt des Umstiegs: zwei
- * DNS-Lookups und zwei TLS-Handshakes weniger im kritischen Rendering-Pfad,
- * und die CSP kommt ohne Google-Hosts aus.
+ * Die Oberfläche besteht aus Flow-Komponenten (@mittwald/flow-react-components,
+ * Regeln in docs/DESIGN.md). Flow bringt Typografie, Farben, Abstände und
+ * Hell/Dunkel selbst mit; hier steht nur, was außerhalb seiner Komponenten
+ * liegt: Schriften, der Seitenhintergrund und ein paar Hilfsklassen.
  *
- * Nur die tatsächlich genutzten Schnitte — jeder Import ist eine Datei im Bundle.
+ * main.tsx lädt `all-layered.css`: Flow liegt in eigenen `@layer`s, alles hier
+ * und in den CSS-Modulen ist ungeschichtet und gewinnt ohne Spezifitätskampf.
+ * Deshalb gilt umgekehrt: keine Regeln gegen Flow-Klassen (`.flow--…`) — die
+ * sind keine zugesicherte API (USAGE.md von Flow, „What you must not depend on“).
  */
-@import '@fontsource/geist/latin-300.css' layer(base);
-@import '@fontsource/geist/latin-400.css' layer(base);
-@import '@fontsource/geist/latin-500.css' layer(base);
-@import '@fontsource/geist/latin-600.css' layer(base);
-@import '@fontsource/geist/latin-700.css' layer(base);
-@import '@fontsource/geist-mono/latin-400.css' layer(base);
-@import '@fontsource/geist-mono/latin-500.css' layer(base);
-@import '@fontsource/goldman/latin-400.css' layer(base);
-@import '@fontsource/goldman/latin-700.css' layer(base);
+@import './fonts.css';
 
-/*
- * Wo Tailwind nach Klassen sucht — wie `content` in der alten v3-Config.
- * Ohne `source(none)` durchsucht v4 das ganze Repo: lokal fand es dann in
- * .github/workflows `contents: read` und erzeugte `.contents`, im
- * Docker-Build (nur src/server/shared) nicht. Lokales CSS und Produktion
- * unterschieden sich, und das Bundle-Budget maß das falsche.
- */
-@import 'tailwindcss' source(none);
-@source '../../index.html';
-@source '../';
-
-/* `darkMode: 'class'` aus v3: Dark Mode hängt an `.dark` auf <html>. */
-@custom-variant dark (&:is(.dark *));
-
-/*
- * `inline`: Utilities bekommen die Werte direkt statt über `var(--color-…)`.
- * Damit rechnet der Build Deckkraft-Varianten wie `text-ink-900/60` schon
- * fertig aus, statt für jede einen `@supports (color-mix)`-Block zu erzeugen
- * — gut 10 kB weniger CSS. Zur Laufzeit liest niemand diese Variablen.
- */
-@theme inline {
-  --breakpoint-3xl: 2560px;
-  --breakpoint-4xl: 3200px;
-
-  --font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
-  --font-display: Geist, ui-sans-serif, system-ui, sans-serif;
-  /* Brand-Wordmark */
-  --font-brand: Goldman, ui-sans-serif, system-ui, sans-serif;
-
-  /*
-   * Zeilenhöhen wie in v3 als feste Länge statt als Faktor. Für das Element
-   * selbst ist das gleich, aber Kinder erben anders: ein `text-[10px]`-Badge
-   * in einem `text-sm`-Tab bekam mit dem v4-Faktor 14 px statt 20 px
-   * Zeilenhöhe, die Tab-Leiste wurde 4 px flacher. `text-[…]`-Größen stehen
-   * an knapp 30 Stellen, deshalb hier zentral statt `leading-*` an jeder.
-   * Ab 5xl ist es in beiden Versionen schon `1`.
-   */
-  --text-xs--line-height: 1rem;
-  --text-sm--line-height: 1.25rem;
-  --text-base--line-height: 1.5rem;
-  --text-lg--line-height: 1.75rem;
-  --text-xl--line-height: 1.75rem;
-  --text-2xl--line-height: 2rem;
-  --text-3xl--line-height: 2.25rem;
-  --text-4xl--line-height: 2.5rem;
-
-  /* Neutrale Skala für das Schwarz-Weiß-Design, Light wie Dark */
-  --color-ink-50: #fafafa;
-  --color-ink-100: #f4f4f5;
-  --color-ink-200: #e4e4e7;
-  --color-ink-300: #d4d4d8;
-  --color-ink-400: #a1a1aa;
-  --color-ink-500: #71717a;
-  --color-ink-600: #52525b;
-  --color-ink-700: #3f3f46;
-  --color-ink-800: #27272a;
-  --color-ink-900: #18181b;
-  --color-ink-950: #09090b;
-
-  /*
-   * Semantische Farben — die eigentliche Palette der Oberfläche (Regeln in
-   * docs/DESIGN.md). Sie zeigen auf Variablen, die :root und .dark unten
-   * umschalten: `text-fg-muted` statt `text-ink-900/60 dark:text-ink-50/60`.
-   */
-  --color-canvas: var(--canvas);
-  --color-surface: var(--surface);
-  --color-surface-muted: var(--surface-muted);
-  --color-line: var(--line);
-  --color-line-subtle: var(--line-subtle);
-  --color-fg: var(--fg);
-  --color-fg-muted: var(--fg-muted);
-  --color-fg-subtle: var(--fg-subtle);
-  --color-accent: var(--accent);
-  --color-on-accent: var(--on-accent);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-danger: var(--danger);
-
-  /* Drei Radien, sonst keine: Karte, verschachtelte Fläche, Pille (rounded-full). */
-  --radius-card: 1.25rem;
-  --radius-panel: 0.75rem;
-
-  --shadow-card: var(--elevation-card);
-  --shadow-overlay: var(--elevation-overlay);
-
-  /*
-   * Eigene Animationen, daraus werden `animate-fade-in-up` und
-   * `animate-scan-bar`. Benannte Klassen statt `style={{ animation }}` bzw.
-   * `animate-[…]`, damit die Regel für „Bewegung reduzieren“ am Dateiende sie
-   * treffen kann — gegen einen Inline-Style käme sie ohne !important nicht an.
-   */
-  --animate-fade-in-up: fadeInUp 0.4s ease-out;
-  --animate-scan-bar: scanBar 1.2s ease-in-out infinite;
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /*
- * Zwei Preflight-Vorgaben hat Tailwind 4 geändert, beide hier auf den Stand
- * von v3 zurückgesetzt, damit sich nichts unbemerkt verschiebt:
- *
- * - Rahmenfarbe ist jetzt `currentcolor` statt gray-200 — ein `border` ohne
- *   eigene Farbe wäre sonst schwarz bzw. weiß.
- * - Buttons zeigen jetzt den Standard-Pfeil statt der Hand. Keiner der
- *   Buttons hier setzt `cursor-pointer` selbst.
+ * Hintergrund wie in den App-Shells von Flow: Verlauf plus Körnung, beides
+ * aus den Theme-Tokens, also hell wie dunkel ohne eigene Farbe. Der Verlauf
+ * spannt die ganze Seite — `background-attachment: fixed` endete in
+ * Ganzseiten-Screenshots (e2e) an der Fensterkante.
  */
-@layer base {
-  *,
-  ::after,
-  ::before,
-  ::backdrop,
-  ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
-  }
-
-  button:not(:disabled),
-  [role='button']:not(:disabled) {
-    cursor: pointer;
-  }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: Inter, sans-serif;
+  color: var(--text--color--default);
+  background: var(--texture--grain), var(--color--background-gradient);
+  background-blend-mode: overlay, normal;
 }
 
-@layer base {
-  /*
-   * Kontrast: fg-muted und fg-subtle erreichen auf `surface` mindestens 4,5:1
-   * (WCAG AA für Fließtext), die Statusfarben ebenso — deshalb im Light-Mode
-   * die dunkleren Stufen (emerald-700, amber-700, red-600).
-   */
-  :root {
-    color-scheme: light;
-    --canvas: #fafafa;
-    --surface: #ffffff;
-    --surface-muted: #f4f4f5;
-    --line: rgb(9 9 11 / 0.09);
-    --line-subtle: rgb(9 9 11 / 0.06);
-    --fg: #09090b;
-    --fg-muted: #52525b;
-    --fg-subtle: #71717a;
-    --accent: #09090b;
-    --on-accent: #ffffff;
-    --success: #047857;
-    --warning: #b45309;
-    --danger: #dc2626;
-    --elevation-card: 0 1px 2px rgb(9 9 11 / 0.04), 0 4px 12px -4px rgb(9 9 11 / 0.05);
-    --elevation-overlay: 0 2px 6px rgb(9 9 11 / 0.06), 0 16px 40px -12px rgb(9 9 11 / 0.2);
-    /* Hintergrund-Decor — dezenter im Light-Mode */
-    --bg-grid: rgba(0, 0, 0, 0.035);
-    --bg-glow-strong: rgba(0, 0, 0, 0.035);
-    --bg-glow-soft: rgba(0, 0, 0, 0.018);
-    --grain-opacity: 0.008;
-  }
-
-  .dark {
-    color-scheme: dark;
-    --canvas: #09090b;
-    --surface: #121215;
-    --surface-muted: #1c1c21;
-    --line: rgb(255 255 255 / 0.08);
-    --line-subtle: rgb(255 255 255 / 0.05);
-    --fg: #fafafa;
-    --fg-muted: #a1a1aa;
-    --fg-subtle: #8a8a93;
-    --accent: #fafafa;
-    --on-accent: #09090b;
-    --success: #34d399;
-    --warning: #fbbf24;
-    --danger: #f87171;
-    /* Schatten tragen auf Schwarz nicht — die Kante macht die Ebene sichtbar. */
-    --elevation-card: inset 0 1px 0 rgb(255 255 255 / 0.03);
-    --elevation-overlay: 0 16px 48px -12px rgb(0 0 0 / 0.7);
-    /* Hintergrund-Decor — kräftiger im Dark-Mode (mehr Sichtbarkeit auf Schwarz) */
-    --bg-grid: rgba(255, 255, 255, 0.035);
-    --bg-glow-strong: rgba(255, 255, 255, 0.045);
-    --bg-glow-soft: rgba(255, 255, 255, 0.018);
-    --grain-opacity: 0.01;
-  }
-
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-    /* Fluid root font-size: alles rem-basierte skaliert automatisch mit */
-    font-size: 16px;
-  }
-
-  /* QHD / 1440p */
-  @media screen and (min-width: 2048px) {
-    html { font-size: 18px; }
-  }
-
-  /* QHD+ / 2560p */
-  @media screen and (min-width: 2560px) {
-    html { font-size: 20px; }
-  }
-
-  /* 4K */
-  @media screen and (min-width: 3200px) {
-    html { font-size: 24px; }
-  }
-
-  body {
-    @apply bg-canvas text-fg;
-    font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
-    font-feature-settings: 'cv11', 'ss01';
-    /* Subtile Grain-Texture direkt im Body-Background, damit sie nicht
-     * mit dem Pseudo-Element-Stacking konkurriert. */
-    background-image:
-      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='var(--grain-opacity, 0.015)'/%3E%3C/svg%3E");
-    background-attachment: fixed;
-  }
-
-  /* Layer 1: Neutral grid pattern, fading towards the edges.
-   * Mask-image macht aus dem unendlichen Grid einen weichen Lichtkegel. */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    background-image:
-      linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
-    background-size: 56px 56px;
-    background-position: center center;
-    -webkit-mask-image: radial-gradient(ellipse 80% 75% at center, black 5%, transparent 80%);
-    mask-image: radial-gradient(ellipse 80% 75% at center, black 5%, transparent 80%);
-  }
-
-  /* Layer 2: Restrained neutral lighting. */
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    background:
-      radial-gradient(ellipse 65% 50% at 50% -10%, var(--bg-glow-strong), transparent 70%),
-      radial-gradient(ellipse 80% 35% at 50% 110%, var(--bg-glow-soft), transparent 75%);
-  }
-
-  /* Ein Fokusring für alles Bedienbare — Komponenten setzen keinen eigenen. */
-  :where(a, button, summary, [role='tab'], [tabindex]:not([tabindex='-1'])):focus-visible {
-    outline: 2px solid var(--fg);
-    outline-offset: 2px;
-  }
-
-  /*
-   * Aus den Tokens statt per `dark:`-Variante: `@apply dark:…` in einem
-   * Pseudo-Element wird zu `::selection:is()` kompiliert — ein Selektor, der nie
-   * greift. Im Dark Mode blieb so die helle Regel stehen, markierter Text wurde
-   * schwarz auf Schwarz (#127). `--fg` wechselt mit dem Theme, eine Regel reicht.
-   */
-  ::selection {
-    color: var(--fg);
-    background-color: color-mix(in oklab, var(--fg) 20%, transparent);
-  }
+/* Für Screenreader lesbar, sonst unsichtbar — Ansagen, Zusatztexte. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /*
- * Die Bausteine der Oberfläche. Regeln und Anwendung: docs/DESIGN.md.
- *
- * `components` liegt unter `utilities` — eine Utility am Element gewinnt also
- * immer (`card p-0`, `btn btn-primary w-full`). Farben kommen ausschließlich
- * aus den semantischen Tokens, deshalb braucht hier nichts ein `dark:`.
+ * Alles, was man abtippt — Domains, IPs, Records —, steht in Flows
+ * Code-Schrift. Eine Klasse statt InlineCode, wo der Wert keine Code-Fläche
+ * haben soll (Tabellenzellen, Überschriften).
  */
-@layer components {
-  /* ── Flächen ─────────────────────────────────────────────────────────── */
-
-  /* Eigenständiger Inhaltsblock. Innenabstand 20 px, ab sm 24 px. */
-  .card {
-    @apply rounded-card border border-line bg-surface p-5 shadow-card sm:p-6;
-  }
-
-  /* Karte ohne Innenabstand — für Listen mit Trennlinien bis zum Rand. */
-  .card-flush {
-    @apply overflow-hidden rounded-card border border-line bg-surface shadow-card;
-  }
-
-  /* Fläche IN einer Karte: Codeblöcke, Kennzahlen, Hinweise. Nie mit Rahmen. */
-  .panel {
-    @apply rounded-panel bg-surface-muted p-4;
-  }
-
-  /* Schwebende Ebene: Menüs, Dialoge. */
-  .overlay {
-    @apply rounded-card border border-line bg-surface shadow-overlay;
-  }
-
-  /* ── Typografie ──────────────────────────────────────────────────────── */
-
-  .page-title {
-    @apply text-3xl font-semibold tracking-tight text-fg sm:text-4xl;
-  }
-
-  /* Kleine Überzeile in Versalien: Kategorie, Abschnitt, Feldgruppe. */
-  .eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-fg-subtle;
-  }
-
-  .card-title {
-    @apply flex items-center gap-2 text-sm font-semibold text-fg;
-  }
-
-  .card-subtitle {
-    @apply mt-1 text-sm text-fg-muted;
-  }
-
-  .link {
-    @apply font-medium text-fg underline decoration-fg/25 underline-offset-4 transition-colors hover:decoration-fg;
-  }
-
-  /* ── Bedienelemente ──────────────────────────────────────────────────── */
-
-  /* Buttons sind immer Pillen. Größe über btn-sm/btn-lg, Form über btn-icon. */
-  .btn {
-    @apply inline-flex h-10 shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-sm font-medium transition-[background-color,border-color,color,opacity,scale] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45;
-  }
-  .btn-primary {
-    @apply bg-accent text-on-accent hover:bg-accent/85;
-  }
-  .btn-secondary {
-    @apply border border-line bg-surface text-fg shadow-xs hover:bg-surface-muted;
-  }
-  .btn-ghost {
-    @apply text-fg-muted hover:bg-surface-muted hover:text-fg;
-  }
-  .btn-sm {
-    @apply h-8 gap-1.5 px-3 text-xs;
-  }
-  .btn-lg {
-    @apply h-12 px-6 text-[15px];
-  }
-  /* Quadratisch zur jeweiligen Höhe — nur Icon, braucht ein aria-label. */
-  .btn-icon {
-    @apply aspect-square px-0;
-  }
-
-  /* Umschaltbare Auswahl (Filter, Typ, Strategie). Aktiv per aria-pressed. */
-  .chip {
-    @apply inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface-muted px-3 text-xs font-medium text-fg-muted transition-colors hover:text-fg;
-  }
-  .chip[aria-pressed='true'] {
-    @apply bg-accent text-on-accent hover:text-on-accent;
-  }
-
-  /* Statusanzeige, nicht klickbar. Ohne Ton-Klasse neutral. */
-  .badge {
-    @apply inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold leading-4 text-fg-muted;
-  }
-  .badge-success {
-    @apply bg-success/12 text-success;
-  }
-  .badge-warning {
-    @apply bg-warning/14 text-warning;
-  }
-  .badge-danger {
-    @apply bg-danger/12 text-danger;
-  }
-
-  /* Icon in einer getönten Kachel — Kartenkopf, Leerzustand, Finding. */
-  .icon-tile {
-    @apply inline-flex size-9 shrink-0 items-center justify-center rounded-panel bg-surface-muted text-fg-muted;
-  }
-  .icon-tile-success {
-    @apply bg-success/12 text-success;
-  }
-  .icon-tile-warning {
-    @apply bg-warning/14 text-warning;
-  }
-  .icon-tile-danger {
-    @apply bg-danger/12 text-danger;
-  }
-
-  .input {
-    @apply h-11 w-full rounded-panel border border-line bg-surface px-4 text-sm text-fg transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-fg/30 focus:outline-hidden focus:ring-4 focus:ring-fg/6;
-  }
-  textarea.input {
-    @apply h-auto py-3 leading-relaxed;
-  }
-
-  /* Animated dots loader for Diggy */
-  .dig-dots span {
-    @apply inline-block w-1.5 h-1.5 rounded-full bg-on-accent;
-    animation: pulse-soft 1.4s ease-in-out infinite;
-  }
-  .dig-dots span:nth-child(2) { animation-delay: 0.2s; }
-  .dig-dots span:nth-child(3) { animation-delay: 0.4s; }
+.mono {
+  font-family: FiraCode, monospace;
+  font-variant-ligatures: none;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes scanBar {
-  0%, 100% {
-    opacity: 0.25;
-    transform: scaleX(0.45);
-  }
-  50% {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-}
-
-@keyframes pulse-soft {
-  0%, 100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* fadeInUp ohne Versatz — Ersatz bei „Bewegung reduzieren“, siehe unten. */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/*
- * „Bewegung reduzieren“ (prefers-reduced-motion) für alles, was CSS bewegt.
- * Framer Motion regelt `MotionConfig` in main.tsx, GSAP, die rAF-Komponenten
- * und das Scrollen in App.tsx `useReducedMotion` — die erreicht diese Regel
- * nicht.
- *
- * - Endlosschleifen stehen still: Spinner, Skeleton-Puls, Lade-Balken,
- *   Punkte im Such-Button. Den Ladezustand tragen dann Text, das stehende
- *   Icon und `role="status"` — die Drehung hat ihn nie allein getragen.
- * - Einblendungen blenden nur noch ein, ohne Versatz und kürzer. Hart
- *   ausschalten ginge auch, aber Ein- und Ausblenden ist keine Bewegung.
- * - Buttons geben beim Klick nicht mehr nach; die Farbe reagiert weiter.
- *
- * Bewusst eine Liste statt `* { animation: none !important }`: der
- * Pauschal-Reset entscheidet für jede Animation gleich, auch für künftige,
- * deren Zustand an der Animation hängt (Fortschritt, Einblendung aus
- * `opacity: 0`). Mit !important ließe er sich zudem nirgends gezielt anders
- * lösen. Die Liste zwingt zur Entscheidung je Animation.
- *
- * Steht außerhalb jeder @layer: ungeschichtete Regeln schlagen alle Ebenen,
- * also auch die Tailwind-Utilities — ohne !important. Nur Inline-Styles
- * schlagen sie, deshalb keine Animation per `style`.
- *
- * Neue CSS-Animation: hier eintragen oder an der Stelle mit `motion-safe:`
- * schreiben (docs/DESIGN.md, „Bewegung“). Ohne die Einstellung ändert diese
- * Regel nichts.
- */
-@media (prefers-reduced-motion: reduce) {
-  .animate-spin,
-  .animate-pulse,
-  .animate-scan-bar,
-  .dig-dots span {
-    animation: none;
-  }
-
-  .animate-fade-in-up {
-    animation-name: fadeIn;
-    animation-duration: 0.15s;
-  }
-
-  .btn:active {
-    scale: none;
-  }
+/* Lange Werte ohne Leerzeichen (DKIM-Schlüssel, Tokens) umbrechen statt überlaufen. */
+.wrap-anywhere {
+  overflow-wrap: anywhere;
 }

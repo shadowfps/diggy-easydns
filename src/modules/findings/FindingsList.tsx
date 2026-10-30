@@ -1,9 +1,14 @@
-import { motion } from 'motion/react';
-import { useState } from 'react';
-import { AlertCircle, AlertTriangle, Info, Check, Copy } from 'lucide-react';
+import {
+  AlertBadge,
+  Badge,
+  Combine,
+  CopyButton,
+  Heading,
+  InlineCode,
+  Section,
+  Text,
+} from '@mittwald/flow-react-components';
 import type { Finding, Severity } from '@/types/dns';
-import { cn } from '@/lib/cn';
-import { staggerDelay, useReducedMotion } from '@/hooks/useReducedMotion';
 import { findingText, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
 
@@ -11,14 +16,13 @@ interface FindingsListProps {
   findings: Finding[];
 }
 
-const SEVERITY_CONFIG: Record<
-  Severity,
-  { label: DeKey; icon: typeof AlertCircle; badge: string; tile: string }
-> = {
-  critical: { label: 'Kritisch', icon: AlertCircle, badge: 'badge-danger', tile: 'icon-tile-danger' },
-  warning: { label: 'Warnung', icon: AlertTriangle, badge: 'badge-warning', tile: 'icon-tile-warning' },
-  info: { label: 'Hinweis', icon: Info, badge: '', tile: '' },
-  success: { label: 'OK', icon: Check, badge: 'badge-success', tile: 'icon-tile-success' },
+type Status = 'danger' | 'warning' | 'info' | 'success';
+
+const SEVERITY_CONFIG: Record<Severity, { label: DeKey; status: Status }> = {
+  critical: { label: 'Kritisch', status: 'danger' },
+  warning: { label: 'Warnung', status: 'warning' },
+  info: { label: 'Hinweis', status: 'info' },
+  success: { label: 'OK', status: 'success' },
 };
 
 // Fachbegriffe — in beiden Sprachen gleich.
@@ -33,85 +37,57 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'warning', 'info', 'success'];
 
+/**
+ * Alle Befunde, der schwerste zuerst. Je Finding eine Section — Flow trennt
+ * sie mit einer Linie, die Liste liest sich als ein Befund, nicht als acht
+ * lose Kästen.
+ */
 export function FindingsList({ findings }: FindingsListProps) {
-  const reduced = useReducedMotion();
   const sorted = [...findings].sort(
     (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity)
   );
 
-  // Eine Karte mit Trennlinien statt einer Karte je Finding: die Liste liest
-  // sich als ein Befund, nicht als acht lose Kästen.
   return (
-    <div className="card-flush divide-y divide-line-subtle">
-      {sorted.map((finding, i) => (
-        <FindingRow key={finding.id} finding={finding} delay={staggerDelay(i, 0.04, reduced)} />
+    <>
+      {sorted.map((finding) => (
+        <FindingSection key={finding.id} finding={finding} />
       ))}
-    </div>
+    </>
   );
 }
 
-function FindingRow({ finding, delay }: { finding: Finding; delay: number }) {
+function FindingSection({ finding }: { finding: Finding }) {
   const cfg = SEVERITY_CONFIG[finding.severity];
-  const Icon = cfg.icon;
-  const [copied, setCopied] = useState(false);
   const { t } = useI18n();
   const text = findingText(finding);
 
-  const copySnippet = () => {
-    if (!finding.fix?.snippet) return;
-    navigator.clipboard.writeText(finding.fix.snippet);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay }}
-      className="flex items-start gap-4 px-5 py-4 sm:px-6"
-    >
-      <span className={cn('icon-tile', cfg.tile)}>
-        <Icon className="size-4" />
-      </span>
+    <Section>
+      <Heading level={2}>
+        {text.title}
+        <AlertBadge status={cfg.status}>{t(cfg.label)}</AlertBadge>
+      </Heading>
+      <Text>
+        <small>
+          <Badge color="neutral">{CATEGORY_LABEL[finding.category] ?? finding.category}</Badge>
+          {/* Ein „Hinweis“ kostet sonst Punkte — hier sieht man, warum der
+              Score trotzdem bleibt. */}
+          {finding.advisory && <> · {t('ohne Punktabzug')}</>}
+        </small>
+      </Text>
+      <Text elementType="p">{text.description}</Text>
 
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <h3 className="mr-1 text-sm font-semibold text-fg">{text.title}</h3>
-          <span className={cn('badge', cfg.badge)}>{t(cfg.label)}</span>
-          <span className="text-xs text-fg-subtle">
-            {CATEGORY_LABEL[finding.category] ?? finding.category}
-            {/* Ein „Hinweis“ kostet sonst Punkte — hier sieht man, warum der
-                Score trotzdem bleibt. In derselben Zeile wie die Kategorie,
-                damit der Zusatz auf schmalen Schirmen nicht allein umbricht. */}
-            {finding.advisory && <> · {t('ohne Punktabzug')}</>}
-          </span>
-        </div>
-        <p className="mt-1 text-sm leading-relaxed text-fg-muted">{text.description}</p>
-
-        {finding.fix && (
-          <div className="mt-3 space-y-2">
-            {text.fixExplanation && <p className="text-sm text-fg-muted">{text.fixExplanation}</p>}
-            {finding.fix.snippet && (
-              <div className="panel flex items-start gap-3 py-3 pr-2">
-                <pre className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs text-fg">
-                  {finding.fix.snippet}
-                </pre>
-                {/* Immer sichtbar — vorher erst beim Hover, also weder per
-                    Touch noch per Tastatur auffindbar. */}
-                <button
-                  type="button"
-                  onClick={copySnippet}
-                  className="btn btn-secondary btn-sm btn-icon"
-                  aria-label={copied ? t('Snippet kopiert') : t('Snippet kopieren')}
-                >
-                  {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </motion.div>
+      {finding.fix && text.fixExplanation && <Text elementType="p">{text.fixExplanation}</Text>}
+      {finding.fix?.snippet && (
+        // Der Wert zum Eintragen, mit Kopieren direkt daneben — immer
+        // sichtbar, also per Touch und Tastatur erreichbar.
+        <Combine>
+          <InlineCode whiteSpace="pre-wrap" className="wrap-anywhere">
+            {finding.fix.snippet}
+          </InlineCode>
+          <CopyButton text={finding.fix.snippet} variant="soft" color="secondary" aria-label={t('Snippet kopieren')} />
+        </Combine>
+      )}
+    </Section>
   );
 }

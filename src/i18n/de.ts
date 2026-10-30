@@ -35,6 +35,9 @@ export type DeText =
   | 'Datenschutz'
   | 'Rechtliches'
   | 'Vergleichen'
+  | 'Menü'
+  | 'Hauptnavigation'
+  | 'Einstellungen'
 
   // ─── Startseite ──────────────────────────────────────────────────────
   | 'Was steckt hinter deiner Domain?'

@@ -21,7 +21,7 @@ import { useProgressiveLookup, type ProgressiveLookup } from '@/hooks/useProgres
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { CardHeader } from '@/components/ui/CardHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Skeleton } from '@mittwald/flow-react-components';
 import { normalizeCompareInput } from '@/lib/comparePath';
 import { cn } from '@/lib/cn';
 import { verdictFor } from '@/lib/scoring';

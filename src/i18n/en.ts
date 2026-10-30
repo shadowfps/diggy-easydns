@@ -28,6 +28,9 @@ const ui: Dictionary = {
   Datenschutz: 'Privacy policy',
   Rechtliches: 'Legal',
   'Vergleichen': 'Compare',
+  'Menü': 'Menu',
+  Hauptnavigation: 'Main navigation',
+  Einstellungen: 'Settings',
 
   // ─── Startseite ──────────────────────────────────────────────────────
   'Was steckt hinter deiner Domain?': 'What’s behind your domain?',

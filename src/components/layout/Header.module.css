@@ -1,0 +1,137 @@
+/*
+ * Kopfzeile nach dem Flow-Template „Simple App“: bleibt beim Scrollen oben
+ * stehen, der Inhalt läuft unter einer durchscheinenden, weichgezeichneten
+ * Fläche durch. Breite und Seitenrand teilt sie mit dem Inhalt (App.module.css),
+ * damit die Kanten fluchten.
+ */
+.header {
+  --header-ground: var(--neutral--color--200);
+
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: color-mix(in srgb, var(--header-ground) 55%, transparent);
+  backdrop-filter: blur(var(--blur));
+}
+
+/* Der dunkle Verlauf beginnt dunkler als das neutrale Token (wie im Template). */
+:global([data-theme='dark']) .header {
+  --header-ground: #121518;
+}
+
+@media (prefers-contrast: more), (prefers-reduced-transparency) {
+  .header {
+    background-color: var(--header-ground);
+    backdrop-filter: none;
+  }
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-px--s);
+  max-width: var(--page-width, 1760px);
+  min-height: 4rem;
+  margin-inline: auto;
+  padding-inline: var(--size-px--m);
+}
+
+@media (min-width: 640px) {
+  .bar {
+    gap: var(--size-px--m);
+    padding-inline: var(--size-px--l);
+  }
+}
+
+@media (min-width: 1024px) {
+  .bar {
+    padding-inline: var(--size-px--xl);
+  }
+}
+
+/*
+ * Mit Suche ab 768 px drei Spalten: die Außenspalten sind gleich breit, die
+ * Suche sitzt dadurch genau in der Seitenmitte. Darunter füllt sie die Lücke
+ * zwischen Wortmarke und Menü.
+ */
+@media (min-width: 768px) {
+  .header[data-search] .bar {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) minmax(0, 36rem) minmax(8rem, 1fr);
+  }
+}
+
+.brand {
+  display: flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: var(--size-px--s);
+}
+
+/* Die Wortmarke ist das einzige, was nicht aus Flow kommt: Goldman, klein geschrieben. */
+.wordmark {
+  font-family: Goldman, sans-serif;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+  color: var(--text--color--default);
+  text-decoration: none;
+}
+
+.tagline {
+  display: none;
+  color: var(--neutral--color--800);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@media (min-width: 640px) {
+  .tagline {
+    display: inline;
+  }
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--size-px--xs);
+  margin-inline-start: auto;
+  justify-self: end;
+}
+
+/*
+ * Für die Navigation ist erst ab einer gewissen Breite Platz — mit der Suche
+ * in der Mitte deutlich später. Bis dahin übernimmt der Burger, wie im
+ * Template.
+ */
+.nav {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .header:not([data-search]) .nav {
+    display: flex;
+  }
+
+  .header:not([data-search]) .burger {
+    display: none;
+  }
+}
+
+@media (min-width: 1500px) {
+  .header[data-search] .nav {
+    display: flex;
+  }
+
+  .header[data-search] .burger {
+    display: none;
+  }
+}

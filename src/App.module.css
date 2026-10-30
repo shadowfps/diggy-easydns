@@ -1,0 +1,235 @@
+/*
+ * Rahmen der Seite nach dem Flow-Template „Simple App“: Kopfzeile, Inhalt mit
+ * gemeinsamer Maximalbreite, Footer. Was innerhalb der Karten liegt, ordnen
+ * Flows Layout-Komponenten (Section, ColumnLayout); hier steht nur das, was
+ * es dort nicht gibt — die Seitenspalten des Reports und die Startseite.
+ */
+.app {
+  /* Kopfzeile und Inhalt teilen eine Maximalbreite, damit die Kanten fluchten. */
+  --page-width: 1760px;
+  --header-height: 4rem;
+
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+
+.main {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  max-width: var(--page-width);
+  flex: 1;
+  flex-direction: column;
+  gap: var(--size-px--l);
+  margin-inline: auto;
+  padding: var(--size-px--l) var(--size-px--m) var(--size-px--xl);
+  /* Nachladende Sektionen sollen die Leseposition nicht verschieben. */
+  overflow-anchor: none;
+}
+
+@media (min-width: 640px) {
+  .main {
+    padding-inline: var(--size-px--l);
+  }
+}
+
+@media (min-width: 1024px) {
+  .main {
+    padding: var(--size-px--xl);
+  }
+}
+
+/* Die Startseite beginnt mit Luft — Suche und Frage sind dort der Inhalt. */
+.main[data-home] {
+  padding-top: clamp(var(--size-px--xl), 10vh, 6rem);
+}
+
+/* ── Startseite ─────────────────────────────────────────────────────── */
+
+.hero {
+  display: flex;
+  width: 100%;
+  max-width: 48rem;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-px--m);
+  margin-inline: auto;
+  text-align: center;
+}
+
+.heroWordmark {
+  font-family: Goldman, sans-serif;
+  font-size: clamp(3rem, 9vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.heroTitle {
+  text-align: center;
+}
+
+.homeSections {
+  display: flex;
+  width: 100%;
+  max-width: 72rem;
+  flex-direction: column;
+  gap: var(--size-px--l);
+  margin: var(--size-px--xl) auto 0;
+}
+
+/* ── Zustände, Textseiten ───────────────────────────────────────────── */
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-px--s);
+  margin-top: var(--size-px--xl);
+}
+
+.narrow {
+  width: 100%;
+  max-width: 42rem;
+  margin-inline: auto;
+}
+
+.textPage {
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+/* ── Report ─────────────────────────────────────────────────────────── */
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--l);
+}
+
+/*
+ * Ab 1280 px zwei Spalten: links (24rem) die Zusammenfassung, die beim
+ * Scrollen mitläuft, rechts die Tabs. ColumnLayout bricht nach der Breite des
+ * Containers um und kennt keine feste Spaltenbreite — deshalb hier ein Raster.
+ */
+@media (min-width: 1280px) {
+  .report {
+    display: grid;
+    grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--size-px--xl);
+  }
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--size-px--m);
+}
+
+/* Darunter gestapelt: Kopf über die volle Breite, Score und Schnellübersicht nebeneinander. */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reportHead {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .summary {
+    position: sticky;
+    top: calc(var(--header-height) + var(--size-px--m));
+  }
+}
+
+.reportHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-px--m);
+}
+
+@media (min-width: 640px) and (max-width: 1279.98px) {
+  .reportHead {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+.reportTitle {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--size-px--xs);
+}
+
+/* Kleine Überzeile in Versalien — Kategorie über der Domain. */
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--neutral--color--800);
+}
+
+.domain {
+  overflow-wrap: anywhere;
+}
+
+.reportActions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: var(--size-px--xs);
+}
+
+.details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--size-px--m);
+}
+
+/* „Alle Findings“ scrollt hierher — unter der Kopfzeile, nicht hinter ihr. */
+.tabsAnchor {
+  scroll-margin-top: calc(var(--header-height) + var(--size-px--m));
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+
+.footer {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  max-width: var(--page-width);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-px--s) var(--size-px--l);
+  margin: var(--size-px--xl) auto 0;
+  padding: var(--size-px--l) var(--size-px--m);
+  color: var(--neutral--color--800);
+}
+
+@media (min-width: 640px) {
+  .footer {
+    padding-inline: var(--size-px--l);
+  }
+}
+
+@media (min-width: 1024px) {
+  .footer {
+    padding-inline: var(--size-px--xl);
+  }
+}
+
+.footerLinks {
+  display: flex;
+  gap: var(--size-px--l);
+}

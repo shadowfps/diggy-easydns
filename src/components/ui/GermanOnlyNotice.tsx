@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { Alert, Text } from '@mittwald/flow-react-components';
 import { useI18n } from '@/i18n';
 
 /**
@@ -13,9 +13,8 @@ export function GermanOnlyNotice() {
   const { language } = useI18n();
   if (language !== 'en') return null;
   return (
-    <p className="panel mt-4 flex items-start gap-2.5 py-3 text-sm text-fg-muted">
-      <Info className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-      <span>The legal information on this page is only available in German.</span>
-    </p>
+    <Alert status="info">
+      <Text>The legal information on this page is only available in German.</Text>
+    </Alert>
   );
 }

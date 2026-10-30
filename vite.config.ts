@@ -1,7 +1,37 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
+
+/**
+ * Entfernt die Schriften, die Flow von cdn.mittwald.de lädt.
+ *
+ * Das Stylesheet von Flow bringt `@font-face`-Regeln für Inter und Fira Code
+ * mit, deren Dateien auf cdn.mittwald.de liegen. Damit ginge bei jedem
+ * Seitenaufruf die IP des Besuchers an einen Dritten — genau das, was diggy
+ * mit den lokalen Schriften vermeidet (siehe src/styles/fonts.css), und die
+ * CSP (`font-src 'self'`) würde die Dateien ohnehin blockieren. Dieselben
+ * Familien liefert diggy selbst aus; hier verschwinden nur die fremden Regeln.
+ *
+ * Scheitert das Entfernen (Flow ändert das Format), bricht der Build ab,
+ * statt still einen Drittanbieter einzubinden. `npm run size` prüft das
+ * Ergebnis zusätzlich am gebauten CSS.
+ */
+function flowSelfHostedFonts(): Plugin {
+  const FLOW_CSS = /@mittwald\/flow-react-components\/dist\/css\/[^/]+\.css$/;
+  const CDN_FONT_FACE = /@font-face\s*\{[^}]*cdn\.mittwald\.de[^}]*\}/g;
+  return {
+    name: 'diggy-flow-self-hosted-fonts',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!FLOW_CSS.test(id.split('?')[0])) return null;
+      const stripped = code.replace(CDN_FONT_FACE, '');
+      if (stripped.includes('cdn.mittwald.de')) {
+        throw new Error('[diggy-flow-self-hosted-fonts] Flow-CSS verweist weiter auf cdn.mittwald.de.');
+      }
+      return { code: stripped, map: null };
+    },
+  };
+}
 
 /**
  * Setzt den Pfad des englischen Wörterbuchs in index.html ein (#86).
@@ -30,7 +60,7 @@ function englishPreload(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), englishPreload()],
+  plugins: [react(), flowSelfHostedFonts(), englishPreload()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

@@ -41,6 +41,17 @@ afterEach(() => {
  */
 configure({ asyncUtilTimeout: 3000 });
 
+/*
+ * Sprache der Flow-Komponenten (Modal-„Schließen“, CopyButton …). In der App
+ * setzt App.tsx einen I18nProvider passend zur gewählten Sprache. Tests, die
+ * eine Komponente allein rendern, haben keinen — react-aria nähme dann
+ * `navigator.language`, in jsdom `en-US`, und Flows eigene Texte stünden
+ * mitten in deutschen Tests auf Englisch. Dieses Symbol liest react-aria vor
+ * `navigator.language`; diggys eigene Spracherkennung (navigator.languages)
+ * bleibt davon unberührt.
+ */
+(window as unknown as Record<symbol, string>)[Symbol.for('react-aria.i18n.locale')] = 'de-DE';
+
 /** Vollständiges MediaQueryList — Framer Motion nutzt noch das Legacy-API. */
 function mediaQueryList(query: string, matches: boolean): MediaQueryList {
   return {

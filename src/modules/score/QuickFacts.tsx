@@ -13,7 +13,7 @@ import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { cn } from '@/lib/cn';
 import { isNullMx } from '@/lib/nullMx';
 import { dmarcPolicyFlawLabelPhrase, effectiveDmarcPolicy } from '@/lib/dmarc';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Skeleton } from '@mittwald/flow-react-components';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { phraseText, useI18n } from '@/i18n';
