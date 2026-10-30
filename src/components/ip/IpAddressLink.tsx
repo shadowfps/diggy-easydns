@@ -19,6 +19,7 @@ import type { IpDetails } from '@/types/dns';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatIpOwnerLabel, useIpDetails } from './useIpDetails';
 import { useI18n } from '@/i18n';
+import { Hostname } from '@/components/ui/Hostname';
 import styles from './IpAddressLink.module.css';
 
 interface IpAddressLinkProps {
@@ -69,7 +70,9 @@ export function IpAddressLink({ ip, className }: IpAddressLinkProps) {
         aria-label={t('Details zu {ip} anzeigen', { ip })}
         className={className ? `${styles.trigger} ${className}` : styles.trigger}
       >
-        <Text className="mono">{ip}</Text>
+        <Text className="mono">
+          <Hostname value={ip} />
+        </Text>
         <IconLink />
       </Button>
       <Modal size="m">

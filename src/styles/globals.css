@@ -35,6 +35,17 @@ body {
 }
 
 /*
+ * Eigener Stapelkontext für die App. Flows Overlays (OffCanvas, Menüs,
+ * Popover) hängen sich als Portal ans Ende von <body> und tragen keinen
+ * z-index — sie liegen oben, weil sie im DOM nach der App kommen. Ohne diese
+ * Grenze konkurrierte der z-index der Kopfzeile mit ihnen, und das OffCanvas
+ * lag unter der Kopfzeile.
+ */
+#root {
+  isolation: isolate;
+}
+
+/*
  * Markierter Text in beiden Themes lesbar (#127): Textfarbe aus dem Theme,
  * die Markierung als getönte Fläche derselben Farbe. Flow setzt keine eigene.
  */

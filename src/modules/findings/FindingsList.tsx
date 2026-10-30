@@ -1,13 +1,5 @@
-import {
-  AlertBadge,
-  Badge,
-  Combine,
-  CopyButton,
-  Heading,
-  InlineCode,
-  Section,
-  Text,
-} from '@mittwald/flow-react-components';
+import { AlertBadge, Badge, Heading, Section, Text } from '@mittwald/flow-react-components';
+import { CopyableValue } from '@/components/ui/CopyableValue';
 import type { Finding, Severity } from '@/types/dns';
 import { findingText, useI18n } from '@/i18n';
 import type { DeKey } from '@/i18n/de';
@@ -81,12 +73,7 @@ function FindingSection({ finding }: { finding: Finding }) {
       {finding.fix?.snippet && (
         // Der Wert zum Eintragen, mit Kopieren direkt daneben — immer
         // sichtbar, also per Touch und Tastatur erreichbar.
-        <Combine>
-          <InlineCode whiteSpace="pre-wrap" className="wrap-anywhere">
-            {finding.fix.snippet}
-          </InlineCode>
-          <CopyButton text={finding.fix.snippet} variant="soft" color="secondary" aria-label={t('Snippet kopieren')} />
-        </Combine>
+        <CopyableValue value={finding.fix.snippet} copyLabel={t('Snippet kopieren')} />
       )}
     </Section>
   );

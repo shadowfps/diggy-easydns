@@ -728,9 +728,10 @@ export default function App() {
             {/* Report */}
             {showReport && report && (
               <div key={report.domain + report.timestamp} className={styles.report}>
-                {/* Ab 1280 px zwei Spalten: links die Zusammenfassung, die beim
+                {/* Ab 1440 px zwei Spalten: links die Zusammenfassung, die beim
                     Scrollen mitläuft, rechts die Tabs. Darunter ist die rechte
-                    Spalte zu schmal für die Tab-Inhalte — dort wird gestapelt. */}
+                    Spalte zu schmal für die Tab-Leiste — dort wird gestapelt
+                    (App.module.css). */}
                 <aside aria-label={t('Zusammenfassung')} className={styles.summary}>
                   {/* Report-Kopf: was geprüft wurde, wann, und was man damit tun kann. */}
                   <div className={styles.reportHead}>

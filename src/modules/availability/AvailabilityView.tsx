@@ -87,7 +87,6 @@ export function AvailabilityView() {
                 autoComplete="off"
                 spellCheck="false"
                 inputMode="url"
-                className="mono"
               >
                 <Label>Domain</Label>
               </TextField>

@@ -296,7 +296,7 @@ export function ContactForm() {
               rows={6}
               maxLength={MAX_MESSAGE_LENGTH}
               showCharacterCount
-              allowVerticalResize
+              allowResize="vertical"
               placeholder={t('Worum geht es?')}
             >
               <Label>{t('Nachricht')}</Label>

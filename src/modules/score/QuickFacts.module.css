@@ -1,4 +1,4 @@
-/* Lange Hostnamen umbrechen statt die Spalte zu sprengen. */
+/* Lange Hostnamen umbrechen statt die Spalte zu sprengen — bevorzugt nach einem Punkt (Hostname). */
 .value {
   overflow-wrap: anywhere;
 }

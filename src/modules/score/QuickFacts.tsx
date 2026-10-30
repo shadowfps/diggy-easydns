@@ -24,6 +24,7 @@ import type { LoadStatus, SectionSlice } from '@/hooks/useProgressiveLookup';
 import { isNullMx } from '@/lib/nullMx';
 import { dmarcPolicyFlawLabelPhrase, effectiveDmarcPolicy } from '@/lib/dmarc';
 import { IpAddressLink } from '@/components/ip/IpAddressLink';
+import { Hostname } from '@/components/ui/Hostname';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { phraseText, useI18n } from '@/i18n';
 import styles from './QuickFacts.module.css';
@@ -96,7 +97,9 @@ export function QuickFacts({ records, ssl, dnssec, mail, techStack, onUseDomain 
         aria-label={t('{value} in die Suche übernehmen', { value: nsRecord.value })}
         className={styles.nsButton}
       >
-        <Text className="mono">{nsRecord.value}</Text>
+        <Text className="mono">
+          <Hostname value={nsRecord.value} />
+        </Text>
       </Button>
     ) : (
       (nsRecord?.value ?? '—')
@@ -220,5 +223,10 @@ function FactValue({ item }: { item: QuickFactItem }) {
   if (item.ok) return <AlertText status="success">{item.value}</AlertText>;
   if (item.bad) return <AlertText status="danger">{item.value}</AlertText>;
   if (item.unchecked) return <AlertText status="unavailable">{item.value}</AlertText>;
-  return <Text className={item.mono ? `mono ${styles.value}` : styles.value}>{item.value}</Text>;
+  return (
+    <Text className={item.mono ? `mono ${styles.value}` : styles.value}>
+      {item.mono && typeof item.value === 'string' ? <Hostname value={item.value} /> : item.value}
+    </Text>
+  );
 }
+

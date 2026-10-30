@@ -61,11 +61,13 @@ Externe Links bekommen `target="_blank"` (Flow setzt das Icon selbst) und
 
 Seitentyp **Detailseite**:
 
-- Ab 1280 px zwei Spalten: links (24rem, mitlaufend) der Kopf — Überzeile,
+- Ab 1440 px zwei Spalten: links (22rem, mitlaufend) der Kopf — Überzeile,
   Domain als `h1`, Prüfzeit, Aktionen (JSON, Link kopieren, Vergleichen) —,
   darunter je eine `LayoutCard` für Health Score und Schnellübersicht.
-  Darunter gestapelt. Die Seitenspalte bleibt flach genug für 1440×900 —
-  Neues kommt in die Tabs.
+  Darunter gestapelt. Die Grenze setzen Flows Tabs: passen ihre Titel nicht
+  in eine Zeile, klappen sie zu einem Menü ein (rund 920 px für acht Tabs mit
+  Zähler). Die Seitenspalte bleibt flach genug für 1440×900 — Neues kommt in
+  die Tabs.
 - Rechts **eine** `LayoutCard` mit Flows `Tabs`. Der Inhalt eines Tabs sind
   `Section`s (Überschrift `level={2}`, Unterüberschriften `level={3}`) —
   **keine** weiteren LayoutCards in der Karte. Mehrere Sections trennt Flow

@@ -40,8 +40,13 @@ const TAB_LABELS: Record<(typeof REPORT_TABS)[number], string> = {
   virusscan: 'Virus Scan',
 };
 
+/*
+ * `includeHidden`: Auf schmalen Schirmen klappt Flow die Tab-Leiste zu einem
+ * Menü ein und blendet die Titel aus — Zustand und Zahl lesen die Tests dann
+ * trotzdem am Tab selbst.
+ */
 const reportTab = (page: Page, tab: (typeof REPORT_TABS)[number]) =>
-  page.getByRole('tab', { name: new RegExp(`^${TAB_LABELS[tab]}`) });
+  page.getByRole('tab', { name: new RegExp(`^${TAB_LABELS[tab]}`), includeHidden: true });
 
 /**
  * Feste „Jetzt“-Zeit, kurz nach der Aufnahme der Testdaten. Ohne sie zählten
@@ -203,17 +208,20 @@ function expectedScore(domain: Domain): number {
 
 /** Wechselt im Report auf einen Tab und wartet auf dessen Inhalt. */
 export async function showTab(page: Page, tab: (typeof REPORT_TABS)[number]): Promise<void> {
-  // Auf schmalen Schirmen klappen Flows Tabs ein: dann steht nur der aktive
-  // Tab in der Leiste, die übrigen liegen im Menü dahinter.
+  const label = new RegExp(`^${TAB_LABELS[tab]}`);
   const target = reportTab(page, tab);
   if (await target.isVisible()) {
     await target.click();
   } else {
-    await page.getByRole('tablist').getByRole('button').last().click();
-    await page.getByRole('menuitem', { name: new RegExp(`^${TAB_LABELS[tab]}`) }).click();
+    // Eingeklappt: Neben der ausgeblendeten Leiste steht ein Button mit dem
+    // aktiven Titel; er öffnet ein Menü mit allen Tabs.
+    const tablist = page.getByRole('tablist', { name: 'Report-Bereiche', includeHidden: true });
+    await tablist.locator('xpath=..').getByRole('button').first().click();
+    await page.getByRole('menu').locator('[role^="menuitem"]').filter({ hasText: label }).click();
   }
-  await expect(reportTab(page, tab)).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel')).toBeVisible();
+  await expect(target).toHaveAttribute('aria-selected', 'true');
+  // Im Records-Tab steckt eine zweite Tab-Leiste (Typ-Filter) — das Panel daher per Name.
+  await expect(page.getByRole('tabpanel', { name: label })).toBeVisible();
   await settle(page);
 }
 

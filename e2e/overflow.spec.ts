@@ -76,7 +76,7 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       // Die History füllt sich wie im echten Betrieb: erst nachschlagen.
       for (const domain of DOMAINS) await openReport(page, domain);
       await page.goto('/history');
-      await page.getByRole('button', { name: 'github.com', exact: true }).waitFor();
+      await page.getByText('github.com', { exact: true }).first().waitFor();
       await settle(page);
       await expectNoHorizontalOverflow(page, 'History');
     });

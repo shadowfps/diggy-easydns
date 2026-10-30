@@ -65,19 +65,28 @@ export function CheckOverview() {
   return (
     <LayoutCard>
       <Section>
-        <Text>
-          <small>{t('Was diggy prüft')}</small>
-        </Text>
-        <Heading level={2}>{t('Sechs Bereiche, ein Befund')}</Heading>
+        {/* Überzeile und Überschrift als Block: in der Section stünde die
+            Überschrift sonst mit dem Abstand eines neuen Abschnitts darunter. */}
+        <Flex direction="column" gap="xs">
+          <Text className="eyebrow">{t('Was diggy prüft')}</Text>
+          <Heading level={2}>{t('Sechs Bereiche, ein Befund')}</Heading>
+        </Flex>
         <Text elementType="p">
           {t('Jeder Bereich fließt in den Health Score ein. PageSpeed und VirusTotal gibt es auf Klick dazu.')}
         </Text>
 
         <ColumnLayout s={[1]} m={[1, 1]} l={[1, 1, 1]} gap="l">
           {checks(i18n).map(({ icon, title, text }) => (
-            <Flex key={title} direction="column" gap="s">
-              {icon}
-              <Heading level={3}>{title}</Heading>
+            <Flex key={title} direction="column" gap="xs">
+              {/* Icon und Titel in einer Zeile. Die Überschrift steht in einem
+                  eigenen Element: in einer Section bekäme sie hinter dem Icon
+                  sonst den Abstand einer neuen Unterüberschrift. */}
+              <Flex align="center" gap="s">
+                {icon}
+                <div>
+                  <Heading level={3}>{title}</Heading>
+                </div>
+              </Flex>
               <Text elementType="p">{text}</Text>
             </Flex>
           ))}

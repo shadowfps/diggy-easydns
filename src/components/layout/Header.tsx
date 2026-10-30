@@ -68,7 +68,8 @@ export function Header({ view, search }: HeaderProps) {
           <HeaderNavigation aria-label={t('Hauptnavigation')} className={styles.nav}>
             <NavigationLinks view={view} />
             <Link href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="GitHub">
-              <Icon>
+              {/* Flow setzt Icons in Links klein — hier steht es allein, so groß wie das Einstellungs-Icon daneben. */}
+              <Icon size="m">
                 <IconBrandGithub />
               </Icon>
             </Link>

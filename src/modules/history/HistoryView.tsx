@@ -23,6 +23,7 @@ import {
 import { IconHistory } from '@tabler/icons-react';
 import type { LookupHistoryEntry } from '@/lib/lookupHistory';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Hostname } from '@/components/ui/Hostname';
 import { verdictFor } from '@/lib/scoring';
 import { formatDate, t, useI18n } from '@/i18n';
 import styles from './HistoryView.module.css';
@@ -195,11 +196,13 @@ function CoreValues({
                   aria-label={t('{value} in die Suche übernehmen', { value })}
                   className={styles.valueButton}
                 >
-                  <Text className="mono wrap-anywhere">{value}</Text>
+                  <Text className="mono wrap-anywhere">
+                    <Hostname value={value} />
+                  </Text>
                 </Button>
               ) : (
                 <Text key={value} className="mono wrap-anywhere">
-                  {value}
+                  <Hostname value={value} />
                 </Text>
               )
             )}

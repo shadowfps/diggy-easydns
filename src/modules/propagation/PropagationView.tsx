@@ -110,11 +110,12 @@ export function PropagationView({
               onTypeChange einen History-Eintrag an. */}
           <Select
             selectedKey={type}
-            onSelectionChange={(key) => {
+            onChange={(key) => {
               if (key !== null && key !== type) onTypeChange(key as PropagationRecordType);
             }}
           >
-            <Label>{t('Record-Typ')}</Label>
+            {/* Ein Typ ist immer gewählt — ohne `optional={false}` hängte Flow „(optional)“ an. */}
+            <Label optional={false}>{t('Record-Typ')}</Label>
             {PROPAGATION_RECORD_TYPES.map((option) => (
               <Option key={option} value={option}>
                 {option}
@@ -208,7 +209,6 @@ function ExpectedInput({
         maxLength={MAX_EXPECTED}
         autoComplete="off"
         spellCheck="false"
-        className="mono"
       >
         <Label>{t('Erwarteter Wert')}</Label>
       </TextField>
@@ -524,7 +524,7 @@ function InlineValues({
   if (!isMismatch) return list;
   return (
     <div className={styles.inline}>
-      <IconWarning status="warning" aria-label={t('weicht ab')} />
+      <IconWarning color="warning" aria-label={t('weicht ab')} />
       {list}
     </div>
   );

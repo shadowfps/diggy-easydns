@@ -51,6 +51,18 @@ configure({ asyncUtilTimeout: 3000 });
  */
 (window as unknown as Record<symbol, string>)[Symbol.for('react-aria.i18n.locale')] = 'de-DE';
 
+/*
+ * Veraltete Flow-API lässt den Test scheitern. Flow warnt zur Laufzeit
+ * („The 'status' prop is deprecated …“) und entfernt die API mit der nächsten
+ * Major-Version — im Browser fiel das nur in der Konsole auf.
+ */
+const consoleWarn = console.warn.bind(console);
+console.warn = (...args: unknown[]) => {
+  const message = args.map(String).join(' ');
+  if (/is deprecated and will be removed/.test(message)) throw new Error(`Flow: ${message}`);
+  consoleWarn(...args);
+};
+
 /** Vollständiges MediaQueryList — samt Legacy-API (`addListener`), die manche Bibliotheken noch nutzen. */
 function mediaQueryList(query: string, matches: boolean): MediaQueryList {
   return {

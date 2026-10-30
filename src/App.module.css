@@ -111,14 +111,19 @@
 }
 
 /*
- * Ab 1280 px zwei Spalten: links (24rem) die Zusammenfassung, die beim
+ * Ab 1440 px zwei Spalten: links (22rem) die Zusammenfassung, die beim
  * Scrollen mitläuft, rechts die Tabs. ColumnLayout bricht nach der Breite des
  * Containers um und kennt keine feste Spaltenbreite — deshalb hier ein Raster.
+ *
+ * Die Grenze kommt von Flows Tabs: passen die acht Titel samt Zähler nicht in
+ * eine Zeile (rund 920 px), klappen sie zu einem Menü ein. Bei 1440 px bleiben
+ * neben 22rem genau genug; darunter steht der Report gestapelt, und die Tabs
+ * haben die volle Breite.
  */
-@media (min-width: 1280px) {
+@media (min-width: 1440px) {
   .report {
     display: grid;
-    grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
     align-items: start;
     gap: var(--size-px--xl);
   }
@@ -131,7 +136,7 @@
 }
 
 /* Darunter gestapelt: Kopf über die volle Breite, Score und Schnellübersicht nebeneinander. */
-@media (min-width: 768px) and (max-width: 1279.98px) {
+@media (min-width: 768px) and (max-width: 1439.98px) {
   .summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -141,7 +146,7 @@
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1440px) {
   .summary {
     position: sticky;
     top: calc(var(--header-height) + var(--size-px--m));
@@ -154,7 +159,7 @@
   gap: var(--size-px--m);
 }
 
-@media (min-width: 640px) and (max-width: 1279.98px) {
+@media (min-width: 640px) and (max-width: 1439.98px) {
   .reportHead {
     flex-direction: row;
     align-items: flex-end;

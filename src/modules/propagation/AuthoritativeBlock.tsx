@@ -435,7 +435,7 @@ function NameserverRow({
           // Untereinander: Zwei Adressen nebeneinander ließen dem Namen links
           // kaum Platz.
           <div className={styles.inline}>
-            {flagged && <IconWarning status="warning" aria-label={t('weicht ab')} />}
+            {flagged && <IconWarning color="warning" aria-label={t('weicht ab')} />}
             <div className={styles.answer}>
               {values.map((value) => (
                 <IpAddressLink key={value} ip={value} />

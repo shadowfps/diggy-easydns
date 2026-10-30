@@ -19,6 +19,7 @@ import type { DnsRecord, RecordType } from '@/types/dns';
 import { IpAddressLink, IpOwnerLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
 import { InfoButton } from '@/components/ui/InfoButton';
+import { Hostname } from '@/components/ui/Hostname';
 import { NULL_MX_EXPLANATION, explainRecordType } from '@/lib/explanations';
 import { isNullMx } from '@/lib/nullMx';
 import { useI18n } from '@/i18n';
@@ -111,9 +112,11 @@ function RecordsTable({
   });
 
   return (
+    // Typ und TTL so schmal wie ihr längster Inhalt („CNAME ?“, „86400s“):
+    // auf dem Handy bleibt sonst für den Wert kaum ein Drittel der Breite.
     <Table aria-label={t('DNS-Records')} layout="fixed" verticalAlign="middle">
       <TableHeader>
-        <TableColumn width="7rem">{t('Typ')}</TableColumn>
+        <TableColumn width="5.5rem">{t('Typ')}</TableColumn>
         <TableColumn>{t('Wert')}</TableColumn>
         <TableColumn width="5.5rem" horizontalAlign="end">
           TTL
@@ -152,7 +155,9 @@ function RecordsTable({
                       aria-label={t('{value} in die Suche übernehmen', { value: record.value })}
                       className={styles.nameserver}
                     >
-                      <Text className="mono">{record.value}</Text>
+                      <Text className="mono">
+                        <Hostname value={record.value} />
+                      </Text>
                     </Button>
                   ) : record.type === 'MX' ? (
                     <MxTarget value={record.value} nullMx={nullMx} />
@@ -160,8 +165,10 @@ function RecordsTable({
                     // Ganz zeigen statt abschneiden: DKIM-Schlüssel, SPF und
                     // Verifizierungs-Tokens will man lesen und kopieren können.
                     // `wrap-anywhere` bricht lange Base64-Ketten, bevorzugt aber
-                    // Leerzeichen (#64).
-                    <span className="wrap-anywhere">{record.value}</span>
+                    // Leerzeichen (#64). Hostnamen (CNAME) brechen nach einem Punkt.
+                    <span className="wrap-anywhere">
+                      {record.type === 'CNAME' ? <Hostname value={record.value} /> : record.value}
+                    </span>
                   )}
                 </span>
               </TableCell>
@@ -209,7 +216,7 @@ function MxTarget({ value, nullMx }: { value: string; nullMx: boolean }) {
   const { t } = useI18n();
   return (
     <>
-      <span className="wrap-anywhere">{value || '.'}</span>
+      <span className="wrap-anywhere">{value ? <Hostname value={value} /> : '.'}</span>
       {nullMx && (
         <span className={styles.nullMx}>
           <Badge color="neutral">{t('Null-MX — keine Mails')}</Badge>

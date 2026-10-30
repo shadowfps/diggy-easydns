@@ -6,7 +6,6 @@ import {
   ColumnLayout,
   Combine,
   Content,
-  CopyButton,
   Heading,
   IconClose,
   IconMinus,
@@ -16,7 +15,6 @@ import {
   Link,
   Section,
   Text,
-  Truncate,
 } from '@mittwald/flow-react-components';
 import type { LookupFailure, MailBimi, MailSecurity, MailTlsRpt } from '@/types/dns';
 import { dmarcPct, noMailProtection, spfMechanisms } from '@/lib/nullMx';
@@ -28,6 +26,7 @@ import {
   hasDmarcReportUri,
 } from '@/lib/dmarc';
 import { phraseText, spfIssueText, t, useI18n, type DeKey } from '@/i18n';
+import { CopyableValue } from '@/components/ui/CopyableValue';
 import { InfoButton } from '@/components/ui/InfoButton';
 import { explainMailTerm } from '@/lib/explanations';
 import { UncheckedBadge, UncheckedLine } from '@/components/ui/Unchecked';
@@ -543,14 +542,7 @@ function Records({ records = [] }: { records?: string[] }) {
  * einen ganzen Code-Editor mit, hier steht nur eine Zeile Text.
  */
 function RecordValue({ record, truncate }: { record: string; truncate?: boolean }) {
-  return (
-    <Combine>
-      <InlineCode className={truncate ? styles.truncated : `wrap-anywhere ${styles.record}`}>
-        {truncate ? <Truncate title={record}>{record}</Truncate> : record}
-      </InlineCode>
-      <CopyButton text={record} />
-    </Combine>
-  );
+  return <CopyableValue value={record} truncate={truncate} />;
 }
 
 /** Warum ein Record nicht wirkt — ein Hinweis, deshalb ohne Warnfarbe. */
