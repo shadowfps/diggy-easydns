@@ -882,6 +882,8 @@ const ui: Dictionary = {
   'Verfügbarkeits-Check fehlgeschlagen': 'Availability check failed',
   'Kontaktformular konnte nicht geladen werden.': 'The contact form couldn’t be loaded.',
   'Nachricht konnte nicht gesendet werden ({status})': 'Your message couldn’t be sent ({status})',
+  'Die Nachricht konnte gerade nicht gesendet werden. Bitte später erneut versuchen.':
+    'Your message couldn’t be sent right now. Please try again later.',
   'Diese Seite konnte nicht geladen werden': 'This page couldn’t be loaded',
   'Meist hilft ein Neuladen, etwa nach einem Update von diggy.':
     'Reloading usually helps, for example after a diggy update.',

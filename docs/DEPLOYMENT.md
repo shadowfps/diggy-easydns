@@ -69,6 +69,14 @@ dem vorherigen Digest. Die Runtime-Umgebung wird dabei aus GitHub-Secrets in die
 
 Fehlt eines der SMTP-/Kontakt-Secrets, bricht der Deploy bewusst ab, statt die Stack-Env leer zu überschreiben.
 
+**Secrets ohne Anführungszeichen setzen.** In der `.env` sind `"…"` und `'…'` Syntax, im Secret gehören sie zum Wert — so kam `SMTP_PASS` mit zwei Zeichen zu viel beim Mailserver an, und das Kontaktformular scheiterte monatelang mit „535 authentication failed“ (aufgefallen am 31.10.2026). Am sichersten den Wert aus der `.env` übernehmen, wie Node ihn liest:
+
+```bash
+node --env-file=.env -e 'process.stdout.write(process.env.SMTP_PASS)' | gh secret set SMTP_PASS
+```
+
+Beide Deploy-Workflows prüfen das vor dem Ausrollen (`scripts/check-secret-quotes.mjs`) und brechen mit dem Namen des Secrets ab. Ein Absender mit Anzeigenamen (`"diggy Kontaktformular" <noreply@diggydns.cloud>`) ist in Ordnung — er steht nicht *ganz* in Anführungszeichen. `CONTACT_FROM` muss eine Adresse sein, die das SMTP-Konto verschicken darf; mittwald lehnt fremde Domains ab (`550 … SPF fail`).
+
 Versions-Tags wie `v0.4.0` erzeugen zusätzlich ein gleichnamiges, unveränderliches Image-Tag. Für mittwald liegt mit `compose.mittwald.yml` eine Stack-Konfiguration bereit. Zielumgebung:
 
 - Projekt: `p-nmi5ji`
