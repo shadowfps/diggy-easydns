@@ -636,9 +636,13 @@ app.post('/api/contact', assertSameOrigin, async (req: Request, res: Response) =
     // Transport-Fehler nur ins Log: err.message von nodemailer enthält den
     // SMTP-Endpunkt ("connect ECONNREFUSED 127.0.0.1:1") und bei Auth-Fehlern
     // das Server-Banner. Für den Nutzer ist davon nichts verwertbar.
+    //
+    // 503 statt 502: Cloudflare ersetzt 502 und 504 des Servers durch eine
+    // eigene Fehlerseite, die Meldung kam nie an — im Formular stand nur
+    // „(502)“ (31.10.2026). Inhaltlich passt „vorübergehend nicht verfügbar“.
     const err = error as Error;
     console.error('[contact] Versand fehlgeschlagen:', err.message || error);
-    return res.status(502).json({
+    return res.status(503).json({
       error: 'contact_failed',
       message: 'Die Nachricht konnte gerade nicht gesendet werden. Bitte später erneut versuchen.',
     });

@@ -253,9 +253,15 @@ export async function sendContactMessage(
   });
 
   if (!res.ok) {
+    // Ohne JSON — etwa eine Fehlerseite von Cloudflare statt der Antwort des
+    // Servers: bei einem Serverfehler dieselbe Meldung, die der Server
+    // geschickt hätte. Ein Status wie „(502)“ sagt Besuchern nichts.
     let errorPayload: LookupError = {
       error: 'contact_failed',
-      message: t('Nachricht konnte nicht gesendet werden ({status})', { status: res.status }),
+      message:
+        res.status >= 500
+          ? t('Die Nachricht konnte gerade nicht gesendet werden. Bitte später erneut versuchen.')
+          : t('Nachricht konnte nicht gesendet werden ({status})', { status: res.status }),
     };
     try {
       errorPayload = await res.json();

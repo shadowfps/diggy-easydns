@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, lookupPageSpeed } from './api';
+import { ApiError, lookupPageSpeed, sendContactMessage } from './api';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -38,5 +38,33 @@ describe('lookupPageSpeed — Fehler (#147)', () => {
     respond(new Response('error code: 502', { status: 502 }));
     const error = await lookupPageSpeed('mittwald.de').catch((e: unknown) => e);
     expect((error as Error).message).toBe('PageSpeed fehlgeschlagen');
+  });
+});
+
+describe('sendContactMessage — Fehler (31.10.2026)', () => {
+  const payload = { name: 'Test', email: 'test@example.com', message: 'Hallo', token: 't', website: '' };
+
+  // Cloudflare ersetzte die 502 des Servers — im Formular stand nur „(502)“.
+  it('zeigt bei einer ersetzten Fehlerseite des Servers eine verständliche Meldung', async () => {
+    respond(new Response('error code: 502', { status: 502 }));
+    const error = await sendContactMessage(payload).catch((e: unknown) => e);
+    expect((error as ApiError).code).toBe('contact_failed');
+    expect((error as Error).message).toBe(
+      'Die Nachricht konnte gerade nicht gesendet werden. Bitte später erneut versuchen.'
+    );
+  });
+
+  it('reicht die Meldung des Servers durch, wenn sie ankommt', async () => {
+    respond(
+      Response.json({ error: 'contact_failed', message: 'Die Nachricht konnte gerade nicht gesendet werden. Bitte später erneut versuchen.' }, { status: 503 })
+    );
+    const error = await sendContactMessage(payload).catch((e: unknown) => e);
+    expect((error as Error).message).toMatch(/^Die Nachricht konnte gerade nicht gesendet werden/);
+  });
+
+  it('nennt bei anderen Fehlerseiten weiter den Status', async () => {
+    respond(new Response('Forbidden', { status: 403 }));
+    const error = await sendContactMessage(payload).catch((e: unknown) => e);
+    expect((error as Error).message).toBe('Nachricht konnte nicht gesendet werden (403)');
   });
 });

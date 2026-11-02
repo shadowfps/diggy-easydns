@@ -597,6 +597,7 @@ export type DeText =
   | 'Verfügbarkeits-Check fehlgeschlagen'
   | 'Kontaktformular konnte nicht geladen werden.'
   | 'Nachricht konnte nicht gesendet werden ({status})'
+  | 'Die Nachricht konnte gerade nicht gesendet werden. Bitte später erneut versuchen.'
   | 'Diese Seite konnte nicht geladen werden'
   | 'Meist hilft ein Neuladen, etwa nach einem Update von diggy.';
 
