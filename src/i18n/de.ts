@@ -143,6 +143,13 @@ export type DeText =
   | 'TTL unbekannt'
   | 'Null-MX'
   | 'Null-MX — keine Mails'
+  | 'Keine Antwort für {types} — diese Typen fehlen deshalb womöglich in der Liste.'
+  | 'Keine Antwort vom DNS'
+  | 'Für {types} kam keine Antwort (Zeitüberschreitung oder Serverfehler). Ob es Records gibt, ist deshalb offen.'
+  | 'Domain existiert nicht'
+  | 'Den Namen {domain} gibt es im DNS nicht (NXDOMAIN). Stimmt die Schreibweise? Ob die Domain registriert ist, zeigt der Tab WHOIS.'
+  | 'Keine Records gefunden'
+  | '{domain} existiert, hat aber keine Records der abgefragten Typen ({types}).'
 
   // ─── Security ────────────────────────────────────────────────────────
   | 'Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.'

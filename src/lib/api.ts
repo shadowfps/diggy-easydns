@@ -93,6 +93,8 @@ export interface LookupCore {
   findings: Finding[];
   /** Nur gesetzt, wenn einzelne Typen scheiterten (siehe LookupReport). */
   failedRecordTypes?: RecordType[];
+  /** Nur gesetzt, wenn es den Namen nicht gibt (siehe LookupReport). */
+  nxdomain?: boolean;
 }
 
 export interface SslSection {

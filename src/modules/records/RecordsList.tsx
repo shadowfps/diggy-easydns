@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Badge,
   CounterBadge,
+  IconDanger,
+  IconUnavailable,
   Section,
   Tab,
   Table,
@@ -17,6 +20,7 @@ import {
 import type { DnsRecord, RecordType } from '@/types/dns';
 import { IpAddressLink, IpOwnerLabel, IpPtrLabel } from '@/components/ip/IpAddressLink';
 import { isInspectableIp } from '@/components/ip/isInspectableIp';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { InfoButton } from '@/components/ui/InfoButton';
 import { LookupLink } from '@/components/ui/LookupLink';
 import { NULL_MX_EXPLANATION, explainRecordType } from '@/lib/explanations';
@@ -26,6 +30,11 @@ import styles from './RecordsList.module.css';
 
 interface RecordsListProps {
   records: DnsRecord[];
+  domain: string;
+  /** Typen ohne Antwort (Timeout, SERVFAIL …) — ob es sie gibt, ist offen. */
+  failedTypes?: RecordType[];
+  /** Den Namen gibt es im DNS nicht (NXDOMAIN). */
+  nxdomain?: boolean;
 }
 
 type Filter = RecordType | 'ALL';
@@ -42,7 +51,7 @@ type Filter = RecordType | 'ALL';
  * nur im gewählten Tab — sonst lägen alle Records mehrfach im DOM, und jede
  * IP fragte ihren Netzbetreiber je Tab ab.
  */
-export function RecordsList({ records }: RecordsListProps) {
+export function RecordsList({ records, domain, failedTypes = [], nxdomain = false }: RecordsListProps) {
   const [filter, setFilter] = useState<Filter>('ALL');
   const { t } = useI18n();
 
@@ -59,8 +68,19 @@ export function RecordsList({ records }: RecordsListProps) {
   const table = (key: Filter, shown: () => DnsRecord[]) =>
     filter === key && <RecordsTable records={shown()} nullMx={nullMx} />;
 
+  if (records.length === 0) return <NoRecords domain={domain} failedTypes={failedTypes} nxdomain={nxdomain} />;
+
   return (
     <Section>
+      {failedTypes.length > 0 && (
+        <Alert status="warning">
+          <Text>
+            {t('Keine Antwort für {types} — diese Typen fehlen deshalb womöglich in der Liste.', {
+              types: failedTypes.join(', '),
+            })}
+          </Text>
+        </Alert>
+      )}
       <Tabs
         aria-label={t('Record-Typ')}
         selectedKey={filter}
@@ -84,6 +104,47 @@ export function RecordsList({ records }: RecordsListProps) {
         ))}
       </Tabs>
     </Section>
+  );
+}
+
+/** Die Typen, die der Server abfragt (server/services/dnsLookup.ts). */
+const QUERIED_TYPES = 'A, AAAA, CNAME, MX, NS, TXT, CAA, SOA';
+
+/**
+ * Keine Records (#151): Bisher stand dann nur der Tabellenkopf da — ob die
+ * Abfrage fertig, gescheitert oder ohne Treffer war, war nicht zu erkennen.
+ * Drei Fälle, weil sie Verschiedenes heißen: Ohne Antwort ist offen, ob es
+ * Records gibt. NXDOMAIN heißt, den Namen gibt es nicht. Sonst existiert er,
+ * hat aber keinen der abgefragten Typen.
+ */
+function NoRecords({ domain, failedTypes, nxdomain }: { domain: string; failedTypes: RecordType[]; nxdomain: boolean }) {
+  const { t, tRich } = useI18n();
+  const name = <span className="mono">{domain}</span>;
+  if (failedTypes.length > 0) {
+    return (
+      <EmptyState tone="danger" icon={<IconDanger />} title={t('Keine Antwort vom DNS')}>
+        {t('Für {types} kam keine Antwort (Zeitüberschreitung oder Serverfehler). Ob es Records gibt, ist deshalb offen.', {
+          types: failedTypes.join(', '),
+        })}
+      </EmptyState>
+    );
+  }
+  if (nxdomain) {
+    return (
+      <EmptyState icon={<IconUnavailable />} title={t('Domain existiert nicht')}>
+        {tRich('Den Namen {domain} gibt es im DNS nicht (NXDOMAIN). Stimmt die Schreibweise? Ob die Domain registriert ist, zeigt der Tab WHOIS.', {
+          domain: name,
+        })}
+      </EmptyState>
+    );
+  }
+  return (
+    <EmptyState title={t('Keine Records gefunden')}>
+      {tRich('{domain} existiert, hat aber keine Records der abgefragten Typen ({types}).', {
+        domain: name,
+        types: QUERIED_TYPES,
+      })}
+    </EmptyState>
   );
 }
 

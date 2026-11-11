@@ -70,6 +70,12 @@ export interface StandardRecords {
    * der Vergleich mit dem letzten Check (#79) darf sie nicht als entfallen melden.
    */
   failedTypes: RecordType[];
+  /**
+   * Den Namen gibt es nicht (NXDOMAIN, #151): jeder Typ kam mit ENOTFOUND
+   * zurück. Ein Name ohne Records liefert ENODATA — der existiert, ihm fehlt
+   * nur jeder abgefragte Typ.
+   */
+  nxdomain: boolean;
 }
 
 /**
@@ -114,7 +120,13 @@ export async function lookupStandardRecords(
     records.push(...wwwCnames);
   }
 
-  return { records, failedTypes };
+  const nxdomain =
+    records.length === 0 &&
+    results.every(
+      (result) => result.status === 'rejected' && (result.reason as NodeJS.ErrnoException).code === 'ENOTFOUND'
+    );
+
+  return { records, failedTypes, nxdomain };
 }
 
 /**

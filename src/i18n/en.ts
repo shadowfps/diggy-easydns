@@ -178,6 +178,17 @@ const ui: Dictionary = {
   'TTL unbekannt': 'TTL unknown',
   'Null-MX': 'Null MX',
   'Null-MX — keine Mails': 'Null MX — no email',
+  'Keine Antwort für {types} — diese Typen fehlen deshalb womöglich in der Liste.':
+    'No answer for {types} — so these types may be missing from the list.',
+  'Keine Antwort vom DNS': 'No answer from DNS',
+  'Für {types} kam keine Antwort (Zeitüberschreitung oder Serverfehler). Ob es Records gibt, ist deshalb offen.':
+    'There was no answer for {types} (timeout or server error). So it’s unclear whether any records exist.',
+  'Domain existiert nicht': 'Domain doesn’t exist',
+  'Den Namen {domain} gibt es im DNS nicht (NXDOMAIN). Stimmt die Schreibweise? Ob die Domain registriert ist, zeigt der Tab WHOIS.':
+    'The name {domain} doesn’t exist in DNS (NXDOMAIN). Is it spelled correctly? The WHOIS tab shows whether the domain is registered.',
+  'Keine Records gefunden': 'No records found',
+  '{domain} existiert, hat aber keine Records der abgefragten Typen ({types}).':
+    '{domain} exists, but has no records of the queried types ({types}).',
 
   // ─── Security ────────────────────────────────────────────────────────
   'Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.':

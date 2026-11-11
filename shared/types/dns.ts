@@ -516,6 +516,8 @@ export interface LookupReport {
    * in `records`, ohne dass es sie nicht gibt.
    */
   failedRecordTypes?: RecordType[];
+  /** Den Namen gibt es im DNS nicht (NXDOMAIN, #151). Nur gesetzt, wenn wahr. */
+  nxdomain?: boolean;
   /**
    * Der TLS-Check scheiterte (Timeout, Netzwerk, DNS). `ssl` fehlt dann, ohne
    * dass es kein Zertifikat gibt.
