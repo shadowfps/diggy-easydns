@@ -3,7 +3,7 @@ import type { Http2ServerRequest } from 'node:http2';
 import net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { CLOSED_BEFORE_RESPONSE, IDLE_MS, http2Get, openSessionCount } from './http2Get.js';
+import { CLOSED_BEFORE_RESPONSE, IDLE_MS, TIMEOUTS_IN_A_ROW, http2Get, openSessionCount } from './http2Get.js';
 import { startH2Server, testCertificate, trustTestCertificate, type H2TestServer } from '../test/h2Server.js';
 
 /**
@@ -70,6 +70,39 @@ async function delayingProxy(origin: string, delayMs: number) {
   const { port } = proxy.address() as AddressInfo;
   return {
     origin: `https://127.0.0.1:${port}`,
+    close: async () => {
+      for (const socket of sockets) socket.destroy();
+      await new Promise((resolve) => proxy.close(resolve));
+    },
+  };
+}
+
+/**
+ * TCP-Proxy vor `origin`, der bestehende Verbindungen auf Zuruf verstummen
+ * lässt: Ab `blackhole()` verschluckt er alles in beide Richtungen, ohne FIN
+ * oder RST — wie ein NAT, das die Zuordnung vergessen hat. Neue Verbindungen
+ * reicht er weiter normal durch.
+ */
+async function blackholeProxy(origin: string) {
+  const { port: upstream } = new URL(origin);
+  const sockets: net.Socket[] = [];
+  const proxy = net.createServer((client) => {
+    const up = net.connect(Number(upstream), '127.0.0.1');
+    for (const socket of [client, up]) socket.on('error', () => {});
+    client.pipe(up).pipe(client);
+    sockets.push(client, up);
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const { port } = proxy.address() as AddressInfo;
+  return {
+    origin: `https://127.0.0.1:${port}`,
+    blackhole: () => {
+      for (const socket of sockets) {
+        socket.unpipe();
+        // Weiter lesen, aber nichts weitergeben — sonst staute sich der Puffer.
+        socket.on('data', () => {});
+      }
+    },
     close: async () => {
       for (const socket of sockets) socket.destroy();
       await new Promise((resolve) => proxy.close(resolve));
@@ -412,4 +445,52 @@ describe('http2Get — Verbindungen', () => {
       expect(tcpSockets()).toBe(0);
     }, UNTIL_IDLE);
   }, LONG_TEST);
+});
+
+/**
+ * Eine Verbindung, die mitten in der Nutzung verstummt (#139). Solange alle
+ * 2 s eine Anfrage kommt, schließt die Leerlaufzeit sie nie — ohne Prüfung
+ * liefe jede weitere Anfrage an diesen Anbieter in den Timeout.
+ */
+describe('http2Get — tote Verbindung', () => {
+  it('verwirft eine Verbindung, die nichts mehr durchlässt, und baut eine neue auf', async () => {
+    server = await startH2Server((req, res) => res.end(req.url));
+    const proxy = await blackholeProxy(server.origin);
+    try {
+      expect(await (await get(`${proxy.origin}/vorher`)).text()).toBe('/vorher');
+      proxy.blackhole();
+
+      // Anfragen im Takt von 300 ms: Die Leerlaufzeit greift nie. Ohne
+      // Erkennung liefe jede in den Timeout.
+      const bodies: (string | undefined)[] = [];
+      for (let i = 0; i <= TIMEOUTS_IN_A_ROW; i++) {
+        bodies.push(
+          await http2Get(`${proxy.origin}/danach`, { signal: AbortSignal.timeout(300) }).then(
+            (res) => res.text(),
+            () => undefined
+          )
+        );
+      }
+
+      expect(bodies).toEqual([...Array<undefined>(TIMEOUTS_IN_A_ROW).fill(undefined), '/danach']);
+      expect(server.sockets).toHaveLength(2);
+    } finally {
+      await proxy.close();
+    }
+  }, LONG_TEST);
+
+  it('behält eine Verbindung, wenn zwischen den Timeouts eine Antwort kommt', async () => {
+    // Ein langsamer Resolver: /haengt beantwortet er nie, alles andere sofort.
+    server = await startH2Server((req, res) => {
+      if (req.url !== '/haengt') res.end(req.url);
+    });
+    const hang = () => http2Get(`${server!.origin}/haengt`, { signal: AbortSignal.timeout(300) });
+
+    for (let i = 0; i < TIMEOUTS_IN_A_ROW + 1; i++) {
+      await expect(hang()).rejects.toMatchObject({ name: 'TimeoutError' });
+      expect(await (await get(`${server.origin}/dazwischen`)).text()).toBe('/dazwischen');
+    }
+
+    expect(server.sockets).toHaveLength(1);
+  });
 });

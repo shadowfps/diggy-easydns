@@ -34,6 +34,11 @@
  * Verbindung, die die Gegenseite schon still verworfen hat. Was die
  * Gegenseite schließt, zurücksetzt oder per GOAWAY beendet, wird sofort
  * ausgetragen; der nächste Versuch (doh.ts) läuft über eine neue Verbindung.
+ *
+ * Bleibt die Verbindung nur stumm — Pakete gehen verloren, kein FIN, kein
+ * RST, etwa nach einem NAT-Timeout —, hilft die Leerlaufzeit nicht, solange
+ * alle 2 s eine Anfrage kommt (#139). Deshalb fliegt eine Sitzung nach
+ * `TIMEOUTS_IN_A_ROW` Timeouts ohne eine Antwort dazwischen aus dem Pool.
  */
 
 import http2 from 'node:http2';
@@ -46,6 +51,17 @@ const NULL_BODY_STATUS = new Set([204, 205, 304]);
 
 /** So lange bleibt eine Sitzung ohne Anfrage offen. */
 export const IDLE_MS = 2_000;
+
+/**
+ * Nach so vielen Timeouts in Folge gilt eine Sitzung als tot (#139). Einer
+ * allein sagt nichts: Ein langsamer Resolver lässt nur seinen eigenen Stream
+ * warten. Kommt dazwischen irgendeine Antwort, lebt die Verbindung.
+ *
+ * Bewusst kein HTTP/2-PING nach dem Timeout: Ein offener PING hält in Node die
+ * Sitzung fest — kam währenddessen ein GOAWAY, blieb der Socket im Test auch
+ * nach destroy() offen.
+ */
+export const TIMEOUTS_IN_A_ROW = 2;
 
 /**
  * `cause.code`, wenn eine Anfrage ohne vollständige Antwort endet, ohne dass
@@ -93,6 +109,20 @@ function sessionFor(origin: string): http2.ClientHttp2Session {
 
 /** Laufende Anfragen je Sitzung. */
 const inFlight = new WeakMap<http2.ClientHttp2Session, number>();
+
+/** Timeouts in Folge je Sitzung — eine Antwort setzt zurück. */
+const timeouts = new WeakMap<http2.ClientHttp2Session, number>();
+
+/**
+ * Nach einem Abbruch auf einer stehenden Verbindung. Die tote Sitzung bekommt
+ * keine neuen Anfragen mehr; was noch auf ihr läuft, endet mit seinem eigenen
+ * Timeout, mit der letzten Anfrage geht sie zu (release).
+ */
+function countTimeout(origin: string, session: http2.ClientHttp2Session) {
+  const count = (timeouts.get(session) ?? 0) + 1;
+  timeouts.set(session, count);
+  if (count >= TIMEOUTS_IN_A_ROW) forget(origin, session);
+}
 
 /**
  * Nach dem Ende einer Anfrage. Eine Sitzung, die keine neuen Anfragen mehr
@@ -162,6 +192,7 @@ export function http2Get(url: string, { headers = {}, signal }: Http2GetInit): P
       // neue Verbindung. Wer schon auf diese wartet, wartet weiter; mit der
       // letzten Anfrage geht sie zu (release).
       if (session.connecting) forget(target.origin, session);
+      else countTimeout(target.origin, session);
       settle(() => reject(signal.reason));
     };
     signal.addEventListener('abort', onAbort, { once: true });
@@ -172,6 +203,8 @@ export function http2Get(url: string, { headers = {}, signal }: Http2GetInit): P
     // Kommt nach 'end' — nur ohne vollständige Antwort ist hier noch etwas offen.
     stream.on('close', () => fail(closedBeforeResponse()));
     stream.on('response', (responseHeaders) => {
+      // Die Verbindung trägt — auch eine Fehlerantwort zeigt das.
+      timeouts.delete(session);
       const chunks: Buffer[] = [];
       let size = 0;
       stream.on('data', (chunk: Buffer) => {
