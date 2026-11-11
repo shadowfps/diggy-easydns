@@ -67,6 +67,20 @@ describe('HistoryView', () => {
     );
   });
 
+  // Gespeichert ist „Präferenz Ziel“ — der Link führte auf
+  // `/lookup/10 mx.example.net`, der Null-MX auf `/lookup/0`.
+  it('verlinkt bei MX nur das Ziel und zeigt den Null-MX als „0 .“ (#122)', async () => {
+    setup([entry('example.com', { mx: ['10 mx.example.net'] }), entry('example.org', { mx: ['0 '] })]);
+    const [withMx, nullMx] = await screen.findAllByRole('row');
+
+    const link = within(withMx).getByRole('link', { name: /^mx\.example\.net/ });
+    expect(link).toHaveAttribute('href', '/lookup/mx.example.net');
+    expect(link.parentElement).toHaveTextContent(/^10 mx\.example\.net/);
+
+    expect(within(nullMx).getByText('0 .')).toBeInTheDocument();
+    expect(within(nullMx).queryByRole('link', { name: /^0/ })).not.toBeInTheDocument();
+  });
+
   it('löscht erst nach Bestätigung', async () => {
     const { onClear } = setup([entry('example.com')]);
 

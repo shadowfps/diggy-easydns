@@ -103,7 +103,7 @@ function NoMailSection({ mail }: { mail: MailSecurity }) {
           : t('Damit Empfänger auch Mails in ihrem Namen abweisen, gehören SPF -all und DMARC p=reject dazu.')}
       </Text>
       <ColumnLayout>
-        <Stat label="Null-MX" value={t('gesetzt')} tone="success" />
+        <Stat label={t('Null-MX')} value={t('gesetzt')} tone="success" />
         <Stat
           label="SPF"
           value={noMailSpfLabel(mail.spf, protection.spfAllowsNoSender)}
