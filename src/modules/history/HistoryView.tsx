@@ -24,6 +24,7 @@ import { IconHistory } from '@tabler/icons-react';
 import type { LookupHistoryEntry } from '@/lib/lookupHistory';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LookupLink } from '@/components/ui/LookupLink';
+import { splitMxValue } from '@/lib/nullMx';
 import { verdictFor } from '@/lib/scoring';
 import { formatDate, t, useI18n } from '@/i18n';
 import styles from './HistoryView.module.css';
@@ -143,7 +144,7 @@ function HistoryItem({ entry, onRun }: { entry: LookupHistoryEntry; onRun: (doma
         <div className={styles.details}>
           <ColumnLayout s={[1]} m={[1, 1, 1]} l={[1, 1, 1]} rowGap="m">
             <CoreValues label="IP" values={entry.ips} />
-            <CoreValues label="MX" values={entry.mx} />
+            <CoreValues label="MX" values={entry.mx} render={(value) => <MxValue value={value} />} />
             <CoreValues label="NS" values={entry.nameservers} />
           </ColumnLayout>
           <div className={styles.badges}>
@@ -162,7 +163,15 @@ function HistoryItem({ entry, onRun }: { entry: LookupHistoryEntry; onRun: (doma
 }
 
 /** Jeder Wert führt auf seinen eigenen Report (#147). */
-function CoreValues({ label, values }: { label: string; values: string[] }) {
+function CoreValues({
+  label,
+  values,
+  render = (value) => <LookupLink value={value} />,
+}: {
+  label: string;
+  values: string[];
+  render?: (value: string) => ReactNode;
+}) {
   return (
     <LabeledValue>
       <Label>{label}</Label>
@@ -171,7 +180,7 @@ function CoreValues({ label, values }: { label: string; values: string[] }) {
           <div className={styles.values}>
             {values.slice(0, 3).map((value) => (
               <Text key={value} className="mono">
-                <LookupLink value={value} />
+                {render(value)}
               </Text>
             ))}
             {values.length > 3 && (
@@ -187,6 +196,21 @@ function CoreValues({ label, values }: { label: string; values: string[] }) {
         )}
       </Content>
     </LabeledValue>
+  );
+}
+
+/**
+ * Gespeichert ist „Präferenz Ziel“ — verlinkt wird nur das Ziel, sonst führte
+ * der Link auf `/lookup/10 mx.example.net`. Der Null-MX steht als `0 .` da wie
+ * in der Records-Liste (#122), auch in Einträgen, die ihn als `"0 "` haben.
+ */
+function MxValue({ value }: { value: string }) {
+  const { priority, target } = splitMxValue(value);
+  return (
+    <>
+      {priority !== undefined && `${priority} `}
+      <LookupLink value={target} />
+    </>
   );
 }
 

@@ -199,7 +199,7 @@ function ChangeRow({ change }: { change: CheckChange }) {
  * deshalb in Zonendatei-Schreibweise und benannt.
  */
 function recordLabel(type: TrackedRecordType, value: string): string {
-  return type === 'MX' && value === '0' ? '0 . (Null-MX)' : value;
+  return type === 'MX' && value === '0' ? `0 . (${t('Null-MX')})` : value;
 }
 
 /**

@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MailSecurity } from '@/types/dns';
 import { MAIL_EXPLANATIONS } from '@/lib/explanations';
+import { setLanguage } from '@/i18n';
 import { MailView } from './MailView';
 
 /**
@@ -617,5 +618,16 @@ describe('MailView — Reverse DNS', () => {
     cleanup();
     render(<MailView mail={{ ...EXPLAINED, mxReverse: undefined }} />);
     expect(screen.queryByRole('heading', { name: /^Reverse DNS/ })).not.toBeInTheDocument();
+  });
+});
+
+/** #122: Die Null-MX-Karte schrieb auf Englisch „Null-MX“, die Records-Liste „Null MX“. */
+describe('MailView — Null-MX auf Englisch', () => {
+  afterEach(() => setLanguage('de', { persist: false }));
+
+  it('beschriftet den Null-MX wie die Records-Liste', async () => {
+    await setLanguage('en', { persist: false });
+    render(<MailView mail={exampleCom} />);
+    expect(within(section('No email (null MX)')).getByText('Null MX')).toBeInTheDocument();
   });
 });
