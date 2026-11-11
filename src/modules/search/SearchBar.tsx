@@ -119,10 +119,15 @@ export function SearchBar({
                 isDisabled={loading}
                 onPress={() => run(entry.domain)}
               >
-                <ScoreIcon score={entry.score} />
-                <Text className="mono">
-                  {entry.domain} {entry.score}
-                </Text>
+                {/* Der Score als eigene Zahl hinter einem Strich, in der
+                    Textschrift (#147): In der Schrift der Domain las sich
+                    „mittwald.de 94“ wie ein Teil des Namens. */}
+                <Text className="mono">{entry.domain}</Text>
+                <span className={styles.score}>
+                  <ScoreIcon score={entry.score} />
+                  <span className="sr-only">Health Score</span>
+                  {entry.score}
+                </span>
               </Button>
             ))}
           </>
