@@ -80,13 +80,14 @@ async function delayingProxy(origin: string, delayMs: number) {
 /**
  * TCP-Proxy vor `origin`, der bestehende Verbindungen auf Zuruf verstummen
  * lässt: Ab `blackhole()` verschluckt er alles in beide Richtungen, ohne FIN
- * oder RST — wie ein NAT, das die Zuordnung vergessen hat. Neue Verbindungen
- * reicht er weiter normal durch.
+ * oder RST — wie ein NAT, das die Zuordnung vergessen hat. Auch ein FIN des
+ * Clients bleibt unbeantwortet (`allowHalfOpen`). Neue Verbindungen reicht er
+ * weiter normal durch.
  */
 async function blackholeProxy(origin: string) {
   const { port: upstream } = new URL(origin);
   const sockets: net.Socket[] = [];
-  const proxy = net.createServer((client) => {
+  const proxy = net.createServer({ allowHalfOpen: true }, (client) => {
     const up = net.connect(Number(upstream), '127.0.0.1');
     for (const socket of [client, up]) socket.on('error', () => {});
     client.pipe(up).pipe(client);
@@ -458,6 +459,8 @@ describe('http2Get — tote Verbindung', () => {
     const proxy = await blackholeProxy(server.origin);
     try {
       expect(await (await get(`${proxy.origin}/vorher`)).text()).toBe('/vorher');
+      // Client, Proxy (zwei) und Server: ein Socket je Ende.
+      const before = tcpSockets();
       proxy.blackhole();
 
       // Anfragen im Takt von 300 ms: Die Leerlaufzeit greift nie. Ohne
@@ -474,6 +477,9 @@ describe('http2Get — tote Verbindung', () => {
 
       expect(bodies).toEqual([...Array<undefined>(TIMEOUTS_IN_A_ROW).fill(undefined), '/danach']);
       expect(server.sockets).toHaveLength(2);
+      // Der Socket der toten Verbindung ist zu, obwohl die Gegenseite auf
+      // nichts mehr antwortet: Die neue Verbindung bringt vier dazu.
+      await vi.waitFor(() => expect(tcpSockets()).toBeLessThan(before + 4));
     } finally {
       await proxy.close();
     }

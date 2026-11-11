@@ -113,6 +113,9 @@ const inFlight = new WeakMap<http2.ClientHttp2Session, number>();
 /** Timeouts in Folge je Sitzung — eine Antwort setzt zurück. */
 const timeouts = new WeakMap<http2.ClientHttp2Session, number>();
 
+/** Sitzungen, die nach Timeouts als tot gelten — sie gehen hart zu (release). */
+const dead = new WeakSet<http2.ClientHttp2Session>();
+
 /**
  * Nach einem Abbruch auf einer stehenden Verbindung. Die tote Sitzung bekommt
  * keine neuen Anfragen mehr; was noch auf ihr läuft, endet mit seinem eigenen
@@ -121,7 +124,9 @@ const timeouts = new WeakMap<http2.ClientHttp2Session, number>();
 function countTimeout(origin: string, session: http2.ClientHttp2Session) {
   const count = (timeouts.get(session) ?? 0) + 1;
   timeouts.set(session, count);
-  if (count >= TIMEOUTS_IN_A_ROW) forget(origin, session);
+  if (count < TIMEOUTS_IN_A_ROW) return;
+  dead.add(session);
+  forget(origin, session);
 }
 
 /**
@@ -129,14 +134,16 @@ function countTimeout(origin: string, session: http2.ClientHttp2Session) {
  * bekommt und keine mehr trägt, braucht niemand: Sie geht sofort zu — mitten
  * im Verbindungsaufbau per destroy(), denn close() wartet dort, bis die
  * Verbindung steht, und ein Server, der den TLS-Handshake nie beendet, hielte
- * den Socket sonst unbegrenzt offen.
+ * den Socket sonst unbegrenzt offen. Eine tote Verbindung ebenso: close()
+ * beendet den Socket mit FIN und wartet auf die Antwort der Gegenseite, die
+ * nie kommt — er bliebe bis zum TCP-Timeout offen.
  */
 function release(origin: string, session: http2.ClientHttp2Session) {
   const left = (inFlight.get(session) ?? 1) - 1;
   inFlight.set(session, left);
   const reusable = sessions.get(origin) === session && !session.closed && !session.destroyed;
   if (left > 0 || reusable) return;
-  if (session.connecting) session.destroy();
+  if (session.connecting || dead.has(session)) session.destroy();
   else session.close();
 }
 
