@@ -114,8 +114,9 @@ const QUERIED_TYPES = 'A, AAAA, CNAME, MX, NS, TXT, CAA, SOA';
  * Keine Records (#151): Bisher stand dann nur der Tabellenkopf da — ob die
  * Abfrage fertig, gescheitert oder ohne Treffer war, war nicht zu erkennen.
  * Drei Fälle, weil sie Verschiedenes heißen: Ohne Antwort ist offen, ob es
- * Records gibt. NXDOMAIN heißt, den Namen gibt es nicht. Sonst existiert er,
- * hat aber keinen der abgefragten Typen.
+ * Records gibt. NXDOMAIN heißt, den Namen gibt es nicht. Sonst gibt es keinen
+ * der abgefragten Typen — dass der Name existiert, ist damit nicht sicher
+ * (widersprüchliche oder unbrauchbare Antworten landen auch hier).
  */
 function NoRecords({ domain, failedTypes, nxdomain }: { domain: string; failedTypes: RecordType[]; nxdomain: boolean }) {
   const { t, tRich } = useI18n();
@@ -140,7 +141,7 @@ function NoRecords({ domain, failedTypes, nxdomain }: { domain: string; failedTy
   }
   return (
     <EmptyState title={t('Keine Records gefunden')}>
-      {tRich('{domain} existiert, hat aber keine Records der abgefragten Typen ({types}).', {
+      {tRich('Für {domain} gibt es keine Records der abgefragten Typen ({types}).', {
         domain: name,
         types: QUERIED_TYPES,
       })}

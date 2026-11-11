@@ -10,31 +10,39 @@ import { describe, expect, it, vi } from 'vitest';
 
 const dnsError = (code: string) => Object.assign(new Error(code), { code });
 
-/** Fehler je Name, für alle Typen gleich — bis auf MX bei `langsam.example`. */
+type Method = 'resolve4' | 'resolve6' | 'resolveMx' | 'resolveNs' | 'resolveTxt' | 'resolveCaa' | 'resolveSoa' | 'resolveCname';
+
+/** Fehler je Name, für alle Typen gleich — bis auf die Ausnahmen darunter. */
 const ERRORS: Record<string, string> = {
   'gibt-es-nicht.example': 'ENOTFOUND',
   'leer.example': 'ENODATA',
   'langsam.example': 'ENOTFOUND',
+  'cname-langsam.example': 'ENOTFOUND',
+  'soa-kaputt.example': 'ENOTFOUND',
+};
+const EXCEPTIONS: Record<string, Partial<Record<Method, string>>> = {
+  'langsam.example': { resolveMx: 'ETIMEOUT' },
+  // Ein Alias, dessen Ziel fehlt: A & Co. melden NXDOMAIN fürs Ziel, nur die
+  // CNAME-Abfrage wüsste es besser — und kam nicht an.
+  'cname-langsam.example': { resolveCname: 'ETIMEOUT' },
+  // EBADRESP gilt als erwartbar (SOA auf einem Alias), beweist aber nichts.
+  'soa-kaputt.example': { resolveSoa: 'EBADRESP' },
 };
 
 vi.mock('node:dns', () => {
-  const fail = async (name: string) => {
-    throw dnsError(ERRORS[name]);
+  const method = (name: Method) => async (domain: string) => {
+    throw dnsError(EXCEPTIONS[domain]?.[name] ?? ERRORS[domain]);
   };
   class Resolver {
     setServers() {}
-    resolve4 = fail;
-    resolve6 = fail;
-    // Ein Typ ohne Antwort: ob es den Namen gibt, ist dann offen.
-    resolveMx = async (name: string) => {
-      if (name === 'langsam.example') throw dnsError('ETIMEOUT');
-      return fail(name);
-    };
-    resolveNs = fail;
-    resolveTxt = fail;
-    resolveCaa = fail;
-    resolveSoa = fail;
-    resolveCname = fail;
+    resolve4 = method('resolve4');
+    resolve6 = method('resolve6');
+    resolveMx = method('resolveMx');
+    resolveNs = method('resolveNs');
+    resolveTxt = method('resolveTxt');
+    resolveCaa = method('resolveCaa');
+    resolveSoa = method('resolveSoa');
+    resolveCname = method('resolveCname');
   }
   return { promises: { Resolver } };
 });
@@ -64,6 +72,23 @@ describe('lookupStandardRecords — NXDOMAIN (#151)', () => {
     expect(await lookupStandardRecords('langsam.example')).toEqual({
       records: [],
       failedTypes: ['MX'],
+      nxdomain: false,
+    });
+  });
+
+  it('meldet NXDOMAIN nicht, wenn die CNAME-Abfrage keine Antwort bekam — und nennt sie', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await lookupStandardRecords('cname-langsam.example')).toEqual({
+      records: [],
+      failedTypes: ['CNAME'],
+      nxdomain: false,
+    });
+  });
+
+  it('meldet NXDOMAIN nicht, wenn eine Antwort unbrauchbar war', async () => {
+    expect(await lookupStandardRecords('soa-kaputt.example')).toEqual({
+      records: [],
+      failedTypes: [],
       nxdomain: false,
     });
   });

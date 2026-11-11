@@ -149,7 +149,7 @@ export type DeText =
   | 'Domain existiert nicht'
   | 'Den Namen {domain} gibt es im DNS nicht (NXDOMAIN). Stimmt die Schreibweise? Ob die Domain registriert ist, zeigt der Tab WHOIS.'
   | 'Keine Records gefunden'
-  | '{domain} existiert, hat aber keine Records der abgefragten Typen ({types}).'
+  | 'Für {domain} gibt es keine Records der abgefragten Typen ({types}).'
 
   // ─── Security ────────────────────────────────────────────────────────
   | 'Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.'

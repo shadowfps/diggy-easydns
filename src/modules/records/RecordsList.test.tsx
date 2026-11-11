@@ -191,11 +191,11 @@ describe('RecordsList — keine Records', () => {
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
   });
 
-  it('sagt, dass der Name existiert, aber keine Records hat', () => {
+  it('sagt sonst, dass es keine Records gibt — ohne zu behaupten, dass der Name existiert', () => {
     render(<RecordsList domain="leer.example" records={[]} />);
     expect(screen.getByRole('heading', { name: 'Keine Records gefunden' })).toBeInTheDocument();
-    expect(screen.getByText(/existiert, hat aber keine Records/)).toHaveTextContent(
-      'leer.example existiert, hat aber keine Records der abgefragten Typen (A, AAAA, CNAME, MX, NS, TXT, CAA, SOA).'
+    expect(screen.getByText(/gibt es keine Records/)).toHaveTextContent(
+      'Für leer.example gibt es keine Records der abgefragten Typen (A, AAAA, CNAME, MX, NS, TXT, CAA, SOA).'
     );
   });
 

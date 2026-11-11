@@ -187,8 +187,8 @@ const ui: Dictionary = {
   'Den Namen {domain} gibt es im DNS nicht (NXDOMAIN). Stimmt die Schreibweise? Ob die Domain registriert ist, zeigt der Tab WHOIS.':
     'The name {domain} doesn’t exist in DNS (NXDOMAIN). Is it spelled correctly? The WHOIS tab shows whether the domain is registered.',
   'Keine Records gefunden': 'No records found',
-  '{domain} existiert, hat aber keine Records der abgefragten Typen ({types}).':
-    '{domain} exists, but has no records of the queried types ({types}).',
+  'Für {domain} gibt es keine Records der abgefragten Typen ({types}).':
+    'There are no records of the queried types ({types}) for {domain}.',
 
   // ─── Security ────────────────────────────────────────────────────────
   'Nicht anwendbar: Namen mit Unterstrich sind DNS-Einträge, keine Hosts — unter ihnen läuft kein Webserver mit Zertifikat.':
