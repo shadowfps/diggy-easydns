@@ -52,7 +52,7 @@
   gap: var(--size-px--xxs);
   margin-inline-start: var(--size-px--xs);
   padding-inline-start: var(--size-px--s);
-  border-inline-start: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-inline-start: 1px solid color-mix(in srgb, currentColor 35%, transparent);
   font-family: Inter, sans-serif;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
