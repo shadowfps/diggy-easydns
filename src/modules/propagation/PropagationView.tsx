@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo } from 'react';
+import { useDeferredValue, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   AlertBadge,
   AlertText,
@@ -100,10 +100,14 @@ export function PropagationView({
   // Standard-Typen, wenn keiner eine Antwort hat — sonst den gezeigten.
   const emptyTypes = standard && primaryPropagationType(results, types) === undefined ? types : [type];
 
+  const { top: heldTop, end: heldEnd, hold } = useHeldHeight(
+    (shown !== undefined || typed.error !== undefined) && (auth.result !== undefined || auth.error !== undefined)
+  );
+
   return (
     <>
       <Section>
-        <div className={styles.controls}>
+        <div ref={heldTop} className={styles.controls}>
           {/* Alle wählbaren Typen, auch ohne Antwort: Wer nach einem neuen MX
               fragt, muss ihn wählen können, bevor es ihn überall gibt. Acht
               Optionen — dafür ist in Flow das Select da. Jede Wahl legt über
@@ -111,7 +115,9 @@ export function PropagationView({
           <Select
             selectedKey={type}
             onChange={(key) => {
-              if (key !== null && key !== type) onTypeChange(key as PropagationRecordType);
+              if (key === null || key === type) return;
+              hold();
+              onTypeChange(key as PropagationRecordType);
             }}
           >
             {/* Ein Typ ist immer gewählt — ohne `optional={false}` hängte Flow „(optional)“ an. */}
@@ -169,8 +175,53 @@ export function PropagationView({
           </div>
         </Section>
       )}
+      <div ref={heldEnd} aria-hidden="true" />
     </>
   );
+}
+
+/**
+ * Hält die Höhe des Tabs über einen Typwechsel (#147). Bis beide Abschnitte
+ * Antworten haben, stehen dort nur zwei Ladezeilen: Die Karte klappte auf ein
+ * Viertel zusammen und wuchs gleich wieder, dazwischen blitzte der
+ * Seitenhintergrund durch.
+ *
+ * `hold()` misst vor dem Wechsel, wie weit der Inhalt unter die Typwahl
+ * reicht; bis `settled` füllt ein Platzhalter am Ende auf diese Höhe auf.
+ * Ein Platzhalter statt `min-height` an einem Container: Flow setzt Abstand
+ * und Trennlinie über direkt benachbarte Sections, ein Container dazwischen
+ * nähme sie weg. Ein Typ aus dem Zwischenspeicher ist sofort `settled` — dann
+ * hält nichts.
+ */
+function useHeldHeight(settled: boolean) {
+  const top = useRef<HTMLDivElement>(null);
+  const end = useRef<HTMLDivElement>(null);
+  const height = useRef<number | null>(null);
+  /** Von der Typwahl bis zum Anfang (ohne) oder Ende (mit Platzhalter). */
+  const measure = (edge: 'top' | 'bottom') =>
+    end.current && top.current
+      ? end.current.getBoundingClientRect()[edge] - top.current.getBoundingClientRect().top
+      : null;
+
+  // Nach jedem Render: Die Ladezeilen ändern ihre Höhe, wenn eine der beiden
+  // Antworten vor der anderen kommt.
+  useLayoutEffect(() => {
+    if (!end.current) return;
+    if (settled) height.current = null;
+    const now = measure('top');
+    end.current.style.height =
+      height.current === null || now === null ? '' : `${Math.max(0, height.current - now)}px`;
+  });
+
+  return {
+    top,
+    end,
+    // Mit Platzhalter: Ein zweiter Wechsel während des Ladens hält weiter
+    // die Höhe von vor dem ersten.
+    hold: () => {
+      height.current = measure('bottom');
+    },
+  };
 }
 
 /** Beispiel im leeren Feld, je Typ in der Form, in der die Antworten stehen. */
