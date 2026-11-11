@@ -833,6 +833,9 @@ export default function App() {
                             <RecordsList
                               key={report.domain}
                               records={report.records}
+                              domain={report.domain}
+                              failedTypes={report.failedRecordTypes}
+                              nxdomain={report.nxdomain}
                             />
                           )}
                         </Tab>

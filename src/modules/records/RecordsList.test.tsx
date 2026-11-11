@@ -25,12 +25,12 @@ describe('RecordsList — TTL', () => {
   ];
 
   it('zeigt eine bekannte TTL in Sekunden', () => {
-    render(<RecordsList records={records} />);
+    render(<RecordsList domain="example.com" records={records} />);
     expect(within(row('mx1.example.com')).getByText('3600s')).toBeInTheDocument();
   });
 
   it('zeigt „—“ statt 0s, wenn die TTL unbekannt ist — mit Klartext für Screenreader', () => {
-    render(<RecordsList records={records} />);
+    render(<RecordsList domain="example.com" records={records} />);
     const txt = row('v=spf1 -all');
 
     expect(within(txt).getByText('—')).toHaveAttribute('aria-hidden', 'true');
@@ -39,7 +39,7 @@ describe('RecordsList — TTL', () => {
   });
 
   it('lässt eine echte TTL von 0 als 0s stehen', () => {
-    render(<RecordsList records={records} />);
+    render(<RecordsList domain="example.com" records={records} />);
     expect(within(row('cdn.example.net')).getByText('0s')).toBeInTheDocument();
   });
 });
@@ -65,13 +65,13 @@ const infoLabels = () =>
 
 describe('RecordsList — Erklärungen', () => {
   it('zeigt ein „?“ je Record-Typ, nicht je Zeile', () => {
-    render(<RecordsList records={RECORDS} />);
+    render(<RecordsList domain="example.com" records={RECORDS} />);
     expect(infoLabels()).toEqual(['Was bedeutet MX?', 'Was bedeutet NS?', 'Was bedeutet TXT?']);
   });
 
   it('zeigt das „?“ auch, wenn ein Filter aktiv ist', async () => {
     const user = userEvent.setup();
-    render(<RecordsList records={RECORDS} />);
+    render(<RecordsList domain="example.com" records={RECORDS} />);
     await user.click(screen.getByRole('tab', { name: /^NS/ }));
     expect(screen.getByRole('tab', { name: /^NS/ })).toHaveAttribute('aria-selected', 'true');
     expect(infoLabels()).toEqual(['Was bedeutet NS?']);
@@ -79,7 +79,7 @@ describe('RecordsList — Erklärungen', () => {
 
   it('klappt die Erklärung des Typs auf', async () => {
     const user = userEvent.setup();
-    render(<RecordsList records={RECORDS} />);
+    render(<RecordsList domain="example.com" records={RECORDS} />);
     await user.click(screen.getByRole('button', { name: 'Was bedeutet MX?' }));
     expect(screen.getByText(RECORD_EXPLANATIONS.MX.text)).toBeInTheDocument();
   });
@@ -95,7 +95,7 @@ const nullMxBadge = () => screen.queryByText('Null-MX — keine Mails');
 
 describe('RecordsList — Null-MX', () => {
   it('zeigt den Null-MX als „0 .“ mit Badge', () => {
-    render(<RecordsList records={[NULL_MX]} />);
+    render(<RecordsList domain="example.com" records={[NULL_MX]} />);
     const mx = row('.');
 
     expect(within(mx).getByText('0')).toBeInTheDocument();
@@ -104,7 +104,7 @@ describe('RecordsList — Null-MX', () => {
   });
 
   it('erkennt auch die Zonendatei-Schreibweise „.“ — ohne doppelten Punkt', () => {
-    render(<RecordsList records={[{ ...NULL_MX, value: '.' }]} />);
+    render(<RecordsList domain="example.com" records={[{ ...NULL_MX, value: '.' }]} />);
     expect(row('.')).toBeInTheDocument();
     expect(screen.queryByText('..')).not.toBeInTheDocument();
     expect(nullMxBadge()).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('RecordsList — Null-MX', () => {
 
   it('erklärt den Null-MX über das Erklärungsmodul', async () => {
     const user = userEvent.setup();
-    render(<RecordsList records={[NULL_MX]} />);
+    render(<RecordsList domain="example.com" records={[NULL_MX]} />);
 
     expect(infoLabels()).toEqual(['Was bedeutet MX?', 'Was bedeutet Null-MX?']);
     await user.click(screen.getByRole('button', { name: 'Was bedeutet Null-MX?' }));
@@ -120,7 +120,7 @@ describe('RecordsList — Null-MX', () => {
   });
 
   it('lässt einen normalen MX unverändert — ohne Punkt und Badge', () => {
-    render(<RecordsList records={RECORDS} />);
+    render(<RecordsList domain="example.com" records={RECORDS} />);
 
     expect(within(row('mx1.example.com')).getByText('10')).toBeInTheDocument();
     expect(screen.queryByText('.')).not.toBeInTheDocument();
@@ -128,7 +128,7 @@ describe('RecordsList — Null-MX', () => {
   });
 
   it('zeigt einen MX mit Großbuchstaben und Schlusspunkt, wie er kam — auch mit Priorität 0', () => {
-    render(<RecordsList records={[{ ...NULL_MX, value: 'MX1.Example.COM.' }]} />);
+    render(<RecordsList domain="example.com" records={[{ ...NULL_MX, value: 'MX1.Example.COM.' }]} />);
 
     expect(within(row('MX1.Example.COM.')).getByText('0')).toBeInTheDocument();
     expect(nullMxBadge()).not.toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('RecordsList — Null-MX', () => {
 
   it('zeigt ein leeres Ziel neben weiteren MX als „.“, nennt es aber nicht Null-MX (RFC 7505: ungültig)', () => {
     const mx1: DnsRecord = { type: 'MX', name: 'example.com', value: 'mx1.example.com', priority: 10, ttl: 3600 };
-    render(<RecordsList records={[NULL_MX, mx1]} />);
+    render(<RecordsList domain="example.com" records={[NULL_MX, mx1]} />);
 
     expect(within(row('.')).getByText('0')).toBeInTheDocument();
     expect(within(row('mx1.example.com')).getByText('10')).toBeInTheDocument();
@@ -144,14 +144,14 @@ describe('RecordsList — Null-MX', () => {
   });
 
   it('zeigt bei einer Priorität ungleich 0 den Punkt, aber kein Badge', () => {
-    render(<RecordsList records={[{ ...NULL_MX, priority: 10 }]} />);
+    render(<RecordsList domain="example.com" records={[{ ...NULL_MX, priority: 10 }]} />);
     expect(within(row('.')).getByText('10')).toBeInTheDocument();
     expect(nullMxBadge()).not.toBeInTheDocument();
   });
 
   it('behält das Badge, wenn der MX-Filter aktiv ist', async () => {
     const user = userEvent.setup();
-    render(<RecordsList records={[NULL_MX, ...RECORDS.filter((r) => r.type !== 'MX')]} />);
+    render(<RecordsList domain="example.com" records={[NULL_MX, ...RECORDS.filter((r) => r.type !== 'MX')]} />);
     await user.click(screen.getByRole('tab', { name: /^MX/ }));
     expect(nullMxBadge()).toBeInTheDocument();
   });
@@ -164,6 +164,7 @@ describe('RecordsList — Hostnamen als Links (#147)', () => {
   it('verlinkt Nameserver, Mailserver und CNAME-Ziele auf ihren eigenen Report', () => {
     render(
       <RecordsList
+        domain="example.com"
         records={[...RECORDS, { type: 'CNAME', name: 'www.example.com', value: 'edge.example.net', ttl: 0 }]}
       />
     );
@@ -173,7 +174,48 @@ describe('RecordsList — Hostnamen als Links (#147)', () => {
   });
 
   it('verlinkt Textwerte und den Null-MX nicht', () => {
-    render(<RecordsList records={[NULL_MX, { type: 'TXT', name: 'example.com', value: 'v=spf1 -all', ttl: 0 }]} />);
+    render(<RecordsList domain="example.com" records={[NULL_MX, { type: 'TXT', name: 'example.com', value: 'v=spf1 -all', ttl: 0 }]} />);
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * #151: Ohne Records stand nur der Tabellenkopf da — nicht zu erkennen, ob
+ * die Abfrage fertig, gescheitert oder ohne Treffer war.
+ */
+describe('RecordsList — keine Records', () => {
+  it('sagt, dass es den Namen nicht gibt (NXDOMAIN)', () => {
+    render(<RecordsList domain="gibt-es-nicht.example" records={[]} nxdomain />);
+    expect(screen.getByRole('heading', { name: 'Domain existiert nicht' })).toBeInTheDocument();
+    expect(screen.getByText(/gibt es im DNS nicht \(NXDOMAIN\)/)).toHaveTextContent('gibt-es-nicht.example');
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+  });
+
+  it('sagt sonst, dass es keine Records gibt — ohne zu behaupten, dass der Name existiert', () => {
+    render(<RecordsList domain="leer.example" records={[]} />);
+    expect(screen.getByRole('heading', { name: 'Keine Records gefunden' })).toBeInTheDocument();
+    expect(screen.getByText(/gibt es keine Records/)).toHaveTextContent(
+      'Für leer.example gibt es keine Records der abgefragten Typen (A, AAAA, CNAME, MX, NS, TXT, CAA, SOA).'
+    );
+  });
+
+  // Ein Timeout ist nicht „keine Records“ — auch wenn der Server zugleich
+  // NXDOMAIN meldet, entscheidet die fehlende Antwort.
+  it('nennt eine gescheiterte Abfrage als offen, nicht als leer', () => {
+    render(<RecordsList domain="example.com" records={[]} failedTypes={['A', 'AAAA']} nxdomain />);
+    expect(screen.getByRole('heading', { name: 'Keine Antwort vom DNS' })).toBeInTheDocument();
+    expect(screen.getByText(/Für A, AAAA kam keine Antwort/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Domain existiert nicht' })).not.toBeInTheDocument();
+  });
+
+  it('weist über der Liste auf Typen ohne Antwort hin', () => {
+    render(<RecordsList domain="example.com" records={RECORDS} failedTypes={['TXT']} />);
+    expect(screen.getByText('Keine Antwort für TXT — diese Typen fehlen deshalb womöglich in der Liste.')).toBeInTheDocument();
+    expect(screen.getByText('ns2.example.com')).toBeInTheDocument();
+  });
+
+  it('zeigt ohne Ausfall keinen Hinweis', () => {
+    render(<RecordsList domain="example.com" records={RECORDS} />);
+    expect(screen.queryByText(/Keine Antwort/)).not.toBeInTheDocument();
   });
 });

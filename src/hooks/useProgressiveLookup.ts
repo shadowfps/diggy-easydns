@@ -96,6 +96,7 @@ interface State {
   timestamp: string | null;
   records: DnsRecord[] | null;
   failedRecordTypes: RecordType[] | undefined;
+  nxdomain: boolean;
   recordsStatus: LoadStatus;
   recordsError: unknown;
   dnsFindings: Finding[];
@@ -119,6 +120,7 @@ const INITIAL: State = {
   timestamp: null,
   records: null,
   failedRecordTypes: undefined,
+  nxdomain: false,
   recordsStatus: 'idle',
   recordsError: null,
   dnsFindings: [],
@@ -159,6 +161,7 @@ function reducer(state: State, action: Action): State {
         ...state,
         records: action.core.records,
         failedRecordTypes: action.core.failedRecordTypes,
+        nxdomain: action.core.nxdomain === true,
         domain: action.core.domain,
         timestamp: action.core.timestamp,
         dnsFindings: action.core.findings,
@@ -330,6 +333,7 @@ export function useProgressiveLookup(): ProgressiveLookup {
       healthScore,
       techStack: (sections.techStack.data as DetectedTech[] | undefined) ?? [],
       failedRecordTypes: state.failedRecordTypes,
+      ...(state.nxdomain && { nxdomain: true }),
       ...(sections.ssl.lookupFailed && { sslLookupFailed: sections.ssl.lookupFailed }),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -70,6 +70,12 @@ export interface StandardRecords {
    * der Vergleich mit dem letzten Check (#79) darf sie nicht als entfallen melden.
    */
   failedTypes: RecordType[];
+  /**
+   * Den Namen gibt es nicht (NXDOMAIN, #151): jeder Typ samt CNAME kam mit
+   * ENOTFOUND zurück. Ein Name ohne Records liefert ENODATA — der existiert,
+   * ihm fehlt nur jeder abgefragte Typ.
+   */
+  nxdomain: boolean;
 }
 
 /**
@@ -85,10 +91,11 @@ export async function lookupStandardRecords(
 
   // CNAME parallel mitziehen — das Ergebnis entscheidet, ob NS/SOA wirklich dem
   // gefragten Namen gehören oder nur vom CNAME-Ziel durchgereicht wurden.
-  const [cnames, results] = await Promise.all([
-    lookupCname(domain),
+  const [[cnameResult], results] = await Promise.all([
+    Promise.allSettled([resolveCnameRecords(domain)]),
     Promise.allSettled(QUERY_TYPES.map((type) => lookupSingleType(domain, type))),
   ]);
+  const cnames = cnameResult.status === 'fulfilled' ? cnameResult.value : [];
 
   const isCnameAlias = cnames.length > 0;
 
@@ -108,13 +115,31 @@ export async function lookupStandardRecords(
   });
 
   records.push(...cnames);
+  // Auch ein CNAME ohne Antwort ist offen (#151): Ohne ihn hieße „keine
+  // Records“ womöglich nur, dass der Alias nicht ankam.
+  if (cnameResult.status === 'rejected') {
+    const err = cnameResult.reason as NodeJS.ErrnoException;
+    if (!EXPECTED_DNS_ERRORS.has(err.code ?? '')) {
+      console.warn(`[dns] CNAME lookup failed for ${domain}:`, err.code ?? err.message);
+      failedTypes.push('CNAME');
+    }
+  }
 
   if (options.includeCommonSubdomains) {
     const wwwCnames = await lookupCname(`www.${domain}`);
     records.push(...wwwCnames);
   }
 
-  return { records, failedTypes };
+  // Streng: Jede Abfrage, auch CNAME, muss NXDOMAIN gemeldet haben. Bei einem
+  // Alias auf ein fehlendes Ziel meldet der Resolver für A & Co. NXDOMAIN
+  // (RFC 2308 §2.1) — gemeint ist dann das Ziel, nicht der Alias.
+  const nxdomain =
+    records.length === 0 &&
+    [cnameResult, ...results].every(
+      (result) => result.status === 'rejected' && (result.reason as NodeJS.ErrnoException).code === 'ENOTFOUND'
+    );
+
+  return { records, failedTypes, nxdomain };
 }
 
 /**
@@ -237,18 +262,19 @@ async function lookupSingleType(domain: string, type: RecordType): Promise<DnsRe
   }
 }
 
+async function resolveCnameRecords(domain: string): Promise<DnsRecord[]> {
+  const [results, ttl] = await Promise.all([resolver.resolveCname(domain), lookupRrsetTtl(domain, 'CNAME')]);
+  return results.map((value) => ({
+    type: 'CNAME',
+    name: domain,
+    value,
+    ttl,
+  }));
+}
+
 async function lookupCname(domain: string): Promise<DnsRecord[]> {
   try {
-    const [results, ttl] = await Promise.all([
-      resolver.resolveCname(domain),
-      lookupRrsetTtl(domain, 'CNAME'),
-    ]);
-    return results.map((value) => ({
-      type: 'CNAME',
-      name: domain,
-      value,
-      ttl,
-    }));
+    return await resolveCnameRecords(domain);
   } catch {
     return [];
   }
