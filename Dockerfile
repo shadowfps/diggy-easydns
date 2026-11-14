@@ -7,7 +7,7 @@
 # Der Brotli-Decoder, den safeTarget.ts auf Antworten fremder Websites
 # anwendet, schreibt dort über Puffergrenzen. Neue Versionen kommen per
 # Dependabot (docker); die CI (container.yml) muss dieselbe Version nutzen.
-FROM node:24.22.1-alpine AS build
+FROM node:24.22.2-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -25,7 +25,7 @@ COPY shared ./shared
 ARG DIGGY_COMMIT=""
 RUN npm run build
 
-FROM node:24.22.1-alpine AS runtime
+FROM node:24.22.2-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
